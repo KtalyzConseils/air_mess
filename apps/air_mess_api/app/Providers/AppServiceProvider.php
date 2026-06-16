@@ -22,15 +22,14 @@ class AppServiceProvider extends ServiceProvider
     {
         Log::info('🟢 AppServiceProvider::boot');
 
-        // Personnalise le lien envoyé dans l'email de reset password :
-        // il doit pointer vers la SPA, pas vers une URL Laravel inexistante.
-        \Illuminate\Auth\Notifications\ResetPassword::createUrlUsing(function ($notifiable, string $token) {
+        // Personnalise le mail de reset password (sujet, contenu, URL).
+        // ATTENTION : quand toMailUsing est défini, Laravel ignore createUrlUsing
+        // et passe directement le TOKEN (pas une URL) au callback. On reconstruit donc
+        // l'URL nous-mêmes ici à partir de config('app.frontend_url').
+        \Illuminate\Auth\Notifications\ResetPassword::toMailUsing(function ($notifiable, string $token) {
             $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
-            return "{$frontendUrl}/reset-password?token={$token}&email=" . urlencode($notifiable->getEmailForPasswordReset());
-        });
+            $url = "{$frontendUrl}/reset-password?token={$token}&email=" . urlencode($notifiable->getEmailForPasswordReset());
 
-        // Personnalise le contenu de l'email (sujet, intro, etc.) en français
-        \Illuminate\Auth\Notifications\ResetPassword::toMailUsing(function ($notifiable, string $url) {
             return (new \Illuminate\Notifications\Messages\MailMessage)
                 ->subject('Réinitialisation de votre mot de passe — Air Mess')
                 ->greeting('Bonjour 👋')

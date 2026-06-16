@@ -10,7 +10,10 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class WelcomeUserMail extends Mailable implements ShouldQueue
+/**
+ * Email envoyé au driver une fois que ses documents ont été validés par un admin.
+ */
+class DriverValidatedMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
@@ -21,22 +24,17 @@ class WelcomeUserMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: match (true) {
-                $this->user->isMarchant() => '🎉 Bienvenue chez Air Mess — votre compte marchand est créé',
-                $this->user->isDriver()   => '🛵 Bienvenue chez Air Mess — vos documents sont en cours de vérification',
-                default                   => '🎉 Bienvenue chez Air Mess',
-            },
+            subject: '✅ Votre compte livreur Air Mess est activé',
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            view: 'emails.welcome-user',
+            view: 'emails.driver-validated',
             with: [
                 'user'        => $this->user,
-                'isMarchant'  => $this->user->isMarchant(),
-                'isDriver'    => $this->user->isDriver(),
+                'driver'      => $this->user->driver,
                 'frontendUrl' => config('app.frontend_url'),
             ],
         );

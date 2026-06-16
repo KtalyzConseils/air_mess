@@ -3,14 +3,21 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
+use App\Models\Driver;
 use App\Models\Individual;
 use App\Models\Marchant;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
@@ -121,6 +128,181 @@ class AuthController extends Controller
             'user'    => $user->load('individual'),
             'token'   => $token,
         ], 201);
+    }
+
+    /**
+     * Inscription d'un livreur (validation manuelle ensuite par un admin ops).
+     * Le compte est créé en activation_status='pending' tant qu'aucun admin n'a vérifié les documents.
+     */
+    public function registerDriver(Request $request, NotificationService $notifier): JsonResponse
+    {
+        $data = $request->validate([
+            // Identité
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name'  => ['required', 'string', 'max:100'],
+            'gender'     => ['required', Rule::in(['M', 'F', 'autre'])],
+            'birth_date' => ['required', 'date', 'before:-16 years'],
+
+            // Auth
+            'email'    => ['required', 'email', 'unique:users,email'],
+            'phone'    => ['required', 'string', 'max:20', 'unique:users,phone'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+
+            // Véhicule
+            'vehicle_type'  => ['required', Rule::in(['scooter', 'moto', 'voiture', 'velo'])],
+            'vehicle_plate' => ['required', 'string', 'max:20'],
+            'vehicle_color' => ['nullable', 'string', 'max:30'],
+
+            // Documents (photo nullable, CNI + permis obligatoires)
+            'photo'           => ['nullable', 'image', 'mimes:jpg,jpeg,png',
+                                  'max:2048', 'dimensions:min_width=200,min_height=200'],
+            'cni'             => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            'driving_license' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+
+            // Contact d'urgence (obligatoire)
+            'emergency_contact_name'  => ['required', 'string', 'max:255'],
+            'emergency_contact_phone' => ['required', 'string', 'max:20'],
+
+            // Équipement (optionnel, défauts à false si non envoyés)
+            'equipment'                  => ['nullable', 'array'],
+            'equipment.isothermal_bag'   => ['nullable', 'boolean'],
+            'equipment.top_case'         => ['nullable', 'boolean'],
+            'equipment.refrigerated_bag' => ['nullable', 'boolean'],
+        ]);
+
+        // Stockage des documents AVANT la transaction (les fichiers sont indépendants de la DB).
+        // Si la transaction échoue, on supprime le dossier dans le catch ci-dessous pour ne pas
+        // laisser de fichiers orphelins sur disque.
+        $paths = $this->storeDriverFiles($request);
+
+        try {
+            $driver = DB::transaction(function () use ($data, $paths) {
+                $user = User::create([
+                    'name'     => $data['first_name'] . ' ' . $data['last_name'],
+                    'email'    => $data['email'],
+                    'phone'    => $data['phone'],
+                    'password' => $data['password'], // hashé via cast 'hashed' sur le model
+                    'type'     => User::TYPE_DRIVER,
+                ]);
+
+                return Driver::create([
+                    'user_id'                  => $user->id,
+                    'first_name'               => $data['first_name'],
+                    'last_name'                => $data['last_name'],
+                    'gender'                   => $data['gender'],
+                    'birth_date'               => $data['birth_date'],
+                    'photo_url'                => $paths['photo_url'],
+                    'cni_url'                  => $paths['cni_url'],
+                    'driving_license_url'      => $paths['driving_license_url'],
+                    'vehicle_type'             => $data['vehicle_type'],
+                    'vehicle_plate'            => $data['vehicle_plate'],
+                    'vehicle_color'            => $data['vehicle_color'] ?? null,
+                    'emergency_contact_name'   => $data['emergency_contact_name'],
+                    'emergency_contact_phone'  => $data['emergency_contact_phone'],
+                    'equipment'                => [
+                        'isothermal_bag'   => filter_var($data['equipment']['isothermal_bag']   ?? false, FILTER_VALIDATE_BOOL),
+                        'top_case'         => filter_var($data['equipment']['top_case']         ?? false, FILTER_VALIDATE_BOOL),
+                        'refrigerated_bag' => filter_var($data['equipment']['refrigerated_bag'] ?? false, FILTER_VALIDATE_BOOL),
+                    ],
+                    // activation_status='pending', availability_status='offline' viennent des défauts table.
+                ]);
+            });
+        } catch (\Throwable $e) {
+            // Cleanup : si la transaction DB plante, on supprime les fichiers stockés pour ne pas
+            // laisser de dossier orphelin (dirname() renvoie 'drivers/{uuid}' depuis 'drivers/{uuid}/cni.pdf').
+            Storage::disk('local')->deleteDirectory(dirname($paths['cni_url']));
+            throw $e;
+        }
+
+        $token = $driver->user->createToken('driver-' . $driver->user->id)->plainTextToken;
+
+        // Mail de bienvenue au driver (queued ShouldQueue)
+        try {
+            Mail::to($driver->user->email)->send(new \App\Mail\WelcomeUserMail($driver->user));
+        } catch (\Throwable $e) {
+            Log::warning('WelcomeUserMail failed', ['err' => $e->getMessage(), 'user_id' => $driver->user->id]);
+        }
+
+        // Notifier les admins super + ops (in-app + email)
+        $this->notifyAdminsOfNewDriver($driver, $notifier);
+
+        return response()->json([
+            'message' => 'Compte livreur créé. Vos documents sont en cours de vérification (sous 48h).',
+            'user'    => $driver->user->load('driver'),
+            'token'   => $token,
+        ], 201);
+    }
+
+    /**
+     * Crée une notif in-app + envoie un email à chaque admin super ou ops
+     * pour qu'ils sachent qu'un nouveau driver attend leur validation.
+     */
+    private function notifyAdminsOfNewDriver(Driver $driver, NotificationService $notifier): void
+    {
+        $admins = Admin::with('user')
+            ->whereIn('sub_role', [Admin::ROLE_SUPER, Admin::ROLE_OPS])
+            ->get();
+
+        $title = 'Nouveau livreur à valider';
+        $body  = "{$driver->first_name} {$driver->last_name} attend la vérification de ses documents.";
+
+        foreach ($admins as $admin) {
+            try {
+                $notifier->sendToUser(
+                    userId: $admin->user_id,
+                    type:   'driver.pending_validation',
+                    title:  $title,
+                    body:   $body,
+                    data:   ['driver_id' => $driver->id],
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Driver pending notif failed', ['err' => $e->getMessage(), 'admin_user_id' => $admin->user_id]);
+            }
+
+            try {
+                Mail::to($admin->user->email)->send(new \App\Mail\DriverPendingValidationMail($driver));
+            } catch (\Throwable $e) {
+                Log::warning('DriverPendingValidationMail failed', ['err' => $e->getMessage(), 'admin_user_id' => $admin->user_id]);
+            }
+        }
+    }
+
+    /**
+     * Stocke les 3 documents sur disk 'local' (privé) dans drivers/{uuid}/.
+     * Retourne les chemins relatifs prêts à être enregistrés en DB.
+     *
+     * NB : chemins relatifs au disk, pas au filesystem. Migration vers S3/MinIO
+     * transparente plus tard (juste changer le driver du disk dans filesystems.php).
+     */
+    private function storeDriverFiles(Request $request): array
+    {
+        $uuid = (string) Str::uuid();
+        $dir  = "drivers/{$uuid}";
+        $disk = Storage::disk('local');
+
+        $paths = [
+            'photo_url'           => null,
+            'cni_url'             => $disk->putFileAs(
+                $dir,
+                $request->file('cni'),
+                'cni.' . $request->file('cni')->extension(),
+            ),
+            'driving_license_url' => $disk->putFileAs(
+                $dir,
+                $request->file('driving_license'),
+                'permis.' . $request->file('driving_license')->extension(),
+            ),
+        ];
+
+        if ($request->hasFile('photo')) {
+            $paths['photo_url'] = $disk->putFileAs(
+                $dir,
+                $request->file('photo'),
+                'photo.' . $request->file('photo')->extension(),
+            );
+        }
+
+        return $paths;
     }
 
     /**

@@ -27,7 +27,7 @@ class DriverController extends Controller
             'availability_status' => ['required', Rule::in(['offline', 'available', 'on_break'])],
         ]);
 
-        $driver = $this->currentDriver($request);
+        $driver = $this->currentDriver($request, requireActive: true);
 
         // On ne peut pas se mettre 'available' si on a une course en cours
         $hasActive = Course::where('driver_id', $driver->id)
@@ -50,7 +50,7 @@ class DriverController extends Controller
             'lng' => ['required', 'numeric', 'between:-180,180'],
         ]);
 
-        $driver = $this->currentDriver($request);
+        $driver = $this->currentDriver($request, requireActive: true);
 
         // Mise à jour dénormalisée (sera abstrait via Repository plus tard)
         $driver->update([
@@ -66,7 +66,7 @@ class DriverController extends Controller
 
     public function offeredCourses(Request $request): JsonResponse
     {
-        $driver = $this->currentDriver($request);
+        $driver = $this->currentDriver($request, requireActive: true);
 
         if ($driver->availability_status !== 'available') {
             return response()->json(['courses' => []]);
@@ -98,7 +98,7 @@ class DriverController extends Controller
     // ===== 4. ACCEPTER UNE COURSE =====
     public function acceptCourse(Request $request, Course $course, NotificationService $notifier): JsonResponse
     {
-        $driver = $this->currentDriver($request);
+        $driver = $this->currentDriver($request, requireActive: true);
 
         // Vérifs métier
         if ($course->status !== Course::STATUS_AWAITING || $course->driver_id !== null) {
@@ -154,7 +154,7 @@ class DriverController extends Controller
     // ===== 5. TRANSITIONS DE STATUT GUIDÉES =====
     public function transition(Request $request, Course $course, NotificationService $notifier): JsonResponse
     {
-        $driver = $this->currentDriver($request);
+        $driver = $this->currentDriver($request, requireActive: true);
 
         if ($course->driver_id !== $driver->id) {
             return response()->json(['message' => 'Course non assignée à vous.'], 403);
@@ -268,12 +268,23 @@ class DriverController extends Controller
     }
 
     // ===== Helper =====
-    private function currentDriver(Request $request): Driver
+    /**
+     * Résout le Driver courant depuis le token.
+     *
+     * @param  bool  $requireActive  Si true, refuse les drivers non encore activés (pending/suspended/validated).
+     *                               À mettre à true pour TOUTES les actions opérationnelles (availability,
+     *                               position, accept, transition, incident) — pas pour les lectures profil/solde.
+     */
+    private function currentDriver(Request $request, bool $requireActive = false): Driver
     {
         $user = $request->user();
 
         if (! $user || ! $user->isDriver() || ! $user->driver) {
             abort(403, 'Réservé aux livreurs.');
+        }
+
+        if ($requireActive && $user->driver->activation_status !== 'active') {
+            abort(403, 'Votre compte est en attente de validation. Vous recevrez un email dès activation.');
         }
 
         return $user->driver;
@@ -349,7 +360,7 @@ class DriverController extends Controller
     // ===== 7. SIGNALER UN INCIDENT =====
     public function reportIncident(Request $request, Course $course, NotificationService $notifier): JsonResponse
     {
-        $driver = $this->currentDriver($request);
+        $driver = $this->currentDriver($request, requireActive: true);
 
         if ($course->driver_id !== $driver->id) {
             return response()->json(['message' => 'Course non assignée à vous.'], 403);

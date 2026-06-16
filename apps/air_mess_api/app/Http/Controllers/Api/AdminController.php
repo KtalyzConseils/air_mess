@@ -510,6 +510,72 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ]);
     }
 
+    // ===== 7quater. VALIDER UN LIVREUR (premier passage pending → active) =====
+    /**
+     * Différent de toggleDriverActive : ce endpoint est dédié à la VALIDATION INITIALE
+     * d'un driver fraîchement inscrit, après vérification de ses documents par l'admin.
+     * Envoie un email "Compte activé" au driver.
+     */
+    public function validateDriver(Driver $driver): JsonResponse
+    {
+        if ($driver->activation_status !== 'pending') {
+            return response()->json([
+                'message' => 'Ce livreur n\'est pas en attente de validation (statut actuel: ' . $driver->activation_status . ').',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($driver) {
+            $driver->update(['activation_status' => 'active']);
+            $driver->user->update(['is_active' => true]);
+        });
+
+        // Email de validation au driver (queued)
+        try {
+            \Illuminate\Support\Facades\Mail::to($driver->user->email)
+                ->send(new \App\Mail\DriverValidatedMail($driver->user));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('DriverValidatedMail failed', [
+                'err' => $e->getMessage(),
+                'driver_id' => $driver->id,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Livreur validé. Email envoyé.',
+            'driver'  => $driver->fresh()->load('user'),
+        ]);
+    }
+
+    // ===== 7quinquies. SERVIR UN DOCUMENT PRIVÉ D'UN LIVREUR =====
+    /**
+     * Sert un document stocké sur le disk 'local' (privé). Protégé par le middleware
+     * admin:ops (les fichiers contiennent CNI/permis, donc accès strictement admin).
+     *
+     * @param  string  $type  photo | cni | driving_license
+     */
+    public function driverDocument(Driver $driver, string $type)
+    {
+        $column = match ($type) {
+            'photo'           => 'photo_url',
+            'cni'             => 'cni_url',
+            'driving_license' => 'driving_license_url',
+            default           => null,
+        };
+
+        if ($column === null) {
+            abort(404, 'Type de document inconnu.');
+        }
+
+        $path = $driver->{$column};
+        if (! $path || ! \Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
+            abort(404, 'Document non trouvé.');
+        }
+
+        // response()->file() détecte le mime-type via finfo et stream le fichier inline.
+        $absolute = \Illuminate\Support\Facades\Storage::disk('local')->path($path);
+        return response()->file($absolute);
+    }
+
     // ===== 8. LISTE DES INCIDENTS =====
     public function incidents(Request $request): JsonResponse
     {

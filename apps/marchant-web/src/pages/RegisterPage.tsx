@@ -192,6 +192,15 @@ const inputClass =
           </Link>
         </p>
 
+        <div className="border-t border-gray-100 mt-6 pt-4 text-center">
+          <p className="text-sm text-gray-500">
+            🛵 Vous êtes livreur ?{' '}
+            <Link to="/register/driver" className="text-airmess-dark font-semibold hover:underline">
+              Inscrivez-vous ici
+            </Link>
+          </p>
+        </div>
+
       </div>
     </div>
   )

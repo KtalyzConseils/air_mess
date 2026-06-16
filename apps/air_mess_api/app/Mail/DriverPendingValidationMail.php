@@ -2,7 +2,7 @@
 
 namespace App\Mail;
 
-use App\Models\User;
+use App\Models\Driver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -10,28 +10,30 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class MarchantValidatedMail extends Mailable implements ShouldQueue
+/**
+ * Notification email envoyée aux admins super + ops à chaque nouvelle inscription de driver.
+ */
+class DriverPendingValidationMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public User $user)
+    public function __construct(public Driver $driver)
     {
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '✅ Votre compte marchand Air Mess est activé',
+            subject: '🆕 Nouveau livreur à valider — ' . $this->driver->first_name . ' ' . $this->driver->last_name,
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            view: 'emails.marchant-validated',
+            view: 'emails.driver-pending-validation',
             with: [
-                'user'        => $this->user,
-                'marchant'    => $this->user->marchant,
+                'driver'      => $this->driver,
                 'frontendUrl' => config('app.frontend_url'),
             ],
         );

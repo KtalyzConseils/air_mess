@@ -14,6 +14,8 @@ import NotificationsPage from './pages/NotificationsPage'
 import ProfilePage from './pages/ProfilePage'
 import MarchantDetailPage from './pages/admin/MarchantDetailPage'
 import RegisterPage from './pages/RegisterPage'
+import DriverRegisterPage from './pages/DriverRegisterPage'
+import DriverRegisterSuccessPage from './pages/DriverRegisterSuccessPage'
 import AdminDriversPage from './pages/admin/AdminDriversPage'
 import AdminDriverDetailPage from './pages/admin/AdminDriverDetailPage'
 import AdminIncidentsPage from './pages/admin/AdminIncidentsPage'
@@ -42,6 +44,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register/driver" element={<DriverRegisterPage />} />
+          <Route path="/register/driver/success" element={<DriverRegisterSuccessPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/t/:token" element={<TrackingPage />} />  {/* PUBLIQUE POUR LE TRACKING */}

@@ -1,9 +1,10 @@
-import { type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { AxiosError } from 'axios'
 import AdminHeader from '../../components/AdminHeader'
 import KpiCard from '../../components/KpiCard'
-import { fetchDriver } from '../../api/admin'
+import { fetchDriver, validateDriver, openDriverDocument } from '../../api/admin'
 import DriverPayoutsSection from '../../components/admin/DriverPayoutsSection'
 
 function formatDate(value: string | null): string {
@@ -39,12 +40,40 @@ function Badge({ map, value }: { map: Record<string, { label: string; classes: s
 
 export default function AdminDriverDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const queryClient = useQueryClient()
+  const [docError, setDocError] = useState<string | null>(null)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'driver', id],
     queryFn: () => fetchDriver(id!),
     enabled: !!id,
   })
+
+  const validateMutation = useMutation({
+    mutationFn: () => validateDriver(Number(id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'driver', id] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] })
+    },
+  })
+
+  async function handleOpenDocument(type: 'photo' | 'cni' | 'driving_license') {
+    setDocError(null)
+    try {
+      await openDriverDocument(Number(id), type)
+    } catch (err) {
+      setDocError(
+        err instanceof AxiosError
+          ? (err.response?.data as { message?: string })?.message ?? 'Impossible d\'ouvrir ce document.'
+          : 'Erreur inattendue.',
+      )
+    }
+  }
+
+  const validateError =
+    validateMutation.error instanceof AxiosError
+      ? (validateMutation.error.response?.data as { message?: string })?.message ?? 'Erreur lors de la validation.'
+      : null
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -101,6 +130,59 @@ export default function AdminDriverDetailPage() {
                 <Row label="Incidents">{data.driver.incidents_count}</Row>
               </section>
             </div>
+
+            {/* Bandeau de validation (visible uniquement si pending) */}
+            {data.driver.activation_status === 'pending' && (
+              <section className="mt-6 bg-amber-50 border-2 border-amber-300 rounded-2xl p-5">
+                <h3 className="font-bold text-amber-900 mb-2">⏳ Validation en attente</h3>
+                <p className="text-sm text-amber-800 mb-3">
+                  Ce livreur attend la vérification de ses documents (CNI + permis). Vérifiez-les ci-dessous
+                  avant d'activer son compte.
+                </p>
+                <button
+                  onClick={() => validateMutation.mutate()}
+                  disabled={validateMutation.isPending}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-green-700 disabled:opacity-50"
+                >
+                  {validateMutation.isPending ? 'Validation…' : '✓ Valider ce livreur'}
+                </button>
+                {validateError && (
+                  <p className="text-sm text-red-600 mt-2">⚠️ {validateError}</p>
+                )}
+              </section>
+            )}
+
+            {/* Documents */}
+            <section className="mt-6 bg-white rounded-2xl shadow-sm p-6">
+              <h3 className="font-semibold text-airmess-dark mb-3">📄 Documents</h3>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => handleOpenDocument('cni')}
+                  disabled={!data.driver.cni_url}
+                  className="px-4 py-2 bg-airmess-dark text-white rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-30"
+                >
+                  🪪 Voir CNI
+                </button>
+                <button
+                  onClick={() => handleOpenDocument('driving_license')}
+                  disabled={!data.driver.driving_license_url}
+                  className="px-4 py-2 bg-airmess-dark text-white rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-30"
+                >
+                  🛂 Voir Permis
+                </button>
+                <button
+                  onClick={() => handleOpenDocument('photo')}
+                  disabled={!data.driver.photo_url}
+                  className="px-4 py-2 bg-gray-200 text-airmess-dark rounded-lg text-sm font-semibold hover:bg-gray-300 disabled:opacity-30"
+                >
+                  📷 {data.driver.photo_url ? 'Voir photo' : 'Pas de photo'}
+                </button>
+              </div>
+              {docError && <p className="text-sm text-red-600 mt-2">⚠️ {docError}</p>}
+              <p className="text-xs text-gray-500 mt-3">
+                Les documents s'ouvrent dans un nouvel onglet (autorisez les popups pour ce site).
+              </p>
+            </section>
 
             {/* Stats de courses */}
             <section className="mt-6">

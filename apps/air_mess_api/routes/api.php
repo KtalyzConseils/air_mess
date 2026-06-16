@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('auth')->group(function () {
     Route::post('/register/marchant', [AuthController::class, 'registerMarchant']);
     Route::post('/register/individual', [AuthController::class, 'registerIndividual']);
+    Route::post('/register/driver', [AuthController::class, 'registerDriver']);
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);   
     Route::post('/password/reset',  [AuthController::class, 'resetPassword']);
@@ -113,7 +114,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/courses/{course}/dispute',  [AdminController::class, 'disputeCourse']);
         Route::get('/drivers', [AdminController::class, 'drivers']);
         Route::get('/drivers/{driver}', [AdminController::class, 'showDriver']);
+        Route::post('/drivers/{driver}/validate', [AdminController::class, 'validateDriver']);
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
+        Route::get('/drivers/{driver}/document/{type}', [AdminController::class, 'driverDocument'])
+            ->whereIn('type', ['photo', 'cni', 'driving_license']);
         Route::get('/incidents', [AdminController::class, 'incidents']);
         Route::post('/incidents/{incident}/resolve', [AdminController::class, 'resolveIncident']);
 

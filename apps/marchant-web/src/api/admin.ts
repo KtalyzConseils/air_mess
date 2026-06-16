@@ -76,6 +76,8 @@ export interface DriverDetail {
   current_lat: number | null
   current_lng: number | null
   photo_url: string | null
+  cni_url: string | null
+  driving_license_url: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
   user: { name: string; email: string; phone: string | null }
@@ -217,6 +219,39 @@ export async function deleteMarchant(id: number): Promise<void> {
 
 export async function toggleDriverActive(id: number): Promise<void> {
   await api.post(`/admin/drivers/${id}/toggle-active`)
+}
+
+/**
+ * Valide un livreur fraîchement inscrit (pending → active). Envoie un email au driver.
+ */
+export async function validateDriver(id: number): Promise<void> {
+  await api.post(`/admin/drivers/${id}/validate`)
+}
+
+/**
+ * Récupère un document privé d'un livreur (photo/CNI/permis) en blob et l'ouvre dans un nouvel onglet.
+ * Le token Sanctum est ajouté automatiquement par l'intercepteur axios.
+ */
+export async function openDriverDocument(
+  driverId: number,
+  type: 'photo' | 'cni' | 'driving_license',
+): Promise<void> {
+  const response = await api.get(`/admin/drivers/${driverId}/document/${type}`, {
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(response.data)
+  const win = window.open(url, '_blank')
+  if (!win) {
+    // Le navigateur a bloqué le popup : fallback en téléchargement
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${type}-driver-${driverId}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+  // Libération du blob URL après un délai (laisse le temps au nouvel onglet de le lire)
+  setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
 }
 
 export async function fetchIncidents(params: IncidentListParams): Promise<Paginated<AdminIncident>> {
