@@ -12,6 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Derrière le proxy Railway : faire confiance aux en-têtes X-Forwarded-*
+        // pour que Laravel détecte le HTTPS et génère des liens corrects
+        // (reset mot de passe, tracking public).
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
         ]);

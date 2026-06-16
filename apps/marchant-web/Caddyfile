@@ -1,0 +1,15 @@
+{
+	admin off
+	# Railway termine le TLS : Caddy sert en HTTP simple.
+	auto_https off
+}
+
+# Railway fournit $PORT ; fallback 80 en local.
+:{$PORT:80} {
+	root * /srv
+	encode gzip
+
+	# Routing client (react-router) : toute route inconnue retombe sur index.html.
+	try_files {path} /index.html
+	file_server
+}
