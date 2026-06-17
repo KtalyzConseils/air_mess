@@ -65,6 +65,11 @@ return [
             'transport' => 'resend',
         ],
 
+        // Transport custom enregistré dans AppServiceProvider (API HTTP Brevo).
+        'brevo' => [
+            'transport' => 'brevo',
+        ],
+
         'sendmail' => [
             'transport' => 'sendmail',
             'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),

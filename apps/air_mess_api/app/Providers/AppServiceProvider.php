@@ -22,6 +22,14 @@ class AppServiceProvider extends ServiceProvider
     {
         Log::info('🟢 AppServiceProvider::boot');
 
+        // Transport e-mail Brevo via API HTTP (Railway bloque le SMTP sortant).
+        // Activé avec MAIL_MAILER=brevo + BREVO_API_KEY (clé API v3, pas la clé SMTP).
+        \Illuminate\Support\Facades\Mail::extend('brevo', function (array $config = []) {
+            return (new \Symfony\Component\Mailer\Bridge\Brevo\Transport\BrevoTransportFactory())->create(
+                new \Symfony\Component\Mailer\Transport\Dsn('brevo+api', 'default', config('services.brevo.key')),
+            );
+        });
+
         // Personnalise le mail de reset password (sujet, contenu, URL).
         // ATTENTION : quand toMailUsing est défini, Laravel ignore createUrlUsing
         // et passe directement le TOKEN (pas une URL) au callback. On reconstruit donc
