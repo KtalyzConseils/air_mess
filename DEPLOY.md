@@ -37,7 +37,10 @@ Les fichiers de déploiement sont déjà dans le repo : `Dockerfile`, `.dockerig
    - **Networking** → **Generate Domain**, et régler le **target port à `8080`**
      (port servi par l'image serversideup).
 3. **Settings → Volumes** → **+ Volume**, point de montage :
-   `/var/www/html/storage`  ← rend persistants les documents livreurs + logs.
+   `/var/www/html/storage/app`  ← rend persistants les documents livreurs.
+   > ⚠️ NE PAS monter sur `/var/www/html/storage` tout court : un volume vide
+   > masquerait `storage/framework/*` (cache/views) et Laravel ne démarrerait plus.
+   > On monte uniquement `storage/app` (où `Storage::disk('local')` écrit les docs).
 4. **Variables** du service api :
 
    | Clé | Valeur |

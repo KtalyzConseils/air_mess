@@ -7,7 +7,7 @@ import AppHeader from '../components/AppHeader'
 import FormSection from '../components/FormSection'
 import Field from '../components/Field'
 import { fetchPackageCategories } from '../api/packageCategories'
-import { createCourse, type CreateCoursePayload } from '../api/courses'
+import { createCourse, fetchDeliveryFees, type CreateCoursePayload } from '../api/courses'
 import AddressPicker from '../components/AddressPicker'
 import type { Address } from '../api/addresses'
 import LocationPicker from '../components/LocationPicker'
@@ -32,6 +32,14 @@ export default function NewCoursePage() {
   const { data: categories = [] } = useQuery({
     queryKey: ['package-categories'],
     queryFn: fetchPackageCategories,
+  })
+
+  // Tarifs de livraison pour afficher le prix dans le select d'urgence.
+  // Fallback aux valeurs par défaut (1500/2500) si la requête échoue.
+  const { data: fees = { standard: 1500, express: 2500 } } = useQuery({
+    queryKey: ['delivery-fees'],
+    queryFn: fetchDeliveryFees,
+    staleTime: 5 * 60 * 1000, // 5 min : les tarifs changent rarement
   })
 
   // Pré-remplissage de l'expéditeur depuis le profil
@@ -187,7 +195,7 @@ export default function NewCoursePage() {
     <div className="min-h-screen bg-gray-50">
       <AppHeader />
 
-      <main className="max-w-4xl mx-auto p-6">
+      <main className="max-w-4xl mx-auto p-4 md:p-6">
         <div className="flex justify-between items-center mb-6">
           <div>
             <Link to="/dashboard" className="text-sm text-gray-500 hover:underline">
@@ -290,8 +298,8 @@ export default function NewCoursePage() {
 
               <Field label="Urgence">
                 <select {...register('urgency')} className={inputClass}>
-                  <option value="standard">Standard</option>
-                  <option value="express">Express (+1000 FCFA)</option>
+                  <option value="standard">Standard — {fees.standard.toLocaleString('fr-FR')} FCFA</option>
+                  <option value="express">Express — {fees.express.toLocaleString('fr-FR')} FCFA</option>
                 </select>
               </Field>
             </div>
@@ -434,7 +442,7 @@ export default function NewCoursePage() {
 
       {/* Modal encaissement : s'affiche si l'utilisateur a soumis sans avoir décidé */}
       {pendingValues && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-9999 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
             <h2 className="text-xl font-bold text-airmess-dark">💰 Encaissement à la livraison ?</h2>
             <p className="text-sm text-gray-600 mt-2">

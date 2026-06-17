@@ -54,7 +54,7 @@ export default function AdminIncidentsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <AdminHeader />
-      <main className="max-w-6xl mx-auto p-6">
+      <main className="max-w-6xl mx-auto p-4 md:p-6">
         <h2 className="text-2xl font-bold text-airmess-dark mb-6">Incidents</h2>
 
         <div className="flex gap-1 bg-white rounded-lg p-1 shadow-sm w-fit mb-4">
@@ -71,13 +71,13 @@ export default function AdminIncidentsPage() {
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
           {isLoading && <div className="p-10 text-center text-gray-500">Chargement...</div>}
           {!isLoading && incidents.length === 0 && (
             <div className="p-10 text-center text-gray-500">Aucun incident.</div>
           )}
           {incidents.length > 0 && (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[800px]">
               <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
                 <tr>
                   <th className="px-4 py-3 text-left">Type</th>

@@ -1,49 +1,57 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import AdminHeader from '../../components/AdminHeader'
-import MarchantStatusBadge from '../../components/MarchantStatusBadge'
-import { fetchMarchants, validateMarchant, type MarchantListParams } from '../../api/admin'
+import { fetchIndividuals, type IndividualListParams } from '../../api/admin'
 
-type FilterKey = 'pending' | 'all' | 'active' | 'suspended'
+type FilterKey = 'all' | 'free' | 'active' | 'expired' | 'suspended'
 
-const FILTERS: { key: FilterKey; label: string; params: MarchantListParams }[] = [
-  { key: 'pending',   label: 'À valider', params: { validation: 'pending' } },
-  { key: 'all',       label: 'Tous',      params: {} },
-  { key: 'active',    label: 'Actifs',    params: { subscription_status: 'active' } },
-  { key: 'suspended', label: 'Suspendus', params: { subscription_status: 'suspended' } },
+const FILTERS: { key: FilterKey; label: string; params: IndividualListParams }[] = [
+  { key: 'all',       label: 'Tous',          params: {} },
+  { key: 'free',      label: 'Quota gratuit', params: { subscription_status: 'free' } },
+  { key: 'active',    label: 'Abonnés',       params: { subscription_status: 'active' } },
+  { key: 'expired',   label: 'Expirés',       params: { subscription_status: 'expired' } },
+  { key: 'suspended', label: 'Suspendus',     params: { subscription_status: 'suspended' } },
 ]
 
-export default function AdminMarchantsPage() {
-  const queryClient = useQueryClient()
-  const [filterKey, setFilterKey] = useState<FilterKey>('pending')
+const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
+  active:    { label: 'Abonné',        classes: 'bg-green-100 text-green-800' },
+  expired:   { label: 'Abo expiré',    classes: 'bg-amber-100 text-amber-800' },
+  suspended: { label: 'Suspendu',      classes: 'bg-red-100 text-red-800' },
+  churned:   { label: 'Désabonné',     classes: 'bg-gray-200 text-gray-700' },
+}
+
+function Badge({ status }: { status: string | null }) {
+  if (!status) {
+    return (
+      <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800">
+        🆓 Quota gratuit
+      </span>
+    )
+  }
+  const meta = STATUS_BADGE[status] ?? { label: status, classes: 'bg-gray-100 text-gray-700' }
+  return <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${meta.classes}`}>{meta.label}</span>
+}
+
+export default function AdminIndividualsPage() {
+  const [filterKey, setFilterKey] = useState<FilterKey>('all')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
 
   const activeFilter = FILTERS.find((f) => f.key === filterKey)!
   const search = q.trim()
 
-  // Quand on recherche, on cherche dans TOUS les marchands (on ignore le filtre de statut
-  // de l'onglet) ; sinon on applique le filtre de l'onglet courant.
-  const params: MarchantListParams = search
+  const params: IndividualListParams = search
     ? { q: search, page }
     : { ...activeFilter.params, page }
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['admin', 'marchants', search ? `search:${search}` : filterKey, page],
-    queryFn: () => fetchMarchants(params),
+    queryKey: ['admin', 'individuals', search ? `search:${search}` : filterKey, page],
+    queryFn: () => fetchIndividuals(params),
     placeholderData: keepPreviousData,
   })
 
-  const mutation = useMutation({
-    mutationFn: validateMarchant,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'marchants'] })
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
-    },
-  })
-
-  const marchants = data?.data ?? []
+  const individuals = data?.data ?? []
 
   function changeFilter(key: FilterKey) {
     setFilterKey(key)
@@ -55,11 +63,10 @@ export default function AdminMarchantsPage() {
       <AdminHeader />
 
       <main className="max-w-6xl mx-auto p-4 md:p-6">
-        <h2 className="text-2xl font-bold text-airmess-dark mb-6">Marchands</h2>
+        <h2 className="text-2xl font-bold text-airmess-dark mb-6">Particuliers</h2>
 
-        {/* Barre de filtres + recherche */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div className="flex gap-1 bg-white rounded-lg p-1 shadow-sm">
+          <div className="flex gap-1 bg-white rounded-lg p-1 shadow-sm flex-wrap">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
@@ -81,14 +88,14 @@ export default function AdminMarchantsPage() {
               setQ(e.target.value)
               setPage(1)
             }}
-            placeholder="Rechercher (raison sociale, IFU, email, téléphone)…"
+            placeholder="Rechercher (nom, email, téléphone)…"
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full sm:w-80 focus:outline-none focus:ring-2 focus:ring-airmess-yellow"
           />
         </div>
 
         {search && (
           <p className="text-xs text-gray-500 mb-3">
-            🔎 Recherche sur <strong>tous</strong> les marchands — les filtres de statut sont ignorés.{' '}
+            🔎 Recherche sur <strong>tous</strong> les particuliers — les filtres de statut sont ignorés.{' '}
             <button onClick={() => setQ('')} className="text-airmess-dark font-semibold hover:underline">
               Effacer
             </button>
@@ -98,53 +105,43 @@ export default function AdminMarchantsPage() {
         <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
           {isLoading && <div className="p-10 text-center text-gray-500">Chargement...</div>}
 
-          {!isLoading && marchants.length === 0 && (
-            <div className="p-10 text-center text-gray-500">Aucun marchand trouvé.</div>
+          {!isLoading && individuals.length === 0 && (
+            <div className="p-10 text-center text-gray-500">Aucun particulier trouvé.</div>
           )}
 
-          {marchants.length > 0 && (
+          {individuals.length > 0 && (
             <table className="w-full text-sm min-w-[700px]">
               <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
                 <tr>
-                  <th className="px-6 py-3 text-left">Raison sociale</th>
-                  <th className="px-6 py-3 text-left">Secteur</th>
+                  <th className="px-6 py-3 text-left">Nom</th>
                   <th className="px-6 py-3 text-left">Contact</th>
+                  <th className="px-6 py-3 text-left">Quota</th>
                   <th className="px-6 py-3 text-left">Statut</th>
                   <th className="px-6 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {marchants.map((m) => (
-                  <tr key={m.id} className="hover:bg-gray-50">
+                {individuals.map((p) => (
+                  <tr key={p.id} className="hover:bg-gray-50">
                     <td className="px-6 py-3">
-                      <Link to={`/admin/marchants/${m.id}`} className="font-medium text-airmess-dark hover:underline">
-                        {m.raison_sociale}
+                      <Link to={`/admin/individuals/${p.id}`} className="font-medium text-airmess-dark hover:underline">
+                        {p.first_name} {p.last_name}
                       </Link>
-                      {!m.validated_at && (
-                        <span className="ml-2 text-xs text-amber-600 font-semibold">• à valider</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-3 text-gray-600">{m.secteur_activite}</td>
-                    <td className="px-6 py-3">
-                      <div>{m.user.email}</div>
-                      <div className="text-xs text-gray-500">{m.user.phone}</div>
                     </td>
                     <td className="px-6 py-3">
-                      <MarchantStatusBadge status={m.subscription_status} />
+                      <div>{p.user.email}</div>
+                      <div className="text-xs text-gray-500">{p.user.phone ?? '—'}</div>
+                    </td>
+                    <td className="px-6 py-3 text-gray-700">
+                      {p.monthly_courses_used}/{p.monthly_courses_limit}
+                    </td>
+                    <td className="px-6 py-3">
+                      <Badge status={p.subscription_status} />
                     </td>
                     <td className="px-6 py-3 text-right whitespace-nowrap">
-                      {!m.validated_at && (
-                        <button
-                          onClick={() => mutation.mutate(m.id)}
-                          disabled={mutation.isPending}
-                          className="bg-airmess-yellow text-airmess-dark font-bold px-3 py-1 rounded hover:opacity-90 disabled:opacity-50 text-xs"
-                        >
-                          Valider
-                        </button>
-                      )}
                       <Link
-                        to={`/admin/marchants/${m.id}`}
-                        className="ml-2 text-airmess-dark font-semibold px-3 py-1 rounded hover:bg-gray-100 text-xs"
+                        to={`/admin/individuals/${p.id}`}
+                        className="text-airmess-dark font-semibold px-3 py-1 rounded hover:bg-gray-100 text-xs"
                       >
                         Voir
                       </Link>
@@ -156,11 +153,10 @@ export default function AdminMarchantsPage() {
           )}
         </div>
 
-        {/* Pagination */}
         {data && data.last_page > 1 && (
           <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
             <span>
-              Page {data.current_page} / {data.last_page} — {data.total} marchand(s)
+              Page {data.current_page} / {data.last_page} — {data.total} particulier(s)
               {isFetching && ' · …'}
             </span>
             <div className="flex gap-2">

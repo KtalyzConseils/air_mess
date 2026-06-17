@@ -9,6 +9,8 @@ import AddressesPage from './pages/AddressesPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminCoursesPage from './pages/admin/AdminCoursesPage'
 import AdminMarchantsPage from './pages/admin/AdminMarchantsPage'
+import AdminIndividualsPage from './pages/admin/AdminIndividualsPage'
+import AdminIndividualDetailPage from './pages/admin/AdminIndividualDetailPage'
 import TrackingPage from './pages/TrackingPage'
 import NotificationsPage from './pages/NotificationsPage'
 import ProfilePage from './pages/ProfilePage'
@@ -83,6 +85,8 @@ function App() {
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial']} />}>
             <Route path="/admin/marchants" element={<AdminMarchantsPage />} />
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
+            <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
+            <Route path="/admin/individuals/:id" element={<AdminIndividualDetailPage />} />
           </Route>
 
           {/* admin — gestion des courses réservée au rôle ops (super inclus) */}

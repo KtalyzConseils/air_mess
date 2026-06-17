@@ -49,6 +49,16 @@ export async function fetchCourses(params: {
   return data
 }
 
+export interface DeliveryFees {
+  standard: number
+  express: number
+}
+
+export async function fetchDeliveryFees(): Promise<DeliveryFees> {
+  const { data } = await api.get('/delivery-fees')
+  return data
+}
+
 export interface CreateCoursePayload {
   package_category_id: number
   urgency: 'standard' | 'express'

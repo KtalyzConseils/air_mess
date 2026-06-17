@@ -94,7 +94,7 @@ export default function CourseDetailPage() {
     <div className="min-h-screen bg-gray-50">
       {isAdmin ? <AdminHeader /> : <AppHeader />}
 
-      <main className="max-w-5xl mx-auto p-6">
+      <main className="max-w-5xl mx-auto p-4 md:p-6">
         {/* Header */}
         <div className="flex justify-between items-start mb-6">
           <div>

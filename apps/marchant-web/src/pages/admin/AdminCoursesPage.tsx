@@ -56,7 +56,7 @@ export default function AdminCoursesPage() {
     <div className="min-h-screen bg-gray-50">
       <AdminHeader />
 
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="max-w-7xl mx-auto p-4 md:p-6">
         <h2 className="text-2xl font-bold text-airmess-dark mb-4">Toutes les courses</h2>
 
         {/* Filtres */}
@@ -84,7 +84,7 @@ export default function AdminCoursesPage() {
           </select>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
           {coursesQuery.isLoading && <div className="p-10 text-center text-gray-500">Chargement...</div>}
 
           {courses.length === 0 && !coursesQuery.isLoading && (
@@ -92,7 +92,7 @@ export default function AdminCoursesPage() {
           )}
 
           {courses.length > 0 && (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[800px]">
               <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
                 <tr>
                   <th className="px-4 py-3 text-left">Référence</th>

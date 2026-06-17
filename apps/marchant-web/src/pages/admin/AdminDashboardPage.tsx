@@ -69,7 +69,7 @@ export default function AdminDashboardPage() {
     <div className="min-h-screen bg-gray-50">
       <AdminHeader />
 
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="max-w-7xl mx-auto p-4 md:p-6">
         <h2 className="text-2xl font-bold text-airmess-dark mb-6">Vue d'ensemble</h2>
 
         {/* Barre d'alertes actionnables */}

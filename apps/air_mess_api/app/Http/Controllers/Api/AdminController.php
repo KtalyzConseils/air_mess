@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseStatusHistory;
 use App\Models\Driver;
+use App\Models\Individual;
 use App\Models\Marchant;
+use App\Models\Payment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -803,6 +805,130 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         return response()->json([
             'message' => 'Plan mis à jour.',
             'plan'    => $plan->fresh(),
+        ]);
+    }
+
+    // ===== 10. LISTE DES PARTICULIERS =====
+    /**
+     * Liste paginée des particuliers avec recherche (nom/email) et filtre statut abo.
+     * Réservé au middleware admin:commercial (super inclus).
+     */
+    public function individuals(Request $request): JsonResponse
+    {
+        $perPage = min((int) $request->query('per_page', 20), 100);
+        $query = Individual::with('user')->latest();
+
+        // Filtre par statut d'abo : 'free' (pas d'abo), 'active', 'expired', 'suspended', 'churned'
+        if ($status = $request->query('subscription_status')) {
+            if ($status === 'free') {
+                $query->whereNull('subscription_status');
+            } else {
+                $query->where('subscription_status', $status);
+            }
+        }
+
+        // Recherche libre sur nom + email + téléphone
+        if ($q = trim((string) $request->query('q', ''))) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('first_name', 'ilike', "%{$q}%")
+                   ->orWhere('last_name', 'ilike', "%{$q}%")
+                   ->orWhereHas('user', function ($uq) use ($q) {
+                       $uq->where('email', 'ilike', "%{$q}%")
+                          ->orWhere('phone', 'ilike', "%{$q}%");
+                   });
+            });
+        }
+
+        return response()->json($query->paginate($perPage));
+    }
+
+    // ===== 11. FICHE DÉTAILLÉE D'UN PARTICULIER =====
+    public function showIndividual(Individual $individual): JsonResponse
+    {
+        $individual->load('user');
+
+        // Stats courses (le particulier est l'expéditeur via users.id = courses.sender_id)
+        $coursesQuery = Course::where('sender_id', $individual->user_id);
+
+        $stats = [
+            'courses_total'       => (clone $coursesQuery)->count(),
+            'courses_delivered'   => (clone $coursesQuery)->where('status', Course::STATUS_DELIVERED)->count(),
+            'courses_in_progress' => (clone $coursesQuery)->whereNotIn('status', Course::TERMINAL_STATUSES)->count(),
+            'courses_cancelled'   => (clone $coursesQuery)->whereIn('status', [Course::STATUS_CANCELLED, Course::STATUS_FAILED])->count(),
+            'last_course_at'      => (clone $coursesQuery)->latest('created_at')->value('created_at'),
+        ];
+
+        // Paiements one-shot (delivery_fee = paiement à la course au-delà du quota)
+        $oneShotPayments = Payment::where('user_id', $individual->user_id)
+            ->where('type', Payment::TYPE_DELIVERY_FEE)
+            ->latest('created_at')
+            ->limit(50)
+            ->get(['id', 'amount_fcfa', 'status', 'provider', 'paid_at', 'created_at']);
+
+        $oneShotSummary = [
+            'total_paid_fcfa' => (int) Payment::where('user_id', $individual->user_id)
+                ->where('type', Payment::TYPE_DELIVERY_FEE)
+                ->where('status', Payment::STATUS_PAID)
+                ->sum('amount_fcfa'),
+            'count_paid'      => Payment::where('user_id', $individual->user_id)
+                ->where('type', Payment::TYPE_DELIVERY_FEE)
+                ->where('status', Payment::STATUS_PAID)
+                ->count(),
+        ];
+
+        return response()->json([
+            'individual'         => $individual,
+            'stats'              => $stats,
+            'one_shot_payments'  => $oneShotPayments,
+            'one_shot_summary'   => $oneShotSummary,
+        ]);
+    }
+
+    // ===== 12. SUSPENDRE UN PARTICULIER =====
+    public function suspendIndividual(Request $request, Individual $individual): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        if ($individual->subscription_status === 'suspended' || ! $individual->user->is_active) {
+            return response()->json(['message' => 'Ce particulier est déjà suspendu.'], 422);
+        }
+
+        DB::transaction(function () use ($individual, $data) {
+            $individual->update(['subscription_status' => 'suspended']);
+            $individual->user->update(['is_active' => false]);
+            $individual->user->tokens()->delete(); // coupure immédiate
+            // Log de la raison côté metadata si besoin plus tard (table individuals n'a pas de champ 'notes')
+            \Illuminate\Support\Facades\Log::info('Individual suspended', [
+                'individual_id' => $individual->id,
+                'reason'        => $data['reason'],
+            ]);
+        });
+
+        return response()->json([
+            'message'    => 'Particulier suspendu.',
+            'individual' => $individual->fresh()->load('user'),
+        ]);
+    }
+
+    // ===== 13. RÉACTIVER UN PARTICULIER =====
+    public function reactivateIndividual(Individual $individual): JsonResponse
+    {
+        if ($individual->user->is_active && $individual->subscription_status !== 'suspended') {
+            return response()->json(['message' => 'Ce particulier n\'est pas suspendu.'], 422);
+        }
+
+        DB::transaction(function () use ($individual) {
+            // Si l'abo était suspendu on le repasse à actif s'il avait un plan, sinon null (quota gratuit)
+            $newStatus = $individual->subscription_plan ? 'active' : null;
+            $individual->update(['subscription_status' => $newStatus]);
+            $individual->user->update(['is_active' => true]);
+        });
+
+        return response()->json([
+            'message'    => 'Particulier réactivé.',
+            'individual' => $individual->fresh()->load('user'),
         ]);
     }
 }

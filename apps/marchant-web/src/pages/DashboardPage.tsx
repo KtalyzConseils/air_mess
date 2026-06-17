@@ -49,7 +49,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50">
       <AppHeader />
 
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="max-w-7xl mx-auto p-4 md:p-6">
         <SubscriptionAlertBanner />
 
         {isPendingMarchant && (
@@ -66,7 +66,7 @@ export default function DashboardPage() {
         )}
 
         {/* Action bar */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-6 gap-3 flex-wrap">
           <h2 className="text-2xl font-bold text-airmess-dark">Tableau de bord</h2>
           {isPendingMarchant ? (
             <span
@@ -95,7 +95,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Liste des courses récentes */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-airmess-dark">Courses récentes</h3>
           </div>
@@ -117,7 +117,7 @@ export default function DashboardPage() {
           )}
 
           {!isLoading && courses.length > 0 && (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[800px]">
               <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
                 <tr>
                   <th className="px-6 py-3 text-left">Référence</th>

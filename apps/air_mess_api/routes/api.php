@@ -62,6 +62,15 @@ Route::middleware('auth:sanctum')->group(function () {
             ->get();
     });
 
+    // Tarifs de livraison (lus depuis AppSetting). Servent à afficher le prix
+    // dans le sélecteur d'urgence du formulaire de création de course.
+    Route::get('/delivery-fees', function () {
+        return [
+            'standard' => (int) \App\Models\AppSetting::get('standard_delivery_fee_fcfa', 1500),
+            'express'  => (int) \App\Models\AppSetting::get('express_delivery_fee_fcfa', 2500),
+        ];
+    });
+
     // Adresses
     Route::prefix('addresses')->group(function () {
         Route::get('/',           [AddressController::class, 'index']);
@@ -105,6 +114,12 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/marchants/{marchant}/reactivate', [AdminController::class, 'reactivateMarchant']);
         Route::post('/marchants/{marchant}/reject', [AdminController::class, 'rejectMarchant']);
         Route::delete('/marchants/{marchant}', [AdminController::class, 'destroyMarchant']);
+
+        // Particuliers (mêmes droits commerciaux que les marchands)
+        Route::get('/individuals', [AdminController::class, 'individuals']);
+        Route::get('/individuals/{individual}', [AdminController::class, 'showIndividual']);
+        Route::post('/individuals/{individual}/suspend', [AdminController::class, 'suspendIndividual']);
+        Route::post('/individuals/{individual}/reactivate', [AdminController::class, 'reactivateIndividual']);
     });
 
     // Opérations (courses + livreurs) : réservées au rôle ops (super inclus)

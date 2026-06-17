@@ -1,6 +1,6 @@
 import api from './client'
 import type { Course, Paginated } from './courses'
-import type { Marchant } from '../types/auth'
+import type { Marchant, Individual } from '../types/auth'
 
 export interface DashboardKpi {
   courses_today: number
@@ -261,4 +261,66 @@ export async function fetchIncidents(params: IncidentListParams): Promise<Pagina
 
 export async function resolveIncident(id: number, resolution_note: string): Promise<void> {
   await api.post(`/admin/incidents/${id}/resolve`, { resolution_note })
+}
+
+// ============== PARTICULIERS (ADMIN) ==============
+
+export type IndividualWithUser = Individual & {
+  user: { id: number; name: string; email: string; phone: string | null; is_active: boolean }
+}
+
+export interface IndividualListParams {
+  subscription_status?: 'free' | 'active' | 'expired' | 'suspended' | 'churned'
+  q?: string
+  page?: number
+  per_page?: number
+}
+
+export interface IndividualStats {
+  courses_total: number
+  courses_delivered: number
+  courses_in_progress: number
+  courses_cancelled: number
+  last_course_at: string | null
+}
+
+export interface IndividualOneShotPayment {
+  id: number
+  amount_fcfa: number
+  status: 'pending' | 'processing' | 'paid' | 'failed' | 'refunded'
+  provider: string
+  paid_at: string | null
+  created_at: string
+}
+
+export interface IndividualOneShotSummary {
+  total_paid_fcfa: number
+  count_paid: number
+}
+
+export interface IndividualDetailResponse {
+  individual: IndividualWithUser
+  stats: IndividualStats
+  one_shot_payments: IndividualOneShotPayment[]
+  one_shot_summary: IndividualOneShotSummary
+}
+
+export async function fetchIndividuals(
+  params: IndividualListParams,
+): Promise<Paginated<IndividualWithUser>> {
+  const { data } = await api.get('/admin/individuals', { params })
+  return data
+}
+
+export async function fetchIndividual(id: number | string): Promise<IndividualDetailResponse> {
+  const { data } = await api.get(`/admin/individuals/${id}`)
+  return data
+}
+
+export async function suspendIndividual(id: number, reason: string): Promise<void> {
+  await api.post(`/admin/individuals/${id}/suspend`, { reason })
+}
+
+export async function reactivateIndividual(id: number): Promise<void> {
+  await api.post(`/admin/individuals/${id}/reactivate`)
 }

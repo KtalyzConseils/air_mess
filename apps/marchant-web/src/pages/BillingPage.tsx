@@ -57,7 +57,7 @@ export default function BillingPage() {
     <div className="min-h-screen bg-gray-50">
       <AppHeader />
 
-      <main className="max-w-6xl mx-auto p-6">
+      <main className="max-w-6xl mx-auto p-4 md:p-6">
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-airmess-dark">Mon abonnement</h2>
           <p className="text-gray-500 mt-1">
