@@ -39,13 +39,13 @@ class AppServiceProvider extends ServiceProvider
             $url = "{$frontendUrl}/reset-password?token={$token}&email=" . urlencode($notifiable->getEmailForPasswordReset());
 
             return (new \Illuminate\Notifications\Messages\MailMessage)
-                ->subject('Réinitialisation de votre mot de passe — Air Mess')
+                ->subject('Réinitialisation de votre mot de passe — RMess')
                 ->greeting('Bonjour 👋')
                 ->line('Vous avez demandé une réinitialisation de votre mot de passe.')
                 ->action('Réinitialiser mon mot de passe', $url)
                 ->line('Ce lien expire dans 60 minutes.')
                 ->line("Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.")
-                ->salutation("— L'équipe Air Mess");
+                ->salutation("— L'équipe RMess");
         });
 
         // CREATING — set reference + tracking_token

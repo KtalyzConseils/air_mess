@@ -22,9 +22,9 @@ class WelcomeUserMail extends Mailable implements ShouldQueue
     {
         return new Envelope(
             subject: match (true) {
-                $this->user->isMarchant() => '🎉 Bienvenue chez Air Mess — votre compte marchand est créé',
-                $this->user->isDriver()   => '🛵 Bienvenue chez Air Mess — vos documents sont en cours de vérification',
-                default                   => '🎉 Bienvenue chez Air Mess',
+                $this->user->isMarchant() => '🎉 Bienvenue chez RMess — votre compte marchand est créé',
+                $this->user->isDriver()   => '🛵 Bienvenue chez RMess — vos documents sont en cours de vérification',
+                default                   => '🎉 Bienvenue chez RMess',
             },
         );
     }

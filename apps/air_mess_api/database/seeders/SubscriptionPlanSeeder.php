@@ -15,7 +15,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'name'               => 'Essai',
                 'monthly_price_fcfa' => 0,
                 'included_courses'   => 10,
-                'description'        => 'Découvre Air Mess pendant 14 jours sans engagement.',
+                'description'        => 'Découvre RMess pendant 14 jours sans engagement.',
                 'features'           => ['email_support'],
                 'sort_order'         => 0,
             ],

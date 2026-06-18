@@ -11,7 +11,7 @@
 
     <p style="margin:0 0 16px 0; line-height:1.6; font-size:15px;">
         Bonne nouvelle ! Le compte de <strong>{{ $marchant->raison_sociale }}</strong> vient d'être validé
-        par notre équipe. Vous pouvez maintenant créer des courses sur Air Mess.
+        par notre équipe. Vous pouvez maintenant créer des courses sur RMess.
     </p>
 
     <div style="background-color:#d1fae5; border-left:4px solid #10b981; padding:12px 16px; border-radius:6px; margin:16px 0;">

@@ -5,7 +5,7 @@
 
     @if ($isMarchant)
         <p style="margin:0 0 16px 0; line-height:1.6; font-size:15px;">
-            Votre compte <strong>marchand</strong> sur Air Mess a bien été créé.
+            Votre compte <strong>marchand</strong> sur RMess a bien été créé.
             Il est actuellement en cours de validation par notre équipe.
         </p>
 
@@ -22,7 +22,7 @@
         </p>
     @elseif ($isDriver)
         <p style="margin:0 0 16px 0; line-height:1.6; font-size:15px;">
-            Votre inscription en tant que <strong>livreur</strong> sur Air Mess a bien été reçue.
+            Votre inscription en tant que <strong>livreur</strong> sur RMess a bien été reçue.
             Nous allons vérifier vos documents avant d'activer votre compte.
         </p>
 
@@ -39,7 +39,7 @@
         </p>
     @else
         <p style="margin:0 0 16px 0; line-height:1.6; font-size:15px;">
-            Votre compte sur Air Mess a bien été créé. Vous pouvez maintenant commander
+            Votre compte sur RMess a bien été créé. Vous pouvez maintenant commander
             des livraisons partout à Cotonou et au Bénin.
         </p>
 

@@ -116,7 +116,7 @@ class CourseBillingService
         try {
             $checkout = $this->fedapay->createCheckout(
                 amountFcfa: $deliveryFee,
-                description: "Air Mess — Course vers {$coursePayload['destination_quartier']}",
+                description: "RMess — Course vers {$coursePayload['destination_quartier']}",
                 customer: [
                     'email'     => $user->email,
                     'firstname' => $user->name,

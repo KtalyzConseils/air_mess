@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
           <div className="mt-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
             <p className="font-semibold">📧 Demande prise en compte</p>
             <p className="text-sm mt-2">
-              Si cet email est associé à un compte Air Mess, un lien de réinitialisation
+              Si cet email est associé à un compte RMess, un lien de réinitialisation
               y a été envoyé. Vérifiez votre boîte (et vos spams).
             </p>
             <p className="text-sm mt-2 text-gray-600">

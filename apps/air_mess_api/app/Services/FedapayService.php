@@ -45,7 +45,7 @@ class FedapayService
                 'customer'     => [
                     'email'        => $customer['email'],
                     'firstname'    => $customer['firstname'] ?? 'Marchand',
-                    'lastname'     => $customer['lastname']  ?? 'AirMess',
+                    'lastname'     => $customer['lastname']  ?? 'RMess',
                     'phone_number' => [
                         'number'  => $customer['phone'] ?? null,
                         'country' => 'bj',

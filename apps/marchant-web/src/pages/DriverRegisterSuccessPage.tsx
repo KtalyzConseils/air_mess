@@ -15,7 +15,7 @@ export default function DriverRegisterSuccessPage() {
         <div className="mt-6 bg-amber-50 border-l-4 border-amber-400 p-4 rounded">
           <p className="text-sm text-amber-900">
             <strong>Prochaine étape :</strong> vous recevrez un <strong>email sous 48h</strong> dès que
-            votre compte sera activé. Vous pourrez alors vous connecter à l'application Air Mess Livreur
+            votre compte sera activé. Vous pourrez alors vous connecter à l'application RMess Livreur
             et commencer à accepter des courses.
           </p>
         </div>

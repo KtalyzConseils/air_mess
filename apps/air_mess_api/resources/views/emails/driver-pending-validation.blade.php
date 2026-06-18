@@ -6,7 +6,7 @@
     </h1>
 
     <p style="margin:0 0 16px 0; line-height:1.6; font-size:15px;">
-        Un nouveau livreur vient de s'inscrire sur Air Mess et attend la vérification de ses documents.
+        Un nouveau livreur vient de s'inscrire sur RMess et attend la vérification de ses documents.
     </p>
 
     <table cellpadding="6" cellspacing="0" border="0" style="margin:16px 0; font-size:14px; width:100%;">

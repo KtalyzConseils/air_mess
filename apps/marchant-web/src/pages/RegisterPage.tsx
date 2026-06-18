@@ -81,7 +81,7 @@ const inputClass =
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-airmess-dark">Créer un compte</h1>
-          <p className="text-gray-500 mt-1">Air Mess</p>
+          <p className="text-gray-500 mt-1">RMess</p>
         </div>
 
         {/* Sélecteur de type */}

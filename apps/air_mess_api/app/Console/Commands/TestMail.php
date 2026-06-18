@@ -16,8 +16,8 @@ class TestMail extends Command
 
         try {
             Mail::raw(
-                "Bonjour !\n\nCeci est un email de test envoyé depuis Air Mess.\nSi tu lis ceci, ta config SMTP fonctionne. 🎉\n\n— L'équipe Air Mess",
-                fn ($msg) => $msg->to($to)->subject('✅ Test Air Mess — Configuration SMTP'),
+                "Bonjour !\n\nCeci est un email de test envoyé depuis RMess.\nSi tu lis ceci, ta config SMTP fonctionne. 🎉\n\n— L'équipe RMess",
+                fn ($msg) => $msg->to($to)->subject('✅ Test RMess — Configuration SMTP'),
             );
             $this->info("✓ Email envoyé à {$to}");
             return Command::SUCCESS;

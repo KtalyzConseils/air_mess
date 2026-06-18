@@ -77,7 +77,7 @@ class SubscriptionController extends Controller
         try {
             $checkout = $fedapay->createCheckout(
                 amountFcfa: $plan->monthly_price_fcfa,
-                description: "Air Mess — Abonnement {$plan->name}",
+                description: "RMess — Abonnement {$plan->name}",
                 customer: [
                     'email'     => $user->email,
                     'firstname' => $user->name,

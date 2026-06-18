@@ -30,14 +30,14 @@ class SubscriptionStatusMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         if ($this->type === 'expired') {
-            return new Envelope(subject: '🚫 Votre abonnement Air Mess a expiré');
+            return new Envelope(subject: '🚫 Votre abonnement RMess a expiré');
         }
 
         $label = $this->daysRemaining === 1
             ? 'demain'
             : "dans {$this->daysRemaining} jours";
 
-        return new Envelope(subject: "⏰ Votre abonnement Air Mess expire {$label}");
+        return new Envelope(subject: "⏰ Votre abonnement RMess expire {$label}");
     }
 
     public function content(): Content

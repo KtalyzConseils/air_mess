@@ -15,7 +15,7 @@ class MakeAdmin extends Command
         {--phone= : Téléphone}
         {--role= : Rôle admin (super, ops, commercial, support)}';
 
-    protected $description = 'Crée un compte administrateur Air Mess (interactif).';
+    protected $description = 'Crée un compte administrateur RMess (interactif).';
 
     public function handle(): int
     {

@@ -1,4 +1,4 @@
-# Image de production de l'API Air Mess (Laravel 13) pour Railway.
+# Image de production de l'API RMess (Laravel 13) pour Railway.
 # Base serversideup : php-fpm + nginx déjà configurés pour Laravel en prod.
 FROM serversideup/php:8.3-fpm-nginx
 

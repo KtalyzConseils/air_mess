@@ -63,7 +63,7 @@ export default function TrackingPage() {
           AM
         </div>
         <div>
-          <h1 className="text-lg font-bold leading-none">Air Mess</h1>
+          <h1 className="text-lg font-bold leading-none">RMess</h1>
           <p className="text-xs text-gray-400">Suivi de livraison</p>
         </div>
       </header>
@@ -156,7 +156,7 @@ export default function TrackingPage() {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6 mb-4">
-          © 2026 Air Mess · Auto-rafraîchissement toutes les 10 secondes
+          © 2026 RMess · Auto-rafraîchissement toutes les 10 secondes
         </p>
       </main>
     </div>

@@ -15,7 +15,7 @@ class AppSettingSeeder extends Seeder
                 'value'       => '75',
                 'type'        => 'number',
                 'label'       => 'Part livreur (%)',
-                'description' => 'Pourcentage du delivery_fee reversé au livreur. Air Mess garde le reste comme commission.',
+                'description' => 'Pourcentage du delivery_fee reversé au livreur. RMess garde le reste comme commission.',
                 'group'       => 'pricing',
             ],
             [
