@@ -25,5 +25,13 @@ COPY --chown=www-data:www-data . .
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
+# Script de démarrage : rend le Volume Railway (storage/app) inscriptible par www-data.
+# L'entrypoint serversideup exécute les scripts de /etc/entrypoint.d/ en root au boot.
+USER root
+RUN cp /var/www/html/docker/50-storage-permissions.sh /etc/entrypoint.d/50-storage-permissions.sh \
+    && sed -i 's/\r$//' /etc/entrypoint.d/50-storage-permissions.sh \
+    && chmod +x /etc/entrypoint.d/50-storage-permissions.sh
+USER www-data
+
 # Le webroot par défaut de l'image est /var/www/html/public, le serveur écoute sur 8080.
 # Healthcheck Railway : GET /up (défini dans bootstrap/app.php).
