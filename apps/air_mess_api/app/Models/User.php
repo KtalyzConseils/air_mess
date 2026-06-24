@@ -77,6 +77,20 @@ class User extends Authenticatable
         return $this->hasOne(Admin::class);
     }
 
+    /**
+     * Wallet payeur (marchand + particulier). Créé à l'inscription, 1 par user.
+     * Les drivers ont leur propre wallet (DriverWallet) — pas celui-ci.
+     */
+    public function wallet()
+    {
+        return $this->hasOne(UserWallet::class);
+    }
+
+    public function walletTransactions()
+    {
+        return $this->hasMany(UserWalletTransaction::class);
+    }
+
     // ===== Helpers de type =====
 
     public function isMarchant(): bool   { return $this->type === self::TYPE_MARCHANT; }

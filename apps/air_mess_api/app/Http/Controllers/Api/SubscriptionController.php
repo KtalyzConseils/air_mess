@@ -112,6 +112,8 @@ class SubscriptionController extends Controller
         FedapayService $fedapay,
         NotificationService $notifier,
         \App\Services\CourseBillingService $billing,
+        \App\Services\DriverWalletService $walletService,
+        \App\Services\UserWalletService $userWalletService,
     ): JsonResponse {
         // 1. Vérifier la signature
         $rawPayload = $request->getContent();
@@ -144,7 +146,7 @@ class SubscriptionController extends Controller
 
         // 4. Selon l'événement
         if ($event === 'transaction.approved' || ($tx['status'] ?? null) === 'approved') {
-            DB::transaction(function () use ($payment, $tx, $notifier, $billing) {
+            DB::transaction(function () use ($payment, $tx, $notifier, $billing, $walletService, $userWalletService) {
                 $payment->update([
                     'status'       => Payment::STATUS_PAID,
                     'paid_at'      => now(),
@@ -181,6 +183,48 @@ class SubscriptionController extends Controller
                  elseif ($payment->type === Payment::TYPE_DELIVERY_FEE) {
                     // Course one-shot du particulier : on crée la course maintenant
                     $billing->finalizeOneShotCourse($payment, $notifier);
+                }
+                 elseif ($payment->type === Payment::TYPE_WALLET_DEPOSIT) {
+                    // Top-up caution driver : on crédite le wallet via le service
+                    if ($user->isDriver() && $user->driver) {
+                        $walletService->deposit($user->driver, (int) $payment->amount_fcfa, $payment);
+
+                        $notifier->sendToUser(
+                            $user->id,
+                            'wallet.deposited',
+                            '💰 Caution rechargée',
+                            'Votre caution a été créditée de ' . number_format($payment->amount_fcfa, 0, ',', ' ') . ' FCFA.',
+                            ['payment_id' => $payment->id, 'amount' => $payment->amount_fcfa],
+                            null,
+                        );
+                    } else {
+                        \Illuminate\Support\Facades\Log::warning('wallet_deposit payment for non-driver user', [
+                            'payment_id' => $payment->id,
+                            'user_id'    => $user->id,
+                            'user_type'  => $user->type,
+                        ]);
+                    }
+                }
+                 elseif ($payment->type === Payment::TYPE_USER_WALLET_DEPOSIT) {
+                    // Top-up wallet marchand/particulier
+                    if ($user->isMarchant() || $user->isIndividual()) {
+                        $userWalletService->deposit($user, (int) $payment->amount_fcfa, $payment);
+
+                        $notifier->sendToUser(
+                            $user->id,
+                            'wallet.deposited',
+                            '💰 Wallet rechargé',
+                            'Votre wallet a été crédité de ' . number_format($payment->amount_fcfa, 0, ',', ' ') . ' FCFA.',
+                            ['payment_id' => $payment->id, 'amount' => $payment->amount_fcfa],
+                            null,
+                        );
+                    } else {
+                        \Illuminate\Support\Facades\Log::warning('user_wallet_deposit payment for non-payer user', [
+                            'payment_id' => $payment->id,
+                            'user_id'    => $user->id,
+                            'user_type'  => $user->type,
+                        ]);
+                    }
                 }
             });
         } elseif (in_array($event, ['transaction.canceled', 'transaction.declined'], true)) {

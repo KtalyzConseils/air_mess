@@ -4,8 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import AdminHeader from '../../components/AdminHeader'
 import KpiCard from '../../components/KpiCard'
+import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
 import { fetchDriver, validateDriver, openDriverDocument } from '../../api/admin'
-import DriverPayoutsSection from '../../components/admin/DriverPayoutsSection'
+import { useAuthStore } from '../../stores/authStore'
+import { hasAdminRole } from '../../lib/permissions'
 
 function formatDate(value: string | null): string {
   if (!value) return '—'
@@ -42,6 +44,9 @@ export default function AdminDriverDetailPage() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const [docError, setDocError] = useState<string | null>(null)
+  const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
+  const currentUser = useAuthStore((s) => s.user)
+  const isSuperAdmin = hasAdminRole(currentUser, 'super')
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'driver', id],
@@ -129,7 +134,53 @@ export default function AdminDriverDetailPage() {
                 <Row label="Taux d'acceptation">{data.driver.acceptance_rate}%</Row>
                 <Row label="Incidents">{data.driver.incidents_count}</Row>
               </section>
+
+              {/* Wallet caution */}
+              <section className="bg-white rounded-2xl shadow-sm p-6 md:col-span-2">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <h3 className="font-semibold text-airmess-dark">💰 Wallet caution</h3>
+                  {isSuperAdmin && data.driver.wallet && (
+                    <button
+                      onClick={() => setWalletAdjustOpen(true)}
+                      className="text-xs px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium"
+                    >
+                      ⚙️ Ajuster…
+                    </button>
+                  )}
+                </div>
+                {data.driver.wallet ? (
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="bg-airmess-yellow/10 rounded-lg p-3">
+                      <p className="text-2xl font-bold text-airmess-dark">{data.driver.wallet.balance.toLocaleString('fr-FR')}</p>
+                      <p className="text-xs text-gray-600 mt-1">Balance (FCFA)</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-lg font-semibold text-gray-700">{data.driver.wallet.total_deposited.toLocaleString('fr-FR')}</p>
+                      <p className="text-xs text-gray-600 mt-1">Total déposé</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-lg font-semibold text-gray-700">{data.driver.wallet.total_withdrawn.toLocaleString('fr-FR')}</p>
+                      <p className="text-xs text-gray-600 mt-1">Total retiré</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Aucun wallet associé.</p>
+                )}
+              </section>
             </div>
+
+            {/* Modal d'ajustement wallet (super-admin uniquement) */}
+            {isSuperAdmin && data.driver.wallet && (
+              <WalletAdjustmentModal
+                open={walletAdjustOpen}
+                onClose={() => setWalletAdjustOpen(false)}
+                target="driver"
+                targetId={data.driver.id}
+                targetName={`${data.driver.first_name} ${data.driver.last_name}`}
+                currentBalance={data.driver.wallet.balance}
+                onSuccessInvalidate={[['admin', 'driver', id]]}
+              />
+            )}
 
             {/* Bandeau de validation (visible uniquement si pending) */}
             {data.driver.activation_status === 'pending' && (
@@ -198,7 +249,6 @@ export default function AdminDriverDetailPage() {
                 {' · '}Dernière livraison : {formatDate(data.stats.last_delivery_at)}
               </p>
             </section>
-            <DriverPayoutsSection driverId={data.driver.id} />
           </>
         )}
       </main>

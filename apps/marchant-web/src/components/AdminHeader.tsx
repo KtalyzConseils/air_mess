@@ -34,7 +34,8 @@ export default function AdminHeader() {
       {canManageOps && <NavLink to="/admin/courses" className={linkClass}>Courses</NavLink>}
       {canManageOps && <NavLink to="/admin/drivers" className={linkClass}>Livreurs</NavLink>}
       {canManageOps && <NavLink to="/admin/incidents" className={linkClass}>Incidents</NavLink>}
-      {canManageOps && <NavLink to="/admin/payouts" className={linkClass}>💸 Versements</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/withdraw-requests" className={linkClass}>🏦 Retraits</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/reconciliation" className={linkClass}>📊 Compta</NavLink>}
       {isSuperAdmin && <NavLink to="/admin/settings" className={linkClass}>⚙️ Paramètres</NavLink>}
     </>
   )
@@ -47,7 +48,8 @@ export default function AdminHeader() {
       {canManageOps && <NavLink to="/admin/courses" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Courses</NavLink>}
       {canManageOps && <NavLink to="/admin/drivers" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Livreurs</NavLink>}
       {canManageOps && <NavLink to="/admin/incidents" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Incidents</NavLink>}
-      {canManageOps && <NavLink to="/admin/payouts" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>💸 Versements</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/withdraw-requests" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>🏦 Retraits</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/reconciliation" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>📊 Compta</NavLink>}
       {isSuperAdmin && <NavLink to="/admin/settings" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>⚙️ Paramètres</NavLink>}
     </>
   )

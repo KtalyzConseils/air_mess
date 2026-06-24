@@ -4,7 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import AdminHeader from '../../components/AdminHeader'
 import KpiCard from '../../components/KpiCard'
+import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
 import { fetchIndividual, suspendIndividual, reactivateIndividual } from '../../api/admin'
+import { useAuthStore } from '../../stores/authStore'
+import { hasAdminRole } from '../../lib/permissions'
 
 function formatDate(value: string | null): string {
   if (!value) return '—'
@@ -38,6 +41,9 @@ export default function AdminIndividualDetailPage() {
   const queryClient = useQueryClient()
   const [showSuspendModal, setShowSuspendModal] = useState(false)
   const [suspendReason, setSuspendReason] = useState('')
+  const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
+  const currentUser = useAuthStore((s) => s.user)
+  const isSuperAdmin = hasAdminRole(currentUser, 'super')
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'individual', id],
@@ -137,11 +143,35 @@ export default function AdminIndividualDetailPage() {
               </section>
 
               <section className="bg-white rounded-2xl shadow-sm p-6">
-                <h3 className="font-semibold text-airmess-dark mb-3">Abonnement</h3>
-                <Row label="Plan">{data.individual.subscription_plan ?? '— (gratuit)'}</Row>
-                <Row label="Statut">{data.individual.subscription_status ?? 'free'}</Row>
-                <Row label="Début">{formatDate(data.individual.subscription_started_at)}</Row>
-                <Row label="Prochain renouvellement">{formatDate(data.individual.subscription_next_billing_at)}</Row>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <h3 className="font-semibold text-airmess-dark">💰 Wallet</h3>
+                  {isSuperAdmin && data.individual.user.wallet && (
+                    <button
+                      onClick={() => setWalletAdjustOpen(true)}
+                      className="text-xs px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium"
+                    >
+                      ⚙️ Ajuster…
+                    </button>
+                  )}
+                </div>
+                {data.individual.user.wallet ? (
+                  <>
+                    <Row label="Balance">
+                      <strong>{data.individual.user.wallet.balance.toLocaleString('fr-FR')} FCFA</strong>
+                    </Row>
+                    <Row label="Réservé (en cours)">
+                      {data.individual.user.wallet.pending_reserved.toLocaleString('fr-FR')} FCFA
+                    </Row>
+                    <Row label="Total rechargé">
+                      {data.individual.user.wallet.total_deposited.toLocaleString('fr-FR')} FCFA
+                    </Row>
+                    <Row label="Total dépensé">
+                      {data.individual.user.wallet.total_spent.toLocaleString('fr-FR')} FCFA
+                    </Row>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-500">Aucun wallet associé.</p>
+                )}
               </section>
 
               <section className="bg-white rounded-2xl shadow-sm p-6 md:col-span-2">
@@ -208,6 +238,19 @@ export default function AdminIndividualDetailPage() {
                 </table>
               )}
             </section>
+
+            {/* Modal d'ajustement wallet (super-admin uniquement) */}
+            {isSuperAdmin && data.individual.user.wallet && (
+              <WalletAdjustmentModal
+                open={walletAdjustOpen}
+                onClose={() => setWalletAdjustOpen(false)}
+                target="user"
+                targetId={data.individual.user.id}
+                targetName={data.individual.user.name}
+                currentBalance={data.individual.user.wallet.balance}
+                onSuccessInvalidate={[['admin', 'individual', id]]}
+              />
+            )}
           </>
         )}
       </main>

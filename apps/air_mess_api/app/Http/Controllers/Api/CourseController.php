@@ -20,6 +20,7 @@ class CourseController extends Controller
         CreateCourseRequest $request,
         NotificationService $notifier,
         \App\Services\CourseBillingService $billing,
+        \App\Services\UserWalletService $walletService,
     ): JsonResponse {
         $data = $request->validated();
         $user = $request->user();
@@ -33,53 +34,62 @@ class CourseController extends Controller
         $driverPercent  = (int) \App\Models\AppSetting::get('driver_commission_percent', 75);
         $driverEarnings = (int) round($deliveryFee * $driverPercent / 100);
 
+        // ===== Modèle de paiement (cf. project_wallet_user) =====
+        // - Marchand : toujours payeur (abonnements masqués → wallet ou pay-as-you-go).
+        // - Particulier dans son quota mensuel : course gratuite (inchangé).
+        // - Particulier hors quota : payeur (wallet ou pay-as-you-go).
+        $isPayer = $user->isMarchant()
+            || ($user->isIndividual() && $user->individual->hasReachedMonthlyLimit());
 
-        // ===== Vérif quota marchand =====
-        if ($user->isMarchant() && $user->marchant->hasReachedMonthlyLimit()) {
-            return response()->json([
-                'message'       => 'Quota mensuel atteint. Passez à un plan supérieur pour continuer.',
-                'quota_reached' => true,
-                'used'          => $user->marchant->monthly_courses_used,
-                'limit'         => $user->marchant->monthlyCoursesLimit(),
-            ], 402); // 402 Payment Required
-        }
-
-        // ===== Vérif quota particulier : au-delà → checkout one-shot =====
-        if ($user->isIndividual() && $user->individual->hasReachedMonthlyLimit()) {
-            return $billing->initiateOneShotCheckout($user, $data, $deliveryFee, $driverEarnings);
-        }
-
-        $course = DB::transaction(function () use ($data, $user, $deliveryFee, $driverEarnings) {
-            $course = Course::create(array_merge($data, [
-                'sender_id'       => $user->id,
-                'status'          => isset($data['scheduled_for'])
-                    ? Course::STATUS_PENDING_PREP
-                    : Course::STATUS_AWAITING,
-                'delivery_fee'    => $deliveryFee,
-                'driver_earnings' => $driverEarnings,
-                'has_collection'  => $data['has_collection'] ?? false,
-                'urgency'         => $data['urgency'] ?? 'standard',
-
-                // Filet de sécurité : on génère reference+token ici même si les events firent
-                'reference'       => $this->generateReference(),
-                'tracking_token'  => Str::random(10),
-                'pickup_code'     => Course::generateCode(),
-                'delivery_code'   => Course::generateCode(),
-            ]));
-
-            // Incrémenter le quota selon le type
-            if ($user->isIndividual()) {
-                $user->individual->increment('monthly_courses_used');
-            } elseif ($user->isMarchant()) {
-                $user->marchant->increment('monthly_courses_used');
+        // Si payeur, on tente d'abord le wallet. Si dispo insuffisant → fallback Fedapay.
+        // Pre-check sans hold (le hold sera posé sous lock dans la transaction).
+        if ($isPayer) {
+            $wallet = $user->wallet;
+            if (! $wallet || ! $wallet->canReserve($deliveryFee)) {
+                return $billing->initiateOneShotCheckout($user, $data, $deliveryFee, $driverEarnings);
             }
+        }
 
-            return $course;
-        });
+        try {
+            $course = DB::transaction(function () use ($data, $user, $deliveryFee, $driverEarnings, $isPayer, $walletService) {
+                $course = Course::create(array_merge($data, [
+                    'sender_id'       => $user->id,
+                    'status'          => isset($data['scheduled_for'])
+                        ? Course::STATUS_PENDING_PREP
+                        : Course::STATUS_AWAITING,
+                    'delivery_fee'    => $deliveryFee,
+                    'driver_earnings' => $driverEarnings,
+                    'has_collection'  => $data['has_collection'] ?? false,
+                    'urgency'         => $data['urgency'] ?? 'standard',
 
-        // Alerte quota marchand (80% / 100%)
-        if ($user->isMarchant()) {
-            $billing->sendQuotaAlertsIfNeeded($user->marchant->fresh(), $notifier);
+                    // Filet de sécurité : on génère reference+token ici même si les events firent
+                    'reference'       => $this->generateReference(),
+                    'tracking_token'  => Str::random(10),
+                    'pickup_code'     => Course::generateCode(),
+                    'delivery_code'   => Course::generateCode(),
+                ]));
+
+                // Hold wallet : sous lock pessimiste. Si le pre-check a passé mais
+                // qu'un autre thread a vidé le wallet entre temps (race), throw → rollback
+                // de la course + fallback checkout côté catch ci-dessous.
+                if ($isPayer) {
+                    $reserved = $walletService->reserveForCourse($user, $course, $deliveryFee);
+                    if (! $reserved) {
+                        throw new \DomainException('Wallet insuffisant à la réservation (race).');
+                    }
+                }
+
+                // Particulier dans son quota : course gratuite, on incrémente le compteur.
+                // Marchand : plus de quota (abonnements masqués).
+                if ($user->isIndividual() && ! $isPayer) {
+                    $user->individual->increment('monthly_courses_used');
+                }
+
+                return $course;
+            });
+        } catch (\DomainException $e) {
+            // Race : wallet vidé entre le pre-check et le hold → fallback pay-as-you-go.
+            return $billing->initiateOneShotCheckout($user, $data, $deliveryFee, $driverEarnings);
         }
 
         // PUSH aux livreurs disponibles dans un rayon de 8 km
@@ -162,7 +172,12 @@ class CourseController extends Controller
     /**
      * Annule une course (statut → cancelled).
      */
-    public function cancel(\Illuminate\Http\Request $request, Course $course, NotificationService $notifier): JsonResponse
+    public function cancel(
+        \Illuminate\Http\Request $request,
+        Course $course,
+        NotificationService $notifier,
+        \App\Services\UserWalletService $walletService,
+    ): JsonResponse
     {
         $this->authorizeAccessToCourse($request->user(), $course);
 
@@ -184,7 +199,7 @@ class CourseController extends Controller
         // Le livreur assigné (s'il y en a un) doit être libéré, sinon il reste bloqué en "busy".
         $driver = $course->driver_id ? Driver::find($course->driver_id) : null;
 
-        DB::transaction(function () use ($course, $request, $previousStatus, $driver) {
+        DB::transaction(function () use ($course, $request, $previousStatus, $driver, $walletService) {
             $course->update([
                 'status'              => Course::STATUS_CANCELLED,
                 'cancelled_at'        => now(),
@@ -195,6 +210,16 @@ class CourseController extends Controller
             // Libérer le livreur : il redevient disponible pour de nouvelles courses.
             if ($driver) {
                 $driver->update(['availability_status' => 'available']);
+            }
+
+            // Wallet : libérer la réservation posée à la création (no-op si pas paid_from_wallet).
+            // On annule toujours AVANT pickup ici (garde au-dessus), donc jamais de charge à refund.
+            if ($course->paid_from_wallet) {
+                $walletService->releaseReservation(
+                    $course->sender,
+                    $course,
+                    (int) $course->delivery_fee,
+                );
             }
 
             \App\Models\CourseStatusHistory::create([

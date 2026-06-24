@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Services\NotificationService;
+use App\Services\DriverWalletService;
 use App\Models\CourseIncident;
 use App\Models\Admin;
 
@@ -75,6 +76,14 @@ class DriverController extends Controller
         $query = Course::where('status', Course::STATUS_AWAITING)
             ->whereNull('driver_id')
             ->with('packageCategory');
+
+        // Filtre caution : on cache les courses avec encaissement > balance du wallet.
+        // Le driver ne verra que ce qu'il peut couvrir avec sa caution.
+        $balance = $driver->wallet?->balance ?? 0;
+        $query->where(function ($q) use ($balance) {
+            $q->where('has_collection', false)
+              ->orWhere('collection_amount', '<=', $balance);
+        });
 
         // Si on connaît la position du livreur → on trie et filtre par proximité
         if ($driver->current_lat !== null && $driver->current_lng !== null) {
@@ -152,7 +161,13 @@ class DriverController extends Controller
     }
 
     // ===== 5. TRANSITIONS DE STATUT GUIDÉES =====
-    public function transition(Request $request, Course $course, NotificationService $notifier): JsonResponse
+    public function transition(
+        Request $request,
+        Course $course,
+        NotificationService $notifier,
+        DriverWalletService $walletService,
+        \App\Services\UserWalletService $userWalletService,
+    ): JsonResponse
     {
         $driver = $this->currentDriver($request, requireActive: true);
 
@@ -199,45 +214,82 @@ class DriverController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($course, $driver, $nextStatus, $timestampField, $data) {
-            $updates = ['status' => $nextStatus];
-            if ($timestampField) {
-                $updates[$timestampField] = now();
-            }
+        try {
+            DB::transaction(function () use ($course, $driver, $nextStatus, $timestampField, $data, $walletService, $userWalletService) {
+                // Capture le statut AVANT update pour les hooks wallet
+                $previousStatus = $course->getOriginal('status');
 
-            $course->update($updates);
+                $updates = ['status' => $nextStatus];
+                if ($timestampField) {
+                    $updates[$timestampField] = now();
+                }
 
-            // Libérer le livreur si terminal
-            if (in_array($nextStatus, Course::TERMINAL_STATUSES, true)) {
-                $driver->update(['availability_status' => 'available']);
-            }
+                $course->update($updates);
 
-            // Créditer le livreur quand la course est livrée
-            if ($nextStatus === Course::STATUS_DELIVERED) {
-                \App\Models\DriverEarning::updateOrCreate(
-                    ['course_id' => $course->id],
-                    [
-                        'driver_id'   => $driver->id,
-                        'amount_fcfa' => $course->driver_earnings,
-                        'status'      => \App\Models\DriverEarning::STATUS_PENDING,
-                        'credited_at' => now(),
-                    ],
+                // Libérer le livreur si terminal
+                if (in_array($nextStatus, Course::TERMINAL_STATUSES, true)) {
+                    $driver->update(['availability_status' => 'available']);
+                }
+
+                // Hook wallet DRIVER : pickup confirmé → débit caution si course avec encaissement
+                if ($nextStatus === Course::STATUS_PICKED_UP && $course->has_collection) {
+                    $walletService->debitForPickup($driver, $course);
+                }
+
+                // Hook wallet DRIVER : failed APRÈS pickup → remboursement caution
+                $wasPickedUp = in_array(
+                    $previousStatus,
+                    [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF],
+                    true,
                 );
-            }
+                if ($nextStatus === Course::STATUS_FAILED && $wasPickedUp && $course->has_collection) {
+                    $walletService->refundFailedCourse($driver, $course);
+                }
 
-            CourseStatusHistory::create([
-                'course_id'       => $course->id,
-                'from_status'     => $course->getOriginal('status'),
-                'to_status'       => $nextStatus,
-                'changed_by_id'   => $driver->user_id,
-                'changed_by_type' => 'user',
-                'reason'          => $data['reason'] ?? null,
-                'metadata'        => array_filter([
-                    'pickup_code'   => $data['pickup_code']   ?? null,
-                    'delivery_code' => $data['delivery_code'] ?? null,
-                ]),
-            ]);
-        });
+                // Créditer le livreur quand la course est livrée : les gains s'ajoutent
+                // directement à son wallet (cf. project_wallet_driver).
+                if ($nextStatus === Course::STATUS_DELIVERED && $course->driver_earnings > 0) {
+                    $walletService->creditEarning($driver, $course, (int) $course->driver_earnings);
+                }
+
+                // ===== Hook wallet USER (marchand/particulier payeur) =====
+                // Si la course était payable depuis le wallet (paid_from_wallet=true) :
+                //  - delivered → capture du hold : on débite réellement le wallet
+                //  - failed    → release du hold : le marchand ne paie pas une course foirée
+                if ($course->paid_from_wallet && $course->sender) {
+                    if ($nextStatus === Course::STATUS_DELIVERED) {
+                        $userWalletService->chargeForCourse(
+                            $course->sender,
+                            $course,
+                            (int) $course->delivery_fee,
+                        );
+                    } elseif ($nextStatus === Course::STATUS_FAILED) {
+                        $userWalletService->releaseReservation(
+                            $course->sender,
+                            $course,
+                            (int) $course->delivery_fee,
+                        );
+                    }
+                }
+
+                CourseStatusHistory::create([
+                    'course_id'       => $course->id,
+                    'from_status'     => $previousStatus,
+                    'to_status'       => $nextStatus,
+                    'changed_by_id'   => $driver->user_id,
+                    'changed_by_type' => 'user',
+                    'reason'          => $data['reason'] ?? null,
+                    'metadata'        => array_filter([
+                        'pickup_code'   => $data['pickup_code']   ?? null,
+                        'delivery_code' => $data['delivery_code'] ?? null,
+                    ]),
+                ]);
+            });
+        } catch (\DomainException $e) {
+            // Règle métier violée par le service wallet (caution insuffisante, etc.)
+            // → 422 propre, course non transitionnée (rollback auto de la transaction)
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         //PUSH au marchand sur les transitions visibles côté client
         $messages = [
@@ -288,6 +340,225 @@ class DriverController extends Controller
         }
 
         return $user->driver;
+    }
+
+    // ===== 8. WALLET (caution) =====
+    /**
+     * État du wallet du driver : caution + cumulés + dernières transactions
+     * + éventuelle demande de retrait en attente.
+     * Accessible même au driver pending (lecture seule, pas une action sensible).
+     */
+    public function wallet(Request $request): JsonResponse
+    {
+        $driver = $this->currentDriver($request); // pas requireActive : lecture OK pour pending
+
+        // Lazy-create si pour une raison X le wallet n'existe pas (defensive — tous devraient en avoir)
+        $wallet = \App\Models\DriverWallet::firstOrCreate(['driver_id' => $driver->id]);
+
+        $recentTransactions = \App\Models\WalletTransaction::where('driver_id', $driver->id)
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get(['id', 'type', 'amount_fcfa', 'balance_after', 'course_id', 'created_at']);
+
+        $pendingWithdraw = \App\Models\WalletWithdrawRequest::where('driver_id', $driver->id)
+            ->where('status', \App\Models\WalletWithdrawRequest::STATUS_PENDING)
+            ->latest()
+            ->first();
+
+        // Plafonds anti-abus : usage actuel + limites pour que le driver sache où il en est
+        $usage = \App\Models\WalletWithdrawRequest::usageForDriver($driver->id);
+        $withdrawLimits = [
+            'max_per_day_count'  => (int) \App\Models\AppSetting::get('driver_withdraw_max_per_day_count', 2),
+            'max_per_week_count' => (int) \App\Models\AppSetting::get('driver_withdraw_max_per_week_count', 5),
+            'max_per_day_fcfa'   => (int) \App\Models\AppSetting::get('driver_withdraw_max_per_day_fcfa', 30000),
+            'max_per_week_fcfa'  => (int) \App\Models\AppSetting::get('driver_withdraw_max_per_week_fcfa', 100000),
+            'used'               => $usage,
+        ];
+
+        return response()->json([
+            'balance'         => $wallet->balance,
+            'total_deposited' => $wallet->total_deposited,
+            'total_withdrawn' => $wallet->total_withdrawn,
+            'min_withdraw_fcfa' => (int) \App\Models\AppSetting::get('driver_min_withdraw_fcfa', 500),
+            'recent_transactions' => $recentTransactions,
+            'pending_withdraw_request' => $pendingWithdraw,
+            'withdraw_limits' => $withdrawLimits,
+        ]);
+    }
+
+    /**
+     * Demande de top-up de caution : crée un Payment pending + checkout Fedapay.
+     * Le wallet est crédité uniquement par le webhook (sous-étape 6c).
+     */
+    public function topUpWallet(Request $request, \App\Services\FedapayService $fedapay): JsonResponse
+    {
+        $driver = $this->currentDriver($request); // pas requireActive : un driver pending peut déjà déposer
+
+        $minAmount = (int) \App\Models\AppSetting::get('driver_min_withdraw_fcfa', 500);
+
+        $data = $request->validate([
+            'amount'       => ['required', 'integer', "min:{$minAmount}"],
+            'callback_url' => ['nullable', 'url'], // optionnel : fallback sur config('app.frontend_url')
+        ]);
+
+        // URL de retour Fedapay : celle fournie OU celle dérivée de la config
+        $callbackUrl = $data['callback_url']
+            ?? rtrim(config('app.frontend_url', 'https://rmess-production.up.railway.app'), '/') . '/billing/return';
+
+        $payment = \App\Models\Payment::create([
+            'user_id'     => $driver->user_id,
+            'type'        => \App\Models\Payment::TYPE_WALLET_DEPOSIT,
+            'amount_fcfa' => $data['amount'],
+            'currency'    => 'XOF',
+            'status'      => \App\Models\Payment::STATUS_PENDING,
+            'provider'    => \App\Models\Payment::PROVIDER_FEDAPAY,
+            'description' => "RMess — Dépôt caution {$driver->first_name} {$driver->last_name}",
+            'metadata'    => ['driver_id' => $driver->id],
+        ]);
+
+        try {
+            $checkout = $fedapay->createCheckout(
+                amountFcfa: $data['amount'],
+                description: 'RMess — Dépôt caution livreur',
+                customer: [
+                    'email'     => $driver->user->email,
+                    'firstname' => $driver->first_name,
+                    'lastname'  => $driver->last_name,
+                    'phone'     => $driver->user->phone,
+                ],
+                callbackUrl: $callbackUrl,
+            );
+        } catch (\Throwable $e) {
+            $payment->update([
+                'status'         => \App\Models\Payment::STATUS_FAILED,
+                'failure_reason' => $e->getMessage(),
+            ]);
+            \Illuminate\Support\Facades\Log::warning('topUpWallet: Fedapay createCheckout failed', [
+                'driver_id' => $driver->id,
+                'err'       => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Impossible de créer le paiement.'], 502);
+        }
+
+        $payment->update([
+            'provider_ref' => $checkout['transaction_id'],
+            'status'       => \App\Models\Payment::STATUS_PROCESSING,
+        ]);
+
+        return response()->json([
+            'payment_id'   => $payment->id,
+            'checkout_url' => $checkout['checkout_url'],
+        ]);
+    }
+
+    /**
+     * Création d'une demande de retrait. Le débit du wallet n'a pas lieu ici :
+     * il attend la validation admin (étape 7).
+     */
+    public function requestWithdraw(Request $request): JsonResponse
+    {
+        $driver = $this->currentDriver($request);
+
+        $minAmount = (int) \App\Models\AppSetting::get('driver_min_withdraw_fcfa', 500);
+
+        $data = $request->validate([
+            'amount'         => ['required', 'integer', "min:{$minAmount}"],
+            'target_method'  => ['required', Rule::in([
+                \App\Models\WalletWithdrawRequest::METHOD_MOMO,
+                \App\Models\WalletWithdrawRequest::METHOD_BANK,
+            ])],
+            'target_account' => ['required', 'string', 'max:100'],
+        ]);
+
+        if ($driver->availability_status === 'busy') {
+            return response()->json([
+                'message' => 'Retrait impossible : vous avez une course en cours.',
+            ], 422);
+        }
+
+        $existingPending = \App\Models\WalletWithdrawRequest::where('driver_id', $driver->id)
+            ->where('status', \App\Models\WalletWithdrawRequest::STATUS_PENDING)
+            ->exists();
+        if ($existingPending) {
+            return response()->json([
+                'message' => 'Vous avez déjà une demande en attente. Annulez-la avant d\'en créer une nouvelle.',
+            ], 422);
+        }
+
+        // ===== Plafonds anti-abus (cf. project_wallet_driver_todo #3) =====
+        // count_* compte tous statuts (anti-spam), amount_* compte pending+approved (argent décaissé)
+        $usage    = \App\Models\WalletWithdrawRequest::usageForDriver($driver->id);
+        $maxDayN  = (int) \App\Models\AppSetting::get('driver_withdraw_max_per_day_count', 2);
+        $maxWeekN = (int) \App\Models\AppSetting::get('driver_withdraw_max_per_week_count', 5);
+        $maxDayA  = (int) \App\Models\AppSetting::get('driver_withdraw_max_per_day_fcfa', 30000);
+        $maxWeekA = (int) \App\Models\AppSetting::get('driver_withdraw_max_per_week_fcfa', 100000);
+
+        if ($usage['count_24h'] >= $maxDayN) {
+            return response()->json([
+                'message' => "Limite atteinte : {$maxDayN} demande(s) max par 24h. Réessayez plus tard.",
+            ], 422);
+        }
+        if ($usage['count_7d'] >= $maxWeekN) {
+            return response()->json([
+                'message' => "Limite atteinte : {$maxWeekN} demande(s) max par 7 jours. Réessayez la semaine prochaine.",
+            ], 422);
+        }
+        if ($usage['amount_24h'] + $data['amount'] > $maxDayA) {
+            $reste = max(0, $maxDayA - $usage['amount_24h']);
+            return response()->json([
+                'message' => "Plafond 24h dépassé. Reste disponible aujourd'hui : " . number_format($reste, 0, ',', ' ') . " FCFA.",
+            ], 422);
+        }
+        if ($usage['amount_7d'] + $data['amount'] > $maxWeekA) {
+            $reste = max(0, $maxWeekA - $usage['amount_7d']);
+            return response()->json([
+                'message' => "Plafond 7 jours dépassé. Reste disponible cette semaine : " . number_format($reste, 0, ',', ' ') . " FCFA.",
+            ], 422);
+        }
+
+        $wallet = \App\Models\DriverWallet::firstOrCreate(['driver_id' => $driver->id]);
+        if ($data['amount'] > $wallet->balance) {
+            return response()->json([
+                'message' => "Solde insuffisant : caution={$wallet->balance} FCFA, demandé={$data['amount']} FCFA.",
+            ], 422);
+        }
+
+        $req = \App\Models\WalletWithdrawRequest::create([
+            'driver_id'      => $driver->id,
+            'amount_fcfa'    => $data['amount'],
+            'target_method'  => $data['target_method'],
+            'target_account' => $data['target_account'],
+            'status'         => \App\Models\WalletWithdrawRequest::STATUS_PENDING,
+        ]);
+
+        return response()->json([
+            'message' => 'Demande de retrait créée. Vous serez notifié(e) dès qu\'un admin la traite.',
+            'request' => $req,
+        ], 201);
+    }
+
+    /**
+     * Annulation par le driver de sa propre demande pending (avant validation admin).
+     */
+    public function cancelWithdraw(Request $request, \App\Models\WalletWithdrawRequest $withdraw): JsonResponse
+    {
+        $driver = $this->currentDriver($request);
+
+        if ($withdraw->driver_id !== $driver->id) {
+            return response()->json(['message' => 'Cette demande ne vous appartient pas.'], 403);
+        }
+        if ($withdraw->status !== \App\Models\WalletWithdrawRequest::STATUS_PENDING) {
+            return response()->json([
+                'message' => "Annulation impossible (statut actuel: {$withdraw->status}).",
+            ], 422);
+        }
+
+        $withdraw->update(['status' => \App\Models\WalletWithdrawRequest::STATUS_CANCELLED]);
+
+        return response()->json([
+            'message' => 'Demande annulée.',
+            'request' => $withdraw->fresh(),
+        ]);
     }
 
     // ===== 6. BALANCE (gains en attente + total versé) =====

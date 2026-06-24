@@ -88,7 +88,7 @@ export default function AppHeader() {
               <NavLink to="/dashboard" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Tableau de bord</NavLink>
               <NavLink to="/addresses" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Carnet d'adresses</NavLink>
               <NavLink to="/courses/new" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>+ Nouvelle livraison</NavLink>
-              <NavLink to="/billing" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>💳 Abonnement</NavLink>
+              <NavLink to="/wallet" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>💰 Mon wallet</NavLink>
               <NavLink to="/profile" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>👤 Mon profil</NavLink>
             </nav>
             <div className="mt-3 pt-3 border-t border-white/10">

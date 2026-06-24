@@ -22,10 +22,12 @@ import AdminDriversPage from './pages/admin/AdminDriversPage'
 import AdminDriverDetailPage from './pages/admin/AdminDriverDetailPage'
 import AdminIncidentsPage from './pages/admin/AdminIncidentsPage'
 import AdminNotificationsPage from './pages/admin/AdminNotificationsPage'
-import BillingPage from './pages/BillingPage'
 import BillingReturnPage from './pages/BillingReturnPage'
+import MyWalletPage from './pages/MyWalletPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
-import AdminPayoutsPage from './pages/admin/AdminPayoutsPage'
+import AdminWithdrawRequestsPage from './pages/admin/AdminWithdrawRequestsPage'
+import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDetailPage'
+import AdminReconciliationPage from './pages/admin/AdminReconciliationPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 
@@ -61,7 +63,7 @@ function App() {
             <Route path="/addresses" element={<AddressesPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/billing" element={<BillingPage />} />
+            <Route path="/wallet" element={<MyWalletPage />} />
           </Route>
 
           {/* Détail d'une course : le marchand/particulier (la sienne) ET l'admin (supervision).
@@ -76,9 +78,12 @@ function App() {
             <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
           </Route>
 
-          {/* admin — paramètres réservés au super-admin */}
+          {/* admin — paramètres + retraits caution réservés au super-admin */}
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['super']} />}>
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/withdraw-requests" element={<AdminWithdrawRequestsPage />} />
+            <Route path="/admin/withdraw-requests/:id" element={<AdminWithdrawRequestDetailPage />} />
+            <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />
           </Route>
 
           {/* admin — gestion des marchands réservée au rôle commercial (super inclus) */}
@@ -95,7 +100,6 @@ function App() {
             <Route path="/admin/drivers" element={<AdminDriversPage />} />
             <Route path="/admin/drivers/:id" element={<AdminDriverDetailPage />} />
             <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
-            <Route path="/admin/payouts" element={<AdminPayoutsPage />} />
           </Route>
 
 

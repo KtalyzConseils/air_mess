@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\AddressController;
 use App\Http\Controllers\Api\TrackingController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\UserWalletController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -48,9 +49,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/position',     [DriverController::class, 'updatePosition']);
         Route::get('/offered-courses', [DriverController::class, 'offeredCourses']);
         Route::get('/stats', [DriverController::class, 'stats']);
-        Route::get('/balance',  [DriverController::class, 'balance']);
-        Route::get('/earnings', [DriverController::class, 'earningsHistory']);
-        Route::get('/payouts',  [DriverController::class, 'payoutsHistory']);
+
+        // Wallet driver (unique source de vérité pour la caution + gains + retraits)
+        Route::get('/wallet',                    [DriverController::class, 'wallet']);
+        Route::post('/wallet/top-up',            [DriverController::class, 'topUpWallet']);
+        Route::post('/wallet/withdraw-request',  [DriverController::class, 'requestWithdraw']);
+        Route::post('/wallet/withdraw-requests/{withdraw}/cancel', [DriverController::class, 'cancelWithdraw']);
+
         Route::post('/courses/{course}/accept',    [DriverController::class, 'acceptCourse']);
         Route::post('/courses/{course}/transition', [DriverController::class, 'transition']);
         Route::post('/courses/{course}/incident', [DriverController::class, 'reportIncident']);
@@ -88,12 +93,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/device-tokens', [NotificationController::class, 'registerToken']);
 
-    // Abonnements (payement et tout)
+    // Abonnements (payement et tout) — masqués côté UI mais conservés pour réversibilité
     Route::prefix('subscription')->group(function () {
         Route::get('/plans', [SubscriptionController::class, 'plans']);
         Route::post('/checkout', [SubscriptionController::class, 'checkout']);
     });
 
+    // Wallet payeur (marchand + particulier) — source de vérité pour les paiements de courses
+    Route::prefix('me/wallet')->group(function () {
+        Route::get('/',        [UserWalletController::class, 'show']);
+        Route::post('/top-up', [UserWalletController::class, 'topUp']);
+    });
 
 });
 
@@ -136,11 +146,13 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/incidents', [AdminController::class, 'incidents']);
         Route::post('/incidents/{incident}/resolve', [AdminController::class, 'resolveIncident']);
 
-        // Payouts livreurs
-        Route::get('/drivers/{driver}/earnings', [AdminController::class, 'driverEarnings']);
-        Route::post('/drivers/{driver}/payouts',     [AdminController::class, 'generateDriverPayout']);
-        Route::post('/payouts/{payout}/mark-paid',   [AdminController::class, 'markPayoutPaid']);
-        Route::get('/payouts',                       [AdminController::class, 'listAllPayouts']);
+        // Demandes de retrait de caution (wallet driver) — remplace l'ancien système de payouts
+        // (les gains driver vont désormais directement dans le wallet, plus de génération de payout)
+        Route::get('/withdraw-requests',                       [AdminController::class, 'withdrawRequests']);
+        Route::get('/withdraw-requests/{withdraw}',            [AdminController::class, 'showWithdrawRequest']);
+        Route::post('/withdraw-requests/{withdraw}/approve',   [AdminController::class, 'approveWithdrawRequest']);
+        Route::post('/withdraw-requests/{withdraw}/reject',    [AdminController::class, 'rejectWithdrawRequest']);
+        Route::post('/withdraw-requests/{withdraw}/mark-paid', [AdminController::class, 'markWithdrawRequestPaid']);
     });
 
     // Paramètres globaux — super-admin uniquement
@@ -149,6 +161,14 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::patch('/settings/{key}', [AdminController::class, 'updateSetting']);
         Route::get('/plans',            [AdminController::class, 'listPlans']);
         Route::patch('/plans/{plan}',   [AdminController::class, 'updatePlan']);
+
+        // Ajustement manuel des wallets (driver + user) — action comptable très sensible
+        Route::post('/drivers/{driver}/wallet-adjustment', [AdminController::class, 'adjustDriverWallet']);
+        Route::post('/users/{user}/wallet-adjustment',     [AdminController::class, 'adjustUserWallet']);
+
+        // Réconciliation comptable : dashboard financier + export CSV
+        Route::get('/reconciliation',            [AdminController::class, 'reconciliation']);
+        Route::get('/reconciliation/export.csv', [AdminController::class, 'reconciliationExportCsv']);
     });
 
 

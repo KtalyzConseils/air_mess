@@ -3,13 +3,6 @@ import AppHeader from '../components/AppHeader'
 import { useAuthStore } from '../stores/authStore'
 import type { Marchant } from '../types/auth'
 
-const PLAN_LABEL: Record<Marchant['subscription_plan'], { label: string; color: string }> = {
-  trial:    { label: 'Essai',    color: 'bg-gray-100 text-gray-700' },
-  starter:  { label: 'Starter',  color: 'bg-blue-100 text-blue-700' },
-  pro:      { label: 'Pro',      color: 'bg-airmess-yellow text-airmess-dark' },
-  business: { label: 'Business', color: 'bg-purple-100 text-purple-700' },
-}
-
 const SECTEUR_LABEL: Record<Marchant['secteur_activite'], string> = {
   supermarche: '🛒 Supermarché',
   restaurant:  '🍽️ Restaurant',
@@ -17,14 +10,6 @@ const SECTEUR_LABEL: Record<Marchant['secteur_activite'], string> = {
   pharmacie:   '💊 Pharmacie',
   ecommerce:   '📦 E-commerce',
   autre:       '🏷️ Autre',
-}
-
-const STATUS_LABEL: Record<Marchant['subscription_status'], { label: string; color: string }> = {
-  trial:     { label: 'Période d\'essai', color: 'bg-yellow-100 text-yellow-800' },
-  active:    { label: 'Actif',            color: 'bg-green-100 text-green-700' },
-  expired:   { label: 'Expiré',           color: 'bg-amber-100 text-amber-800' },
-  suspended: { label: 'Suspendu',         color: 'bg-red-100 text-red-700' },
-  churned:   { label: 'Résilié',          color: 'bg-gray-100 text-gray-600' },
 }
 
 
@@ -60,8 +45,6 @@ export default function ProfilePage() {
   }
 
   const marchant = user.marchant
-  const plan = marchant ? PLAN_LABEL[marchant.subscription_plan] : null
-  const status = marchant ? STATUS_LABEL[marchant.subscription_status] : null
   const secteur = marchant ? SECTEUR_LABEL[marchant.secteur_activite] : null
 
   return (
@@ -99,19 +82,6 @@ export default function ProfilePage() {
                 <> &middot; <span>{user.phone}</span></>
               )}
             </p>
-            {/* Badges */}
-            <div className="flex gap-2 mt-4">
-              {plan && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${plan.color}`}>
-                  {plan.label}
-                </span>
-              )}
-              {status && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${status.color}`}>
-                  {status.label}
-                </span>
-              )}
-            </div>
           </div>
         </section>
    
@@ -184,36 +154,6 @@ export default function ProfilePage() {
         )}
    
 
-        {/* ──────────────────────────────────────────────
-          SECTION "Abonnement"
-          ────────────────────────────────────────────── */}
-        {marchant && (
-          <section className="bg-white rounded-2xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4 text-airmess-dark">Abonnement</h2>
-            <div className="grid grid-cols-[160px_1fr] gap-y-3 items-center">
-              <div className="text-gray-500 font-medium">Formule</div>
-              <div>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${plan?.color ?? 'bg-gray-100 text-gray-600'}`}>
-                  {plan?.label ?? '—'}
-                </span>
-              </div>
-
-              <div className="text-gray-500 font-medium">Statut</div>
-              <div>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${status?.color ?? 'bg-gray-100 text-gray-600'}`}>
-                  {status?.label ?? '—'}
-                </span>
-              </div>
-
-              <div className="text-gray-500 font-medium">Date de début</div>
-              <div className="text-airmess-dark">{formatDate(marchant.subscription_started_at)}</div>
-
-              <div className="text-gray-500 font-medium">Prochaine échéance</div>
-              <div className="text-airmess-dark">{formatDate(marchant.subscription_next_billing_at)}</div>
-            </div>
-          </section>
-        )}
-   
       </main>
     </div>
   )

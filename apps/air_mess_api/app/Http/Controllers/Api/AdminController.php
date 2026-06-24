@@ -268,7 +268,7 @@ class AdminController extends Controller
     // ===== 5ter. FICHE DÉTAILLÉE D'UN MARCHAND =====
     public function showMarchant(Marchant $marchant): JsonResponse
     {
-        $marchant->load(['user', 'validatedBy', 'commercialAssignedTo']);
+        $marchant->load(['user', 'user.wallet', 'validatedBy', 'commercialAssignedTo']);
 
         // Statistiques de courses (le marchand est l'expéditeur : sender_id = user_id)
         $coursesQuery = Course::where('sender_id', $marchant->user_id);
@@ -444,7 +444,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     // ===== 7bis. FICHE DÉTAILLÉE D'UN LIVREUR =====
     public function showDriver(Driver $driver): JsonResponse
     {
-        $driver->load('user');
+        $driver->load(['user', 'wallet']);
 
         // Le livreur est rattaché aux courses via driver_id
         $coursesQuery = Course::where('driver_id', $driver->id);
@@ -845,7 +845,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     // ===== 11. FICHE DÉTAILLÉE D'UN PARTICULIER =====
     public function showIndividual(Individual $individual): JsonResponse
     {
-        $individual->load('user');
+        $individual->load(['user', 'user.wallet']);
 
         // Stats courses (le particulier est l'expéditeur via users.id = courses.sender_id)
         $coursesQuery = Course::where('sender_id', $individual->user_id);
@@ -909,6 +909,527 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         return response()->json([
             'message'    => 'Particulier suspendu.',
             'individual' => $individual->fresh()->load('user'),
+        ]);
+    }
+
+    // ===== 14. LISTE DES DEMANDES DE RETRAIT (CAUTION DRIVER) =====
+    public function withdrawRequests(Request $request): JsonResponse
+    {
+        $perPage = min((int) $request->query('per_page', 20), 100);
+        $query = \App\Models\WalletWithdrawRequest::query()
+            ->with(['driver:id,user_id,first_name,last_name', 'driver.user:id,phone,email'])
+            ->latest();
+
+        if ($status = $request->query('status')) {
+            $query->where('status', $status);
+        }
+
+        return response()->json($query->paginate($perPage));
+    }
+
+    // ===== 14a. DÉTAIL D'UNE DEMANDE DE RETRAIT (pour page admin de revue) =====
+    /**
+     * Renvoie le contexte complet nécessaire à l'admin avant approbation/rejet :
+     *  - la demande + driver
+     *  - l'état actuel du wallet (balance + cumuls)
+     *  - la course active du driver (si busy) → l'approbation sera bloquée
+     *  - les 10 dernières transactions wallet
+     *  - les agrégats des retraits passés (approved/rejected count + total approuvé)
+     */
+    public function showWithdrawRequest(\App\Models\WalletWithdrawRequest $withdraw): JsonResponse
+    {
+        $withdraw->load([
+            'driver:id,user_id,first_name,last_name,availability_status,activation_status',
+            'driver.user:id,phone,email',
+            'driver.wallet',
+            'decidedByAdmin:id,first_name,last_name',
+            'paidByAdmin:id,first_name,last_name',
+        ]);
+
+        $driver = $withdraw->driver;
+
+        // Course active = non terminale (couvre tous les statuts "en cours")
+        $activeCourse = \App\Models\Course::query()
+            ->where('driver_id', $driver->id)
+            ->whereNotIn('status', \App\Models\Course::TERMINAL_STATUSES)
+            ->latest()
+            ->first(['id', 'reference', 'status', 'has_collection', 'collection_amount']);
+
+        $recentTransactions = \App\Models\WalletTransaction::query()
+            ->where('driver_id', $driver->id)
+            ->with('course:id,reference')
+            ->latest('created_at')
+            ->limit(10)
+            ->get(['id', 'type', 'amount_fcfa', 'balance_after', 'course_id', 'created_at']);
+
+        $pastRequests = \App\Models\WalletWithdrawRequest::query()
+            ->where('driver_id', $driver->id)
+            ->where('id', '!=', $withdraw->id)
+            ->selectRaw('status, COUNT(*) as count, COALESCE(SUM(amount_fcfa), 0) as total')
+            ->groupBy('status')
+            ->get()
+            ->keyBy('status');
+
+        return response()->json([
+            'request'             => $withdraw,
+            'active_course'       => $activeCourse,
+            'recent_transactions' => $recentTransactions,
+            'past_requests'       => [
+                'approved_count'  => (int) ($pastRequests['approved']->count ?? 0),
+                'approved_total'  => (int) ($pastRequests['approved']->total ?? 0),
+                'rejected_count'  => (int) ($pastRequests['rejected']->count ?? 0),
+                'cancelled_count' => (int) ($pastRequests['cancelled']->count ?? 0),
+            ],
+        ]);
+    }
+
+    // ===== 14bis. APPROUVER UNE DEMANDE DE RETRAIT =====
+    /**
+     * Approuve une demande pending : appelle DriverWalletService::withdraw() pour
+     * débiter la caution. Si la règle métier échoue (driver busy, solde baissé entre
+     * temps), la demande RESTE en pending et l'admin pourra retenter — la demande
+     * elle-même est légitime, c'est l'état du wallet qui est transitoire.
+     */
+    public function approveWithdrawRequest(
+        Request $request,
+        \App\Models\WalletWithdrawRequest $withdraw,
+        \App\Services\DriverWalletService $walletService,
+        NotificationService $notifier,
+    ): JsonResponse {
+        if ($withdraw->status !== \App\Models\WalletWithdrawRequest::STATUS_PENDING) {
+            return response()->json([
+                'message' => "Cette demande n'est plus en attente (statut actuel: {$withdraw->status}).",
+            ], 422);
+        }
+
+        $admin = $request->user()->admin;
+
+        try {
+            DB::transaction(function () use ($withdraw, $admin, $walletService, $notifier) {
+                $walletService->withdraw(
+                    driver:  $withdraw->driver,
+                    amount:  $withdraw->amount_fcfa,
+                    adminId: $admin->id,
+                    reason:  "Approval of withdraw request #{$withdraw->id}",
+                );
+
+                $withdraw->update([
+                    'status'              => \App\Models\WalletWithdrawRequest::STATUS_APPROVED,
+                    'decided_by_admin_id' => $admin->id,
+                    'decided_at'          => now(),
+                ]);
+
+                $notifier->sendToUser(
+                    $withdraw->driver->user_id,
+                    'wallet.withdraw_approved',
+                    '✅ Retrait approuvé',
+                    "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA a été validé. Versement en cours sur votre {$withdraw->target_method}.",
+                    ['withdraw_id' => $withdraw->id],
+                    null,
+                );
+            });
+        } catch (\DomainException $e) {
+            // La demande reste en pending — l'admin pourra retenter plus tard
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message'  => 'Demande approuvée. N\'oubliez pas d\'effectuer le virement réel.',
+            'request'  => $withdraw->fresh()->load('driver.user'),
+        ]);
+    }
+
+    // ===== 14ter. REJETER UNE DEMANDE DE RETRAIT =====
+    public function rejectWithdrawRequest(
+        Request $request,
+        \App\Models\WalletWithdrawRequest $withdraw,
+        NotificationService $notifier,
+    ): JsonResponse {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        if ($withdraw->status !== \App\Models\WalletWithdrawRequest::STATUS_PENDING) {
+            return response()->json([
+                'message' => "Cette demande n'est plus en attente (statut actuel: {$withdraw->status}).",
+            ], 422);
+        }
+
+        $admin = $request->user()->admin;
+
+        $withdraw->update([
+            'status'              => \App\Models\WalletWithdrawRequest::STATUS_REJECTED,
+            'decided_by_admin_id' => $admin->id,
+            'decided_at'          => now(),
+            'rejection_reason'    => $data['reason'],
+        ]);
+
+        $notifier->sendToUser(
+            $withdraw->driver->user_id,
+            'wallet.withdraw_rejected',
+            '🚫 Retrait refusé',
+            "Votre demande de retrait a été refusée. Raison : {$data['reason']}",
+            ['withdraw_id' => $withdraw->id],
+            null,
+        );
+
+        return response()->json([
+            'message' => 'Demande refusée. Le driver a été notifié.',
+            'request' => $withdraw->fresh()->load('driver.user'),
+        ]);
+    }
+
+    // ===== 15bis. EXPORT CSV DES TRANSACTIONS WALLET (super-admin) =====
+    /**
+     * Export CSV unifié des transactions wallet (driver + user) pour la compta IRL.
+     * Une ligne par transaction, période ajustable.
+     */
+    public function reconciliationExportCsv(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $data = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to'   => ['nullable', 'date'],
+        ]);
+        $from = isset($data['from']) ? \Carbon\Carbon::parse($data['from'])->startOfDay() : now()->subDays(30)->startOfDay();
+        $to   = isset($data['to'])   ? \Carbon\Carbon::parse($data['to'])->endOfDay()     : now()->endOfDay();
+
+        $filename = 'reconciliation_' . $from->format('Ymd') . '_' . $to->format('Ymd') . '.csv';
+
+        return response()->streamDownload(function () use ($from, $to) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // BOM UTF-8 pour Excel
+            fputcsv($out, ['wallet_type', 'wallet_owner_id', 'wallet_owner_name', 'tx_id', 'tx_type', 'amount_fcfa', 'balance_after', 'course_id', 'created_at'], ';');
+
+            \DB::table('wallet_transactions as wt')
+                ->join('drivers as d', 'd.id', '=', 'wt.driver_id')
+                ->whereBetween('wt.created_at', [$from, $to])
+                ->orderBy('wt.created_at')
+                ->select('wt.id', 'wt.type', 'wt.amount_fcfa', 'wt.balance_after', 'wt.course_id', 'wt.created_at', 'd.id as driver_id', 'd.first_name', 'd.last_name')
+                ->chunk(500, function ($rows) use ($out) {
+                    foreach ($rows as $r) {
+                        fputcsv($out, [
+                            'driver',
+                            $r->driver_id,
+                            trim($r->first_name . ' ' . $r->last_name),
+                            $r->id,
+                            $r->type,
+                            $r->amount_fcfa,
+                            $r->balance_after,
+                            $r->course_id,
+                            $r->created_at,
+                        ], ';');
+                    }
+                });
+
+            \DB::table('user_wallet_transactions as uwt')
+                ->join('users as u', 'u.id', '=', 'uwt.user_id')
+                ->whereBetween('uwt.created_at', [$from, $to])
+                ->orderBy('uwt.created_at')
+                ->select('uwt.id', 'uwt.type', 'uwt.amount_fcfa', 'uwt.balance_after', 'uwt.course_id', 'uwt.created_at', 'u.id as user_id', 'u.name')
+                ->chunk(500, function ($rows) use ($out) {
+                    foreach ($rows as $r) {
+                        fputcsv($out, [
+                            'user',
+                            $r->user_id,
+                            $r->name,
+                            $r->id,
+                            $r->type,
+                            $r->amount_fcfa,
+                            $r->balance_after,
+                            $r->course_id,
+                            $r->created_at,
+                        ], ';');
+                    }
+                });
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    // ===== 15. RÉCONCILIATION COMPTABLE (super-admin uniquement) =====
+    /**
+     * Dashboard financier pour la compta. Retourne en 1 seule réponse :
+     *  - Snapshot temps réel (argent en circulation dans tous les wallets)
+     *  - Flux sur une période (top-ups, charges, retraits, refunds)
+     *  - Marge brute plateforme (revenus courses - part driver)
+     *  - Anomalies à vérifier (4 catégories)
+     *
+     * Cf. project_wallet_driver_todo #6.
+     */
+    public function reconciliation(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to'   => ['nullable', 'date'],
+        ]);
+        // Période par défaut : 30 derniers jours
+        $from = isset($data['from']) ? \Carbon\Carbon::parse($data['from'])->startOfDay() : now()->subDays(30)->startOfDay();
+        $to   = isset($data['to'])   ? \Carbon\Carbon::parse($data['to'])->endOfDay()     : now()->endOfDay();
+
+        // ===== A. Snapshot temps réel : argent en circulation =====
+        $driverCirculation = \DB::table('driver_wallets')->selectRaw(
+            'COALESCE(SUM(balance), 0) AS total, COUNT(*) AS wallets'
+        )->first();
+        $userCirculation = \DB::table('user_wallets')->selectRaw(
+            'COALESCE(SUM(balance), 0) AS total, COALESCE(SUM(pending_reserved), 0) AS reserved, COUNT(*) AS wallets'
+        )->first();
+
+        // ===== B/C. Flux sur la période =====
+        // Driver wallet flux (par type)
+        $driverFlows = \DB::table('wallet_transactions')
+            ->whereBetween('created_at', [$from, $to])
+            ->selectRaw('type, COUNT(*) AS n, COALESCE(SUM(amount_fcfa), 0) AS total')
+            ->groupBy('type')
+            ->get()
+            ->keyBy('type');
+        // User wallet flux (par type)
+        $userFlows = \DB::table('user_wallet_transactions')
+            ->whereBetween('created_at', [$from, $to])
+            ->selectRaw('type, COUNT(*) AS n, COALESCE(SUM(amount_fcfa), 0) AS total')
+            ->groupBy('type')
+            ->get()
+            ->keyBy('type');
+        // Retraits effectivement versés sur la période
+        $withdrawsPaid = \DB::table('wallet_withdraw_requests')
+            ->whereBetween('paid_at', [$from, $to])
+            ->whereNotNull('paid_at')
+            ->selectRaw('COUNT(*) AS n, COALESCE(SUM(amount_fcfa), 0) AS total')
+            ->first();
+
+        // ===== E. Marge brute plateforme sur la période =====
+        // Courses livrées sur la période : delivery_fee (revenu) - driver_earnings (commission driver)
+        $revenue = \DB::table('courses')
+            ->where('status', Course::STATUS_DELIVERED)
+            ->whereBetween('delivered_at', [$from, $to])
+            ->selectRaw(
+                'COUNT(*) AS n,
+                COALESCE(SUM(delivery_fee), 0) AS gross,
+                COALESCE(SUM(driver_earnings), 0) AS driver_share'
+            )
+            ->first();
+
+        // ===== D. Anomalies à vérifier =====
+        // 1. Driver wallets dormants : balance > 5000 ET dernière transaction > 60 jours
+        $dormantThreshold = now()->subDays(60);
+        $dormantDrivers = \DB::table('driver_wallets as dw')
+            ->join('drivers as d', 'd.id', '=', 'dw.driver_id')
+            ->leftJoin(\DB::raw('(SELECT driver_id, MAX(created_at) AS last_tx FROM wallet_transactions GROUP BY driver_id) AS lt'), 'lt.driver_id', '=', 'dw.driver_id')
+            ->where('dw.balance', '>', 5000)
+            ->where(function ($q) use ($dormantThreshold) {
+                $q->whereNull('lt.last_tx')->orWhere('lt.last_tx', '<', $dormantThreshold);
+            })
+            ->select('d.id', 'd.first_name', 'd.last_name', 'dw.balance', 'lt.last_tx')
+            ->orderByDesc('dw.balance')
+            ->limit(20)
+            ->get();
+
+        // 2. Driver balances très élevées (> 100 000 FCFA)
+        $highBalanceDrivers = \DB::table('driver_wallets as dw')
+            ->join('drivers as d', 'd.id', '=', 'dw.driver_id')
+            ->where('dw.balance', '>', 100000)
+            ->select('d.id', 'd.first_name', 'd.last_name', 'dw.balance')
+            ->orderByDesc('dw.balance')
+            ->limit(20)
+            ->get();
+
+        // 3. Drift driver : SUM(transactions.amount_fcfa) != wallet.balance pour un driver
+        // Note : on cherche les wallets dont la somme des TX diverge de la balance enregistrée.
+        $driftDrivers = \DB::select(<<<'SQL'
+            SELECT dw.driver_id, d.first_name, d.last_name, dw.balance,
+                   COALESCE(SUM(wt.amount_fcfa), 0) AS sum_tx,
+                   dw.balance - COALESCE(SUM(wt.amount_fcfa), 0) AS drift
+            FROM driver_wallets dw
+            JOIN drivers d ON d.id = dw.driver_id
+            LEFT JOIN wallet_transactions wt ON wt.driver_id = dw.driver_id
+            GROUP BY dw.driver_id, d.first_name, d.last_name, dw.balance
+            HAVING dw.balance != COALESCE(SUM(wt.amount_fcfa), 0)
+            LIMIT 20
+        SQL);
+
+        // 4. Drift user : pareil côté user_wallets
+        $driftUsers = \DB::select(<<<'SQL'
+            SELECT uw.user_id, u.name, uw.balance,
+                   COALESCE(SUM(uwt.amount_fcfa), 0) AS sum_tx,
+                   uw.balance - COALESCE(SUM(uwt.amount_fcfa), 0) AS drift
+            FROM user_wallets uw
+            JOIN users u ON u.id = uw.user_id
+            LEFT JOIN user_wallet_transactions uwt ON uwt.user_id = uw.user_id
+            GROUP BY uw.user_id, u.name, uw.balance
+            HAVING uw.balance != COALESCE(SUM(uwt.amount_fcfa), 0)
+            LIMIT 20
+        SQL);
+
+        return response()->json([
+            'period' => [
+                'from' => $from->toIso8601String(),
+                'to'   => $to->toIso8601String(),
+            ],
+            'snapshot' => [
+                'drivers' => [
+                    'wallets_count'   => (int) $driverCirculation->wallets,
+                    'total_balance'   => (int) $driverCirculation->total,
+                ],
+                'users' => [
+                    'wallets_count'   => (int) $userCirculation->wallets,
+                    'total_balance'   => (int) $userCirculation->total,
+                    'total_reserved'  => (int) $userCirculation->reserved,
+                ],
+                'grand_total' => (int) $driverCirculation->total + (int) $userCirculation->total,
+            ],
+            'flows' => [
+                'driver' => $driverFlows,
+                'user'   => $userFlows,
+                'withdraws_paid' => [
+                    'count' => (int) $withdrawsPaid->n,
+                    'total' => (int) $withdrawsPaid->total,
+                ],
+            ],
+            'margin' => [
+                'delivered_courses' => (int) $revenue->n,
+                'gross_revenue'     => (int) $revenue->gross,
+                'driver_commission' => (int) $revenue->driver_share,
+                'platform_margin'   => (int) $revenue->gross - (int) $revenue->driver_share,
+            ],
+            'anomalies' => [
+                'dormant_drivers'      => $dormantDrivers,
+                'high_balance_drivers' => $highBalanceDrivers,
+                'drift_drivers'        => $driftDrivers,
+                'drift_users'          => $driftUsers,
+                'has_any' => $dormantDrivers->isNotEmpty()
+                    || $highBalanceDrivers->isNotEmpty()
+                    || count($driftDrivers) > 0
+                    || count($driftUsers) > 0,
+            ],
+        ]);
+    }
+
+    // ===== 14quinquies. AJUSTEMENT MANUEL D'UN WALLET DRIVER (super-admin) =====
+    /**
+     * Crédit ou débit manuel d'un wallet driver, hors flow Fedapay.
+     * Cas d'usage : rattrapage de bug, top-up MoMo direct, geste commercial, test.
+     *
+     * Garde-fous :
+     *  - réservé au super-admin (gardé côté route)
+     *  - direction explicite ('credit' ou 'debit')
+     *  - raison obligatoire (min 10 chars) — trace dans metadata
+     *  - balance >= 0 garanti par le service (DomainException si débit > balance)
+     *  - chaque appel = 1 transaction immuable (audit)
+     */
+    public function adjustDriverWallet(
+        Request $request,
+        \App\Models\Driver $driver,
+        \App\Services\DriverWalletService $walletService,
+    ): JsonResponse {
+        $data = $request->validate([
+            'direction' => ['required', Rule::in(['credit', 'debit'])],
+            'amount'    => ['required', 'integer', 'min:1'],
+            'reason'    => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $admin = $request->user()->admin;
+
+        try {
+            $tx = $data['direction'] === 'credit'
+                ? $walletService->adjustCredit($driver, $data['amount'], $admin->id, $data['reason'])
+                : $walletService->adjustDebit($driver, $data['amount'], $admin->id, $data['reason']);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message'      => 'Ajustement effectué.',
+            'transaction'  => $tx,
+            'wallet'       => $driver->wallet()->first(),
+        ]);
+    }
+
+    // ===== 14sexies. AJUSTEMENT MANUEL D'UN WALLET USER (marchand/particulier) =====
+    public function adjustUserWallet(
+        Request $request,
+        \App\Models\User $user,
+        \App\Services\UserWalletService $userWalletService,
+    ): JsonResponse {
+        if (! $user->isMarchant() && ! $user->isIndividual()) {
+            return response()->json([
+                'message' => "L'ajustement de wallet user ne s'applique qu'aux marchands et particuliers.",
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'direction' => ['required', Rule::in(['credit', 'debit'])],
+            'amount'    => ['required', 'integer', 'min:1'],
+            'reason'    => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $admin = $request->user()->admin;
+
+        try {
+            $tx = $data['direction'] === 'credit'
+                ? $userWalletService->adjustCredit($user, $data['amount'], $admin->id, $data['reason'])
+                : $userWalletService->adjustDebit($user, $data['amount'], $admin->id, $data['reason']);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message'     => 'Ajustement effectué.',
+            'transaction' => $tx,
+            'wallet'      => $user->wallet()->first(),
+        ]);
+    }
+
+    // ===== 14quater. MARQUER UNE DEMANDE COMME VIRÉE (trace du payout réel) =====
+    /**
+     * Après l'approbation (qui débite le wallet), l'admin va virer manuellement sur
+     * MoMo/banque. Une fois fait, il revient ici renseigner la référence du virement
+     * pour avoir une preuve traçable du paiement réel.
+     *
+     * Sans cet endpoint, on n'avait aucun moyen de répondre à un driver qui dirait
+     * « je n'ai pas reçu mon argent ». Cf. project_wallet_driver_todo #2.
+     */
+    public function markWithdrawRequestPaid(
+        Request $request,
+        \App\Models\WalletWithdrawRequest $withdraw,
+        NotificationService $notifier,
+    ): JsonResponse {
+        $data = $request->validate([
+            'external_payout_reference' => ['required', 'string', 'max:100'],
+        ]);
+
+        if ($withdraw->status !== \App\Models\WalletWithdrawRequest::STATUS_APPROVED) {
+            return response()->json([
+                'message' => "Seules les demandes approuvées peuvent être marquées comme virées (statut actuel: {$withdraw->status}).",
+            ], 422);
+        }
+
+        if ($withdraw->isPaid()) {
+            return response()->json([
+                'message' => "Cette demande a déjà été marquée comme virée le " . $withdraw->paid_at->format('d/m/Y H:i') . ".",
+            ], 422);
+        }
+
+        $admin = $request->user()->admin;
+
+        $withdraw->update([
+            'external_payout_reference' => trim($data['external_payout_reference']),
+            'paid_at'                   => now(),
+            'paid_by_admin_id'          => $admin->id,
+        ]);
+
+        $notifier->sendToUser(
+            $withdraw->driver->user_id,
+            'wallet.withdraw_paid',
+            '✅ Virement effectué',
+            "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA a été viré (réf: {$data['external_payout_reference']}).",
+            ['withdraw_id' => $withdraw->id, 'reference' => $data['external_payout_reference']],
+            null,
+        );
+
+        return response()->json([
+            'message' => 'Demande marquée comme virée. Le driver a été notifié.',
+            'request' => $withdraw->fresh()->load(['driver.user', 'paidByAdmin']),
         ]);
     }
 

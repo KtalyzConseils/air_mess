@@ -6,6 +6,7 @@ import AdminHeader from '../../components/AdminHeader'
 import MarchantStatusBadge from '../../components/MarchantStatusBadge'
 import KpiCard from '../../components/KpiCard'
 import ConfirmModal from '../../components/ConfirmModal'
+import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
 import {
   fetchMarchant,
   validateMarchant,
@@ -14,6 +15,8 @@ import {
   rejectMarchant,
   deleteMarchant,
 } from '../../api/admin'
+import { useAuthStore } from '../../stores/authStore'
+import { hasAdminRole } from '../../lib/permissions'
 
 const SECTEUR_LABEL: Record<string, string> = {
   supermarche: '🛒 Supermarché',
@@ -22,13 +25,6 @@ const SECTEUR_LABEL: Record<string, string> = {
   pharmacie:   '💊 Pharmacie',
   ecommerce:   '📦 E-commerce',
   autre:       '🏷️ Autre',
-}
-
-const PLAN_LABEL: Record<string, string> = {
-  trial:    'Essai',
-  starter:  'Starter',
-  pro:      'Pro',
-  business: 'Business',
 }
 
 type ConfirmAction = 'validate' | 'reactivate' | 'suspend' | 'reject' | 'delete'
@@ -105,6 +101,9 @@ export default function MarchantDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
+  const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
+  const currentUser = useAuthStore((s) => s.user)
+  const isSuperAdmin = hasAdminRole(currentUser, 'super')
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'marchant', id],
@@ -269,18 +268,53 @@ export default function MarchantDetailPage() {
                 <Row label="Téléphone">{data.marchant.user.phone ?? '—'}</Row>
               </section>
 
-              {/* Carte 2 : abonnement */}
+              {/* Carte 2 : wallet (remplace l'ancienne carte abonnement) */}
               <section className="bg-white rounded-2xl shadow-sm p-6">
-                <h3 className="font-semibold text-airmess-dark mb-3">Abonnement</h3>
-                <Row label="Formule">{PLAN_LABEL[data.marchant.subscription_plan] ?? data.marchant.subscription_plan}</Row>
-                <Row label="Statut">
-                  <MarchantStatusBadge status={data.marchant.subscription_status} />
-                </Row>
-                <Row label="Validé le">{formatDate(data.marchant.validated_at)}</Row>
-                <Row label="Début abonnement">{formatDate(data.marchant.subscription_started_at)}</Row>
-                <Row label="Prochaine facturation">{formatDate(data.marchant.subscription_next_billing_at)}</Row>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <h3 className="font-semibold text-airmess-dark">💰 Wallet</h3>
+                  {isSuperAdmin && data.marchant.user.wallet && (
+                    <button
+                      onClick={() => setWalletAdjustOpen(true)}
+                      className="text-xs px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium"
+                    >
+                      ⚙️ Ajuster…
+                    </button>
+                  )}
+                </div>
+                {data.marchant.user.wallet ? (
+                  <>
+                    <Row label="Balance">
+                      <strong>{data.marchant.user.wallet.balance.toLocaleString('fr-FR')} FCFA</strong>
+                    </Row>
+                    <Row label="Réservé (en cours)">
+                      {data.marchant.user.wallet.pending_reserved.toLocaleString('fr-FR')} FCFA
+                    </Row>
+                    <Row label="Total rechargé">
+                      {data.marchant.user.wallet.total_deposited.toLocaleString('fr-FR')} FCFA
+                    </Row>
+                    <Row label="Total dépensé">
+                      {data.marchant.user.wallet.total_spent.toLocaleString('fr-FR')} FCFA
+                    </Row>
+                    <Row label="Validé le">{formatDate(data.marchant.validated_at)}</Row>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-500">Aucun wallet associé.</p>
+                )}
               </section>
             </div>
+
+            {/* Modal d'ajustement wallet (super-admin uniquement) */}
+            {isSuperAdmin && data.marchant.user.wallet && (
+              <WalletAdjustmentModal
+                open={walletAdjustOpen}
+                onClose={() => setWalletAdjustOpen(false)}
+                target="user"
+                targetId={data.marchant.user.id}
+                targetName={data.marchant.raison_sociale}
+                currentBalance={data.marchant.user.wallet.balance}
+                onSuccessInvalidate={[['admin', 'marchant', id]]}
+              />
+            )}
 
             {/* Stats de courses */}
             <section className="mt-6">

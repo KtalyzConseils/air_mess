@@ -12,6 +12,7 @@ import AddressPicker from '../components/AddressPicker'
 import type { Address } from '../api/addresses'
 import LocationPicker from '../components/LocationPicker'
 import { useAuthStore } from '../stores/authStore'
+import { fetchWallet } from '../api/wallet'
 
 type FormValues = CreateCoursePayload
 
@@ -40,6 +41,16 @@ export default function NewCoursePage() {
     queryKey: ['delivery-fees'],
     queryFn: fetchDeliveryFees,
     staleTime: 5 * 60 * 1000, // 5 min : les tarifs changent rarement
+  })
+
+  // Wallet du marchand/particulier : on l'affiche pour qu'il sache combien sera
+  // débité ET pour le prévenir si paiement direct (pay-as-you-go) sera demandé.
+  const isPayerUser = user?.type === 'marchant' || user?.type === 'individual'
+  const { data: wallet } = useQuery({
+    queryKey: ['wallet'],
+    queryFn: fetchWallet,
+    enabled: isPayerUser,
+    staleTime: 30_000,
   })
 
   // Pré-remplissage de l'expéditeur depuis le profil
@@ -212,18 +223,68 @@ export default function NewCoursePage() {
               <p className="text-sm text-amber-900">{quotaError}</p>
             </div>
             <Link
-              to="/billing"
+              to="/wallet"
               className="ml-3 px-3 py-1.5 bg-airmess-yellow text-airmess-dark text-sm font-semibold rounded-lg hover:opacity-90"
             >
-              Voir les plans
+              Recharger
             </Link>
           </div>
         )}
+
+        {/* Bandeau wallet — montre le solde et prévient si la course passera en paiement direct.
+            Marchand : toujours payeur. Particulier : seulement s'il est hors quota
+            (sinon course gratuite via quota, le wallet n'est pas concerné). */}
+        {isPayerUser && wallet && (() => {
+          const fee = (watch('urgency') ?? 'standard') === 'express' ? fees.express : fees.standard
+          const individualOutOfQuota =
+            user?.type === 'individual' &&
+            user.individual &&
+            user.individual.monthly_courses_used >= user.individual.monthly_courses_limit
+          const isPayer = user?.type === 'marchant' || individualOutOfQuota
+          if (!isPayer) return null
+
+          const canCover = wallet.available >= fee
+
+          return canCover ? (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-emerald-900">
+                <span>💰</span>
+                <span>
+                  <strong>{wallet.available.toLocaleString('fr-FR')} FCFA</strong> dans votre wallet.
+                  Cette course ({fee.toLocaleString('fr-FR')} FCFA) sera débitée à la livraison.
+                </span>
+              </div>
+              <Link to="/wallet" className="text-xs text-emerald-700 underline shrink-0">
+                Gérer →
+              </Link>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 mb-4 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2 text-sm text-amber-900">
+                <span className="text-base">⚠️</span>
+                <div>
+                  <p className="font-semibold">Wallet insuffisant ({wallet.available.toLocaleString('fr-FR')} FCFA)</p>
+                  <p className="text-xs mt-0.5">
+                    Cette course ({fee.toLocaleString('fr-FR')} FCFA) sera réglée par paiement direct Fedapay à la création.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/wallet"
+                className="ml-3 px-3 py-1.5 bg-airmess-yellow text-airmess-dark text-sm font-semibold rounded-lg hover:opacity-90 shrink-0"
+              >
+                Recharger
+              </Link>
+            </div>
+          )
+        })()}
 
         {user?.type === 'individual' && user.individual && (() => {
           const used = user.individual.monthly_courses_used
           const limit = user.individual.monthly_courses_limit
           const reached = used >= limit
+          // Le bandeau wallet juste au-dessus prend déjà en charge l'info wallet/paiement
+          // direct quand le quota est atteint — ici on évite de dupliquer.
           return (
             <div className={`rounded-xl p-3 mb-4 text-sm flex items-start gap-2 border ${
               reached
@@ -239,7 +300,7 @@ export default function NewCoursePage() {
                 </p>
                 {reached && (
                   <p className="text-xs mt-0.5">
-                    Vous pouvez tout de même créer cette course — un paiement à l'unité vous sera demandé.
+                    Cette course sera débitée de votre wallet si le solde le permet, sinon par paiement direct Fedapay.
                   </p>
                 )}
               </div>

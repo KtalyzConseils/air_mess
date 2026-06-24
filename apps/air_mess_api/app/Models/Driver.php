@@ -72,6 +72,30 @@ class Driver extends Model
     }
 
     /**
+     * Wallet (caution) du livreur. Créé à l'inscription, 1 par driver.
+     */
+    public function wallet()
+    {
+        return $this->hasOne(DriverWallet::class);
+    }
+
+    /**
+     * Journal de toutes les opérations sur le wallet.
+     */
+    public function walletTransactions()
+    {
+        return $this->hasMany(WalletTransaction::class);
+    }
+
+    /**
+     * Demandes de retrait de caution (pending = en attente de validation admin).
+     */
+    public function withdrawRequests()
+    {
+        return $this->hasMany(WalletWithdrawRequest::class);
+    }
+
+    /**
      * Solde en attente (gains livrés mais pas encore versés).
      */
     public function pendingBalance(): int

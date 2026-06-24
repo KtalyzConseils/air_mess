@@ -92,68 +92,8 @@ export async function fetchDriverStats(): Promise<DriverStats> {
   return data
 }
 
-// ===== Gains réels (driver_earnings table) =====
-
-export interface DriverBalance {
-  pending_balance_fcfa: number
-  total_paid_out_fcfa: number
-  pending_count: number
-}
-
-export async function fetchDriverBalance(): Promise<DriverBalance> {
-  const { data } = await api.get('/driver/balance')
-  return data
-}
-
-export interface EarningItem {
-  id: number
-  driver_id: number
-  course_id: number
-  amount_fcfa: number
-  status: 'pending' | 'paid' | 'void'
-  payout_id: number | null
-  credited_at: string | null
-  course?: {
-    id: number
-    reference: string
-    origin_quartier: string
-    destination_quartier: string
-    delivered_at: string | null
-  }
-}
-
-export async function fetchDriverEarnings(page = 1): Promise<{
-  data: EarningItem[]
-  current_page: number
-  last_page: number
-  total: number
-}> {
-  const { data } = await api.get('/driver/earnings', { params: { page } })
-  return data
-}
-
-export interface PayoutItem {
-  id: number
-  total_amount_fcfa: number
-  earnings_count: number
-  status: 'pending' | 'paid' | 'failed'
-  method: string
-  destination: string | null
-  period_start: string
-  period_end: string
-  paid_at: string | null
-  created_at: string
-}
-
-export async function fetchDriverPayouts(page = 1): Promise<{
-  data: PayoutItem[]
-  current_page: number
-  last_page: number
-  total: number
-}> {
-  const { data } = await api.get('/driver/payouts', { params: { page } })
-  return data
-}
+// NB : fetchDriverBalance / fetchDriverEarnings / fetchDriverPayouts ont été supprimées
+// le 2026-06-23. Les gains sont désormais crédités directement dans le wallet.
 
 export interface CourseHistoryItem {
   id: number

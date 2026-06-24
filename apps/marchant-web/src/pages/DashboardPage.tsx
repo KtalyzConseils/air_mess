@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
 import KpiCard from '../components/KpiCard'
 import StatusBadge from '../components/StatusBadge'
-import SubscriptionAlertBanner from '../components/SubscriptionAlertBanner'
 import { fetchCourses, type Course } from '../api/courses'
 import { useState } from 'react'
 import { useAuthStore } from '../stores/authStore'
@@ -50,8 +49,6 @@ export default function DashboardPage() {
       <AppHeader />
 
       <main className="max-w-7xl mx-auto p-4 md:p-6">
-        <SubscriptionAlertBanner />
-
         {isPendingMarchant && (
             <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex items-start gap-3">
             <span className="text-lg leading-none">⏳</span>

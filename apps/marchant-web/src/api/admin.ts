@@ -59,6 +59,21 @@ export interface DriverStats {
   last_delivery_at: string | null
 }
 
+export interface DriverWallet {
+  id: number
+  balance: number
+  total_deposited: number
+  total_withdrawn: number
+}
+
+export interface UserWallet {
+  id: number
+  balance: number
+  pending_reserved: number
+  total_deposited: number
+  total_spent: number
+}
+
 export interface DriverDetail {
   id: number
   first_name: string
@@ -81,6 +96,7 @@ export interface DriverDetail {
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
   user: { name: string; email: string; phone: string | null }
+  wallet: DriverWallet | null
 }
 
 export async function fetchDriver(
@@ -107,7 +123,7 @@ export async function fetchAdminCourses(params: {
 }
 
 export type MarchantWithUser = Marchant & {
-  user: { id: number; name: string; email: string; phone: string | null }
+  user: { id: number; name: string; email: string; phone: string | null; wallet?: UserWallet | null }
 }
 
 export async function fetchPendingMarchants(): Promise<MarchantWithUser[]> {
@@ -266,7 +282,7 @@ export async function resolveIncident(id: number, resolution_note: string): Prom
 // ============== PARTICULIERS (ADMIN) ==============
 
 export type IndividualWithUser = Individual & {
-  user: { id: number; name: string; email: string; phone: string | null; is_active: boolean }
+  user: { id: number; name: string; email: string; phone: string | null; is_active: boolean; wallet?: UserWallet | null }
 }
 
 export interface IndividualListParams {
@@ -323,4 +339,216 @@ export async function suspendIndividual(id: number, reason: string): Promise<voi
 
 export async function reactivateIndividual(id: number): Promise<void> {
   await api.post(`/admin/individuals/${id}/reactivate`)
+}
+
+// ============== WALLET WITHDRAW REQUESTS (ADMIN) ==============
+
+export interface WithdrawRequestWithDriver {
+  id: number
+  driver_id: number
+  amount_fcfa: number
+  target_method: 'momo' | 'bank'
+  target_account: string
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  decided_by_admin_id: number | null
+  decided_at: string | null
+  rejection_reason: string | null
+  created_at: string
+  updated_at: string
+  driver: {
+    id: number
+    user_id: number
+    first_name: string
+    last_name: string
+    user: { id: number; phone: string | null; email: string }
+  }
+}
+
+export interface WithdrawRequestListParams {
+  status?: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  page?: number
+  per_page?: number
+}
+
+export async function fetchWithdrawRequests(
+  params: WithdrawRequestListParams,
+): Promise<Paginated<WithdrawRequestWithDriver>> {
+  const { data } = await api.get('/admin/withdraw-requests', { params })
+  return data
+}
+
+// ----- Détail d'une demande (page de revue admin) -----
+
+export interface WithdrawRequestDetailDriver {
+  id: number
+  user_id: number
+  first_name: string
+  last_name: string
+  availability_status: string
+  activation_status: string
+  user: { id: number; phone: string | null; email: string }
+  wallet: {
+    id: number
+    balance: number
+    total_deposited: number
+    total_withdrawn: number
+  } | null
+}
+
+export interface WithdrawRequestDetailRequest {
+  id: number
+  driver_id: number
+  amount_fcfa: number
+  target_method: 'momo' | 'bank'
+  target_account: string
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  decided_by_admin_id: number | null
+  decided_at: string | null
+  rejection_reason: string | null
+  external_payout_reference: string | null
+  paid_at: string | null
+  paid_by_admin_id: number | null
+  created_at: string
+  updated_at: string
+  driver: WithdrawRequestDetailDriver
+  decided_by_admin: { id: number; first_name: string; last_name: string } | null
+  paid_by_admin: { id: number; first_name: string; last_name: string } | null
+}
+
+export interface WithdrawRequestActiveCourse {
+  id: number
+  reference: string
+  status: string
+  has_collection: boolean
+  collection_amount: number | null
+}
+
+export interface WithdrawRequestRecentTx {
+  id: number
+  type: 'deposit' | 'withdraw' | 'pickup_debit' | 'refund' | 'earning'
+  amount_fcfa: number
+  balance_after: number
+  course_id: number | null
+  created_at: string
+  course: { id: number; reference: string } | null
+}
+
+export interface WithdrawRequestPastAggregates {
+  approved_count: number
+  approved_total: number
+  rejected_count: number
+  cancelled_count: number
+}
+
+export interface WithdrawRequestDetailResponse {
+  request: WithdrawRequestDetailRequest
+  active_course: WithdrawRequestActiveCourse | null
+  recent_transactions: WithdrawRequestRecentTx[]
+  past_requests: WithdrawRequestPastAggregates
+}
+
+export async function fetchWithdrawRequest(id: number | string): Promise<WithdrawRequestDetailResponse> {
+  const { data } = await api.get(`/admin/withdraw-requests/${id}`)
+  return data
+}
+
+export async function approveWithdrawRequest(id: number): Promise<void> {
+  await api.post(`/admin/withdraw-requests/${id}/approve`)
+}
+
+export async function rejectWithdrawRequest(id: number, reason: string): Promise<void> {
+  await api.post(`/admin/withdraw-requests/${id}/reject`, { reason })
+}
+
+export async function markWithdrawRequestPaid(id: number, externalReference: string): Promise<void> {
+  await api.post(`/admin/withdraw-requests/${id}/mark-paid`, {
+    external_payout_reference: externalReference,
+  })
+}
+
+// ============== AJUSTEMENT MANUEL DES WALLETS (SUPER-ADMIN) ==============
+
+export type WalletAdjustmentTarget = 'driver' | 'user'
+export type WalletAdjustmentDirection = 'credit' | 'debit'
+
+export interface WalletAdjustmentPayload {
+  direction: WalletAdjustmentDirection
+  amount: number
+  reason: string
+}
+
+/**
+ * Ajustement manuel d'un wallet driver. Réservé super-admin (gardé côté API).
+ * Le wallet est crédité ou débité immédiatement, une transaction immuable est créée
+ * avec admin_id + raison.
+ */
+export async function adjustDriverWallet(driverId: number, payload: WalletAdjustmentPayload): Promise<void> {
+  await api.post(`/admin/drivers/${driverId}/wallet-adjustment`, payload)
+}
+
+/**
+ * Ajustement manuel d'un wallet user (marchand ou particulier).
+ */
+export async function adjustUserWallet(userId: number, payload: WalletAdjustmentPayload): Promise<void> {
+  await api.post(`/admin/users/${userId}/wallet-adjustment`, payload)
+}
+
+// ============== RÉCONCILIATION COMPTABLE (SUPER-ADMIN) ==============
+
+export interface ReconciliationFlow {
+  type: string
+  n: number
+  total: number
+}
+
+export interface ReconciliationResponse {
+  period: { from: string; to: string }
+  snapshot: {
+    drivers: { wallets_count: number; total_balance: number }
+    users: { wallets_count: number; total_balance: number; total_reserved: number }
+    grand_total: number
+  }
+  flows: {
+    driver: Record<string, ReconciliationFlow>
+    user: Record<string, ReconciliationFlow>
+    withdraws_paid: { count: number; total: number }
+  }
+  margin: {
+    delivered_courses: number
+    gross_revenue: number
+    driver_commission: number
+    platform_margin: number
+  }
+  anomalies: {
+    dormant_drivers: Array<{ id: number; first_name: string; last_name: string; balance: number; last_tx: string | null }>
+    high_balance_drivers: Array<{ id: number; first_name: string; last_name: string; balance: number }>
+    drift_drivers: Array<{ driver_id: number; first_name: string; last_name: string; balance: number; sum_tx: number; drift: number }>
+    drift_users: Array<{ user_id: number; name: string; balance: number; sum_tx: number; drift: number }>
+    has_any: boolean
+  }
+}
+
+export async function fetchReconciliation(from?: string, to?: string): Promise<ReconciliationResponse> {
+  const { data } = await api.get('/admin/reconciliation', { params: { from, to } })
+  return data
+}
+
+/**
+ * Construit l'URL absolue pour télécharger le CSV avec params from/to.
+ * Le téléchargement passe par axios pour bénéficier du Bearer token, puis on génère un Blob.
+ */
+export async function downloadReconciliationCsv(from?: string, to?: string): Promise<void> {
+  const response = await api.get('/admin/reconciliation/export.csv', {
+    params: { from, to },
+    responseType: 'blob',
+  })
+  const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8' })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `reconciliation_${from ?? 'auto'}_${to ?? 'auto'}.csv`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => window.URL.revokeObjectURL(url), 30_000)
 }
