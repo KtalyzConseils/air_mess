@@ -3,7 +3,11 @@
  * The base URL is injected at build time via VITE_APP_URL (see .env.example).
  * Falls back to localhost so `npm run dev` works without configuration.
  */
-const APP_URL = (import.meta.env.VITE_APP_URL ?? 'http://localhost:5173').replace(/\/$/, '')
+// Use VITE_APP_URL when provided AND non-empty; otherwise fall back.
+// (An empty string from a misconfigured build arg must NOT produce relative links.)
+const RAW = (import.meta.env.VITE_APP_URL ?? '').trim()
+const FALLBACK = import.meta.env.DEV ? 'http://localhost:5173' : 'https://app.airmess-logistics.com'
+const APP_URL = (RAW || FALLBACK).replace(/\/$/, '')
 
 export const links = {
   app: APP_URL,
