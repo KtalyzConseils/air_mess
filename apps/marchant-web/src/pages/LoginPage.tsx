@@ -43,7 +43,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-airmess-dark p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-airmess-dark">R Mess</h1>
+          <h1 className="text-4xl font-bold text-airmess-dark">Air Mess</h1>
           <p className="text-gray-500 mt-2">Espace marchand</p>
         </div>
 
@@ -103,7 +103,7 @@ export default function LoginPage() {
         </p>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          © 2026 KTALYZ — RMess
+          © 2026 KTALYZ — Air Mess
         </p>
       </div>
     </div>

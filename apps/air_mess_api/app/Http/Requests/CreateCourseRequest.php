@@ -11,6 +11,10 @@ class CreateCourseRequest extends FormRequest
     /**
      * Autorise la requête seulement si l'utilisateur est marchant ou particulier,
      * actif, et (pour marchant) validé.
+     *
+     * Note : depuis la suppression du système d'abonnement (2026-06-24, cf.
+     * project_wallet_user), on ne se base plus sur subscription_status pour autoriser.
+     * Le paiement de la course est traité dans le controller via wallet ou pay-as-you-go.
      */
     public function authorize(): bool
     {
@@ -22,19 +26,12 @@ class CreateCourseRequest extends FormRequest
 
         if ($user->isMarchant()) {
             $marchant = $user->marchant;
-            if (! $marchant || ! $marchant->validated_at) {
-                return false;
-            }
-            if (! in_array($marchant->subscription_status, ['trial', 'active'], true)) {
-                return false;
-            }
-            // Le check de quota se fait dans le controller pour retourner un message clair (au lieu d'un 403 muet).
-            return true;
+            // Seul prérequis : marchand validé (l'abo n'existe plus, le wallet gère le paiement).
+            return $marchant && $marchant->validated_at !== null;
         }
 
         if ($user->isIndividual()) {
-            // Le check de quota se fait dans le controller : au-delà du quota le particulier
-            // peut payer la course à l'unité (flux one-shot).
+            // Le particulier crée librement : quota gratuit puis wallet/pay-as-you-go côté controller.
             return true;
         }
 

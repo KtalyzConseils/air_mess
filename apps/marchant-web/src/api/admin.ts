@@ -95,13 +95,42 @@ export interface DriverDetail {
   driving_license_url: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
-  user: { name: string; email: string; phone: string | null }
+  user: { id: number; name: string; email: string; phone: string | null }
   wallet: DriverWallet | null
+}
+
+export type DeclineReason =
+  | 'too_far'
+  | 'wrong_quartier'
+  | 'no_helmet'
+  | 'vehicle_unfit'
+  | 'personal'
+  | 'other'
+
+export interface DeclineRecord {
+  id: number
+  driver_id: number
+  course_id: number
+  reason: DeclineReason
+  custom_reason: string | null
+  created_at: string
+  course: {
+    id: number
+    reference: string
+    origin_quartier: string
+    destination_quartier: string
+  } | null
+}
+
+export interface DriverDeclines {
+  total_30d: number
+  by_reason: Partial<Record<DeclineReason, number>>
+  recent: DeclineRecord[]
 }
 
 export async function fetchDriver(
   id: number | string,
-): Promise<{ driver: DriverDetail; stats: DriverStats }> {
+): Promise<{ driver: DriverDetail; stats: DriverStats; declines: DriverDeclines }> {
   const { data } = await api.get(`/admin/drivers/${id}`)
   return data
 }
@@ -408,6 +437,10 @@ export interface WithdrawRequestDetailRequest {
   external_payout_reference: string | null
   paid_at: string | null
   paid_by_admin_id: number | null
+  payout_initiated_at: string | null
+  payout_provider_ref: string | null
+  payout_failed_at: string | null
+  payout_failure_reason: string | null
   created_at: string
   updated_at: string
   driver: WithdrawRequestDetailDriver
@@ -464,6 +497,10 @@ export async function markWithdrawRequestPaid(id: number, externalReference: str
   await api.post(`/admin/withdraw-requests/${id}/mark-paid`, {
     external_payout_reference: externalReference,
   })
+}
+
+export async function retryWithdrawPayout(id: number): Promise<void> {
+  await api.post(`/admin/withdraw-requests/${id}/retry-payout`)
 }
 
 // ============== AJUSTEMENT MANUEL DES WALLETS (SUPER-ADMIN) ==============

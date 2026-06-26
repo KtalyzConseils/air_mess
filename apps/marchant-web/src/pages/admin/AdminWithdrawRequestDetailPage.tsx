@@ -8,6 +8,7 @@ import {
   approveWithdrawRequest,
   rejectWithdrawRequest,
   markWithdrawRequestPaid,
+  retryWithdrawPayout,
   type WithdrawRequestRecentTx,
 } from '../../api/admin'
 
@@ -102,6 +103,21 @@ export default function AdminWithdrawRequestDetailPage() {
     },
   })
 
+  const retryPayoutMutation = useMutation({
+    mutationFn: () => retryWithdrawPayout(Number(id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests', 'detail', id] })
+    },
+    onError: (err) => {
+      const message =
+        err instanceof AxiosError
+          ? err.response?.data?.message ?? 'Erreur lors de la retentative.'
+          : 'Erreur inattendue.'
+      window.alert(`⚠️ ${message}`)
+    },
+  })
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -146,6 +162,10 @@ export default function AdminWithdrawRequestDetailPage() {
   const isApproved = request.status === 'approved'
   const isPaid = request.paid_at !== null
   const canMarkPaid = isApproved && !isPaid
+  // États du payout API FedaPay
+  const payoutInitiated = request.payout_initiated_at !== null
+  const payoutFailed = request.payout_failed_at !== null
+  const payoutInFlight = payoutInitiated && !payoutFailed && !isPaid
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -173,13 +193,42 @@ export default function AdminWithdrawRequestDetailPage() {
           </div>
         )}
 
-        {/* Bandeau "à virer" : demande approuvée mais pas encore marquée comme payée */}
-        {canMarkPaid && (
+        {/* États du payout API FedaPay (3 cas possibles quand la demande est approuvée mais pas encore payée) */}
+        {canMarkPaid && payoutInFlight && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-4 text-sm text-indigo-900">
+            ⏳ <strong>Payout FedaPay lancé automatiquement</strong> à{' '}
+            {formatDateTime(request.payout_initiated_at)} (ref :{' '}
+            <span className="font-mono">{request.payout_provider_ref}</span>). En attente du webhook de
+            confirmation. Aucune action requise — la trace sera complétée automatiquement.
+          </div>
+        )}
+        {canMarkPaid && payoutFailed && (
+          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 text-sm text-red-900">
+            🚨 <strong>Le payout FedaPay a échoué</strong> ({formatDateTime(request.payout_failed_at)}).
+            <div className="mt-1 font-mono text-xs bg-white/50 rounded px-2 py-1">
+              {request.payout_failure_reason ?? 'Erreur inconnue'}
+            </div>
+            <div className="mt-2 flex gap-2 flex-wrap">
+              <button
+                onClick={() => retryPayoutMutation.mutate()}
+                disabled={retryPayoutMutation.isPending}
+                className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 disabled:opacity-50"
+              >
+                {retryPayoutMutation.isPending ? 'Tentative…' : '🔁 Retenter le payout'}
+              </button>
+              <span className="text-xs text-red-700 self-center">
+                ou utilisez le bouton « Marquer comme viré » ci-dessous pour le faire manuellement.
+              </span>
+            </div>
+          </div>
+        )}
+        {canMarkPaid && !payoutInitiated && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 text-sm text-blue-900">
-            🏦 Le wallet du livreur a été débité. <strong>Effectuez le virement</strong> de{' '}
-            {formatFcfa(request.amount_fcfa)} sur{' '}
-            {request.target_method === 'momo' ? 'MoMo' : 'le compte bancaire'}{' '}
-            <span className="font-mono">{request.target_account}</span>, puis revenez ici renseigner la référence.
+            🏦 Le wallet du livreur a été débité.{' '}
+            {request.target_method === 'momo'
+              ? <>Le payout FedaPay n'a pas été lancé (numéro non éligible ou tentative manuelle attendue). Effectuez le virement vers <span className="font-mono">{request.target_account}</span>, puis revenez renseigner la référence.</>
+              : <>Effectuez le virement bancaire vers <span className="font-mono">{request.target_account}</span>, puis revenez renseigner la référence.</>
+            }
           </div>
         )}
 

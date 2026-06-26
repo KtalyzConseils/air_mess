@@ -96,6 +96,39 @@ class Driver extends Model
     }
 
     /**
+     * Refus de courses offertes (cf. project_wallet_driver_todo #7).
+     */
+    public function declineRecords()
+    {
+        return $this->hasMany(CourseDeclineRecord::class);
+    }
+
+    /**
+     * Recalcule l'acceptance_rate sur une fenêtre rolling 30 jours et le persiste.
+     * Formule : accepts / (accepts + declines) — 100% par défaut si aucun event.
+     *
+     * Appelé après chaque accept ou decline pour garder le compteur frais.
+     */
+    public function recalcAcceptanceRate(): float
+    {
+        $cutoff = now()->subDays(30);
+
+        $accepts = Course::where('driver_id', $this->id)
+            ->where('assigned_at', '>=', $cutoff)
+            ->count();
+        $declines = CourseDeclineRecord::where('driver_id', $this->id)
+            ->where('created_at', '>=', $cutoff)
+            ->count();
+
+        $total = $accepts + $declines;
+        $rate = $total > 0 ? round(($accepts / $total) * 100, 2) : 100.0;
+
+        $this->update(['acceptance_rate' => $rate]);
+
+        return $rate;
+    }
+
+    /**
      * Solde en attente (gains livrés mais pas encore versés).
      */
     public function pendingBalance(): int

@@ -34,14 +34,20 @@ class WalletWithdrawRequest extends Model
         'external_payout_reference',
         'paid_at',
         'paid_by_admin_id',
+        'payout_initiated_at',
+        'payout_provider_ref',
+        'payout_failed_at',
+        'payout_failure_reason',
     ];
 
     protected function casts(): array
     {
         return [
-            'amount_fcfa' => 'integer',
-            'decided_at'  => 'datetime',
-            'paid_at'     => 'datetime',
+            'amount_fcfa'         => 'integer',
+            'decided_at'          => 'datetime',
+            'paid_at'             => 'datetime',
+            'payout_initiated_at' => 'datetime',
+            'payout_failed_at'    => 'datetime',
         ];
     }
 

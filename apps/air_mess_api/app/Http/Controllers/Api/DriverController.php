@@ -85,6 +85,14 @@ class DriverController extends Controller
               ->orWhere('collection_amount', '<=', $balance);
         });
 
+        // Filtre refus : on cache les courses que ce driver a déjà refusées explicitement.
+        // Évite qu'il revoie son refus dans la liste. Cf. project_wallet_driver_todo #7.
+        $query->whereNotIn('id', function ($sub) use ($driver) {
+            $sub->select('course_id')
+                ->from('course_decline_records')
+                ->where('driver_id', $driver->id);
+        });
+
         // Si on connaît la position du livreur → on trie et filtre par proximité
         if ($driver->current_lat !== null && $driver->current_lng !== null) {
             $query
@@ -137,6 +145,9 @@ class DriverController extends Controller
             ]);
         });
 
+        // Recalcule l'acceptance_rate sur la fenêtre rolling 30j (cf. project_wallet_driver_todo #7)
+        $driver->refresh()->recalcAcceptanceRate();
+
        //PUSH au marchand expéditeur
         $notifier->sendToUser(
             $course->sender_id,
@@ -158,6 +169,66 @@ class DriverController extends Controller
                 ->makeHidden(['pickup_code', 'delivery_code']),
         ]);
 
+    }
+
+    /**
+     * Refus explicite d'une course offerte par le driver.
+     * Crée un CourseDeclineRecord, fait disparaître la course du flux offered-courses
+     * pour ce driver, et recalcule son acceptance_rate sur 30j.
+     *
+     * Idempotent : un 2e decline sur la même course retourne 200 avec le record existant.
+     *
+     * Cf. project_wallet_driver_todo #7.
+     */
+    public function declineCourse(Request $request, Course $course): JsonResponse
+    {
+        $driver = $this->currentDriver($request, requireActive: true);
+
+        $data = $request->validate([
+            'reason'        => ['required', Rule::in(\App\Models\CourseDeclineRecord::REASONS)],
+            'custom_reason' => [
+                'required_if:reason,other', 'nullable', 'string', 'min:5', 'max:500',
+            ],
+        ]);
+
+        // On ne peut refuser que des courses encore offertes (awaiting + sans driver_id)
+        if ($course->status !== Course::STATUS_AWAITING || $course->driver_id !== null) {
+            return response()->json([
+                'message' => "Cette course n'est plus disponible (statut: {$course->status}).",
+            ], 409);
+        }
+
+        // Idempotence applicative : si on a déjà refusé, on retourne le record existant.
+        $existing = \App\Models\CourseDeclineRecord::where('driver_id', $driver->id)
+            ->where('course_id', $course->id)
+            ->first();
+        if ($existing) {
+            return response()->json([
+                'message' => 'Vous aviez déjà refusé cette course.',
+                'decline' => $existing,
+            ], 200);
+        }
+
+        // custom_reason est uniquement présent quand reason='other' (CHECK Postgres)
+        $customReason = $data['reason'] === \App\Models\CourseDeclineRecord::REASON_OTHER
+            ? trim($data['custom_reason'])
+            : null;
+
+        DB::transaction(function () use ($driver, $course, $data, $customReason) {
+            \App\Models\CourseDeclineRecord::create([
+                'driver_id'     => $driver->id,
+                'course_id'     => $course->id,
+                'reason'        => $data['reason'],
+                'custom_reason' => $customReason,
+            ]);
+        });
+
+        // Recalcule l'acceptance_rate sur 30j après l'event decline
+        $driver->refresh()->recalcAcceptanceRate();
+
+        return response()->json([
+            'message' => 'Course refusée. Elle ne réapparaîtra plus dans vos offres.',
+        ], 201);
     }
 
     // ===== 5. TRANSITIONS DE STATUT GUIDÉES =====

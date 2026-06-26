@@ -86,16 +86,17 @@ function App() {
             <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />
           </Route>
 
-          {/* admin — gestion des marchands réservée au rôle commercial (super inclus) */}
-          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial']} />}>
+          {/* admin — fiches marchands/particuliers : lecture partagée (commercial+ops+support),
+              actions sensibles gatées à l'intérieur des pages via canManage* */}
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial', 'ops', 'support']} />}>
             <Route path="/admin/marchants" element={<AdminMarchantsPage />} />
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
             <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
             <Route path="/admin/individuals/:id" element={<AdminIndividualDetailPage />} />
           </Route>
 
-          {/* admin — gestion des courses réservée au rôle ops (super inclus) */}
-          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['ops']} />}>
+          {/* admin — fiches courses/livreurs/incidents : lecture partagée idem */}
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial', 'ops', 'support']} />}>
             <Route path="/admin/courses" element={<AdminCoursesPage />} />
             <Route path="/admin/drivers" element={<AdminDriversPage />} />
             <Route path="/admin/drivers/:id" element={<AdminDriverDetailPage />} />

@@ -3,10 +3,12 @@ import { View, Text, Pressable } from 'react-native'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { acceptCourse, type DriverCourseSummary } from '../api/driver'
 import CourseDetailModal from './CourseDetailModal'
+import DeclineCourseModal from './DeclineCourseModal'
 
 export default function OfferedCourseItem({ course }: { course: DriverCourseSummary }) {
   const queryClient = useQueryClient()
   const [detailOpen, setDetailOpen] = useState(false)
+  const [declineOpen, setDeclineOpen] = useState(false)
   const isExpress = course.urgency === 'express'
 
   const mutation = useMutation({
@@ -94,27 +96,37 @@ export default function OfferedCourseItem({ course }: { course: DriverCourseSumm
             )}
           </View>
 
-          {/* Bouton d'acceptation */}
-          <Pressable
-            onPress={() => mutation.mutate()}
-            disabled={mutation.isPending}
-            className={`rounded-lg py-3 mt-3 items-center ${
-              isExpress ? 'bg-orange-500' : 'bg-airmess-yellow'
-            }`}
-            style={{ opacity: mutation.isPending ? 0.5 : 1 }}
-          >
-            <Text
-              className={`font-bold ${
-                isExpress ? 'text-white' : 'text-airmess-dark'
-              }`}
+          {/* Boutons d'action : Refuser + Accepter */}
+          <View className="flex-row gap-2 mt-3">
+            <Pressable
+              onPress={() => setDeclineOpen(true)}
+              disabled={mutation.isPending}
+              className="flex-1 rounded-lg py-3 items-center border border-gray-300 bg-white"
+              style={{ opacity: mutation.isPending ? 0.5 : 1 }}
             >
-              {mutation.isPending
-                ? 'Acceptation...'
-                : isExpress
-                ? '⚡ Accepter'
-                : '✓ Accepter cette course'}
-            </Text>
-          </Pressable>
+              <Text className="text-gray-700 font-semibold">✕ Refuser</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => mutation.mutate()}
+              disabled={mutation.isPending}
+              className={`flex-[2] rounded-lg py-3 items-center ${
+                isExpress ? 'bg-orange-500' : 'bg-airmess-yellow'
+              }`}
+              style={{ opacity: mutation.isPending ? 0.5 : 1 }}
+            >
+              <Text
+                className={`font-bold ${
+                  isExpress ? 'text-white' : 'text-airmess-dark'
+                }`}
+              >
+                {mutation.isPending
+                  ? 'Acceptation...'
+                  : isExpress
+                  ? '⚡ Accepter'
+                  : '✓ Accepter'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </Pressable>
 
@@ -122,6 +134,13 @@ export default function OfferedCourseItem({ course }: { course: DriverCourseSumm
         course={course}
         visible={detailOpen}
         onClose={() => setDetailOpen(false)}
+      />
+
+      <DeclineCourseModal
+        visible={declineOpen}
+        courseId={course.id}
+        courseReference={course.reference}
+        onClose={() => setDeclineOpen(false)}
       />
     </>
   )

@@ -80,7 +80,7 @@ export default function CourseDetailPage() {
   // Lien WhatsApp pré-rempli pour le destinataire : suivi + code de livraison.
   const trackingUrl = `${window.location.origin}/t/${course.tracking_token}`
   const waMessage =
-    `Bonjour, votre colis RMess (réf. ${course.reference}) arrive.\n` +
+    `Bonjour, votre colis Air Mess (réf. ${course.reference}) arrive.\n` +
     `Suivez la livraison ici : ${trackingUrl}\n` +
     `🔑 Code de livraison à remettre au livreur : ${course.delivery_code}`
   const waLink = `https://wa.me/${waNumber(course.destination_phone)}?text=${encodeURIComponent(waMessage)}`

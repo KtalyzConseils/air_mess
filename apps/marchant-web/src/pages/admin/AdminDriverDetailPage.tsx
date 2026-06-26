@@ -5,6 +5,7 @@ import { AxiosError } from 'axios'
 import AdminHeader from '../../components/AdminHeader'
 import KpiCard from '../../components/KpiCard'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
+import SupportNotesPanel from '../../components/SupportNotesPanel'
 import { fetchDriver, validateDriver, openDriverDocument } from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
@@ -35,6 +36,15 @@ const ACTIVATION: Record<string, { label: string; classes: string }> = {
   active:    { label: 'Actif',      classes: 'bg-green-100 text-green-800' },
   suspended: { label: 'Suspendu',   classes: 'bg-red-100 text-red-800' },
 }
+
+const DECLINE_REASON_LABEL: Record<string, string> = {
+  too_far:        '📍 Trop loin',
+  wrong_quartier: '🗺️ Quartier mal connu',
+  no_helmet:      '⛑️ Pas de casque',
+  vehicle_unfit:  '🛵 Véhicule pas adapté',
+  personal:       '👤 Raison personnelle',
+  other:          '✍️ Autre',
+}
 function Badge({ map, value }: { map: Record<string, { label: string; classes: string }>; value: string }) {
   const meta = map[value] ?? { label: value, classes: 'bg-gray-100 text-gray-700' }
   return <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${meta.classes}`}>{meta.label}</span>
@@ -47,6 +57,8 @@ export default function AdminDriverDetailPage() {
   const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
+  // Valider un livreur = action ops. Support ne fait que lire les docs et noter.
+  const canManageDriver = hasAdminRole(currentUser, 'ops')
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'driver', id],
@@ -167,6 +179,48 @@ export default function AdminDriverDetailPage() {
                   <p className="text-sm text-gray-500">Aucun wallet associé.</p>
                 )}
               </section>
+
+              {/* Refus de courses (rolling 30j) */}
+              <section className="bg-white rounded-2xl shadow-sm p-6 md:col-span-2">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <h3 className="font-semibold text-airmess-dark">❌ Refus de courses (30 derniers jours)</h3>
+                  <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded font-semibold">
+                    Total : {data.declines.total_30d}
+                  </span>
+                </div>
+                {data.declines.total_30d === 0 ? (
+                  <p className="text-sm text-gray-500">Aucun refus sur la période. 👍</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4 text-sm">
+                      {Object.entries(data.declines.by_reason).map(([reason, n]) => (
+                        <div key={reason} className="bg-gray-50 rounded-lg px-3 py-2 flex justify-between">
+                          <span className="text-gray-600">{DECLINE_REASON_LABEL[reason] ?? reason}</span>
+                          <span className="font-semibold text-gray-800">{n}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <ul className="divide-y divide-gray-100 text-sm">
+                      {data.declines.recent.map((d) => (
+                        <li key={d.id} className="py-2 flex justify-between items-start gap-3">
+                          <div>
+                            <p className="font-medium text-gray-800">
+                              {DECLINE_REASON_LABEL[d.reason] ?? d.reason}
+                              {d.custom_reason && <span className="text-gray-500 font-normal"> — « {d.custom_reason} »</span>}
+                            </p>
+                            {d.course && (
+                              <p className="text-xs text-gray-500">
+                                Course <span className="font-mono">{d.course.reference}</span> · {d.course.origin_quartier} → {d.course.destination_quartier}
+                              </p>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-400 shrink-0">{formatDate(d.created_at)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </section>
             </div>
 
             {/* Modal d'ajustement wallet (super-admin uniquement) */}
@@ -182,8 +236,8 @@ export default function AdminDriverDetailPage() {
               />
             )}
 
-            {/* Bandeau de validation (visible uniquement si pending) */}
-            {data.driver.activation_status === 'pending' && (
+            {/* Bandeau de validation (ops uniquement, et seulement si pending) */}
+            {canManageDriver && data.driver.activation_status === 'pending' && (
               <section className="mt-6 bg-amber-50 border-2 border-amber-300 rounded-2xl p-5">
                 <h3 className="font-bold text-amber-900 mb-2">⏳ Validation en attente</h3>
                 <p className="text-sm text-amber-800 mb-3">
@@ -248,6 +302,15 @@ export default function AdminDriverDetailPage() {
                 Gains cumulés : <strong>{data.stats.total_earnings.toLocaleString('fr-FR')} FCFA</strong>
                 {' · '}Dernière livraison : {formatDate(data.stats.last_delivery_at)}
               </p>
+            </section>
+
+            {/* Notes internes — tous les rôles admin peuvent lire/écrire */}
+            <section className="mt-6">
+              <SupportNotesPanel
+                notableType="user"
+                notableId={data.driver.user.id}
+                title="📝 Notes internes (livreur)"
+              />
             </section>
           </>
         )}

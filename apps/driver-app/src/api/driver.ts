@@ -62,6 +62,25 @@ export async function acceptCourse(courseId: number): Promise<DriverCourseSummar
   return data.course
 }
 
+export type DeclineReason =
+  | 'too_far'
+  | 'wrong_quartier'
+  | 'no_helmet'
+  | 'vehicle_unfit'
+  | 'personal'
+  | 'other'
+
+export async function declineCourse(
+  courseId: number,
+  reason: DeclineReason,
+  customReason?: string,
+): Promise<void> {
+  await api.post(`/driver/courses/${courseId}/decline`, {
+    reason,
+    custom_reason: customReason ?? null,
+  })
+}
+
 export async function transition(
   courseId: number,
   action: TransitionAction,

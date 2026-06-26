@@ -5,6 +5,7 @@ import { AxiosError } from 'axios'
 import AdminHeader from '../../components/AdminHeader'
 import KpiCard from '../../components/KpiCard'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
+import SupportNotesPanel from '../../components/SupportNotesPanel'
 import { fetchIndividual, suspendIndividual, reactivateIndividual } from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
@@ -44,6 +45,8 @@ export default function AdminIndividualDetailPage() {
   const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
+  // Suspendre/réactiver un particulier = action commerciale. Support ne fait que lire et noter.
+  const canManageIndividual = hasAdminRole(currentUser, 'commercial')
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'individual', id],
@@ -110,24 +113,26 @@ export default function AdminIndividualDetailPage() {
                 )}
               </div>
 
-              <div className="flex gap-2">
-                {isSuspended ? (
-                  <button
-                    onClick={() => reactivateMutation.mutate()}
-                    disabled={reactivateMutation.isPending}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {reactivateMutation.isPending ? 'Réactivation…' : '✓ Réactiver'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setShowSuspendModal(true)}
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-red-700"
-                  >
-                    🚫 Suspendre
-                  </button>
-                )}
-              </div>
+              {canManageIndividual && (
+                <div className="flex gap-2">
+                  {isSuspended ? (
+                    <button
+                      onClick={() => reactivateMutation.mutate()}
+                      disabled={reactivateMutation.isPending}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {reactivateMutation.isPending ? 'Réactivation…' : '✓ Réactiver'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setShowSuspendModal(true)}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-red-700"
+                    >
+                      🚫 Suspendre
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {actionError && (
@@ -251,6 +256,15 @@ export default function AdminIndividualDetailPage() {
                 onSuccessInvalidate={[['admin', 'individual', id]]}
               />
             )}
+
+            {/* Notes internes — tous les rôles admin peuvent lire/écrire */}
+            <section className="mt-6">
+              <SupportNotesPanel
+                notableType="user"
+                notableId={data.individual.user.id}
+                title="📝 Notes internes (particulier)"
+              />
+            </section>
           </>
         )}
       </main>

@@ -7,6 +7,7 @@ import MarchantStatusBadge from '../../components/MarchantStatusBadge'
 import KpiCard from '../../components/KpiCard'
 import ConfirmModal from '../../components/ConfirmModal'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
+import SupportNotesPanel from '../../components/SupportNotesPanel'
 import {
   fetchMarchant,
   validateMarchant,
@@ -104,6 +105,9 @@ export default function MarchantDetailPage() {
   const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
+  // Les actions sur le marchand (valider / suspendre / refuser / supprimer) sont
+  // réservées au rôle commercial (support ne fait que lire et ajouter des notes).
+  const canManageMarchant = hasAdminRole(currentUser, 'commercial')
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'marchant', id],
@@ -204,58 +208,62 @@ export default function MarchantDetailPage() {
               {!data.marchant.validated_at && (
                 <span className="text-xs text-amber-600 font-semibold">• à valider</span>
               )}
-              <div className="ml-auto flex gap-2">
-                {data.marchant.subscription_status === 'suspended' && (
-                  <button
-                    onClick={() => setConfirmAction('reactivate')}
-                    className="bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 text-sm"
-                  >
-                    ▶️ Réactiver
-                  </button>
-                )}
-
-                {!data.marchant.validated_at && data.marchant.subscription_status !== 'churned' && (
-                  <>
+              {canManageMarchant && (
+                <div className="ml-auto flex gap-2">
+                  {data.marchant.subscription_status === 'suspended' && (
                     <button
-                      onClick={() => setConfirmAction('validate')}
-                      className="bg-airmess-yellow text-airmess-dark font-bold px-4 py-2 rounded-lg hover:opacity-90 text-sm"
+                      onClick={() => setConfirmAction('reactivate')}
+                      className="bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 text-sm"
                     >
-                      ✅ Valider l'inscription
+                      ▶️ Réactiver
                     </button>
-                    <button
-                      onClick={() => setConfirmAction('reject')}
-                      className="bg-white border border-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                    >
-                      ❌ Refuser
-                    </button>
-                  </>
-                )}
+                  )}
 
-                {data.marchant.validated_at && data.marchant.subscription_status === 'active' && (
-                  <button
-                    onClick={() => setConfirmAction('suspend')}
-                    className="bg-airmess-red text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 text-sm"
-                  >
-                    ⏸️ Suspendre
-                  </button>
-                )}
-              </div>
+                  {!data.marchant.validated_at && data.marchant.subscription_status !== 'churned' && (
+                    <>
+                      <button
+                        onClick={() => setConfirmAction('validate')}
+                        className="bg-airmess-yellow text-airmess-dark font-bold px-4 py-2 rounded-lg hover:opacity-90 text-sm"
+                      >
+                        ✅ Valider l'inscription
+                      </button>
+                      <button
+                        onClick={() => setConfirmAction('reject')}
+                        className="bg-white border border-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                      >
+                        ❌ Refuser
+                      </button>
+                    </>
+                  )}
+
+                  {data.marchant.validated_at && data.marchant.subscription_status === 'active' && (
+                    <button
+                      onClick={() => setConfirmAction('suspend')}
+                      className="bg-airmess-red text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 text-sm"
+                    >
+                      ⏸️ Suspendre
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Zone de danger */}
-            <section className="my-8 border border-red-200 rounded-2xl p-6 bg-red-50">
-              <h3 className="font-semibold text-red-700 mb-1">Zone de danger</h3>
-              <p className="text-sm text-red-600 mb-4">
-                La suppression est définitive. Elle est impossible si le marchand a déjà des courses
-                (suspendez-le plutôt).
-              </p>
-              <button
-                onClick={() => setConfirmAction('delete')}
-                className="bg-red-600 text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 text-sm"
-              >
-                Supprimer définitivement
-              </button>
-            </section>
+            {/* Zone de danger — uniquement pour le commercial */}
+            {canManageMarchant && (
+              <section className="my-8 border border-red-200 rounded-2xl p-6 bg-red-50">
+                <h3 className="font-semibold text-red-700 mb-1">Zone de danger</h3>
+                <p className="text-sm text-red-600 mb-4">
+                  La suppression est définitive. Elle est impossible si le marchand a déjà des courses
+                  (suspendez-le plutôt).
+                </p>
+                <button
+                  onClick={() => setConfirmAction('delete')}
+                  className="bg-red-600 text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 text-sm"
+                >
+                  Supprimer définitivement
+                </button>
+              </section>
+            )}
 
             <div className="grid gap-6 md:grid-cols-2">
               {/* Carte 1 : identité & contact */}
@@ -328,6 +336,15 @@ export default function MarchantDetailPage() {
               <p className="text-xs text-gray-400 mt-3">
                 Dernière course : {formatDate(data.stats.last_course_at)}
               </p>
+            </section>
+
+            {/* Notes internes — tous les rôles admin peuvent lire/écrire */}
+            <section className="mt-6">
+              <SupportNotesPanel
+                notableType="user"
+                notableId={data.marchant.user.id}
+                title="📝 Notes internes (marchand)"
+              />
             </section>
           </>
         )}

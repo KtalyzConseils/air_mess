@@ -73,7 +73,7 @@ export default function DriverRegisterPage() {
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-white">Devenir livreur RMess</h1>
+          <h1 className="text-3xl font-bold text-white">Devenir livreur Air Mess</h1>
           <p className="text-gray-300 mt-2">
             Remplissez ce formulaire — nos équipes vérifient vos documents sous 48h.
           </p>

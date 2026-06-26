@@ -127,11 +127,17 @@ class SubscriptionController extends Controller
         // 2. Lire le payload
         $payload = $request->json()->all();
         $tx      = $payload['entity'] ?? null;
-        $event   = $payload['name'] ?? null;        // ex: 'transaction.approved'
+        $event   = $payload['name'] ?? null;        // ex: 'transaction.approved' ou 'payout.approved'
         $txId    = $tx['id'] ?? null;
 
         if (! $txId) {
             return response()->json(['message' => 'Payload incomplet.'], 400);
+        }
+
+        // 2bis. Si l'event est un payout, on route vers une logique séparée
+        // (les payouts matchent un WalletWithdrawRequest, pas un Payment).
+        if (is_string($event) && str_starts_with($event, 'payout.')) {
+            return $this->handlePayoutWebhook($event, $tx, $txId, $notifier);
         }
 
         // 3. Idempotence : si on a déjà traité, stop
@@ -232,6 +238,64 @@ class SubscriptionController extends Controller
                 'status'         => Payment::STATUS_FAILED,
                 'failure_reason' => $tx['status'] ?? $event,
                 'raw_response'   => $tx,
+            ]);
+        }
+
+        return response()->json(['message' => 'OK']);
+    }
+
+    /**
+     * Webhook FedaPay pour les events payout.* (virements sortants).
+     * Match le WalletWithdrawRequest via payout_provider_ref.
+     *
+     *  - payout.approved/processed → remplit paid_at + external_payout_reference + notif driver
+     *  - payout.failed/canceled   → flag payout_failed_at + raison, admin peut retenter
+     */
+    private function handlePayoutWebhook(
+        string $event,
+        array $tx,
+        $txId,
+        NotificationService $notifier,
+    ): JsonResponse {
+        $withdraw = \App\Models\WalletWithdrawRequest::where('payout_provider_ref', (string) $txId)->first();
+        if (! $withdraw) {
+            Log::warning('Fedapay payout webhook : WithdrawRequest introuvable', ['payout_id' => $txId, 'event' => $event]);
+            return response()->json(['message' => 'Inconnu.'], 200);
+        }
+
+        // Idempotence : déjà payé via webhook ?
+        if ($withdraw->isPaid() && in_array($event, ['payout.approved', 'payout.processed'], true)) {
+            return response()->json(['message' => 'Déjà traité.'], 200);
+        }
+
+        if (in_array($event, ['payout.approved', 'payout.processed'], true)) {
+            DB::transaction(function () use ($withdraw, $tx, $notifier) {
+                $withdraw->update([
+                    'paid_at'                  => now(),
+                    'external_payout_reference' => $tx['reference'] ?? ('fedapay:' . $tx['id']),
+                    'paid_by_admin_id'         => $withdraw->decided_by_admin_id, // payout auto = même admin qui a approuvé
+                    'payout_failed_at'         => null,
+                    'payout_failure_reason'    => null,
+                ]);
+
+                $notifier->sendToUser(
+                    $withdraw->driver->user_id,
+                    'wallet.withdraw_paid',
+                    '✅ Virement effectué',
+                    "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA a été viré automatiquement.",
+                    ['withdraw_id' => $withdraw->id, 'reference' => $withdraw->external_payout_reference],
+                    null,
+                );
+            });
+        } elseif (in_array($event, ['payout.failed', 'payout.canceled', 'payout.declined'], true)) {
+            $withdraw->update([
+                'payout_failed_at'      => now(),
+                'payout_failure_reason' => $tx['failure_reason'] ?? $tx['status'] ?? $event,
+            ]);
+            Log::warning('Fedapay payout failed', [
+                'withdraw_id' => $withdraw->id,
+                'event'       => $event,
+                'tx'          => $tx,
             ]);
         }
 
