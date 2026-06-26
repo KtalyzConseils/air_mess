@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="amWing" gradientUnits="userSpaceOnUse" x1="121" y1="330" x2="591" y2="156">
+      <stop offset="0" stop-color="#FFD633"/>
+      <stop offset="1" stop-color="#FFCC00"/>
+    </linearGradient>
+    <linearGradient id="amBlade" gradientUnits="userSpaceOnUse" x1="628" y1="170" x2="400" y2="452">
+      <stop offset="0" stop-color="#E2231A"/>
+      <stop offset="1" stop-color="#D40511"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#161514"/>
+  <g transform="translate(9,18.6) scale(0.0907) translate(-121,-156)">
+    <polygon points="591,156 318,210 401,228 215,270 301,288 121,330 252,345" fill="url(#amWing)" stroke="url(#amWing)" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+    <polygon points="628,156 438,452 356,438 466,278 442,270" fill="url(#amBlade)" stroke="url(#amBlade)" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * AirMess design tokens — "la course en direct"
+ * Yellow = road markings / hi-vis. Red = live/urgent. Asphalt = dark.
+ * ------------------------------------------------------------------ */
+@theme {
+  --color-yellow: #ffc300;
+  --color-yellow-deep: #d99f00;
+  --color-red: #cc0000;
+
+  /* Exact AirMess logo colors (wing = yellow, blade = red) */
+  --color-logo-yellow: #ffcc00;
+  --color-logo-yellow-bright: #ffd633;
+  --color-logo-red: #e2231a;
+  --color-logo-red-deep: #d40511;
+  --color-ink: #161514;
+  --color-asphalt: #211f1d;
+  --color-asphalt-line: #322f2b;
+  --color-bg: #f6f5f1;
+  --color-paper: #ffffff;
+  --color-muted: #6b6760;
+  --color-faint: #e9e7e1;
+
+  --font-display: "Archivo", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Tracking-style eyebrow / data labels */
+.data-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ---- Signature: the dashed GPS route line ---- */
+@keyframes route-flow {
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+.route-dash {
+  stroke-dasharray: 2 10;
+  stroke-linecap: round;
+  animation: route-flow 30s linear infinite;
+}
+
+/* moving courier dot along the hero route */
+@keyframes dot-travel {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(204, 0, 0, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(204, 0, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(204, 0, 0, 0);
+  }
+}
+.live-pulse {
+  animation: live-pulse 2s var(--ease-out-soft) infinite;
+}
+
+/* ---- Scroll reveal ---- */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.5s var(--ease-out-soft),
+    transform 0.5s var(--ease-out-soft);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Partners marquee (auto-scroll) ---- */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  animation: marquee 32s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .route-dash,
+  .live-pulse,
+  [style*="dot-travel"] {
+    animation: none !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
