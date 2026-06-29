@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import AppHeader from '../components/AppHeader'
+import Card from '../components/ui/Card'
+import Button from '../components/ui/Button'
 import { useAuthStore } from '../stores/authStore'
 
 export default function BillingReturnPage() {
@@ -16,7 +18,6 @@ export default function BillingReturnPage() {
   const isCanceled = status === 'canceled'
 
   useEffect(() => {
-    // Rafraîchir le wallet et les courses : le webhook a déjà mis à jour la BDD
     fetchMe()
     queryClient.invalidateQueries({ queryKey: ['wallet'] })
     queryClient.invalidateQueries({ queryKey: ['courses'] })
@@ -24,57 +25,52 @@ export default function BillingReturnPage() {
   }, [fetchMe, queryClient])
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-cream">
       <AppHeader />
-      <main className="max-w-2xl mx-auto p-4 md:p-6">
-        <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
+      <main className="max-w-2xl mx-auto px-4 md:px-6 py-10 md:py-16">
+        <Card variant="signature" padding="lg" className="text-center ams-anim-scale-in">
           {isSuccess && (
             <>
-              <div className="text-6xl mb-4">🎉</div>
-              <h2 className="text-2xl font-bold text-airmess-dark">Paiement reçu</h2>
-              <p className="text-gray-600 mt-3">
-                Ton paiement a bien été confirmé. Si c'était un rechargement, ton wallet est crédité dans
-                quelques secondes ; si c'était une course, elle a été créée automatiquement.
+              <div className="text-display-1 mb-4">🎉</div>
+              <h2 className="text-h1 text-ink">Paiement reçu</h2>
+              <p className="text-body text-warm-500 mt-3 max-w-md mx-auto">
+                Votre paiement a bien été confirmé. Si c'était un rechargement, votre wallet est crédité
+                dans quelques secondes ; si c'était une course, elle a été créée automatiquement.
               </p>
             </>
           )}
 
           {isCanceled && (
             <>
-              <div className="text-6xl mb-4">↩️</div>
-              <h2 className="text-2xl font-bold text-airmess-dark">Paiement annulé</h2>
-              <p className="text-gray-600 mt-3">
-                Tu as annulé le paiement. Aucun montant n'a été prélevé. Tu peux réessayer quand tu veux.
+              <div className="text-display-1 mb-4">↩️</div>
+              <h2 className="text-h1 text-ink">Paiement annulé</h2>
+              <p className="text-body text-warm-500 mt-3 max-w-md mx-auto">
+                Vous avez annulé le paiement. Aucun montant n'a été prélevé. Vous pouvez réessayer
+                quand vous voulez.
               </p>
             </>
           )}
 
           {!isSuccess && !isCanceled && (
             <>
-              <div className="text-6xl mb-4">⏳</div>
-              <h2 className="text-2xl font-bold text-airmess-dark">En cours de traitement</h2>
-              <p className="text-gray-600 mt-3">
-                Nous attendons la confirmation de Fedapay. Tu recevras une notification dès que ton paiement
-                sera validé.
+              <div className="text-display-1 mb-4">⏳</div>
+              <h2 className="text-h1 text-ink">En cours de traitement</h2>
+              <p className="text-body text-warm-500 mt-3 max-w-md mx-auto">
+                Nous attendons la confirmation de Fedapay. Vous recevrez une notification dès que votre
+                paiement sera validé.
               </p>
             </>
           )}
 
-          <div className="flex justify-center gap-2 mt-6 flex-wrap">
-            <button
-              onClick={() => navigate('/wallet')}
-              className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
-            >
+          <div className="flex justify-center gap-3 mt-8 flex-wrap">
+            <Button variant="secondary" size="md" onClick={() => navigate('/wallet')}>
               💰 Mon wallet
-            </button>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="px-4 py-2 rounded-lg bg-airmess-dark text-white font-semibold hover:bg-gray-700"
-            >
-              Tableau de bord
-            </button>
+            </Button>
+            <Button variant="dark" size="md" pill onClick={() => navigate('/dashboard')}>
+              Tableau de bord →
+            </Button>
           </div>
-        </div>
+        </Card>
       </main>
     </div>
   )

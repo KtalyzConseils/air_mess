@@ -1,5 +1,10 @@
 import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
+import Card from '../components/ui/Card'
+import Button from '../components/ui/Button'
+import Badge from '../components/ui/Badge'
+import PageEyebrow from '../components/ui/PageEyebrow'
 import { useAuthStore } from '../stores/authStore'
 import type { Marchant } from '../types/auth'
 
@@ -11,7 +16,6 @@ const SECTEUR_LABEL: Record<Marchant['secteur_activite'], string> = {
   ecommerce:   '📦 E-commerce',
   autre:       '🏷️ Autre',
 }
-
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -28,17 +32,29 @@ function formatDateTime(iso: string | null | undefined): string {
   })
 }
 
+function initialsOf(name: string): string {
+  return name
+    .split(' ')
+    .filter((w) => w.length > 0)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+}
+
 export default function ProfilePage() {
   const { user, fetchMe } = useAuthStore()
 
-  useEffect(() => { fetchMe() }, [fetchMe])
+  useEffect(() => {
+    fetchMe()
+  }, [fetchMe])
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-cream">
         <AppHeader />
-        <main className="max-w-4xl mx-auto p-6 text-center text-gray-500">
-          Chargement du profil...
+        <main className="max-w-4xl mx-auto px-4 md:px-6 py-12 text-center text-warm-500">
+          Chargement du profil…
         </main>
       </div>
     )
@@ -46,114 +62,101 @@ export default function ProfilePage() {
 
   const marchant = user.marchant
   const secteur = marchant ? SECTEUR_LABEL[marchant.secteur_activite] : null
+  const displayName = marchant?.raison_sociale || user.name
+  const initials = initialsOf(displayName)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-cream">
       <AppHeader />
-      <main className="max-w-4xl mx-auto p-6 space-y-6">
+      <main className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
+        <PageEyebrow label="Mon profil" className="mb-4" />
+        <h1 className="text-h1 md:text-display-2 text-ink leading-tight mb-2">
+          {displayName}.
+        </h1>
+        <p className="text-body-l text-warm-500 mb-10">
+          Informations de votre compte Air Mess.
+        </p>
 
-        <section className="bg-white rounded-2xl shadow-sm p-6 flex items-center gap-6">
-          {/* Avatar initiales */}
-          <div className="w-20 h-20 flex items-center justify-center rounded-full bg-airmess-yellow text-2xl font-bold text-airmess-dark uppercase select-none">
-            {marchant?.raison_sociale
-              ? marchant.raison_sociale.split(' ')
-                  .filter(w => w.length > 0)
-                  .slice(0,2)
-                  .map(w => w[0])
-                  .join('')
-              : user.name.split(' ')
-                  .filter(w => w.length > 0)
-                  .slice(0,2)
-                  .map(w => w[0])
-                  .join('')}
+        {/* ============================================================
+            CARTE IDENTITÉ
+            ============================================================ */}
+        <Card variant="signature" padding="lg" className="mb-6 flex items-center gap-5 md:gap-6">
+          <div className="w-20 h-20 md:w-24 md:h-24 flex items-center justify-center rounded-full bg-airmess-yellow text-h2 md:text-h1 font-bold text-ink select-none shrink-0">
+            {initials}
           </div>
-          {/* Right Info */}
-          <div className="flex-1 min-w-0 flex flex-col gap-1">
-            {/* Raison sociale */}
-            <h1 className="text-2xl font-bold text-airmess-dark truncate">
-              {marchant?.raison_sociale || user.name}
-            </h1>
-            {/* Nom complet */}
-            <p className="text-gray-700 font-medium">{user.name}</p>
-            {/* Email + phone */}
-            <p className="text-sm text-gray-500">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-h2 text-ink truncate">{displayName}</h2>
+            <p className="text-body text-warm-600">{user.name}</p>
+            <p className="text-body-s text-warm-500 mt-1 truncate">
               {user.email}
-              {user.phone && (
-                <> &middot; <span>{user.phone}</span></>
-              )}
+              {user.phone && <span className="text-warm-400"> · {user.phone}</span>}
             </p>
           </div>
-        </section>
-   
+        </Card>
 
-        {/* ────────────────────────────────────────────────────
-            SECTION "Compte" : infos User
-        ──────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold mb-4 text-airmess-dark">Compte</h2>
-          <div className="grid grid-cols-[160px_1fr] gap-y-3 items-center">
-            <div className="text-gray-500 font-medium">Nom complet</div>
-            <div className="text-airmess-dark">{user.name}</div>
+        {/* ============================================================
+            COMPTE
+            ============================================================ */}
+        <Card variant="default" padding="lg" className="mb-6">
+          <h3 className="text-h3 text-ink font-bold mb-5">Compte</h3>
+          <dl className="grid grid-cols-[140px_1fr] md:grid-cols-[180px_1fr] gap-y-3 items-center text-body-s">
+            <dt className="text-warm-500 font-medium">Nom complet</dt>
+            <dd className="text-ink">{user.name}</dd>
 
-            <div className="text-gray-500 font-medium">Email</div>
-            <div className="flex items-center gap-2">
+            <dt className="text-warm-500 font-medium">Email</dt>
+            <dd className="text-ink flex items-center gap-2 flex-wrap">
               <span>{user.email}</span>
               {user.email_verified_at ? (
-                <span title="Email vérifié" className="text-green-600 text-lg">✅</span>
+                <Badge variant="success" size="sm">✓ Vérifié</Badge>
               ) : (
-                <span title="Email non vérifié" className="text-yellow-500 text-lg">⚠️</span>
+                <Badge variant="warning" size="sm">⚠ Non vérifié</Badge>
               )}
-            </div>
+            </dd>
 
-            <div className="text-gray-500 font-medium">Téléphone</div>
-            <div className="text-airmess-dark">{user.phone ? user.phone : '—'}</div>
+            <dt className="text-warm-500 font-medium">Téléphone</dt>
+            <dd className="text-ink">{user.phone ?? '—'}</dd>
 
-            <div className="text-gray-500 font-medium">Dernière connexion</div>
-            <div className="text-airmess-dark">{formatDateTime(user.last_login_at)}</div>
+            <dt className="text-warm-500 font-medium">Dernière connexion</dt>
+            <dd className="text-warm-600">{formatDateTime(user.last_login_at)}</dd>
+          </dl>
+
+          <div className="mt-6 pt-5 border-t border-warm-100 flex flex-wrap gap-3">
+            <Link to="/forgot-password">
+              <Button variant="secondary" size="sm">Changer mon mot de passe</Button>
+            </Link>
           </div>
-        </section>
-   
+        </Card>
 
-
-        {/* ────────────────────────────────────────────────────
-            SECTION "Entreprise" : infos Marchant
-        ──────────────────────────────────────────────────── */}
+        {/* ============================================================
+            ENTREPRISE (marchand uniquement)
+            ============================================================ */}
         {marchant && (
-          <section className="bg-white rounded-2xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4 text-airmess-dark">Entreprise</h2>
-            <div className="grid grid-cols-[160px_1fr] gap-y-3 items-center">
-              <div className="text-gray-500 font-medium">Raison sociale</div>
-              <div className="text-airmess-dark">{marchant.raison_sociale}</div>
+          <Card variant="default" padding="lg">
+            <h3 className="text-h3 text-ink font-bold mb-5">Entreprise</h3>
+            <dl className="grid grid-cols-[140px_1fr] md:grid-cols-[180px_1fr] gap-y-3 items-center text-body-s">
+              <dt className="text-warm-500 font-medium">Raison sociale</dt>
+              <dd className="text-ink font-medium">{marchant.raison_sociale}</dd>
 
-              <div className="text-gray-500 font-medium">Secteur</div>    
-              <div className="text-airmess-dark">{secteur}</div> 
+              <dt className="text-warm-500 font-medium">Secteur</dt>
+              <dd className="text-ink">{secteur}</dd>
 
-              <div className="text-gray-500 font-medium">IFU / RCCM</div>
-              <div className="text-airmess-dark">{marchant.ifu_rccm || '—'}</div>
+              <dt className="text-warm-500 font-medium">IFU / RCCM</dt>
+              <dd className="text-ink">{marchant.ifu_rccm || '—'}</dd>
 
-              <div className="text-gray-500 font-medium">Validé le</div>
-              <div className="text-airmess-dark flex items-center gap-2">
+              <dt className="text-warm-500 font-medium">Validation</dt>
+              <dd className="flex items-center gap-2 flex-wrap">
                 {marchant.validated_at ? (
                   <>
-                    {formatDate(marchant.validated_at)}
-                    <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs font-semibold flex items-center gap-1">
-                      ✅ Validé
-                    </span>
+                    <span className="text-ink">{formatDate(marchant.validated_at)}</span>
+                    <Badge variant="success" size="sm">✓ Validé</Badge>
                   </>
                 ) : (
-                  <>
-                    —
-                    <span className="rounded-full bg-yellow-100 text-yellow-700 px-2 py-0.5 text-xs font-semibold flex items-center gap-1">
-                      ⏳ En attente
-                    </span>
-                  </>
+                  <Badge variant="warning" size="sm">⏳ En attente</Badge>
                 )}
-              </div>
-            </div>
-          </section>
+              </dd>
+            </dl>
+          </Card>
         )}
-   
-
       </main>
     </div>
   )

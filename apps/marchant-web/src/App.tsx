@@ -4,6 +4,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import NewCoursePage from './pages/NewCoursePage'
+import MyCoursesPage from './pages/MyCoursesPage'
 import CourseDetailPage from './pages/CourseDetailPage'
 import AddressesPage from './pages/AddressesPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
@@ -59,6 +60,7 @@ function App() {
           <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} />}>
             {/* marchant */}
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/courses" element={<MyCoursesPage />} />
             <Route path="/courses/new" element={<NewCoursePage />} />
             <Route path="/addresses" element={<AddressesPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />

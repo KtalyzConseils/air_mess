@@ -1,27 +1,57 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import AppHeader from '../components/AppHeader'
-import KpiCard from '../components/KpiCard'
+import Highlight from '../components/Highlight'
+import Card from '../components/ui/Card'
+import Button from '../components/ui/Button'
+import Badge from '../components/ui/Badge'
+import PageEyebrow from '../components/ui/PageEyebrow'
 import StatusBadge from '../components/StatusBadge'
 import { fetchCourses, type Course } from '../api/courses'
-import { useState } from 'react'
+import { fetchWallet } from '../api/wallet'
 import { useAuthStore } from '../stores/authStore'
 
+const IN_PROGRESS_STATUSES = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff']
 
 export default function DashboardPage() {
-  const { data, isLoading, error } = useQuery({
+  const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const [copiedId, setCopiedId] = useState<number | null>(null)
+
+  const isPendingMarchant = user?.type === 'marchant' && !user.marchant?.validated_at
+  const greetingName =
+    user?.marchant?.raison_sociale ??
+    user?.individual?.first_name ??
+    user?.name ??
+    ''
+
+  const { data: coursesData, isLoading, error } = useQuery({
     queryKey: ['courses', { per_page: 50 }],
     queryFn: () => fetchCourses({ per_page: 50 }),
   })
 
-  const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
-  const isPendingMarchant = user?.type === 'marchant' && !user.marchant?.validated_at
+  const { data: wallet } = useQuery({
+    queryKey: ['me', 'wallet'],
+    queryFn: fetchWallet,
+    refetchInterval: 30_000,
+  })
 
-  const [copiedId, setCopiedId] = useState<number | null>(null)
+  const courses: Course[] = coursesData?.data ?? []
+  const today = new Date().toISOString().slice(0, 10)
+
+  const inProgressCourses = courses.filter((c) => IN_PROGRESS_STATUSES.includes(c.status))
+  const totalToday = courses.filter((c) => c.created_at.startsWith(today)).length
+  const deliveredMonth = courses.filter(
+    (c) => c.status === 'delivered' && c.delivered_at?.startsWith(today.slice(0, 7)),
+  ).length
+  const awaitingCount = courses.filter((c) => c.status === 'awaiting_assignment').length
+  const caMonth = courses
+    .filter((c) => c.status === 'delivered' && c.delivered_at?.startsWith(today.slice(0, 7)))
+    .reduce((sum, c) => sum + (c.delivery_fee ?? 0), 0)
 
   async function copyTrackingLink(course: Course, e: React.MouseEvent) {
-    e.stopPropagation()   // empêche le clic de propager sur la <tr> qui navigue
+    e.stopPropagation()
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/t/${course.tracking_token}`)
       setCopiedId(course.id)
@@ -31,146 +61,202 @@ export default function DashboardPage() {
     }
   }
 
-  const courses: Course[] = data?.data ?? []
-
-  // KPIs calculés depuis la liste reçue
-  const today = new Date().toISOString().slice(0, 10)
-  const inProgress = courses.filter((c) =>
-    ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff'].includes(c.status),
-  ).length
-  const awaiting = courses.filter((c) => c.status === 'awaiting_assignment').length
-  const deliveredToday = courses.filter(
-    (c) => c.status === 'delivered' && c.delivered_at?.startsWith(today),
-  ).length
-  const totalToday = courses.filter((c) => c.created_at.startsWith(today)).length
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-cream">
       <AppHeader />
 
-      <main className="max-w-7xl mx-auto p-4 md:p-6">
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
+        {/* Bandeau pending — gardé tel quel, juste restylé */}
         {isPendingMarchant && (
-            <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex items-start gap-3">
-            <span className="text-lg leading-none">⏳</span>
-            <div className="text-sm">
-              <p className="font-semibold">Compte en attente de validation</p>
-              <p className="text-amber-700">
+          <Card
+            variant="default"
+            padding="md"
+            className="mb-8 bg-warning-bg! border-warning/30! flex items-start gap-3"
+          >
+            <span className="text-h3 leading-none">⏳</span>
+            <div>
+              <p className="font-bold text-warning text-body">Compte en attente de validation</p>
+              <p className="text-body-s text-warm-600 mt-0.5">
                 Votre compte marchand est en cours de validation par un administrateur (sous 24h).
                 Vous serez notifié dès qu'il sera actif.
               </p>
             </div>
+          </Card>
+        )}
+
+        {/* ============================================================
+            HERO : section marker + greeting + wallet + CTA
+            Layout : 2/3 - 1/3 sur desktop
+            ============================================================ */}
+        <div className="grid gap-8 md:grid-cols-3 mb-12">
+          <div className="md:col-span-2">
+            <PageEyebrow label="Tableau de bord" className="mb-4" />
+            <h1 className="text-h1 md:text-display-2 text-ink leading-tight">
+              Bonjour {greetingName}.
+            </h1>
+            <p className="text-body-l text-warm-500 mt-3">
+              Voici vos <Highlight>courses</Highlight> du jour.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {/* Wallet card */}
+            <Card variant="elevated" padding="md">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-eyebrow text-warm-500 uppercase">💰 Wallet</span>
+                {wallet?.is_low && <Badge variant="warning" size="sm">Bas</Badge>}
+              </div>
+              <p className="text-h2 text-ink tabular-nums mt-2">
+                {wallet ? wallet.balance.toLocaleString('fr-FR') : '—'}
+                <span className="text-body text-warm-500 ml-1.5 font-normal">FCFA</span>
+              </p>
+              <Link to="/wallet">
+                <Button variant="secondary" size="sm" fullWidth className="mt-3">
+                  + Recharger
+                </Button>
+              </Link>
+              <Link
+                to="/wallet"
+                className="block mt-2 text-center text-caption font-medium text-warm-600 hover:text-ink"
+              >
+                Voir l'historique →
+              </Link>
+            </Card>
+
+            {/* CTA Nouvelle course */}
+            {isPendingMarchant ? (
+              <Button variant="primary" size="lg" pill fullWidth disabled>
+                + Nouvelle livraison
+              </Button>
+            ) : (
+              <Link to="/courses/new" className="block">
+                <Button variant="primary" size="lg" pill fullWidth rightIcon={<span aria-hidden>→</span>}>
+                  ⚡ Créer une course
+                </Button>
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* ============================================================
+            KPI GRID — 5 chiffres clés (incluant CA mensuel mis en avant)
+            ============================================================ */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mb-12">
+          <KpiTile label="Aujourd'hui" value={totalToday} hint="courses créées" />
+          <KpiTile label="En cours" value={inProgressCourses.length} accent="brand" />
+          <KpiTile label="En attribution" value={awaitingCount} hint="livreur recherché" />
+          <KpiTile label="Livrées (mois)" value={deliveredMonth} />
+          <KpiTile
+            label="CA du mois"
+            value={`${caMonth.toLocaleString('fr-FR')}`}
+            hint="FCFA encaissés"
+          />
+        </div>
+
+        {/* ============================================================
+            SECTION 02 — Courses en cours
+            ============================================================ */}
+        <div className="flex items-end justify-between mb-5 gap-4 border-b border-warm-200 pb-3">
+          <h2 className="text-h2 text-ink font-bold">
+            Vos livraisons actives
+          </h2>
+          <Link to="/courses" className="text-body-s font-medium text-ink hover:text-airmess-red shrink-0">
+            Voir tout →
+          </Link>
+        </div>
+
+        {isLoading && (
+          <Card padding="lg" className="text-center text-warm-500">Chargement…</Card>
+        )}
+
+        {error && (
+          <Card padding="lg" className="text-center bg-danger-bg! border-airmess-red/20! text-airmess-red">
+            Erreur de chargement. Vérifie que l'API tourne.
+          </Card>
+        )}
+
+        {!isLoading && !error && inProgressCourses.length === 0 && (
+          <Card padding="lg" className="text-center">
+            <p className="text-body text-warm-600 mb-3">Aucune course en cours.</p>
+            {!isPendingMarchant && (
+              <Link to="/courses/new">
+                <Button variant="primary" size="md" pill>
+                  Créer ma première course
+                </Button>
+              </Link>
+            )}
+          </Card>
+        )}
+
+        {!isLoading && inProgressCourses.length > 0 && (
+          <div className="space-y-3">
+            {inProgressCourses.slice(0, 5).map((c) => (
+              <button
+                key={c.id}
+                onClick={() => navigate(`/courses/${c.id}`)}
+                className="w-full text-left bg-off-white border border-warm-200 hover:border-warm-400 hover:shadow-md rounded-lg p-4 md:p-5 transition-all duration-200 flex items-center gap-4"
+              >
+                <div className="shrink-0">
+                  <StatusBadge status={c.status} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <span className="font-mono text-caption text-warm-500">{c.reference}</span>
+                  </div>
+                  <p className="text-body font-medium text-ink truncate">
+                    {c.origin_quartier} → {c.destination_quartier}, {c.destination_city}
+                  </p>
+                  <p className="text-body-s text-warm-500 mt-0.5">
+                    {c.destination_name}
+                    {c.driver?.user?.name && ` · ${c.driver.user.name}`}
+                  </p>
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <button
+                    onClick={(e) => copyTrackingLink(c, e)}
+                    title="Copier le lien de suivi"
+                    className="p-2 rounded-md text-warm-500 hover:text-ink hover:bg-warm-100"
+                  >
+                    {copiedId === c.id ? '✓' : '🔗'}
+                  </button>
+                  <span aria-hidden className="text-warm-400">→</span>
+                </div>
+              </button>
+            ))}
           </div>
         )}
 
-        {/* Action bar */}
-        <div className="flex justify-between items-center mb-6 gap-3 flex-wrap">
-          <h2 className="text-2xl font-bold text-airmess-dark">Tableau de bord</h2>
-          {isPendingMarchant ? (
-            <span
-              className="bg-gray-200 text-gray-400 font-bold px-4 py-2 rounded-lg cursor-not-allowed"
-              title="Disponible une fois votre compte validé"
-            >
-              + Nouvelle livraison
-            </span>
-          ) : (
-            <Link
-              to="/courses/new"
-              className="bg-airmess-yellow text-airmess-dark font-bold px-4 py-2 rounded-lg hover:opacity-90"
-            >
-              + Nouvelle livraison
-            </Link>
-          )}
-
-        </div>
-
-        {/* KPI Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <KpiCard label="Courses du jour" value={totalToday} accent="yellow" />
-          <KpiCard label="En cours" value={inProgress} accent="dark" />
-          <KpiCard label="En attribution" value={awaiting} hint="livreur recherché" accent="gray" />
-          <KpiCard label="Livrées aujourd'hui" value={deliveredToday} accent="yellow" />
-        </div>
-
-        {/* Liste des courses récentes */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
-          <div className="px-6 py-4 border-b">
-            <h3 className="font-semibold text-airmess-dark">Courses récentes</h3>
-          </div>
-
-          {isLoading && (
-            <div className="p-10 text-center text-gray-500">Chargement...</div>
-          )}
-
-          {error && (
-            <div className="p-10 text-center text-red-600">
-              Erreur de chargement. Vérifie que l'API tourne.
-            </div>
-          )}
-
-          {!isLoading && !error && courses.length === 0 && (
-            <div className="p-10 text-center text-gray-500">
-              Aucune course pour le moment. Crée ta première livraison !
-            </div>
-          )}
-
-          {!isLoading && courses.length > 0 && (
-            <table className="w-full text-sm min-w-[800px]">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-                <tr>
-                  <th className="px-6 py-3 text-left">Référence</th>
-                  <th className="px-6 py-3 text-left">Destination</th>
-                  <th className="px-6 py-3 text-left">Statut</th>
-                  <th className="px-6 py-3 text-left">Livreur</th>
-                  <th className="px-6 py-3 text-right">Frais</th>
-                  <th className="px-6 py-3 text-left">Créée</th>
-                  <th className="px-6 py-3 text-center w-12"></th>  
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {courses.map((c) => (
-                  <tr
-                    key={c.id}
-                    onClick={() => navigate(`/courses/${c.id}`)}
-                    className="hover:bg-gray-50 cursor-pointer"
-                  >
-                    <td className="px-6 py-3 font-mono text-xs">{c.reference}</td>
-                    <td className="px-6 py-3">
-                      <div className="font-medium">{c.destination_name}</div>
-                      <div className="text-xs text-gray-500">
-                        {c.destination_quartier}, {c.destination_city}
-                      </div>
-                    </td>
-                    <td className="px-6 py-3">
-                      <StatusBadge status={c.status} />
-                    </td>
-                    <td className="px-6 py-3 text-gray-600">
-                      {c.driver?.user?.name ?? <span className="text-gray-400 italic">—</span>}
-                    </td>
-                    <td className="px-6 py-3 text-right font-mono">
-                      {c.delivery_fee?.toLocaleString('fr-FR')} FCFA
-                    </td>
-                    <td className="px-6 py-3 text-xs text-gray-500">
-                      {new Date(c.created_at).toLocaleString('fr-FR', {
-                        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <button
-                        onClick={(e) => copyTrackingLink(c, e)}
-                        title="Copier le lien de suivi"
-                        className="text-gray-400 hover:text-airmess-dark p-1 rounded hover:bg-gray-100"
-                      >
-                        {copiedId === c.id ? '✓' : '🔗'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       </main>
+    </div>
+  )
+}
+
+/* ============================================================
+   Sous-composant : KpiTile
+   ============================================================ */
+interface KpiTileProps {
+  label: string
+  value: number | string
+  hint?: string
+  accent?: 'default' | 'brand'
+}
+
+function KpiTile({ label, value, hint, accent = 'default' }: KpiTileProps) {
+  return (
+    <div
+      className={
+        accent === 'brand'
+          ? 'bg-airmess-yellow text-ink rounded-lg p-4 md:p-5'
+          : 'bg-off-white border border-warm-200 rounded-lg p-4 md:p-5'
+      }
+    >
+      <p className="text-eyebrow uppercase text-warm-600">{label}</p>
+      {/* Taille responsive : sur mobile/md plus modeste pour absorber les
+          longs nombres (ex: CA "1 500 000"). Sur lg+ on remonte en display-2. */}
+      <p className="text-h1 lg:text-display-2 text-ink mt-1 tabular-nums leading-none truncate">
+        {value}
+      </p>
+      {hint && <p className="text-caption text-warm-500 mt-1.5 truncate">{hint}</p>}
     </div>
   )
 }

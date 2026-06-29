@@ -6,6 +6,9 @@ import AppHeader from '../components/AppHeader'
 import AdminHeader from '../components/AdminHeader'
 import StatusBadge from '../components/StatusBadge'
 import Timeline from '../components/Timeline'
+import Card from '../components/ui/Card'
+import Button from '../components/ui/Button'
+import PageEyebrow from '../components/ui/PageEyebrow'
 import { fetchCourse, fetchCourseHistory, cancelCourse } from '../api/courses'
 import { useAuthStore } from '../stores/authStore'
 
@@ -17,7 +20,6 @@ export default function CourseDetailPage() {
   const isAdmin = user?.type === 'admin'
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
-
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
   async function copy(text: string, key: string) {
@@ -29,7 +31,6 @@ export default function CourseDetailPage() {
       alert('Impossible de copier — copie manuelle requise.')
     }
   }
-
 
   const courseQuery = useQuery({
     queryKey: ['course', id],
@@ -55,19 +56,22 @@ export default function CourseDetailPage() {
 
   if (courseQuery.isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-cream">
         {isAdmin ? <AdminHeader /> : <AppHeader />}
-        <main className="max-w-5xl mx-auto p-6 text-gray-500">Chargement...</main>
+        <main className="max-w-5xl mx-auto px-4 md:px-6 py-12 text-warm-500">Chargement…</main>
       </div>
     )
   }
 
   if (courseQuery.error) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-cream">
         {isAdmin ? <AdminHeader /> : <AppHeader />}
-        <main className="max-w-5xl mx-auto p-6 text-red-600">
-          Erreur de chargement. <button onClick={() => navigate(-1)} className="underline">Retour</button>
+        <main className="max-w-5xl mx-auto px-4 md:px-6 py-12">
+          <Card padding="lg" className="text-center bg-danger-bg! border-airmess-red/20! text-airmess-red">
+            Erreur de chargement.{' '}
+            <button onClick={() => navigate(-1)} className="underline font-semibold">Retour</button>
+          </Card>
         </main>
       </div>
     )
@@ -77,7 +81,6 @@ export default function CourseDetailPage() {
   const isTerminal = ['delivered', 'cancelled', 'failed'].includes(course.status)
   const canCancel = !isTerminal && !['picked_up', 'at_dropoff'].includes(course.status)
 
-  // Lien WhatsApp pré-rempli pour le destinataire : suivi + code de livraison.
   const trackingUrl = `${window.location.origin}/t/${course.tracking_token}`
   const waMessage =
     `Bonjour, votre colis Air Mess (réf. ${course.reference}) arrive.\n` +
@@ -91,126 +94,135 @@ export default function CourseDetailPage() {
       : null
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-cream">
       {isAdmin ? <AdminHeader /> : <AppHeader />}
 
-      <main className="max-w-5xl mx-auto p-4 md:p-6">
-        {/* Header */}
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <Link to={isAdmin ? '/admin/courses' : '/dashboard'} className="text-sm text-gray-500 hover:underline">
-              {isAdmin ? '← Retour aux courses' : '← Retour au tableau de bord'}
-            </Link>
-            <div className="flex items-center gap-3 mt-2">
-              <h2 className="text-2xl font-bold text-airmess-dark font-mono">{course.reference}</h2>
+      <main className="max-w-5xl mx-auto px-4 md:px-6 py-8 md:py-12">
+        {/* ============================================================
+            HERO — référence + statut + actions
+            ============================================================ */}
+        <div className="mb-6">
+          <Link
+            to={isAdmin ? '/admin/courses' : '/courses'}
+            className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink"
+          >
+            ← {isAdmin ? 'Retour aux courses' : 'Retour à mes courses'}
+          </Link>
+        </div>
+
+        <PageEyebrow label="Détail de la course" className="mb-3" />
+
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-h1 md:text-display-2 text-ink font-mono leading-tight">
+                {course.reference}
+              </h1>
               <StatusBadge status={course.status} />
             </div>
+            <p className="text-body-l text-warm-500 mt-2">
+              {course.origin_quartier} → {course.destination_quartier}, {course.destination_city}
+            </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() =>
-                copy(`${window.location.origin}/t/${course.tracking_token}`, 'link')
-              }
-              className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 flex items-center gap-1"
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => copy(trackingUrl, 'link')}
             >
-              {copiedKey === 'link' ? '✓ Copié !' : '🔗 Copier le lien de suivi'}
-            </button>
-
+              {copiedKey === 'link' ? '✓ Copié' : '🔗 Lien de suivi'}
+            </Button>
             {canCancel && (
-              <button
-                onClick={() => setConfirmCancel(true)}
-                className="text-airmess-red hover:underline text-sm"
-              >
-                Annuler la course
-              </button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmCancel(true)}>
+                <span className="text-airmess-red">Annuler</span>
+              </Button>
             )}
           </div>
         </div>
 
-        {/* ===== Panneau OPS (admin uniquement) ===== */}
+        {/* ============================================================
+            PANNEAU OPS — admin uniquement
+            ============================================================ */}
         {isAdmin && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
-            <h4 className="text-xs uppercase tracking-wider text-indigo-700 font-semibold mb-3">
+          <Card variant="default" padding="lg" className="mb-6 bg-info-bg! border-info/20!">
+            <p className="text-eyebrow uppercase text-info font-semibold mb-4">
               🛠️ Vue ops — informations internes
-            </h4>
+            </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-              {/* Expéditeur */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 text-body-s">
               <div>
-                <p className="text-gray-500">Expéditeur</p>
-                <p className="font-medium text-airmess-dark">{course.sender?.name ?? course.origin_name}</p>
-                <p className="text-xs text-gray-500">{course.sender?.phone ?? '—'}</p>
+                <p className="text-warm-500">Expéditeur</p>
+                <p className="font-bold text-ink">{course.sender?.name ?? course.origin_name}</p>
+                <p className="text-caption text-warm-500">{course.sender?.phone ?? '—'}</p>
               </div>
 
-              {/* Livreur + lien fiche */}
               <div>
-                <p className="text-gray-500">Livreur</p>
+                <p className="text-warm-500">Livreur</p>
                 {course.driver ? (
                   <>
                     <Link
                       to={`/admin/drivers/${course.driver.id}`}
-                      className="font-medium text-airmess-dark hover:underline"
+                      className="font-bold text-ink hover:text-airmess-red"
                     >
                       {course.driver.user.name}
                     </Link>
-                    <p className="text-xs text-gray-500">{course.driver.user.phone}</p>
+                    <p className="text-caption text-warm-500">{course.driver.user.phone}</p>
                   </>
                 ) : (
-                  <p className="font-medium text-gray-400 italic">Non assigné</p>
+                  <p className="font-medium text-warm-400 italic">Non assigné</p>
                 )}
               </div>
 
-              {/* Marge transporteur */}
               <div>
-                <p className="text-gray-500">Marge transporteur</p>
-                <p className="font-medium text-airmess-dark">
+                <p className="text-warm-500">Marge transporteur</p>
+                <p className="font-bold text-ink tabular-nums">
                   {(course.delivery_fee - course.driver_earnings).toLocaleString('fr-FR')} FCFA
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-caption text-warm-500 tabular-nums">
                   {course.delivery_fee.toLocaleString('fr-FR')} − {course.driver_earnings.toLocaleString('fr-FR')}
                 </p>
               </div>
             </div>
 
-            {/* Codes opérationnels (support) */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm mt-4 pt-4 border-t border-indigo-200">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-4 pt-4 border-t border-info/20">
               <div>
-                <p className="text-gray-500">Code de retrait</p>
-                <p className="font-mono font-bold text-airmess-dark tracking-widest text-lg">{course.pickup_code}</p>
+                <p className="text-caption text-warm-500">Code de retrait</p>
+                <p className="font-mono font-bold text-ink tracking-widest text-h3">{course.pickup_code}</p>
               </div>
               <div>
-                <p className="text-gray-500">Code de livraison</p>
-                <p className="font-mono font-bold text-airmess-dark tracking-widest text-lg">{course.delivery_code}</p>
+                <p className="text-caption text-warm-500">Code de livraison</p>
+                <p className="font-mono font-bold text-ink tracking-widest text-h3">{course.delivery_code}</p>
               </div>
             </div>
 
-            {/* Jalons temporels + durées */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-sm mt-4 pt-4 border-t border-indigo-200">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-body-s mt-4 pt-4 border-t border-info/20">
               <div>
-                <p className="text-gray-500">Créée</p>
-                <p className="font-medium text-airmess-dark">{fmtDateTime(course.created_at)}</p>
+                <p className="text-caption text-warm-500">Créée</p>
+                <p className="font-medium text-ink">{fmtDateTime(course.created_at)}</p>
               </div>
               <div>
-                <p className="text-gray-500">Attribuée</p>
-                <p className="font-medium text-airmess-dark">{fmtDateTime(course.assigned_at)}</p>
-                <p className="text-xs text-gray-500">délai : {duration(course.created_at, course.assigned_at)}</p>
+                <p className="text-caption text-warm-500">Attribuée</p>
+                <p className="font-medium text-ink">{fmtDateTime(course.assigned_at)}</p>
+                <p className="text-caption text-warm-500">délai : {duration(course.created_at, course.assigned_at)}</p>
               </div>
               <div>
-                <p className="text-gray-500">Récupérée</p>
-                <p className="font-medium text-airmess-dark">{fmtDateTime(course.picked_up_at)}</p>
+                <p className="text-caption text-warm-500">Récupérée</p>
+                <p className="font-medium text-ink">{fmtDateTime(course.picked_up_at)}</p>
               </div>
               <div>
-                <p className="text-gray-500">Livrée</p>
-                <p className="font-medium text-airmess-dark">{fmtDateTime(course.delivered_at)}</p>
-                <p className="text-xs text-gray-500">transit : {duration(course.picked_up_at, course.delivered_at)}</p>
+                <p className="text-caption text-warm-500">Livrée</p>
+                <p className="font-medium text-ink">{fmtDateTime(course.delivered_at)}</p>
+                <p className="text-caption text-warm-500">transit : {duration(course.picked_up_at, course.delivered_at)}</p>
               </div>
             </div>
-          </div>
+          </Card>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Colonne gauche : infos course */}
+        {/* ============================================================
+            CONTENU PRINCIPAL — grid 2/3 + 1/3
+            ============================================================ */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-4">
             {/* Origine */}
             <Section title="Origine">
@@ -218,61 +230,57 @@ export default function CourseDetailPage() {
               <KV label="Quartier" value={`${course.origin_quartier}, ${course.origin_city}`} />
             </Section>
 
-            {/* Codes de validation — affiché dès qu'un livreur est assigné */}
+            {/* Codes de validation — affiché quand un livreur est assigné */}
             {course.driver && !isTerminal && (
-              <div className="bg-white rounded-xl shadow-sm p-5 border-l-4 border-airmess-yellow">
-                <h4 className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-3">
+              <Card variant="signature" padding="lg" className="border-l-4 border-l-airmess-yellow!">
+                <p className="text-eyebrow uppercase text-warm-500 font-semibold mb-2">
                   🔑 Codes de validation
-                </h4>
-
-                <p className="text-xs text-gray-600 mb-3">
-                  Donne le <strong>code de retrait</strong> au livreur quand il arrive.
-                  Le <strong>code de livraison</strong> est pour le destinataire (visible sur son lien de suivi).
+                </p>
+                <p className="text-body-s text-warm-600 mb-4">
+                  Donnez le <strong className="text-ink">code de retrait</strong> au livreur quand il arrive.
+                  Le <strong className="text-ink">code de livraison</strong> est pour le destinataire (visible sur son lien de suivi).
                 </p>
 
-                {/* Code de retrait — gros et copiable */}
-                <div className="bg-airmess-yellow/10 rounded-lg p-4 flex items-center justify-between mb-3">
+                {/* Code de retrait — gros & copiable */}
+                <div className="bg-airmess-yellow/15 rounded-lg p-4 flex items-center justify-between mb-3 flex-wrap gap-3">
                   <div>
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Code de retrait</p>
-                    <p className="text-3xl font-bold font-mono text-airmess-dark tracking-[0.5em] mt-1">
+                    <p className="text-caption text-warm-600 uppercase font-semibold">Code de retrait</p>
+                    <p className="text-h1 font-bold font-mono text-ink tracking-[0.4em] mt-1">
                       {course.pickup_code}
                     </p>
                   </div>
-                  <button
-                    onClick={() => copy(course.pickup_code, 'pickup')}
-                    className="px-3 py-2 rounded-lg bg-airmess-dark text-white text-sm font-semibold hover:bg-gray-700"
-                  >
+                  <Button variant="dark" size="sm" pill onClick={() => copy(course.pickup_code, 'pickup')}>
                     {copiedKey === 'pickup' ? '✓ Copié' : '📋 Copier'}
-                  </button>
+                  </Button>
                 </div>
 
-                {/* Code de livraison — discret */}
-                <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
+                {/* Code de livraison — secondaire */}
+                <div className="bg-warm-100 rounded-lg p-3 flex items-center justify-between flex-wrap gap-2">
                   <div>
-                    <p className="text-xs text-gray-500 uppercase">Code de livraison (destinataire)</p>
-                    <p className="text-lg font-bold font-mono text-airmess-dark tracking-widest mt-0.5">
+                    <p className="text-caption text-warm-500 uppercase">Code de livraison (destinataire)</p>
+                    <p className="text-h3 font-bold font-mono text-ink tracking-widest mt-0.5">
                       {course.delivery_code}
                     </p>
                   </div>
                   <button
                     onClick={() => copy(course.delivery_code, 'delivery')}
-                    className="text-xs text-gray-500 hover:text-airmess-dark underline"
+                    className="text-caption text-warm-500 hover:text-ink underline"
                   >
                     {copiedKey === 'delivery' ? '✓ Copié' : 'Copier'}
                   </button>
                 </div>
 
-                {/* Envoi WhatsApp au destinataire : lien de suivi + code de livraison */}
+                {/* CTA WhatsApp */}
                 <a
                   href={waLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-3 w-full flex items-center justify-center gap-2 bg-[#25D366] text-white font-semibold py-2.5 rounded-lg hover:opacity-90"
+                  className="mt-4 w-full flex items-center justify-center gap-2 bg-[#25D366] text-white font-semibold py-3 rounded-full hover:opacity-90 transition-opacity shadow-sm"
                 >
-                  <span className="text-lg">📲</span>
+                  <span className="text-lg" aria-hidden>📲</span>
                   Envoyer au destinataire (WhatsApp)
                 </a>
-              </div>
+              </Card>
             )}
 
             {/* Destination */}
@@ -312,13 +320,13 @@ export default function CourseDetailPage() {
                   <KV label="Téléphone" value={course.driver.user.phone} />
                 </>
               ) : (
-                <p className="text-sm text-gray-500 italic">Aucun livreur assigné</p>
+                <p className="text-body-s text-warm-500 italic">Aucun livreur assigné</p>
               )}
             </Section>
 
             <Section title="Historique">
               {historyQuery.isLoading ? (
-                <p className="text-sm text-gray-500">Chargement...</p>
+                <p className="text-body-s text-warm-500">Chargement…</p>
               ) : (
                 <Timeline items={historyQuery.data ?? []} />
               )}
@@ -326,38 +334,41 @@ export default function CourseDetailPage() {
           </div>
         </div>
 
-        {/* Modal d'annulation */}
+        {/* ============================================================
+            MODAL ANNULATION
+            ============================================================ */}
         {confirmCancel && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-              <h3 className="text-lg font-bold text-airmess-dark">Annuler cette course ?</h3>
-              <p className="text-sm text-gray-500 mt-2">
-                Cette action est définitive. Donne un motif pour l'historique.
+          <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 ams-anim-fade-in">
+            <Card variant="signature" padding="lg" className="max-w-md w-full ams-anim-scale-in">
+              <h3 className="text-h2 text-ink font-bold">Annuler cette course ?</h3>
+              <p className="text-body-s text-warm-500 mt-2">
+                Cette action est définitive. Donnez un motif pour l'historique.
               </p>
               <textarea
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 rows={3}
-                className="w-full mt-3 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-airmess-yellow"
                 placeholder="ex: Client a changé d'avis"
+                className="w-full mt-4 bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
               />
-              {apiError && <p className="text-red-600 text-sm mt-2">{apiError}</p>}
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  onClick={() => setConfirmCancel(false)}
-                  className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
-                >
+              {apiError && (
+                <p className="text-body-s text-airmess-red mt-2">{apiError}</p>
+              )}
+              <div className="flex justify-end gap-3 mt-5">
+                <Button variant="secondary" size="md" onClick={() => setConfirmCancel(false)}>
                   Retour
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="danger"
+                  size="md"
+                  pill
                   onClick={() => cancelMutation.mutate()}
-                  disabled={cancelMutation.isPending}
-                  className="px-4 py-2 rounded-lg bg-airmess-red text-white disabled:opacity-50"
+                  loading={cancelMutation.isPending}
                 >
-                  {cancelMutation.isPending ? 'Annulation...' : 'Confirmer l\'annulation'}
-                </button>
+                  Confirmer l'annulation
+                </Button>
               </div>
-            </div>
+            </Card>
           </div>
         )}
       </main>
@@ -365,26 +376,27 @@ export default function CourseDetailPage() {
   )
 }
 
-// ===== Helpers de présentation =====
+/* ============================================================
+   Helpers de présentation
+   ============================================================ */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm p-5">
-      <h4 className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-3">{title}</h4>
+    <Card variant="default" padding="md">
+      <p className="text-eyebrow uppercase text-warm-500 font-semibold mb-3">{title}</p>
       <dl className="space-y-2">{children}</dl>
-    </div>
+    </Card>
   )
 }
 
 function KV({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="flex justify-between items-start gap-3 text-sm">
-      <dt className="text-gray-500 flex-shrink-0">{label}</dt>
-      <dd className="text-airmess-dark font-medium text-right break-words">{value}</dd>
+    <div className="flex justify-between items-start gap-3 text-body-s">
+      <dt className="text-warm-500 shrink-0">{label}</dt>
+      <dd className="text-ink font-medium text-right wrap-break-word">{value}</dd>
     </div>
   )
 }
 
-// Formate une date ISO en "12/06 14:30"
 function fmtDateTime(v?: string | null): string {
   if (!v) return '—'
   return new Date(v).toLocaleString('fr-FR', {
@@ -392,7 +404,6 @@ function fmtDateTime(v?: string | null): string {
   })
 }
 
-// Durée entre deux instants : "45 min" ou "2 h 05"
 function duration(from?: string | null, to?: string | null): string {
   if (!from || !to) return '—'
   const ms = new Date(to).getTime() - new Date(from).getTime()
@@ -402,10 +413,9 @@ function duration(from?: string | null, to?: string | null): string {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
 }
 
-// Normalise un numéro pour wa.me : chiffres seuls, + préfixe Bénin (229) si numéro local.
 function waNumber(phone: string): string {
   let d = phone.replace(/\D/g, '')
-  if (d.startsWith('00')) d = d.slice(2) // 00229... → 229...
-  if (d.length <= 8) d = '229' + d       // numéro local béninois (8 chiffres) → +229
+  if (d.startsWith('00')) d = d.slice(2)
+  if (d.length <= 8) d = '229' + d
   return d
 }
