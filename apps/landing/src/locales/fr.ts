@@ -107,6 +107,7 @@ const fr: Translation = {
       { value: 'Gratuit', label: 'Inscription' },
     ],
     cta: 'Commencer comme livreur',
+    download: 'Télécharger l’app livreur (Android)',
     note: 'Une pièce d’identité valide et un véhicule suffisent pour postuler.',
   },
   faq: {

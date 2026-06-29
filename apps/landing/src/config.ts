@@ -14,6 +14,9 @@ export const links = {
   login: `${APP_URL}/login`,
   registerSender: `${APP_URL}/register`,
   registerDriver: `${APP_URL}/register/driver`,
+  // Direct download of the courier (driver) Android app build (Expo).
+  driverApp:
+    'https://expo.dev/accounts/ktalyzconseils/projects/driver-app/builds/dbb5f333-0f0e-4d53-a0e1-27c733396470',
 } as const
 
 export const contact = {

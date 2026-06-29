@@ -105,6 +105,7 @@ const en = {
       { value: 'Free', label: 'To sign up' },
     ],
     cta: 'Start as a courier',
+    download: 'Download the courier app (Android)',
     note: 'A valid ID and a vehicle are all you need to apply.',
   },
   faq: {
