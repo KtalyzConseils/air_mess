@@ -9,7 +9,6 @@
       <stop offset="1" stop-color="#D40511"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="#161514"/>
   <g transform="translate(9,18.6) scale(0.0907) translate(-121,-156)">
     <polygon points="591,156 318,210 401,228 215,270 301,288 121,330 252,345" fill="url(#amWing)" stroke="url(#amWing)" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
     <polygon points="628,156 438,452 356,438 466,278 442,270" fill="url(#amBlade)" stroke="url(#amBlade)" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
