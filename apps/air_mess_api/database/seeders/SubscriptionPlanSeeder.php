@@ -25,7 +25,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'monthly_price_fcfa' => 5000,
                 'included_courses'   => 30,
                 'description'        => 'Parfait pour démarrer : boutiques, artisans, petits restaurants.',
-                'features'           => ['email_support', 'tracking_pages'],
+                'features'           => ['email_support', 'tracking_pages', 'api_access'],
                 'sort_order'         => 1,
             ],
             [
@@ -40,6 +40,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'multi_user',
                     'advanced_stats',
                     'priority_matching',
+                    'api_access',
                 ],
                 'sort_order'         => 2,
             ],

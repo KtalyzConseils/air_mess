@@ -1,0 +1,241 @@
+openapi: 3.1.0
+info:
+  title: AirMess — API d'intégration
+  version: "1.0.0"
+  description: |
+    Créez des courses (livraisons) AirMess automatiquement depuis votre propre
+    application (site e-commerce, ERP, backend…).
+
+    **Cas d'usage** : une commande est passée sur votre boutique → vous appelez
+    AirMess en serveur-à-serveur → une course est créée et proposée aux livreurs
+    autour de votre point de retrait.
+
+    ## Authentification
+    Toutes les requêtes utilisent une **clé d'intégration** (jeton Bearer)
+    portant l'autorisation `integration:create-course`. La clé est générée
+    depuis votre compte marchand (plan incluant `api_access`). Elle est
+    **secrète** : ne l'exposez jamais côté navigateur.
+
+    ## Idempotence
+    Renvoyez le même `external_reference` (votre n° de commande) pour éviter les
+    doublons : un second appel renvoie la course existante avec un statut `200`.
+  contact:
+    name: Support AirMess
+    email: support@airmess.bj
+
+servers:
+  - url: https://api.airmess.bj/api
+    description: Production
+  - url: http://127.0.0.1:8000/api
+    description: Local (développement)
+
+tags:
+  - name: Courses
+    description: Création de courses depuis un système externe.
+  - name: Clés
+    description: Gestion des clés d'intégration (depuis le compte marchand).
+
+security:
+  - integrationKey: []
+
+paths:
+  /integration/courses:
+    post:
+      tags: [Courses]
+      summary: Créer une course
+      description: |
+        Crée une course de livraison. **Idempotent** sur `external_reference`.
+
+        Le rapprochement livreurs se fait autour du point de **retrait**
+        (`origin`). Si `origin.lat`/`origin.lng` sont fournis, la course passe en
+        `awaiting_assignment` (proposée immédiatement). Sinon elle reste en
+        `awaiting_geo` jusqu'à géolocalisation du retrait.
+      operationId: createCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseRequest'
+            examples:
+              avecGps:
+                summary: Avec coordonnées de retrait (dispatch immédiat)
+                value:
+                  external_reference: "GB-ORD-10293"
+                  source: "gbandjo"
+                  urgency: "standard"
+                  origin:
+                    name: "Boutique Awa"
+                    phone: "+22990000001"
+                    quartier: "Gbegamey"
+                    city: "Cotonou"
+                    lat: 6.37
+                    lng: 2.41
+                  destination:
+                    name: "Koffi"
+                    phone: "+22997000002"
+                    address: "Maison bleue, en face du marché"
+                    quartier: "Calavi"
+                    city: "Abomey-Calavi"
+                  package:
+                    description: "Commande #10293"
+                    size: "M"
+      responses:
+        '201':
+          description: Course créée.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseResponse' }
+              example:
+                message: "Course créée. En attente d'attribution."
+                reference: "AM-2026-00042"
+                status: "awaiting_assignment"
+                tracking_url: "https://airmess.bj/t/EqVC0WhyTs"
+                delivery_fee: 1500
+        '200':
+          description: Course déjà existante pour cet `external_reference` (idempotence).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseResponse' }
+        '401':
+          description: Clé absente ou invalide.
+        '403':
+          description: Clé sans l'autorisation, ou compte non validé / abonnement inactif.
+        '402':
+          description: Quota mensuel de courses atteint.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QuotaError' }
+        '422':
+          description: Validation échouée.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+        '429':
+          description: Trop de requêtes (limite 60/min par clé).
+
+  /integration/keys:
+    get:
+      tags: [Clés]
+      summary: Lister ses clés d'intégration
+      description: Authentifié avec la **session marchand** (pas la clé). Ne renvoie pas la valeur des clés.
+      operationId: listKeys
+      responses:
+        '200': { description: Liste des clés. }
+    post:
+      tags: [Clés]
+      summary: Générer une clé d'intégration
+      description: Authentifié avec la **session marchand**. La valeur en clair n'est renvoyée qu'ici, une seule fois.
+      operationId: createKey
+      responses:
+        '201':
+          description: Clé créée.
+          content:
+            application/json:
+              example:
+                message: "Clé d'intégration générée. Copiez-la maintenant : elle ne sera plus affichée."
+                id: 146
+                key: "146|k71gsCLTNMkLGWPZQMbTTb9tqygexUAcupMN9yzxff902cc3"
+  /integration/keys/{id}:
+    delete:
+      tags: [Clés]
+      summary: Révoquer une clé
+      operationId: revokeKey
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Clé révoquée. }
+        '404': { description: Clé introuvable. }
+
+components:
+  securitySchemes:
+    integrationKey:
+      type: http
+      scheme: bearer
+      description: Clé d'intégration (jeton Bearer, ability `integration:create-course`).
+
+  schemas:
+    Origin:
+      type: object
+      required: [name, phone, quartier, city]
+      properties:
+        name: { type: string, maxLength: 150, example: "Boutique Awa" }
+        phone: { type: string, maxLength: 20, example: "+22990000001" }
+        street: { type: string, nullable: true }
+        landmark: { type: string, nullable: true }
+        quartier: { type: string, maxLength: 100, example: "Gbegamey" }
+        city: { type: string, maxLength: 100, example: "Cotonou" }
+        lat: { type: number, format: float, nullable: true, example: 6.37 }
+        lng: { type: number, format: float, nullable: true, example: 2.41 }
+        instructions: { type: string, nullable: true }
+
+    Destination:
+      type: object
+      required: [phone]
+      properties:
+        name: { type: string, nullable: true, example: "Koffi" }
+        phone: { type: string, maxLength: 20, description: "Numéro WhatsApp du client.", example: "+22997000002" }
+        address: { type: string, nullable: true, description: "Adresse texte libre." }
+        landmark: { type: string, nullable: true }
+        quartier: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        lat: { type: number, format: float, nullable: true }
+        lng: { type: number, format: float, nullable: true }
+        instructions: { type: string, nullable: true }
+
+    Package:
+      type: object
+      properties:
+        category_id: { type: integer, nullable: true, description: "Défaut : catégorie « standard »." }
+        description: { type: string, nullable: true }
+        size: { type: string, enum: [S, M, L, XL], default: M }
+
+    CourseRequest:
+      type: object
+      required: [origin, destination]
+      properties:
+        external_reference:
+          type: string
+          maxLength: 100
+          description: "Identifiant de la commande dans VOTRE système (idempotence)."
+          example: "GB-ORD-10293"
+        source: { type: string, maxLength: 30, example: "gbandjo" }
+        urgency: { type: string, enum: [standard, express], default: standard }
+        origin: { $ref: '#/components/schemas/Origin' }
+        destination: { $ref: '#/components/schemas/Destination' }
+        package: { $ref: '#/components/schemas/Package' }
+        collection_amount: { type: number, nullable: true, description: "Si présent, encaissement à la livraison activé." }
+        collection_method: { type: string, enum: [cash, mobile_money, prepaid], nullable: true }
+
+    CourseResponse:
+      type: object
+      properties:
+        message: { type: string }
+        reference: { type: string, example: "AM-2026-00042" }
+        status:
+          type: string
+          enum: [awaiting_geo, awaiting_assignment]
+          example: "awaiting_assignment"
+        tracking_url: { type: string, format: uri }
+        delivery_fee: { type: integer, example: 1500 }
+
+    QuotaError:
+      type: object
+      properties:
+        message: { type: string, example: "Quota mensuel atteint." }
+        quota_reached: { type: boolean, example: true }
+        used: { type: integer, example: 500 }
+        limit: { type: integer, example: 500 }
+
+    ValidationError:
+      type: object
+      properties:
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
