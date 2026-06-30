@@ -20,17 +20,22 @@ return new class extends Migration {
             $table->index('subscription_status');
         });
 
-        // Contrainte CHECK : les valeurs autorisées pour subscription_status
-        DB::statement("
-            ALTER TABLE individuals
-            ADD CONSTRAINT individuals_subscription_status_check
-            CHECK (subscription_status IS NULL OR subscription_status IN ('active', 'expired', 'suspended', 'churned'))
-        ");
+        // Contrainte CHECK : les valeurs autorisées pour subscription_status.
+        // SQL natif Postgres → ignoré sur sqlite (tests), où l'enum n'est pas contraint.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement("
+                ALTER TABLE individuals
+                ADD CONSTRAINT individuals_subscription_status_check
+                CHECK (subscription_status IS NULL OR subscription_status IN ('active', 'expired', 'suspended', 'churned'))
+            ");
+        }
     }
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE individuals DROP CONSTRAINT IF EXISTS individuals_subscription_status_check');
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE individuals DROP CONSTRAINT IF EXISTS individuals_subscription_status_check');
+        }
 
         Schema::table('individuals', function (Blueprint $table) {
             $table->dropIndex(['subscription_status']);

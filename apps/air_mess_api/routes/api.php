@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\AddressController;
 use App\Http\Controllers\Api\TrackingController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\IntegrationKeyController;
+use App\Http\Controllers\Api\IntegrationCourseController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -94,8 +96,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/checkout', [SubscriptionController::class, 'checkout']);
     });
 
+    // Clés d'intégration du marchand (pour connecter un site externe type Gbandjo).
+    // Gérées par le marchand connecté ; la valeur en clair n'apparaît qu'à la création.
+    Route::prefix('integration/keys')->group(function () {
+        Route::get('/',        [IntegrationKeyController::class, 'index']);
+        Route::post('/',       [IntegrationKeyController::class, 'store']);
+        Route::delete('/{id}', [IntegrationKeyController::class, 'destroy']);
+    });
 
 });
+
+// ===== API d'intégration externe (serveur-à-serveur) =====
+// Auth par clé d'intégration (token Sanctum portant l'ability dédiée) + throttle.
+Route::middleware(['auth:sanctum', 'abilities:integration:create-course', 'throttle:60,1'])
+    ->prefix('integration')
+    ->group(function () {
+        Route::post('/courses', [IntegrationCourseController::class, 'store']);
+    });
 
 
 

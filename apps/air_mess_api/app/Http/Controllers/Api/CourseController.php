@@ -20,19 +20,14 @@ class CourseController extends Controller
         CreateCourseRequest $request,
         NotificationService $notifier,
         \App\Services\CourseBillingService $billing,
+        \App\Services\CourseCreationService $creator,
     ): JsonResponse {
         $data = $request->validated();
         $user = $request->user();
 
-        // Calcul tarif simple pour le MVP
-        $isExpress = ($data['urgency'] ?? 'standard') === 'express';
-        $deliveryFee = (int) \App\Models\AppSetting::get(
-            $isExpress ? 'express_delivery_fee_fcfa' : 'standard_delivery_fee_fcfa',
-            $isExpress ? 2500 : 1500, // fallback si la setting n'existe pas
-        );
-        $driverPercent  = (int) \App\Models\AppSetting::get('driver_commission_percent', 75);
-        $driverEarnings = (int) round($deliveryFee * $driverPercent / 100);
-
+        // Tarif forfaitaire (urgence) + part livreur.
+        ['delivery_fee' => $deliveryFee, 'driver_earnings' => $driverEarnings]
+            = $creator->pricing($data['urgency'] ?? 'standard');
 
         // ===== Vérif quota marchand =====
         if ($user->isMarchant() && $user->marchant->hasReachedMonthlyLimit()) {
@@ -49,51 +44,23 @@ class CourseController extends Controller
             return $billing->initiateOneShotCheckout($user, $data, $deliveryFee, $driverEarnings);
         }
 
-        $course = DB::transaction(function () use ($data, $user, $deliveryFee, $driverEarnings) {
-            $course = Course::create(array_merge($data, [
-                'sender_id'       => $user->id,
-                'status'          => isset($data['scheduled_for'])
-                    ? Course::STATUS_PENDING_PREP
-                    : Course::STATUS_AWAITING,
-                'delivery_fee'    => $deliveryFee,
-                'driver_earnings' => $driverEarnings,
-                'has_collection'  => $data['has_collection'] ?? false,
-                'urgency'         => $data['urgency'] ?? 'standard',
-
-                // Filet de sécurité : on génère reference+token ici même si les events firent
-                'reference'       => $this->generateReference(),
-                'tracking_token'  => Str::random(10),
-                'pickup_code'     => Course::generateCode(),
-                'delivery_code'   => Course::generateCode(),
-            ]));
-
-            // Incrémenter le quota selon le type
-            if ($user->isIndividual()) {
-                $user->individual->increment('monthly_courses_used');
-            } elseif ($user->isMarchant()) {
-                $user->marchant->increment('monthly_courses_used');
-            }
-
-            return $course;
-        });
+        $course = $creator->persist($user, $data, [
+            'status'          => isset($data['scheduled_for'])
+                ? Course::STATUS_PENDING_PREP
+                : Course::STATUS_AWAITING,
+            'delivery_fee'    => $deliveryFee,
+            'driver_earnings' => $driverEarnings,
+            'has_collection'  => $data['has_collection'] ?? false,
+            'urgency'         => $data['urgency'] ?? 'standard',
+        ]);
 
         // Alerte quota marchand (80% / 100%)
         if ($user->isMarchant()) {
             $billing->sendQuotaAlertsIfNeeded($user->marchant->fresh(), $notifier);
         }
 
-        // PUSH aux livreurs disponibles dans un rayon de 8 km
-        $driverUserIds = Driver::availableNear($course->origin_lat, $course->origin_lng, 8.0)
-        ->pluck('user_id')
-        ->toArray();
-
-        $title = $course->urgency === 'express' ? '⚡ Course Express' : '📦 Nouvelle course';
-        $body  = "{$course->origin_quartier} → {$course->destination_quartier} · {$course->driver_earnings} FCFA";
-
-        $notifier->sendToUsers($driverUserIds, 'course.offered', $title, $body,
-            ['reference' => $course->reference],
-            $course->id,
-        );
+        // PUSH aux livreurs disponibles autour du retrait (rayon 8 km).
+        $creator->dispatchToAvailableDrivers($course);
 
         return response()->json([
             'message' => 'Course créée. En attente d\'attribution.',
@@ -244,22 +211,5 @@ class CourseController extends Controller
         }
 
         abort(403, 'Accès refusé à cette course.');
-    }
-
-
-    /**
-     * Génère une référence unique du type AM-2026-00001.
-     */
-    private function generateReference(): string
-    {
-        $year = now()->format('Y');
-        $count = Course::whereYear('created_at', $year)->count() + 1;
-
-        // Boucle de sécurité contre les collisions de timing
-        do {
-            $ref = sprintf('AM-%s-%05d', $year, $count++);
-        } while (Course::where('reference', $ref)->exists());
-
-        return $ref;
     }
 }
