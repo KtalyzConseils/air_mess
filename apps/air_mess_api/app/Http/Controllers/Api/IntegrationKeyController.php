@@ -44,6 +44,15 @@ class IntegrationKeyController extends Controller
     {
         $this->ensureMarchant($request);
 
+        // L'accès API est une fonctionnalité de plan : on ne génère une clé que si
+        // le plan du marchand inclut `api_access` (Starter/Pro/Business, pas Essai).
+        if (! $request->user()->marchant->hasApiAccess()) {
+            return response()->json([
+                'message'        => 'Votre plan actuel n\'inclut pas l\'accès API. Passez à un plan supérieur (Starter, Pro ou Business) pour générer une clé d\'intégration.',
+                'requires_plan'  => 'api_access',
+            ], 403);
+        }
+
         $token = $request->user()->createToken(self::TOKEN_NAME, [self::ABILITY]);
 
         return response()->json([

@@ -106,7 +106,9 @@ paths:
         '401':
           description: Clé absente ou invalide.
         '403':
-          description: Clé sans l'autorisation, ou compte non validé / abonnement inactif.
+          description: |
+            Clé sans l'autorisation, compte marchand non validé, ou plan
+            n'incluant pas `api_access` (réservé à Starter, Pro et Business).
         '402':
           description: |
             Solde wallet insuffisant pour facturer la course. Le marchand doit
