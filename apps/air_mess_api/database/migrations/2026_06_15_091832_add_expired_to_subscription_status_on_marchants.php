@@ -6,6 +6,11 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration {
     public function up(): void
     {
+        // SQL natif Postgres (contrainte CHECK) → ignoré sur sqlite (tests).
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         // 1. Supprimer la contrainte CHECK actuelle
         DB::statement('ALTER TABLE marchants DROP CONSTRAINT IF EXISTS marchants_subscription_status_check');
 
@@ -23,6 +28,10 @@ return new class extends Migration {
         // sinon la nouvelle contrainte refuserait ces lignes
         DB::table('marchants')->where('subscription_status', 'expired')
             ->update(['subscription_status' => 'churned']);
+
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
 
         DB::statement('ALTER TABLE marchants DROP CONSTRAINT IF EXISTS marchants_subscription_status_check');
         DB::statement("
