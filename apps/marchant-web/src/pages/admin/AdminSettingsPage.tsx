@@ -1,15 +1,45 @@
-import { useState } from 'react'
+import { useState, type ComponentType } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
-import AdminHeader from '../../components/AdminHeader'
+import AdminPageShell from '../../components/admin/AdminPageShell'
+import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import { AdminButton } from '../../components/admin/AdminToolbar'
+import {
+  AlertTriangleIcon,
+  SettingsIcon,
+  BarChartIcon,
+  PackageIcon,
+  CheckIcon,
+  DashboardIcon,
+  MenuIcon,
+  type IconProps,
+} from '../../components/ui/icons'
 import { fetchSettings, updateSetting, type AppSetting } from '../../api/admin/settings'
 import { fetchAdminPlans, updateAdminPlan, type AdminPlan } from '../../api/admin/plans'
+import { useUiPrefsStore, type NavMode } from '../../stores/uiPrefsStore'
 
-// Libellés humains pour les groupes
-const GROUP_LABEL: Record<string, string> = {
-  pricing: '💰 Tarification',
-  quotas:  '📊 Quotas & limites',
-  general: '⚙️ Général',
+interface GroupMeta {
+  label: string
+  description: string
+  Icon: ComponentType<IconProps>
+}
+
+const GROUP_META: Record<string, GroupMeta> = {
+  pricing: {
+    label: 'Tarification',
+    description: 'Tarifs, commissions et prix appliqués aux courses.',
+    Icon: BarChartIcon,
+  },
+  quotas: {
+    label: 'Quotas & limites',
+    description: "Plafonds d'usage et seuils déclencheurs.",
+    Icon: PackageIcon,
+  },
+  general: {
+    label: 'Général',
+    description: "Paramètres divers du système.",
+    Icon: SettingsIcon,
+  },
 }
 
 export default function AdminSettingsPage() {
@@ -19,36 +49,74 @@ export default function AdminSettingsPage() {
   })
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AdminHeader />
-      <main className="max-w-3xl mx-auto p-4 md:p-6">
-        <h2 className="text-2xl font-bold text-airmess-dark mb-1">Paramètres globaux</h2>
-        <p className="text-sm text-gray-500 mb-6">
-          Réglages appliqués à l'ensemble de la plateforme. Réservé au super-admin.
-        </p>
+    <AdminPageShell>
+      <AdminPageHeader
+        title="Paramètres globaux"
+        subtitle="Réglages plateforme — réservé au super-admin."
+      />
 
-        {isLoading && <p className="text-gray-500">Chargement…</p>}
-        {isError && <p className="text-red-600">Erreur de chargement.</p>}
+      <div className="px-4 md:px-8 lg:px-12 py-6 max-w-4xl mx-auto space-y-8">
+        {/* Préférences UI — locale (par-device), pas un setting serveur */}
+        <NavPreferenceSection />
 
-        {settings && Object.entries(settings).map(([group, items]) => (
-          <section key={group} className="mb-6">
-            <h3 className="font-semibold text-airmess-dark mb-3">
-              {GROUP_LABEL[group] ?? group}
-            </h3>
-            <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
-              {items.map((s) => <SettingRow key={s.key} setting={s} />)}
-            </div>
-          </section>
-        ))}
+        {isLoading && <p className="text-body-s text-warm-500">Chargement…</p>}
+        {isError && <p className="text-body-s text-airmess-red">Erreur de chargement.</p>}
+
+        {settings &&
+          Object.entries(settings).map(([group, items]) => {
+            const meta = GROUP_META[group] ?? {
+              label: group,
+              description: '',
+              Icon: SettingsIcon,
+            }
+            return (
+              <SettingsGroup key={group} meta={meta}>
+                <ul className="divide-y divide-warm-200">
+                  {items.map((s) => (
+                    <SettingRow key={s.key} setting={s} />
+                  ))}
+                </ul>
+              </SettingsGroup>
+            )
+          })}
 
         <PlansSection />
-      </main>
-    </div>
+      </div>
+    </AdminPageShell>
   )
 }
 
-// ===== Section : plans d'abonnement marchands =====
+/* ============================================================
+   Groupe de paramètres : en-tête avec icône + description,
+   puis liste de rows. Le visuel principal vient du contraste
+   entre l'en-tête (jaune subtil) et le corps (off-white).
+   ============================================================ */
+function SettingsGroup({
+  meta,
+  children,
+}: {
+  meta: GroupMeta
+  children: React.ReactNode
+}) {
+  return (
+    <section className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
+      <header className="flex items-start gap-3 px-6 py-4 bg-airmess-yellow/8 border-b border-warm-200">
+        <span className="shrink-0 w-9 h-9 rounded-md bg-airmess-yellow text-ink flex items-center justify-center">
+          <meta.Icon size={18} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-body font-bold text-ink leading-tight">{meta.label}</h2>
+          <p className="text-caption text-warm-600 mt-0.5">{meta.description}</p>
+        </div>
+      </header>
+      {children}
+    </section>
+  )
+}
 
+/* ============================================================
+   Section plans abonnements — pareil mais sans data dynamique
+   ============================================================ */
 function PlansSection() {
   const { data: plans, isLoading, isError } = useQuery({
     queryKey: ['admin', 'plans'],
@@ -56,18 +124,28 @@ function PlansSection() {
   })
 
   return (
-    <section className="mb-6">
-      <h3 className="font-semibold text-airmess-dark mb-3">📦 Plans d'abonnement marchands</h3>
-
-      {isLoading && <p className="text-gray-500 text-sm">Chargement des plans…</p>}
-      {isError && <p className="text-red-600 text-sm">Erreur de chargement.</p>}
+    <SettingsGroup
+      meta={{
+        label: "Plans d'abonnement marchands",
+        description: "Prix mensuel et quota inclus dans chaque plan.",
+        Icon: PackageIcon,
+      }}
+    >
+      {isLoading && (
+        <p className="text-body-s text-warm-500 px-6 py-4">Chargement des plans…</p>
+      )}
+      {isError && (
+        <p className="text-body-s text-airmess-red px-6 py-4">Erreur de chargement.</p>
+      )}
 
       {plans && (
-        <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
-          {plans.map((p) => <PlanRow key={p.id} plan={p} />)}
-        </div>
+        <ul className="divide-y divide-warm-200">
+          {plans.map((p) => (
+            <PlanRow key={p.id} plan={p} />
+          ))}
+        </ul>
       )}
-    </section>
+    </SettingsGroup>
   )
 }
 
@@ -79,19 +157,22 @@ function PlanRow({ plan }: { plan: AdminPlan }) {
   const [error, setError] = useState<string | null>(null)
 
   const mutation = useMutation({
-    mutationFn: () => updateAdminPlan(plan.id, {
-      monthly_price_fcfa: Number(price),
-      included_courses:   Number(quota),
-    }),
+    mutationFn: () =>
+      updateAdminPlan(plan.id, {
+        monthly_price_fcfa: Number(price),
+        included_courses: Number(quota),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'plans'] })
       setEditing(false)
       setError(null)
     },
     onError: (err) => {
-      setError(err instanceof AxiosError
-        ? err.response?.data?.message ?? 'Mise à jour impossible.'
-        : 'Mise à jour impossible.')
+      setError(
+        err instanceof AxiosError
+          ? err.response?.data?.message ?? 'Mise à jour impossible.'
+          : 'Mise à jour impossible.',
+      )
     },
   })
 
@@ -103,93 +184,74 @@ function PlanRow({ plan }: { plan: AdminPlan }) {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <p className="font-semibold text-airmess-dark">
-            {plan.name}
-            <span className="ml-2 text-xs text-gray-400 font-normal">/{plan.code}</span>
-          </p>
+    <li className="px-6 py-4 hover:bg-cream/30 transition-colors">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-start">
+        {/* Colonne gauche : description */}
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-2">
+            <p className="text-body font-bold text-ink">{plan.name}</p>
+            <span className="text-caption font-mono text-warm-400">/{plan.code}</span>
+          </div>
           {plan.description && (
-            <p className="text-xs text-gray-500 mt-1">{plan.description}</p>
+            <p className="text-body-s text-warm-500 mt-1">{plan.description}</p>
           )}
         </div>
 
+        {/* Colonne droite : valeur + actions */}
         {!editing ? (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <div className="text-right">
-              <p className="text-lg font-bold text-airmess-dark whitespace-nowrap">
-                {plan.monthly_price_fcfa.toLocaleString('fr-FR')} <span className="text-xs font-normal text-gray-500">FCFA/mois</span>
+              <p className="text-body font-bold text-ink tabular-nums whitespace-nowrap">
+                {plan.monthly_price_fcfa.toLocaleString('fr-FR')}{' '}
+                <span className="text-caption text-warm-500 font-normal">FCFA/mois</span>
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-caption text-warm-500 tabular-nums">
                 {plan.included_courses} courses incluses
               </p>
             </div>
-            <button
-              onClick={() => setEditing(true)}
-              className="px-3 py-1 rounded-lg border border-gray-300 text-sm hover:bg-gray-50"
-            >
+            <AdminButton variant="secondary" size="sm" onClick={() => setEditing(true)}>
               Modifier
-            </button>
+            </AdminButton>
           </div>
         ) : (
           <div className="flex flex-col items-end gap-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                disabled={mutation.isPending}
-                className="w-28 px-3 py-1 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-airmess-yellow text-sm"
-                placeholder="Prix"
-              />
-              <span className="text-xs text-gray-500">FCFA/mois</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={quota}
-                onChange={(e) => setQuota(e.target.value)}
-                disabled={mutation.isPending}
-                className="w-28 px-3 py-1 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-airmess-yellow text-sm"
-                placeholder="Courses"
-              />
-              <span className="text-xs text-gray-500">courses incluses</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => mutation.mutate()}
-                disabled={mutation.isPending}
-                className="px-3 py-1 rounded-lg bg-airmess-yellow text-airmess-dark text-sm font-semibold disabled:opacity-50"
-              >
-                {mutation.isPending ? '…' : 'OK'}
-              </button>
-              <button
-                onClick={cancel}
-                disabled={mutation.isPending}
-                className="px-3 py-1 rounded-lg border border-gray-300 text-sm hover:bg-gray-50 disabled:opacity-50"
-              >
-                Annuler
-              </button>
-            </div>
+            <NumberFieldWithUnit
+              value={price}
+              onChange={setPrice}
+              disabled={mutation.isPending}
+              unit="FCFA/mois"
+              placeholder="Prix"
+            />
+            <NumberFieldWithUnit
+              value={quota}
+              onChange={setQuota}
+              disabled={mutation.isPending}
+              unit="courses"
+              placeholder="Quota"
+            />
+            <EditActions
+              onSave={() => mutation.mutate()}
+              onCancel={cancel}
+              isPending={mutation.isPending}
+            />
           </div>
         )}
       </div>
 
-      {error && (
-        <p className="text-sm text-airmess-red mt-2 bg-red-50 p-2 rounded">{error}</p>
-      )}
-    </div>
+      {error && <InlineError text={error} />}
+    </li>
   )
 }
 
-// ===== Sous-composant : une ligne =====
-
+/* ============================================================
+   Ligne de paramètre individuel
+   ============================================================ */
 function SettingRow({ setting }: { setting: AppSetting }) {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState<string>(String(setting.value))
   const [error, setError] = useState<string | null>(null)
+  const [justSaved, setJustSaved] = useState(false)
 
   const mutation = useMutation({
     mutationFn: () => updateSetting(setting.key, parseValue(value, setting.type)),
@@ -197,6 +259,8 @@ function SettingRow({ setting }: { setting: AppSetting }) {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
       setEditing(false)
       setError(null)
+      setJustSaved(true)
+      setTimeout(() => setJustSaved(false), 1500)
     },
     onError: (err) => {
       const msg =
@@ -213,75 +277,248 @@ function SettingRow({ setting }: { setting: AppSetting }) {
     setError(null)
   }
 
+  // Suffixe contextuel sur la valeur (déduit de la clé)
+  const suffix = setting.key.includes('_percent')
+    ? '%'
+    : setting.key.includes('_fcfa')
+      ? 'FCFA'
+      : null
+
   return (
-    <div className="p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <p className="font-semibold text-airmess-dark">{setting.label ?? setting.key}</p>
+    <li className="px-6 py-4 hover:bg-cream/30 transition-colors">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-start">
+        {/* Colonne gauche : description (responsive : titre + clé technique) */}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-body-s font-bold text-ink">
+              {setting.label ?? setting.key}
+            </p>
+            {setting.label && (
+              <span className="text-caption font-mono text-warm-400">{setting.key}</span>
+            )}
+            {justSaved && (
+              <span className="inline-flex items-center gap-1 text-caption font-semibold text-success">
+                <CheckIcon size={12} /> Enregistré
+              </span>
+            )}
+          </div>
           {setting.description && (
-            <p className="text-xs text-gray-500 mt-1">{setting.description}</p>
+            <p className="text-body-s text-warm-500 mt-1 max-w-prose">{setting.description}</p>
+          )}
+          {setting.updated_by && !editing && (
+            <p className="text-caption text-warm-400 mt-1.5">
+              Dernière modif par {setting.updated_by.name}
+            </p>
           )}
         </div>
 
+        {/* Colonne droite : valeur + actions */}
         {!editing ? (
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-bold text-airmess-dark whitespace-nowrap">
-              {String(setting.value)}
-              {setting.key.includes('_percent') && ' %'}
-              {setting.key.includes('_fcfa') && ' FCFA'}
-            </span>
-            <button
-              onClick={() => setEditing(true)}
-              className="px-3 py-1 rounded-lg border border-gray-300 text-sm hover:bg-gray-50"
-            >
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right">
+              <span className="text-body font-bold text-ink whitespace-nowrap tabular-nums">
+                {String(setting.value)}
+                {suffix && (
+                  <span className="text-caption text-warm-500 font-normal ml-1">
+                    {suffix}
+                  </span>
+                )}
+              </span>
+            </div>
+            <AdminButton variant="secondary" size="sm" onClick={() => setEditing(true)}>
               Modifier
-            </button>
+            </AdminButton>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <input
-              type={setting.type === 'number' ? 'number' : 'text'}
+          <div className="flex flex-col items-end gap-2">
+            <NumberFieldWithUnit
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={setValue}
               disabled={mutation.isPending}
-              className="w-32 px-3 py-1 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-airmess-yellow text-sm"
+              unit={suffix ?? undefined}
+              type={setting.type === 'number' ? 'number' : 'text'}
               autoFocus
             />
-            <button
-              onClick={() => mutation.mutate()}
-              disabled={mutation.isPending}
-              className="px-3 py-1 rounded-lg bg-airmess-yellow text-airmess-dark text-sm font-semibold disabled:opacity-50"
-            >
-              {mutation.isPending ? '…' : 'OK'}
-            </button>
-            <button
-              onClick={cancel}
-              disabled={mutation.isPending}
-              className="px-3 py-1 rounded-lg border border-gray-300 text-sm hover:bg-gray-50 disabled:opacity-50"
-            >
-              Annuler
-            </button>
+            <EditActions
+              onSave={() => mutation.mutate()}
+              onCancel={cancel}
+              isPending={mutation.isPending}
+            />
           </div>
         )}
       </div>
 
-      {error && (
-        <p className="text-sm text-airmess-red mt-2 bg-red-50 p-2 rounded">{error}</p>
-      )}
+      {error && <InlineError text={error} />}
+    </li>
+  )
+}
 
-      {setting.updated_by && (
-        <p className="text-[10px] text-gray-400 mt-2">
-          Modifié par {setting.updated_by.name}
-        </p>
+/* ============================================================
+   Sous-composants utilitaires de la page
+   ============================================================ */
+
+function NumberFieldWithUnit({
+  value,
+  onChange,
+  disabled,
+  unit,
+  placeholder,
+  type = 'number',
+  autoFocus,
+}: {
+  value: string
+  onChange: (v: string) => void
+  disabled?: boolean
+  unit?: string
+  placeholder?: string
+  type?: 'number' | 'text'
+  autoFocus?: boolean
+}) {
+  return (
+    <div className="inline-flex items-stretch border border-warm-300 rounded-md overflow-hidden bg-off-white focus-within:border-airmess-yellow focus-within:shadow-glow-yellow transition-all">
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        className="w-28 h-8 px-3 bg-transparent text-body-s text-ink focus:outline-none tabular-nums"
+      />
+      {unit && (
+        <span className="px-2.5 inline-flex items-center text-caption text-warm-500 bg-cream border-l border-warm-200 whitespace-nowrap">
+          {unit}
+        </span>
       )}
     </div>
   )
 }
 
-// Helper : convertir la string d'input vers le type attendu
+function EditActions({
+  onSave,
+  onCancel,
+  isPending,
+}: {
+  onSave: () => void
+  onCancel: () => void
+  isPending: boolean
+}) {
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <AdminButton variant="secondary" size="sm" onClick={onCancel} disabled={isPending}>
+        Annuler
+      </AdminButton>
+      <AdminButton variant="primary" size="sm" onClick={onSave} disabled={isPending}>
+        {isPending ? 'Enregistrement…' : 'Enregistrer'}
+      </AdminButton>
+    </div>
+  )
+}
+
+function InlineError({ text }: { text: string }) {
+  return (
+    <p className="text-body-s text-airmess-red mt-3 bg-danger-bg border border-airmess-red/20 px-3 py-2 rounded-md flex items-center gap-1.5">
+      <AlertTriangleIcon size={14} />
+      {text}
+    </p>
+  )
+}
+
 function parseValue(raw: string, type: AppSetting['type']) {
   if (type === 'number') return Number(raw)
   if (type === 'boolean') return raw === 'true' || raw === '1'
   if (type === 'json') return JSON.parse(raw)
   return raw
+}
+
+/* ============================================================
+   Préférence de navigation — store local (par-device).
+   ============================================================ */
+
+interface NavOption {
+  value: NavMode
+  label: string
+  description: string
+  Icon: ComponentType<IconProps>
+}
+
+const NAV_OPTIONS: NavOption[] = [
+  {
+    value: 'both',
+    label: 'Sidebar + bouton flottant',
+    description: "Sidebar verticale toujours visible + bouton radial déplaçable. C'est le défaut.",
+    Icon: DashboardIcon,
+  },
+  {
+    value: 'sidebar',
+    label: 'Sidebar uniquement',
+    description: 'Mode classique : seule la barre verticale est affichée. Cache le bouton flottant.',
+    Icon: MenuIcon,
+  },
+  {
+    value: 'fab',
+    label: 'Bouton flottant uniquement',
+    description: 'Mode minimaliste : pas de sidebar, navigation exclusivement par le bouton radial.',
+    Icon: SettingsIcon,
+  },
+]
+
+function NavPreferenceSection() {
+  const navMode = useUiPrefsStore((s) => s.navMode)
+  const setNavMode = useUiPrefsStore((s) => s.setNavMode)
+
+  return (
+    <SettingsGroup
+      meta={{
+        label: 'Préférences de navigation',
+        description: "Choix local — sauvegardé sur cet appareil uniquement.",
+        Icon: DashboardIcon,
+      }}
+    >
+      <ul className="divide-y divide-warm-200">
+        {NAV_OPTIONS.map((opt) => {
+          const active = navMode === opt.value
+          return (
+            <li key={opt.value}>
+              <button
+                type="button"
+                onClick={() => setNavMode(opt.value)}
+                className={[
+                  'w-full text-left px-6 py-4 flex items-start gap-4 transition-colors',
+                  active ? 'bg-airmess-yellow/8' : 'hover:bg-cream/40',
+                ].join(' ')}
+              >
+                {/* Radio visuel */}
+                <span
+                  className={[
+                    'shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                    active ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-300 bg-off-white',
+                  ].join(' ')}
+                >
+                  {active && <span className="w-2 h-2 rounded-full bg-ink" />}
+                </span>
+
+                {/* Icône + texte */}
+                <span className="shrink-0 w-8 h-8 rounded-md bg-warm-100 text-warm-600 flex items-center justify-center">
+                  <opt.Icon size={16} />
+                </span>
+
+                <span className="min-w-0 flex-1">
+                  <p className="text-body-s font-bold text-ink flex items-center gap-2">
+                    {opt.label}
+                    {active && (
+                      <span className="inline-flex items-center gap-1 text-caption font-semibold text-success">
+                        <CheckIcon size={12} /> Actif
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-body-s text-warm-500 mt-0.5">{opt.description}</p>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </SettingsGroup>
+  )
 }

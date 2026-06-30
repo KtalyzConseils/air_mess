@@ -37,9 +37,9 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="earnings"
+        name="wallet"
         options={{
-          title: 'Gains',
+          title: 'Mon wallet',
           tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} />,
         }}
       />

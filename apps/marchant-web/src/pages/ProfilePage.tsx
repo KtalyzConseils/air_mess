@@ -1,14 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactElement } from 'react'
+import { Link } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
+import Card from '../components/ui/Card'
+import Button from '../components/ui/Button'
+import Badge from '../components/ui/Badge'
+import PageEyebrow from '../components/ui/PageEyebrow'
 import { useAuthStore } from '../stores/authStore'
 import type { Marchant } from '../types/auth'
-
-const PLAN_LABEL: Record<Marchant['subscription_plan'], { label: string; color: string }> = {
-  trial:    { label: 'Essai',    color: 'bg-gray-100 text-gray-700' },
-  starter:  { label: 'Starter',  color: 'bg-blue-100 text-blue-700' },
-  pro:      { label: 'Pro',      color: 'bg-airmess-yellow text-airmess-dark' },
-  business: { label: 'Business', color: 'bg-purple-100 text-purple-700' },
-}
+import { useUiPrefsStore, type ClientNavMode } from '../stores/uiPrefsStore'
 
 const SECTEUR_LABEL: Record<Marchant['secteur_activite'], string> = {
   supermarche: '🛒 Supermarché',
@@ -18,15 +17,6 @@ const SECTEUR_LABEL: Record<Marchant['secteur_activite'], string> = {
   ecommerce:   '📦 E-commerce',
   autre:       '🏷️ Autre',
 }
-
-const STATUS_LABEL: Record<Marchant['subscription_status'], { label: string; color: string }> = {
-  trial:     { label: 'Période d\'essai', color: 'bg-yellow-100 text-yellow-800' },
-  active:    { label: 'Actif',            color: 'bg-green-100 text-green-700' },
-  expired:   { label: 'Expiré',           color: 'bg-amber-100 text-amber-800' },
-  suspended: { label: 'Suspendu',         color: 'bg-red-100 text-red-700' },
-  churned:   { label: 'Résilié',          color: 'bg-gray-100 text-gray-600' },
-}
-
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -43,178 +33,264 @@ function formatDateTime(iso: string | null | undefined): string {
   })
 }
 
+function initialsOf(name: string): string {
+  return name
+    .split(' ')
+    .filter((w) => w.length > 0)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+}
+
 export default function ProfilePage() {
   const { user, fetchMe } = useAuthStore()
 
-  useEffect(() => { fetchMe() }, [fetchMe])
+  useEffect(() => {
+    fetchMe()
+  }, [fetchMe])
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-cream">
         <AppHeader />
-        <main className="max-w-4xl mx-auto p-6 text-center text-gray-500">
-          Chargement du profil...
+        <main className="max-w-4xl mx-auto px-4 md:px-6 py-12 text-center text-warm-500">
+          Chargement du profil…
         </main>
       </div>
     )
   }
 
   const marchant = user.marchant
-  const plan = marchant ? PLAN_LABEL[marchant.subscription_plan] : null
-  const status = marchant ? STATUS_LABEL[marchant.subscription_status] : null
   const secteur = marchant ? SECTEUR_LABEL[marchant.secteur_activite] : null
+  const displayName = marchant?.raison_sociale || user.name
+  const initials = initialsOf(displayName)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-cream">
       <AppHeader />
-      <main className="max-w-4xl mx-auto p-6 space-y-6">
+      <main className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
+        <PageEyebrow label="Mon profil" className="mb-4" />
+        <h1 className="text-h1 md:text-display-2 text-ink leading-tight mb-2">
+          {displayName}.
+        </h1>
+        <p className="text-body-l text-warm-500 mb-10">
+          Informations de votre compte Air Mess.
+        </p>
 
-        <section className="bg-white rounded-2xl shadow-sm p-6 flex items-center gap-6">
-          {/* Avatar initiales */}
-          <div className="w-20 h-20 flex items-center justify-center rounded-full bg-airmess-yellow text-2xl font-bold text-airmess-dark uppercase select-none">
-            {marchant?.raison_sociale
-              ? marchant.raison_sociale.split(' ')
-                  .filter(w => w.length > 0)
-                  .slice(0,2)
-                  .map(w => w[0])
-                  .join('')
-              : user.name.split(' ')
-                  .filter(w => w.length > 0)
-                  .slice(0,2)
-                  .map(w => w[0])
-                  .join('')}
+        {/* ============================================================
+            CARTE IDENTITÉ
+            ============================================================ */}
+        <Card variant="signature" padding="lg" className="mb-6 flex items-center gap-5 md:gap-6">
+          <div className="w-20 h-20 md:w-24 md:h-24 flex items-center justify-center rounded-full bg-airmess-yellow text-h2 md:text-h1 font-bold text-ink select-none shrink-0">
+            {initials}
           </div>
-          {/* Right Info */}
-          <div className="flex-1 min-w-0 flex flex-col gap-1">
-            {/* Raison sociale */}
-            <h1 className="text-2xl font-bold text-airmess-dark truncate">
-              {marchant?.raison_sociale || user.name}
-            </h1>
-            {/* Nom complet */}
-            <p className="text-gray-700 font-medium">{user.name}</p>
-            {/* Email + phone */}
-            <p className="text-sm text-gray-500">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-h2 text-ink truncate">{displayName}</h2>
+            <p className="text-body text-warm-600">{user.name}</p>
+            <p className="text-body-s text-warm-500 mt-1 truncate">
               {user.email}
-              {user.phone && (
-                <> &middot; <span>{user.phone}</span></>
-              )}
+              {user.phone && <span className="text-warm-400"> · {user.phone}</span>}
             </p>
-            {/* Badges */}
-            <div className="flex gap-2 mt-4">
-              {plan && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${plan.color}`}>
-                  {plan.label}
-                </span>
-              )}
-              {status && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${status.color}`}>
-                  {status.label}
-                </span>
-              )}
-            </div>
           </div>
-        </section>
-   
+        </Card>
 
-        {/* ────────────────────────────────────────────────────
-            SECTION "Compte" : infos User
-        ──────────────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold mb-4 text-airmess-dark">Compte</h2>
-          <div className="grid grid-cols-[160px_1fr] gap-y-3 items-center">
-            <div className="text-gray-500 font-medium">Nom complet</div>
-            <div className="text-airmess-dark">{user.name}</div>
+        {/* ============================================================
+            COMPTE
+            ============================================================ */}
+        <Card variant="default" padding="lg" className="mb-6">
+          <h3 className="text-h3 text-ink font-bold mb-5">Compte</h3>
+          <dl className="grid grid-cols-[140px_1fr] md:grid-cols-[180px_1fr] gap-y-3 items-center text-body-s">
+            <dt className="text-warm-500 font-medium">Nom complet</dt>
+            <dd className="text-ink">{user.name}</dd>
 
-            <div className="text-gray-500 font-medium">Email</div>
-            <div className="flex items-center gap-2">
+            <dt className="text-warm-500 font-medium">Email</dt>
+            <dd className="text-ink flex items-center gap-2 flex-wrap">
               <span>{user.email}</span>
               {user.email_verified_at ? (
-                <span title="Email vérifié" className="text-green-600 text-lg">✅</span>
+                <Badge variant="success" size="sm">✓ Vérifié</Badge>
               ) : (
-                <span title="Email non vérifié" className="text-yellow-500 text-lg">⚠️</span>
+                <Badge variant="warning" size="sm">⚠ Non vérifié</Badge>
               )}
-            </div>
+            </dd>
 
-            <div className="text-gray-500 font-medium">Téléphone</div>
-            <div className="text-airmess-dark">{user.phone ? user.phone : '—'}</div>
+            <dt className="text-warm-500 font-medium">Téléphone</dt>
+            <dd className="text-ink">{user.phone ?? '—'}</dd>
 
-            <div className="text-gray-500 font-medium">Dernière connexion</div>
-            <div className="text-airmess-dark">{formatDateTime(user.last_login_at)}</div>
+            <dt className="text-warm-500 font-medium">Dernière connexion</dt>
+            <dd className="text-warm-600">{formatDateTime(user.last_login_at)}</dd>
+          </dl>
+
+          <div className="mt-6 pt-5 border-t border-warm-100 flex flex-wrap gap-3">
+            <Link to="/forgot-password">
+              <Button variant="secondary" size="sm">Changer mon mot de passe</Button>
+            </Link>
           </div>
-        </section>
-   
+        </Card>
 
-
-        {/* ────────────────────────────────────────────────────
-            SECTION "Entreprise" : infos Marchant
-        ──────────────────────────────────────────────────── */}
+        {/* ============================================================
+            ENTREPRISE (marchand uniquement)
+            ============================================================ */}
         {marchant && (
-          <section className="bg-white rounded-2xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4 text-airmess-dark">Entreprise</h2>
-            <div className="grid grid-cols-[160px_1fr] gap-y-3 items-center">
-              <div className="text-gray-500 font-medium">Raison sociale</div>
-              <div className="text-airmess-dark">{marchant.raison_sociale}</div>
+          <Card variant="default" padding="lg">
+            <h3 className="text-h3 text-ink font-bold mb-5">Entreprise</h3>
+            <dl className="grid grid-cols-[140px_1fr] md:grid-cols-[180px_1fr] gap-y-3 items-center text-body-s">
+              <dt className="text-warm-500 font-medium">Raison sociale</dt>
+              <dd className="text-ink font-medium">{marchant.raison_sociale}</dd>
 
-              <div className="text-gray-500 font-medium">Secteur</div>    
-              <div className="text-airmess-dark">{secteur}</div> 
+              <dt className="text-warm-500 font-medium">Secteur</dt>
+              <dd className="text-ink">{secteur}</dd>
 
-              <div className="text-gray-500 font-medium">IFU / RCCM</div>
-              <div className="text-airmess-dark">{marchant.ifu_rccm || '—'}</div>
+              <dt className="text-warm-500 font-medium">IFU / RCCM</dt>
+              <dd className="text-ink">{marchant.ifu_rccm || '—'}</dd>
 
-              <div className="text-gray-500 font-medium">Validé le</div>
-              <div className="text-airmess-dark flex items-center gap-2">
+              <dt className="text-warm-500 font-medium">Validation</dt>
+              <dd className="flex items-center gap-2 flex-wrap">
                 {marchant.validated_at ? (
                   <>
-                    {formatDate(marchant.validated_at)}
-                    <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs font-semibold flex items-center gap-1">
-                      ✅ Validé
-                    </span>
+                    <span className="text-ink">{formatDate(marchant.validated_at)}</span>
+                    <Badge variant="success" size="sm">✓ Validé</Badge>
                   </>
                 ) : (
-                  <>
-                    —
-                    <span className="rounded-full bg-yellow-100 text-yellow-700 px-2 py-0.5 text-xs font-semibold flex items-center gap-1">
-                      ⏳ En attente
-                    </span>
-                  </>
+                  <Badge variant="warning" size="sm">⏳ En attente</Badge>
                 )}
-              </div>
-            </div>
-          </section>
+              </dd>
+            </dl>
+          </Card>
         )}
-   
 
-        {/* ──────────────────────────────────────────────
-          SECTION "Abonnement"
-          ────────────────────────────────────────────── */}
-        {marchant && (
-          <section className="bg-white rounded-2xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4 text-airmess-dark">Abonnement</h2>
-            <div className="grid grid-cols-[160px_1fr] gap-y-3 items-center">
-              <div className="text-gray-500 font-medium">Formule</div>
-              <div>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${plan?.color ?? 'bg-gray-100 text-gray-600'}`}>
-                  {plan?.label ?? '—'}
-                </span>
-              </div>
+        {/* ============================================================
+            Préférences d'affichage — navigation
+            ============================================================ */}
+        <div className="mt-10">
+          <PageEyebrow label="Préférences d'affichage" className="mb-4" />
+          <h2 className="text-h2 md:text-h1 text-ink font-bold leading-tight">
+            Style de navigation
+          </h2>
+          <p className="text-body-l text-warm-500 mt-2 mb-6">
+            Choisis comment tu veux naviguer dans Air Mess.{' '}
+            <span className="text-warm-400 text-body-s">
+              Réglage sauvegardé sur cet appareil.
+            </span>
+          </p>
 
-              <div className="text-gray-500 font-medium">Statut</div>
-              <div>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${status?.color ?? 'bg-gray-100 text-gray-600'}`}>
-                  {status?.label ?? '—'}
-                </span>
-              </div>
-
-              <div className="text-gray-500 font-medium">Date de début</div>
-              <div className="text-airmess-dark">{formatDate(marchant.subscription_started_at)}</div>
-
-              <div className="text-gray-500 font-medium">Prochaine échéance</div>
-              <div className="text-airmess-dark">{formatDate(marchant.subscription_next_billing_at)}</div>
-            </div>
-          </section>
-        )}
-   
+          <NavModeCards />
+        </div>
       </main>
+    </div>
+  )
+}
+
+/* ============================================================
+   Sélecteur "Style de navigation"
+   ------------------------------------------------------------
+   Deux cartes mockup côte à côte — la sélection se voit en un coup d'œil
+   via une bordure jaune + ombre, et chaque carte montre une mini-représentation
+   visuelle du mode (header barre + items vs FAB + arc).
+   ============================================================ */
+interface NavModeOption {
+  value: ClientNavMode
+  title: string
+  description: string
+  preview: () => ReactElement
+}
+
+function HorizontalPreview() {
+  return (
+    <div className="bg-airmess-dark rounded-md p-2 space-y-2">
+      {/* Mini header */}
+      <div className="flex items-center gap-1.5">
+        <div className="w-3 h-3 rounded-sm bg-airmess-yellow" />
+        <div className="flex gap-1 ml-auto">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className={`h-1.5 w-5 rounded-full ${
+                i === 1 ? 'bg-airmess-yellow' : 'bg-white/30'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+      {/* Faux contenu */}
+      <div className="bg-cream/90 rounded-sm h-12" />
+    </div>
+  )
+}
+
+function FabPreview() {
+  return (
+    <div className="bg-cream rounded-md p-2 h-[64px] relative overflow-hidden">
+      {/* Arc d'items derrière */}
+      <div className="absolute right-3 bottom-3 w-8 h-8 rounded-full bg-airmess-yellow shadow-md z-10" />
+      {[-50, -25, 0, 25, 50].map((dy, i) => (
+        <div
+          key={i}
+          className="absolute w-4 h-4 rounded-full bg-airmess-dark shadow-sm"
+          style={{
+            right: 9 + Math.abs(dy) * 0.5 + 18,
+            bottom: 16 + dy / 2 + 16,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+const NAV_OPTIONS: NavModeOption[] = [
+  {
+    value: 'horizontal',
+    title: 'Barre horizontale',
+    description: 'Classique. Le menu est toujours visible en haut de l\'écran.',
+    preview: HorizontalPreview,
+  },
+  {
+    value: 'fab',
+    title: 'Bouton flottant',
+    description: 'Minimaliste. Un point déplaçable ouvre la nav en demi-cercle.',
+    preview: FabPreview,
+  },
+]
+
+function NavModeCards() {
+  const mode = useUiPrefsStore((s) => s.clientNavMode)
+  const setMode = useUiPrefsStore((s) => s.setClientNavMode)
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+      {NAV_OPTIONS.map((opt) => {
+        const active = mode === opt.value
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => setMode(opt.value)}
+            aria-pressed={active}
+            className={[
+              'relative text-left rounded-lg border-2 p-4 transition-all',
+              'focus:outline-none focus:ring-2 focus:ring-airmess-yellow/50',
+              active
+                ? 'border-airmess-yellow bg-off-white shadow-md'
+                : 'border-warm-200 bg-off-white hover:border-warm-400 hover:shadow-sm',
+            ].join(' ')}
+          >
+            {/* Coche actif */}
+            {active && (
+              <span className="absolute top-3 right-3 w-6 h-6 rounded-full bg-airmess-yellow text-ink flex items-center justify-center font-bold text-body-s shadow">
+                ✓
+              </span>
+            )}
+
+            {/* Mini illustration */}
+            <div className="mb-4">
+              <opt.preview />
+            </div>
+
+            <h3 className="text-body font-bold text-ink">{opt.title}</h3>
+            <p className="text-body-s text-warm-500 mt-1">{opt.description}</p>
+          </button>
+        )
+      })}
     </div>
   )
 }

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View, Text, Pressable, TextInput, Linking } from 'react-native'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { transition, type DriverCourseSummary, type TransitionAction } from '../api/driver'
-import { openGoogleMaps, openWaze } from '../utils/navigation'
+import { openGoogleMaps } from '../utils/navigation'
 import IncidentModal from './IncidentModal'
 import FailCourseModal from './FailCourseModal'
 
@@ -59,19 +59,13 @@ export default function ActiveCourseCard({ course }: Props) {
         Course en cours · {course.status}
       </Text>
 
-      {/* Boutons navigation externe */}
-      <View className="flex-row gap-2 mt-3">
+      {/* Bouton navigation externe */}
+      <View className="mt-3">
         <Pressable
           onPress={() => openGoogleMaps(targetLat, targetLng, targetLabel)}
-          className="flex-1 bg-airmess-dark rounded-lg py-3 items-center"
+          className="bg-airmess-dark rounded-lg py-3 items-center"
         >
-          <Text className="text-white font-semibold text-sm">🗺️ Google Maps</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => openWaze(targetLat, targetLng)}
-          className="flex-1 bg-blue-600 rounded-lg py-3 items-center"
-        >
-          <Text className="text-white font-semibold text-sm">🚗 Waze</Text>
+          <Text className="text-white font-semibold text-sm">🗺️ Ouvrir dans Google Maps</Text>
         </Pressable>
       </View>
 

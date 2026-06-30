@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\IntegrationKeyController;
 use App\Http\Controllers\Api\IntegrationCourseController;
+use App\Http\Controllers\Api\SupportController;
+use App\Http\Controllers\Api\UserWalletController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -50,10 +52,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/position',     [DriverController::class, 'updatePosition']);
         Route::get('/offered-courses', [DriverController::class, 'offeredCourses']);
         Route::get('/stats', [DriverController::class, 'stats']);
-        Route::get('/balance',  [DriverController::class, 'balance']);
-        Route::get('/earnings', [DriverController::class, 'earningsHistory']);
-        Route::get('/payouts',  [DriverController::class, 'payoutsHistory']);
+
+        // Wallet driver (unique source de vérité pour la caution + gains + retraits)
+        Route::get('/wallet',                    [DriverController::class, 'wallet']);
+        Route::post('/wallet/top-up',            [DriverController::class, 'topUpWallet']);
+        Route::post('/wallet/withdraw-request',  [DriverController::class, 'requestWithdraw']);
+        Route::post('/wallet/withdraw-requests/{withdraw}/cancel', [DriverController::class, 'cancelWithdraw']);
+
         Route::post('/courses/{course}/accept',    [DriverController::class, 'acceptCourse']);
+        Route::post('/courses/{course}/decline',   [DriverController::class, 'declineCourse']);
         Route::post('/courses/{course}/transition', [DriverController::class, 'transition']);
         Route::post('/courses/{course}/incident', [DriverController::class, 'reportIncident']);
     });
@@ -90,7 +97,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/device-tokens', [NotificationController::class, 'registerToken']);
 
-    // Abonnements (payement et tout)
+    // Abonnements (payement et tout) — masqués côté UI mais conservés pour réversibilité
     Route::prefix('subscription')->group(function () {
         Route::get('/plans', [SubscriptionController::class, 'plans']);
         Route::post('/checkout', [SubscriptionController::class, 'checkout']);
@@ -102,6 +109,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/',        [IntegrationKeyController::class, 'index']);
         Route::post('/',       [IntegrationKeyController::class, 'store']);
         Route::delete('/{id}', [IntegrationKeyController::class, 'destroy']);
+    });
+
+    // Wallet payeur (marchand + particulier) — source de vérité pour les paiements de courses
+    Route::prefix('me/wallet')->group(function () {
+        Route::get('/',        [UserWalletController::class, 'show']);
+        Route::post('/top-up', [UserWalletController::class, 'topUp']);
     });
 
 });
@@ -120,44 +133,69 @@ Route::middleware(['auth:sanctum', 'abilities:integration:create-course', 'throt
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard']);
 
-    // Gestion des marchands : réservée au rôle commercial (super inclus automatiquement)
-    // NB : /pending doit rester déclarée AVANT /{marchant} pour ne pas être capturée comme un id.
-    Route::middleware('admin:commercial')->group(function () {
-        Route::get('/marchants', [AdminController::class, 'marchants']);
-        Route::get('/marchants/pending', [AdminController::class, 'pendingMarchants']);
-        Route::get('/marchants/{marchant}', [AdminController::class, 'showMarchant']);
-        Route::post('/marchants/{marchant}/validate', [AdminController::class, 'validateMarchant']);
-        Route::post('/marchants/{marchant}/suspend', [AdminController::class, 'suspendMarchant']);
-        Route::post('/marchants/{marchant}/reactivate', [AdminController::class, 'reactivateMarchant']);
-        Route::post('/marchants/{marchant}/reject', [AdminController::class, 'rejectMarchant']);
-        Route::delete('/marchants/{marchant}', [AdminController::class, 'destroyMarchant']);
+    // === LECTURE PARTAGÉE (commercial + ops + support) ===
+    // Le support peut lire les fiches users/courses/drivers/incidents pour assister
+    // au téléphone, mais ne peut rien modifier. Les actions restent gatées plus bas.
+    // NB : /pending doit rester AVANT /{marchant} pour ne pas être capturée comme un id.
+    Route::middleware('admin:commercial,ops,support')->group(function () {
+        Route::get('/marchants',                 [AdminController::class, 'marchants']);
+        Route::get('/marchants/pending',         [AdminController::class, 'pendingMarchants']);
+        Route::get('/marchants/{marchant}',      [AdminController::class, 'showMarchant']);
+        Route::get('/individuals',               [AdminController::class, 'individuals']);
+        Route::get('/individuals/{individual}',  [AdminController::class, 'showIndividual']);
+        Route::get('/courses',                   [AdminController::class, 'courses']);
+        Route::get('/drivers',                   [AdminController::class, 'drivers']);
+        Route::get('/drivers/{driver}',          [AdminController::class, 'showDriver']);
+        Route::get('/drivers/{driver}/document/{type}', [AdminController::class, 'driverDocument'])
+            ->whereIn('type', ['photo', 'cni', 'driving_license']);
+        Route::get('/incidents',                 [AdminController::class, 'incidents']);
+    });
 
-        // Particuliers (mêmes droits commerciaux que les marchands)
-        Route::get('/individuals', [AdminController::class, 'individuals']);
-        Route::get('/individuals/{individual}', [AdminController::class, 'showIndividual']);
-        Route::post('/individuals/{individual}/suspend', [AdminController::class, 'suspendIndividual']);
+    // === ÉCRITURE COMMERCIALE (validation/suspension marchands & particuliers) ===
+    Route::middleware('admin:commercial')->group(function () {
+        Route::post('/marchants/{marchant}/validate',   [AdminController::class, 'validateMarchant']);
+        Route::post('/marchants/{marchant}/suspend',    [AdminController::class, 'suspendMarchant']);
+        Route::post('/marchants/{marchant}/reactivate', [AdminController::class, 'reactivateMarchant']);
+        Route::post('/marchants/{marchant}/reject',     [AdminController::class, 'rejectMarchant']);
+        Route::delete('/marchants/{marchant}',          [AdminController::class, 'destroyMarchant']);
+
+        Route::post('/individuals/{individual}/suspend',    [AdminController::class, 'suspendIndividual']);
         Route::post('/individuals/{individual}/reactivate', [AdminController::class, 'reactivateIndividual']);
     });
 
-    // Opérations (courses + livreurs) : réservées au rôle ops (super inclus)
+    // === ÉCRITURE OPS (réassignation course, validation driver, retraits) ===
+    // Les retraits (argent) restent strictement ops — pas accessibles au support.
     Route::middleware('admin:ops')->group(function () {
-        Route::get('/courses', [AdminController::class, 'courses']);
-        Route::post('/courses/{course}/reassign', [AdminController::class, 'reassignCourse']);
-        Route::post('/courses/{course}/dispute',  [AdminController::class, 'disputeCourse']);
-        Route::get('/drivers', [AdminController::class, 'drivers']);
-        Route::get('/drivers/{driver}', [AdminController::class, 'showDriver']);
-        Route::post('/drivers/{driver}/validate', [AdminController::class, 'validateDriver']);
+        Route::post('/courses/{course}/reassign',      [AdminController::class, 'reassignCourse']);
+        Route::post('/courses/{course}/dispute',       [AdminController::class, 'disputeCourse']);
+        Route::post('/drivers/{driver}/validate',      [AdminController::class, 'validateDriver']);
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
-        Route::get('/drivers/{driver}/document/{type}', [AdminController::class, 'driverDocument'])
-            ->whereIn('type', ['photo', 'cni', 'driving_license']);
-        Route::get('/incidents', [AdminController::class, 'incidents']);
-        Route::post('/incidents/{incident}/resolve', [AdminController::class, 'resolveIncident']);
+        Route::post('/incidents/{incident}/resolve',   [AdminController::class, 'resolveIncident']);
 
-        // Payouts livreurs
-        Route::get('/drivers/{driver}/earnings', [AdminController::class, 'driverEarnings']);
-        Route::post('/drivers/{driver}/payouts',     [AdminController::class, 'generateDriverPayout']);
-        Route::post('/payouts/{payout}/mark-paid',   [AdminController::class, 'markPayoutPaid']);
-        Route::get('/payouts',                       [AdminController::class, 'listAllPayouts']);
+        // Demandes de retrait de caution — argent, donc strictement ops/super.
+        Route::get('/withdraw-requests',                          [AdminController::class, 'withdrawRequests']);
+        Route::get('/withdraw-requests/{withdraw}',               [AdminController::class, 'showWithdrawRequest']);
+        Route::post('/withdraw-requests/{withdraw}/approve',      [AdminController::class, 'approveWithdrawRequest']);
+        Route::post('/withdraw-requests/{withdraw}/reject',       [AdminController::class, 'rejectWithdrawRequest']);
+        Route::post('/withdraw-requests/{withdraw}/mark-paid',    [AdminController::class, 'markWithdrawRequestPaid']);
+        Route::post('/withdraw-requests/{withdraw}/retry-payout', [AdminController::class, 'retryWithdrawPayout']);
+    });
+
+    // === ACTIONS DOUCES SUPPORT (support inclus) ===
+    // Reset password, notif manuelle, annulation course non-assignée.
+    // Le support ne touche jamais à l'argent ni à l'état d'un compte.
+    Route::middleware('admin:support')->group(function () {
+        Route::post('/users/{user}/send-password-reset', [SupportController::class, 'sendPasswordReset']);
+        Route::post('/users/{user}/send-notification',   [SupportController::class, 'sendNotificationToUser']);
+        Route::post('/courses/{course}/cancel-support',  [SupportController::class, 'cancelCourse']);
+    });
+
+    // === NOTES INTERNES (ouvertes à tous les rôles admin) ===
+    // Utile pour transmettre du contexte entre support, ops, commercial.
+    Route::middleware('admin:support,ops,commercial')->group(function () {
+        Route::get('/notes',          [SupportController::class, 'listNotes']);
+        Route::post('/notes',         [SupportController::class, 'storeNote']);
+        Route::delete('/notes/{note}', [SupportController::class, 'destroyNote']);
     });
 
     // Paramètres globaux — super-admin uniquement
@@ -166,6 +204,14 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::patch('/settings/{key}', [AdminController::class, 'updateSetting']);
         Route::get('/plans',            [AdminController::class, 'listPlans']);
         Route::patch('/plans/{plan}',   [AdminController::class, 'updatePlan']);
+
+        // Ajustement manuel des wallets (driver + user) — action comptable très sensible
+        Route::post('/drivers/{driver}/wallet-adjustment', [AdminController::class, 'adjustDriverWallet']);
+        Route::post('/users/{user}/wallet-adjustment',     [AdminController::class, 'adjustUserWallet']);
+
+        // Réconciliation comptable : dashboard financier + export CSV
+        Route::get('/reconciliation',            [AdminController::class, 'reconciliation']);
+        Route::get('/reconciliation/export.csv', [AdminController::class, 'reconciliationExportCsv']);
     });
 
 

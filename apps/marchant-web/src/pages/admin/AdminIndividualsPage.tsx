@@ -1,36 +1,49 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import AdminHeader from '../../components/AdminHeader'
+import AdminPageShell from '../../components/admin/AdminPageShell'
+import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminTabs from '../../components/admin/AdminTabs'
+import AdminPagination from '../../components/admin/AdminPagination'
+import { AdminSearchInput, AdminButton } from '../../components/admin/AdminToolbar'
 import { fetchIndividuals, type IndividualListParams } from '../../api/admin'
 
 type FilterKey = 'all' | 'free' | 'active' | 'expired' | 'suspended'
 
-const FILTERS: { key: FilterKey; label: string; params: IndividualListParams }[] = [
-  { key: 'all',       label: 'Tous',          params: {} },
-  { key: 'free',      label: 'Quota gratuit', params: { subscription_status: 'free' } },
-  { key: 'active',    label: 'Abonnés',       params: { subscription_status: 'active' } },
-  { key: 'expired',   label: 'Expirés',       params: { subscription_status: 'expired' } },
-  { key: 'suspended', label: 'Suspendus',     params: { subscription_status: 'suspended' } },
-]
+const FILTERS: readonly { key: FilterKey; label: string; params: IndividualListParams }[] = [
+  { key: 'all', label: 'Tous', params: {} },
+  { key: 'free', label: 'Quota gratuit', params: { subscription_status: 'free' } },
+  { key: 'active', label: 'Abonnés', params: { subscription_status: 'active' } },
+  { key: 'expired', label: 'Expirés', params: { subscription_status: 'expired' } },
+  { key: 'suspended', label: 'Suspendus', params: { subscription_status: 'suspended' } },
+] as const
 
 const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
-  active:    { label: 'Abonné',        classes: 'bg-green-100 text-green-800' },
-  expired:   { label: 'Abo expiré',    classes: 'bg-amber-100 text-amber-800' },
-  suspended: { label: 'Suspendu',      classes: 'bg-red-100 text-red-800' },
-  churned:   { label: 'Désabonné',     classes: 'bg-gray-200 text-gray-700' },
+  active: { label: 'Abonné', classes: 'bg-success-bg text-success border border-success/20' },
+  expired: { label: 'Abo expiré', classes: 'bg-warning-bg text-warning border border-warning/20' },
+  suspended: { label: 'Suspendu', classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
+  churned: { label: 'Désabonné', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
 }
 
 function Badge({ status }: { status: string | null }) {
   if (!status) {
     return (
-      <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800">
-        🆓 Quota gratuit
+      <span className="inline-block px-2 py-0.5 rounded text-caption font-semibold bg-cream text-ink border border-warm-300">
+        Quota gratuit
       </span>
     )
   }
-  const meta = STATUS_BADGE[status] ?? { label: status, classes: 'bg-gray-100 text-gray-700' }
-  return <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${meta.classes}`}>{meta.label}</span>
+  const meta = STATUS_BADGE[status] ?? {
+    label: status,
+    classes: 'bg-warm-100 text-warm-600 border border-warm-200',
+  }
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${meta.classes}`}
+    >
+      {meta.label}
+    </span>
+  )
 }
 
 export default function AdminIndividualsPage() {
@@ -59,125 +72,108 @@ export default function AdminIndividualsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AdminHeader />
-
-      <main className="max-w-6xl mx-auto p-4 md:p-6">
-        <h2 className="text-2xl font-bold text-airmess-dark mb-6">Particuliers</h2>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div className="flex gap-1 bg-white rounded-lg p-1 shadow-sm flex-wrap">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => changeFilter(f.key)}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition ${
-                  filterKey === f.key
-                    ? 'bg-airmess-dark text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+    <AdminPageShell>
+      <AdminPageHeader
+        title="Particuliers"
+        subtitle="Comptes individuels et leur consommation de quota"
+        toolbar={
+          <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+            <AdminTabs tabs={FILTERS} value={filterKey} onChange={changeFilter} />
+            <AdminSearchInput
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value)
+                setPage(1)
+              }}
+              placeholder="Nom, email, téléphone…"
+              minWidthClass="min-w-[260px]"
+            />
           </div>
+        }
+      />
 
-          <input
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value)
-              setPage(1)
-            }}
-            placeholder="Rechercher (nom, email, téléphone)…"
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full sm:w-80 focus:outline-none focus:ring-2 focus:ring-airmess-yellow"
-          />
-        </div>
-
+      <div className="px-4 md:px-6 lg:px-8 py-5">
         {search && (
-          <p className="text-xs text-gray-500 mb-3">
-            🔎 Recherche sur <strong>tous</strong> les particuliers — les filtres de statut sont ignorés.{' '}
-            <button onClick={() => setQ('')} className="text-airmess-dark font-semibold hover:underline">
+          <p className="text-caption text-warm-500 mb-3">
+            Recherche globale — filtre <strong className="text-ink">{activeFilter.label}</strong>{' '}
+            ignoré.{' '}
+            <button
+              onClick={() => setQ('')}
+              className="text-airmess-red font-semibold hover:underline"
+            >
               Effacer
             </button>
           </p>
         )}
 
-        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
-          {isLoading && <div className="p-10 text-center text-gray-500">Chargement...</div>}
-
-          {!isLoading && individuals.length === 0 && (
-            <div className="p-10 text-center text-gray-500">Aucun particulier trouvé.</div>
-          )}
-
-          {individuals.length > 0 && (
-            <table className="w-full text-sm min-w-[700px]">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-                <tr>
-                  <th className="px-6 py-3 text-left">Nom</th>
-                  <th className="px-6 py-3 text-left">Contact</th>
-                  <th className="px-6 py-3 text-left">Quota</th>
-                  <th className="px-6 py-3 text-left">Statut</th>
-                  <th className="px-6 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {individuals.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-3">
-                      <Link to={`/admin/individuals/${p.id}`} className="font-medium text-airmess-dark hover:underline">
-                        {p.first_name} {p.last_name}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-3">
-                      <div>{p.user.email}</div>
-                      <div className="text-xs text-gray-500">{p.user.phone ?? '—'}</div>
-                    </td>
-                    <td className="px-6 py-3 text-gray-700">
-                      {p.monthly_courses_used}/{p.monthly_courses_limit}
-                    </td>
-                    <td className="px-6 py-3">
-                      <Badge status={p.subscription_status} />
-                    </td>
-                    <td className="px-6 py-3 text-right whitespace-nowrap">
-                      <Link
-                        to={`/admin/individuals/${p.id}`}
-                        className="text-airmess-dark font-semibold px-3 py-1 rounded hover:bg-gray-100 text-xs"
-                      >
-                        Voir
-                      </Link>
-                    </td>
+        <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
+          {isLoading ? (
+            <div className="p-10 text-center text-warm-500 text-body-s">Chargement…</div>
+          ) : individuals.length === 0 ? (
+            <div className="p-10 text-center text-warm-500 text-body-s italic">
+              Aucun particulier trouvé.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-body-s min-w-[700px]">
+                <thead className="bg-cream/60 text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
+                  <tr>
+                    <th className="px-5 py-2.5 text-left">Nom</th>
+                    <th className="px-5 py-2.5 text-left">Contact</th>
+                    <th className="px-5 py-2.5 text-left">Quota</th>
+                    <th className="px-5 py-2.5 text-left">Statut</th>
+                    <th className="px-5 py-2.5 text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-warm-200">
+                  {individuals.map((p) => (
+                    <tr key={p.id} className="hover:bg-cream/40 transition-colors">
+                      <td className="px-5 py-2.5">
+                        <Link
+                          to={`/admin/individuals/${p.id}`}
+                          className="font-semibold text-ink hover:text-airmess-red"
+                        >
+                          {p.first_name} {p.last_name}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-2.5">
+                        <p className="text-ink truncate max-w-[220px]">{p.user.email}</p>
+                        <p className="text-caption text-warm-500 truncate max-w-[220px]">
+                          {p.user.phone ?? '—'}
+                        </p>
+                      </td>
+                      <td className="px-5 py-2.5 text-ink tabular-nums">
+                        {p.monthly_courses_used}/{p.monthly_courses_limit}
+                      </td>
+                      <td className="px-5 py-2.5">
+                        <Badge status={p.subscription_status} />
+                      </td>
+                      <td className="px-5 py-2.5 text-right whitespace-nowrap">
+                        <Link to={`/admin/individuals/${p.id}`}>
+                          <AdminButton variant="ghost" size="sm">
+                            Voir
+                          </AdminButton>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
-        {data && data.last_page > 1 && (
-          <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
-            <span>
-              Page {data.current_page} / {data.last_page} — {data.total} particulier(s)
-              {isFetching && ' · …'}
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={data.current_page <= 1}
-                className="px-3 py-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-white"
-              >
-                Précédent
-              </button>
-              <button
-                onClick={() => setPage((p) => p + 1)}
-                disabled={data.current_page >= data.last_page}
-                className="px-3 py-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-white"
-              >
-                Suivant
-              </button>
-            </div>
-          </div>
+        {data && (
+          <AdminPagination
+            currentPage={data.current_page}
+            lastPage={data.last_page}
+            total={data.total}
+            itemLabel="particulier"
+            onChange={setPage}
+            isFetching={isFetching}
+          />
         )}
-      </main>
-    </div>
+      </div>
+    </AdminPageShell>
   )
 }

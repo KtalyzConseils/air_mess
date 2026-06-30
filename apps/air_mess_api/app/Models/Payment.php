@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 class Payment extends Model
 {
     // Types de flux (prévus pour les 5 flux du système de paiement)
-    public const TYPE_SUBSCRIPTION = 'subscription';
-    public const TYPE_DELIVERY_FEE = 'delivery_fee';
-    public const TYPE_PAYOUT       = 'payout';
-    public const TYPE_COD          = 'cod';
+    public const TYPE_SUBSCRIPTION   = 'subscription';
+    public const TYPE_DELIVERY_FEE   = 'delivery_fee';
+    public const TYPE_PAYOUT         = 'payout';
+    public const TYPE_COD            = 'cod';
+    public const TYPE_WALLET_DEPOSIT      = 'wallet_deposit';      // top-up caution driver
+    public const TYPE_USER_WALLET_DEPOSIT = 'user_wallet_deposit'; // top-up wallet marchand/particulier
 
     // Cycle de vie
     public const STATUS_PENDING    = 'pending';

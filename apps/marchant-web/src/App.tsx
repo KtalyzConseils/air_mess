@@ -4,6 +4,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import NewCoursePage from './pages/NewCoursePage'
+import MyCoursesPage from './pages/MyCoursesPage'
 import CourseDetailPage from './pages/CourseDetailPage'
 import AddressesPage from './pages/AddressesPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
@@ -22,12 +23,15 @@ import AdminDriversPage from './pages/admin/AdminDriversPage'
 import AdminDriverDetailPage from './pages/admin/AdminDriverDetailPage'
 import AdminIncidentsPage from './pages/admin/AdminIncidentsPage'
 import AdminNotificationsPage from './pages/admin/AdminNotificationsPage'
-import BillingPage from './pages/BillingPage'
 import BillingReturnPage from './pages/BillingReturnPage'
+import MyWalletPage from './pages/MyWalletPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
-import AdminPayoutsPage from './pages/admin/AdminPayoutsPage'
+import AdminWithdrawRequestsPage from './pages/admin/AdminWithdrawRequestsPage'
+import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDetailPage'
+import AdminReconciliationPage from './pages/admin/AdminReconciliationPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import ClientQuickNav from './components/ClientQuickNav'
 
 
 const queryClient = new QueryClient({
@@ -57,11 +61,12 @@ function App() {
           <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} />}>
             {/* marchant */}
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/courses" element={<MyCoursesPage />} />
             <Route path="/courses/new" element={<NewCoursePage />} />
             <Route path="/addresses" element={<AddressesPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/billing" element={<BillingPage />} />
+            <Route path="/wallet" element={<MyWalletPage />} />
           </Route>
 
           {/* Détail d'une course : le marchand/particulier (la sienne) ET l'admin (supervision).
@@ -76,32 +81,39 @@ function App() {
             <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
           </Route>
 
-          {/* admin — paramètres réservés au super-admin */}
+          {/* admin — paramètres + retraits caution réservés au super-admin */}
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['super']} />}>
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/withdraw-requests" element={<AdminWithdrawRequestsPage />} />
+            <Route path="/admin/withdraw-requests/:id" element={<AdminWithdrawRequestDetailPage />} />
+            <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />
           </Route>
 
-          {/* admin — gestion des marchands réservée au rôle commercial (super inclus) */}
-          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial']} />}>
+          {/* admin — fiches marchands/particuliers : lecture partagée (commercial+ops+support),
+              actions sensibles gatées à l'intérieur des pages via canManage* */}
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial', 'ops', 'support']} />}>
             <Route path="/admin/marchants" element={<AdminMarchantsPage />} />
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
             <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
             <Route path="/admin/individuals/:id" element={<AdminIndividualDetailPage />} />
           </Route>
 
-          {/* admin — gestion des courses réservée au rôle ops (super inclus) */}
-          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['ops']} />}>
+          {/* admin — fiches courses/livreurs/incidents : lecture partagée idem */}
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial', 'ops', 'support']} />}>
             <Route path="/admin/courses" element={<AdminCoursesPage />} />
             <Route path="/admin/drivers" element={<AdminDriversPage />} />
             <Route path="/admin/drivers/:id" element={<AdminDriverDetailPage />} />
             <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
-            <Route path="/admin/payouts" element={<AdminPayoutsPage />} />
           </Route>
 
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+
+        {/* FAB global pour marchand/particulier — se rend null si user=admin
+            ou si la préférence est 'horizontal' (cf. ClientQuickNav). */}
+        <ClientQuickNav />
       </BrowserRouter>
     </QueryClientProvider>
   )

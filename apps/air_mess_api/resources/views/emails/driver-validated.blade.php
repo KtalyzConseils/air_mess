@@ -10,7 +10,7 @@
     </p>
 
     <p style="margin:0 0 16px 0; line-height:1.6; font-size:15px;">
-        Vos documents ont été vérifiés et votre compte livreur RMess est désormais
+        Vos documents ont été vérifiés et votre compte livreur Air Mess est désormais
         <strong>actif</strong>. Vous pouvez maintenant vous connecter à l'application
         et commencer à accepter des courses.
     </p>
@@ -25,7 +25,7 @@
     </div>
 
     <p style="margin:16px 0; line-height:1.6; font-size:15px;">
-        Bienvenue dans l'équipe RMess et bonne route !
+        Bienvenue dans l'équipe Air Mess et bonne route !
     </p>
 
     <p style="margin:24px 0 0 0; line-height:1.6; font-size:13px; color:#6b7280;">

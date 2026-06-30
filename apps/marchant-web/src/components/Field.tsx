@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { cn } from '../lib/cn'
 
 interface Props {
   label: string
@@ -8,14 +9,22 @@ interface Props {
   children: ReactNode
 }
 
-export default function Field({ label, required, error, className = '', children }: Props) {
+/**
+ * Wrapper de champ : label en eyebrow, contenu, message d'erreur.
+ * Conserve son API d'origine pour ne pas casser les formulaires existants.
+ */
+export default function Field({ label, required, error, className, children }: Props) {
   return (
     <div className={className}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label} {required && <span className="text-airmess-red">*</span>}
-      </label>
+      {label && (
+        <label className="block mb-1.5 text-caption text-warm-600 font-medium">
+          {label} {required && <span className="text-airmess-red">*</span>}
+        </label>
+      )}
       {children}
-      {error && <p className="mt-1 text-xs text-airmess-red">{error}</p>}
+      {error && (
+        <p className={cn('mt-1.5 text-caption text-airmess-red')}>{error}</p>
+      )}
     </div>
   )
 }

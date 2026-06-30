@@ -185,7 +185,7 @@ class AuthController extends Controller
                     'type'     => User::TYPE_DRIVER,
                 ]);
 
-                return Driver::create([
+                $driver = Driver::create([
                     'user_id'                  => $user->id,
                     'first_name'               => $data['first_name'],
                     'last_name'                => $data['last_name'],
@@ -206,6 +206,14 @@ class AuthController extends Controller
                     ],
                     // activation_status='pending', availability_status='offline' viennent des défauts table.
                 ]);
+
+                // Création du wallet vide (caution = 0) à l'inscription. Le driver pourra
+                // déposer plus tard via top-up Fedapay pour activer l'encaissement.
+                \App\Models\DriverWallet::create([
+                    'driver_id' => $driver->id,
+                ]);
+
+                return $driver;
             });
         } catch (\Throwable $e) {
             // Cleanup : si la transaction DB plante, on supprime les fichiers stockés pour ne pas

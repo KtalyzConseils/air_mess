@@ -27,18 +27,3 @@ export async function openGoogleMaps(lat: number, lng: number, _label?: string) 
   Linking.openURL(url).catch(() => Alert.alert('Erreur', 'Impossible d\'ouvrir Google Maps.'))
 }
 
-/**
- * Ouvre Waze avec navigation vers (lat, lng).
- * Si Waze n'est pas installé, on retombe sur Google Maps.
- */
-export async function openWaze(lat: number, lng: number) {
-  const wazeUrl = `waze://?ll=${lat},${lng}&navigate=yes`
-  const fallbackUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
-
-  try {
-    const supported = await Linking.canOpenURL(wazeUrl)
-    Linking.openURL(supported ? wazeUrl : fallbackUrl)
-  } catch {
-    Linking.openURL(fallbackUrl).catch(() => Alert.alert('Erreur', 'Impossible d\'ouvrir Waze.'))
-  }
-}
