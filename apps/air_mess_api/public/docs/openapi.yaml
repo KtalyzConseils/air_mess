@@ -16,15 +16,21 @@ info:
     depuis votre compte marchand (plan incluant `api_access`). Elle est
     **secrète** : ne l'exposez jamais côté navigateur.
 
+    ## Facturation (wallet)
+    Chaque course créée via l'API est facturée au marchand via son **wallet**
+    AirMess (le montant `delivery_fee` est réservé à la création, puis débité à
+    la livraison). Si le solde est insuffisant, l'appel renvoie `402` et la
+    course n'est pas créée : rechargez le wallet depuis votre tableau de bord.
+
     ## Idempotence
     Renvoyez le même `external_reference` (votre n° de commande) pour éviter les
     doublons : un second appel renvoie la course existante avec un statut `200`.
   contact:
     name: Support AirMess
-    email: support@airmess.bj
+    email: support@airmess-logistics.com
 
 servers:
-  - url: https://api.airmess.bj/api
+  - url: https://api.airmess-logistics.com/api
     description: Production
   - url: http://127.0.0.1:8000/api
     description: Local (développement)
@@ -90,7 +96,7 @@ paths:
                 message: "Course créée. En attente d'attribution."
                 reference: "AM-2026-00042"
                 status: "awaiting_assignment"
-                tracking_url: "https://airmess.bj/t/EqVC0WhyTs"
+                tracking_url: "https://api.airmess-logistics.com/t/EqVC0WhyTs"
                 delivery_fee: 1500
         '200':
           description: Course déjà existante pour cet `external_reference` (idempotence).
@@ -102,10 +108,12 @@ paths:
         '403':
           description: Clé sans l'autorisation, ou compte non validé / abonnement inactif.
         '402':
-          description: Quota mensuel de courses atteint.
+          description: |
+            Solde wallet insuffisant pour facturer la course. Le marchand doit
+            recharger son wallet (la course n'est pas créée).
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/QuotaError' }
+              schema: { $ref: '#/components/schemas/InsufficientFundsError' }
         '422':
           description: Validation échouée.
           content:
@@ -222,13 +230,13 @@ components:
         tracking_url: { type: string, format: uri }
         delivery_fee: { type: integer, example: 1500 }
 
-    QuotaError:
+    InsufficientFundsError:
       type: object
       properties:
-        message: { type: string, example: "Quota mensuel atteint." }
-        quota_reached: { type: boolean, example: true }
-        used: { type: integer, example: 500 }
-        limit: { type: integer, example: 500 }
+        message: { type: string, example: "Solde wallet insuffisant. Rechargez votre wallet pour créer des courses via l'API." }
+        insufficient_funds: { type: boolean, example: true }
+        available: { type: integer, description: "Solde disponible (FCFA).", example: 500 }
+        required: { type: integer, description: "Montant nécessaire (delivery_fee, FCFA).", example: 1500 }
 
     ValidationError:
       type: object
