@@ -1,24 +1,65 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import AdminHeader from '../../components/AdminHeader'
+import AdminPageShell from '../../components/admin/AdminPageShell'
+import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import { AdminButton } from '../../components/admin/AdminToolbar'
+import {
+  AlertTriangleIcon,
+  PackageIcon,
+  BikeIcon,
+  CheckIcon,
+  BellIcon,
+} from '../../components/ui/icons'
 import { fetchNotifications, markNotificationRead, type AppNotification } from '../../api/notifications'
 
-const TYPE_META: Record<string, { icon: string; label: string }> = {
-  'incident.reported':      { icon: '🚨', label: 'Nouvel incident' },
-  'incident.resolved':      { icon: '✅', label: 'Incident résolu' },
-  'course.incident':        { icon: '⚠️', label: 'Incident signalé' },
-  'course.assigned_to_you': { icon: '📦', label: 'Course attribuée' },
-  'course.removed':         { icon: '↩️', label: 'Course retirée' },
-  'course.driver_changed':  { icon: '🔄', label: 'Changement de livreur' },
-  'course.accepted':        { icon: '✅', label: 'Course acceptée' },
-  'course.delivered':       { icon: '🎉', label: 'Livré' },
-  'course.failed':          { icon: '⚠️', label: 'Échec' },
+type IconKey =
+  | 'alert'
+  | 'package'
+  | 'driver'
+  | 'check'
+  | 'default'
+
+const TYPE_META: Record<string, { iconKey: IconKey; label: string; tone: 'danger' | 'warning' | 'success' | 'info' }> = {
+  'incident.reported': { iconKey: 'alert', label: 'Nouvel incident', tone: 'danger' },
+  'incident.resolved': { iconKey: 'check', label: 'Incident résolu', tone: 'success' },
+  'course.incident': { iconKey: 'alert', label: 'Incident signalé', tone: 'warning' },
+  'course.assigned_to_you': { iconKey: 'package', label: 'Course attribuée', tone: 'info' },
+  'course.removed': { iconKey: 'package', label: 'Course retirée', tone: 'warning' },
+  'course.driver_changed': { iconKey: 'driver', label: 'Changement de livreur', tone: 'info' },
+  'course.accepted': { iconKey: 'check', label: 'Course acceptée', tone: 'success' },
+  'course.delivered': { iconKey: 'check', label: 'Livré', tone: 'success' },
+  'course.failed': { iconKey: 'alert', label: 'Échec', tone: 'danger' },
+}
+
+function NotifIcon({ iconKey, tone }: { iconKey: IconKey; tone: string }) {
+  const color = {
+    danger: 'bg-danger-bg text-airmess-red',
+    warning: 'bg-warning-bg text-warning',
+    success: 'bg-success-bg text-success',
+    info: 'bg-cream text-ink',
+  }[tone] ?? 'bg-warm-100 text-warm-600'
+
+  const Icon = {
+    alert: AlertTriangleIcon,
+    package: PackageIcon,
+    driver: BikeIcon,
+    check: CheckIcon,
+    default: BellIcon,
+  }[iconKey]
+
+  return (
+    <span
+      className={`shrink-0 w-9 h-9 rounded-md flex items-center justify-center ${color}`}
+    >
+      <Icon size={18} />
+    </span>
+  )
 }
 
 function timeAgo(iso: string, nowMs: number): string {
   const diff = (nowMs - new Date(iso).getTime()) / 1000
-  if (diff < 60) return 'à l\'instant'
+  if (diff < 60) return "à l'instant"
   if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`
   if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`
   return new Date(iso).toLocaleDateString('fr-FR')
@@ -51,75 +92,99 @@ export default function AdminNotificationsPage() {
   }
 
   function handleMarkAllRead() {
-    notifications.filter((n) => n.read_at === null).forEach((n) => markRead.mutate(n.id))
+    notifications
+      .filter((n) => n.read_at === null)
+      .forEach((n) => markRead.mutate(n.id))
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AdminHeader />
-      <main className="max-w-3xl mx-auto p-4 md:p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-airmess-dark">🔔 Notifications</h2>
-          {unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllRead}
-              className="px-3 py-1.5 text-sm font-semibold text-white bg-airmess-dark rounded hover:bg-gray-700 transition"
-            >
+    <AdminPageShell>
+      <AdminPageHeader
+        title="Notifications"
+        subtitle={
+          unreadCount > 0
+            ? `${unreadCount} non lue${unreadCount > 1 ? 's' : ''}`
+            : 'Toutes lues'
+        }
+        actions={
+          unreadCount > 0 ? (
+            <AdminButton variant="primary" onClick={handleMarkAllRead}>
               Tout marquer lu ({unreadCount})
-            </button>
-          )}
-        </div>
+            </AdminButton>
+          ) : null
+        }
+      />
 
-        {isLoading && <div className="text-center text-gray-500 py-10">Chargement...</div>}
+      <div className="px-4 md:px-6 lg:px-8 py-5 max-w-3xl mx-auto">
+        {isLoading && (
+          <p className="text-body-s text-warm-500 text-center py-10">Chargement…</p>
+        )}
 
         {error && (
-          <div className="text-center text-red-600 py-10">
+          <p className="text-body-s text-airmess-red text-center py-10">
             Erreur de chargement. Vérifie que l'API tourne.
-          </div>
+          </p>
         )}
 
         {!isLoading && !error && notifications.length === 0 && (
-          <div className="text-center text-gray-500 py-10">Aucune notification pour le moment.</div>
+          <p className="text-body-s text-warm-500 text-center py-10 italic">
+            Aucune notification pour le moment.
+          </p>
         )}
 
         {notifications.length > 0 && (
-          <div className="space-y-2">
+          <ul className="space-y-1.5">
             {notifications.map((notif) => {
-              const meta = TYPE_META[notif.type] ?? { icon: '🔔', label: 'Notification' }
+              const meta = TYPE_META[notif.type] ?? {
+                iconKey: 'default' as IconKey,
+                label: 'Notification',
+                tone: 'info' as const,
+              }
               const isUnread = notif.read_at === null
               const reference =
-                notif.data && typeof notif.data.reference === 'string' ? notif.data.reference : null
+                notif.data && typeof notif.data.reference === 'string'
+                  ? notif.data.reference
+                  : null
 
               return (
-                <div
+                <li
                   key={notif.id}
                   onClick={() => handleClick(notif)}
-                  className={`p-4 rounded-lg shadow-sm hover:shadow-md cursor-pointer transition flex items-start gap-3 ${
-                    isUnread ? 'bg-blue-50 border-l-4 border-blue-500' : 'bg-white opacity-70'
-                  }`}
+                  className={[
+                    'flex items-start gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all border',
+                    isUnread
+                      ? 'bg-off-white border-warm-300 hover:border-warm-400 shadow-xs'
+                      : 'bg-cream/40 border-transparent hover:bg-cream/70 opacity-75',
+                  ].join(' ')}
                 >
-                  <div className="text-2xl leading-none pt-0.5">{meta.icon}</div>
+                  <NotifIcon iconKey={meta.iconKey} tone={meta.tone} />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-airmess-dark truncate">{notif.title}</h3>
-                      {isUnread && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
+                      <h3 className="text-body-s font-semibold text-ink truncate">
+                        {notif.title}
+                      </h3>
+                      {isUnread && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-airmess-red shrink-0" />
+                      )}
                     </div>
-                    <p className="text-sm text-gray-600 mt-0.5">{notif.body}</p>
+                    <p className="text-body-s text-warm-600 mt-0.5">{notif.body}</p>
                     {reference && (
-                      <p className="text-xs font-mono text-gray-400 mt-1">Réf : {reference}</p>
+                      <p className="text-caption font-mono text-warm-400 mt-1">
+                        Réf : {reference}
+                      </p>
                     )}
                   </div>
 
-                  <div className="text-xs text-gray-500 shrink-0 whitespace-nowrap">
+                  <span className="text-caption text-warm-500 shrink-0 whitespace-nowrap tabular-nums">
                     {timeAgo(notif.created_at, nowMs)}
-                  </div>
-                </div>
+                  </span>
+                </li>
               )
             })}
-          </div>
+          </ul>
         )}
-      </main>
-    </div>
+      </div>
+    </AdminPageShell>
   )
 }

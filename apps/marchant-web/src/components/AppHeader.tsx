@@ -7,6 +7,7 @@ import { useDesktopNotifications } from '../hooks/useDesktopNotifications'
 import EnableNotificationsButton from './EnableNotificationsButton'
 import markWhite from '../assets/logo/airmess-mark-white.svg'
 import mark from '../assets/logo/airmess-mark.svg'
+import { useUiPrefsStore } from '../stores/uiPrefsStore'
 
 /**
  * Header global de l'app marchand/particulier.
@@ -16,6 +17,8 @@ import mark from '../assets/logo/airmess-mark.svg'
  * - À droite : notifs + UserMenu + burger mobile
  */
 export default function AppHeader() {
+  const clientNavMode = useUiPrefsStore((s) => s.clientNavMode)
+
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: fetchUnreadCount,
@@ -25,6 +28,12 @@ export default function AppHeader() {
   useDesktopNotifications()
 
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Mode 'fab' : le header est entièrement remplacé par le FAB radial
+  // (rendu globalement dans App.tsx). On retourne null sans casser le layout
+  // — les pages utilisent `min-h-screen` autour de leur main, le header n'a
+  // jamais été stretch.
+  if (clientNavMode === 'fab') return null
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     [

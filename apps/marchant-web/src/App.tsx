@@ -31,6 +31,7 @@ import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDe
 import AdminReconciliationPage from './pages/admin/AdminReconciliationPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import ClientQuickNav from './components/ClientQuickNav'
 
 
 const queryClient = new QueryClient({
@@ -109,6 +110,10 @@ function App() {
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+
+        {/* FAB global pour marchand/particulier — se rend null si user=admin
+            ou si la préférence est 'horizontal' (cf. ClientQuickNav). */}
+        <ClientQuickNav />
       </BrowserRouter>
     </QueryClientProvider>
   )

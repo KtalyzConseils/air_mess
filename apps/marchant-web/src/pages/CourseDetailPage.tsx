@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import AppHeader from '../components/AppHeader'
-import AdminHeader from '../components/AdminHeader'
+import AdminPageShell from '../components/admin/AdminPageShell'
 import StatusBadge from '../components/StatusBadge'
 import Timeline from '../components/Timeline'
 import Card from '../components/ui/Card'
@@ -54,26 +54,37 @@ export default function CourseDetailPage() {
     },
   })
 
+  // Le wrapper de la page diffère selon le rôle :
+  //  - admin : sidebar verticale (AdminPageShell) → cohérent avec le reste de /admin
+  //  - autre : header horizontal marchant (AppHeader)
+  const Wrapper = ({ children }: { children: React.ReactNode }) =>
+    isAdmin ? (
+      <AdminPageShell>{children}</AdminPageShell>
+    ) : (
+      <div className="min-h-screen bg-cream">
+        <AppHeader />
+        {children}
+      </div>
+    )
+
   if (courseQuery.isLoading) {
     return (
-      <div className="min-h-screen bg-cream">
-        {isAdmin ? <AdminHeader /> : <AppHeader />}
+      <Wrapper>
         <main className="max-w-5xl mx-auto px-4 md:px-6 py-12 text-warm-500">Chargement…</main>
-      </div>
+      </Wrapper>
     )
   }
 
   if (courseQuery.error) {
     return (
-      <div className="min-h-screen bg-cream">
-        {isAdmin ? <AdminHeader /> : <AppHeader />}
+      <Wrapper>
         <main className="max-w-5xl mx-auto px-4 md:px-6 py-12">
           <Card padding="lg" className="text-center bg-danger-bg! border-airmess-red/20! text-airmess-red">
             Erreur de chargement.{' '}
             <button onClick={() => navigate(-1)} className="underline font-semibold">Retour</button>
           </Card>
         </main>
-      </div>
+      </Wrapper>
     )
   }
 
@@ -94,9 +105,7 @@ export default function CourseDetailPage() {
       : null
 
   return (
-    <div className="min-h-screen bg-cream">
-      {isAdmin ? <AdminHeader /> : <AppHeader />}
-
+    <Wrapper>
       <main className="max-w-5xl mx-auto px-4 md:px-6 py-8 md:py-12">
         {/* ============================================================
             HERO — référence + statut + actions
@@ -372,7 +381,7 @@ export default function CourseDetailPage() {
           </div>
         )}
       </main>
-    </div>
+    </Wrapper>
   )
 }
 

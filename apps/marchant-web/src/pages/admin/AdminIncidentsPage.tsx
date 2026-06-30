@@ -1,26 +1,34 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import AdminHeader from '../../components/AdminHeader'
+import AdminPageShell from '../../components/admin/AdminPageShell'
+import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminTabs from '../../components/admin/AdminTabs'
+import AdminPagination from '../../components/admin/AdminPagination'
+import AdminModal from '../../components/admin/AdminModal'
+import { AdminButton } from '../../components/admin/AdminToolbar'
 import { fetchIncidents, resolveIncident, INCIDENT_TYPE_LABELS } from '../../api/admin'
 
 type StatusFilter = 'open' | 'all' | 'resolved'
 
-const FILTERS: { key: StatusFilter; label: string; status?: string }[] = [
-  { key: 'open',     label: 'Ouverts',  status: 'open' },
-  { key: 'all',      label: 'Tous' },
-  { key: 'resolved', label: 'Résolus',  status: 'resolved' },
-]
+const FILTERS: readonly { key: StatusFilter; label: string; status?: string }[] = [
+  { key: 'open', label: 'Ouverts', status: 'open' },
+  { key: 'all', label: 'Tous' },
+  { key: 'resolved', label: 'Résolus', status: 'resolved' },
+] as const
 
 const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
-  open:      { label: 'Ouvert',   classes: 'bg-amber-100 text-amber-800' },
-  resolved:  { label: 'Résolu',   classes: 'bg-green-100 text-green-800' },
-  cancelled: { label: 'Annulé',   classes: 'bg-gray-200 text-gray-600' },
+  open: { label: 'Ouvert', classes: 'bg-warning-bg text-warning border border-warning/20' },
+  resolved: { label: 'Résolu', classes: 'bg-success-bg text-success border border-success/20' },
+  cancelled: { label: 'Annulé', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
 }
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('fr-FR', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   })
 }
 
@@ -28,6 +36,8 @@ export default function AdminIncidentsPage() {
   const queryClient = useQueryClient()
   const [filterKey, setFilterKey] = useState<StatusFilter>('open')
   const [page, setPage] = useState(1)
+  const [resolveTarget, setResolveTarget] = useState<{ id: number; type: string } | null>(null)
+  const [resolveNote, setResolveNote] = useState('')
 
   const activeFilter = FILTERS.find((f) => f.key === filterKey)!
 
@@ -39,116 +49,179 @@ export default function AdminIncidentsPage() {
 
   const resolveMutation = useMutation({
     mutationFn: ({ id, note }: { id: number; note: string }) => resolveIncident(id, note),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'incidents'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'incidents'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
+      closeResolveModal()
+    },
   })
 
-  function handleResolve(id: number) {
-    const note = window.prompt('Note de résolution (obligatoire) :')
-    if (note && note.trim()) {
-      resolveMutation.mutate({ id, note: note.trim() })
-    }
+  function openResolveModal(id: number, type: string) {
+    setResolveTarget({ id, type })
+    setResolveNote('')
+  }
+  function closeResolveModal() {
+    setResolveTarget(null)
+    setResolveNote('')
   }
 
   const incidents = data?.data ?? []
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AdminHeader />
-      <main className="max-w-6xl mx-auto p-4 md:p-6">
-        <h2 className="text-2xl font-bold text-airmess-dark mb-6">Incidents</h2>
+    <AdminPageShell>
+      <AdminPageHeader
+        title="Incidents"
+        subtitle="Signalements livreurs et clients à traiter"
+        toolbar={
+          <AdminTabs
+            tabs={FILTERS}
+            value={filterKey}
+            onChange={(k) => {
+              setFilterKey(k)
+              setPage(1)
+            }}
+          />
+        }
+      />
 
-        <div className="flex gap-1 bg-white rounded-lg p-1 shadow-sm w-fit mb-4">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => { setFilterKey(f.key); setPage(1) }}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition ${
-                filterKey === f.key ? 'bg-airmess-dark text-white' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
-          {isLoading && <div className="p-10 text-center text-gray-500">Chargement...</div>}
-          {!isLoading && incidents.length === 0 && (
-            <div className="p-10 text-center text-gray-500">Aucun incident.</div>
-          )}
-          {incidents.length > 0 && (
-            <table className="w-full text-sm min-w-[800px]">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-                <tr>
-                  <th className="px-4 py-3 text-left">Type</th>
-                  <th className="px-4 py-3 text-left">Course</th>
-                  <th className="px-4 py-3 text-left">Signalé par</th>
-                  <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">Statut</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {incidents.map((inc) => (
-                  <tr key={inc.id} className="hover:bg-gray-50 align-top">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-airmess-dark">
-                        {INCIDENT_TYPE_LABELS[inc.type] ?? inc.type}
-                      </div>
-                      {inc.description && (
-                        <div className="text-xs text-gray-500 mt-1 max-w-xs">{inc.description}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {inc.course ? (
-                        <Link to={`/courses/${inc.course.id}`} className="font-mono text-xs text-airmess-dark hover:underline">
-                          {inc.course.reference}
-                        </Link>
-                      ) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {inc.reported_by?.name ?? '—'}
-                      <div className="text-xs text-gray-400">{inc.reporter_type}</div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{formatDateTime(inc.created_at)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${(STATUS_BADGE[inc.status] ?? STATUS_BADGE.cancelled).classes}`}>
-                        {(STATUS_BADGE[inc.status] ?? { label: inc.status }).label}
-                      </span>
-                      {inc.status === 'resolved' && inc.resolution_note && (
-                        <div className="text-xs text-gray-400 mt-1 max-w-xs">→ {inc.resolution_note}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {inc.status === 'open' && (
-                        <button
-                          onClick={() => handleResolve(inc.id)}
-                          disabled={resolveMutation.isPending}
-                          className="bg-airmess-yellow text-airmess-dark font-bold px-3 py-1 rounded hover:opacity-90 disabled:opacity-50 text-xs"
-                        >
-                          Résoudre
-                        </button>
-                      )}
-                    </td>
+      <div className="px-4 md:px-6 lg:px-8 py-5">
+        <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
+          {isLoading ? (
+            <div className="p-10 text-center text-warm-500 text-body-s">Chargement…</div>
+          ) : incidents.length === 0 ? (
+            <div className="p-10 text-center text-warm-500 text-body-s italic">Aucun incident.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-body-s min-w-[800px]">
+                <thead className="bg-cream/60 text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left">Type</th>
+                    <th className="px-4 py-2.5 text-left">Course</th>
+                    <th className="px-4 py-2.5 text-left">Signalé par</th>
+                    <th className="px-4 py-2.5 text-left">Date</th>
+                    <th className="px-4 py-2.5 text-left">Statut</th>
+                    <th className="px-4 py-2.5 text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-warm-200">
+                  {incidents.map((inc) => {
+                    const badge = STATUS_BADGE[inc.status] ?? STATUS_BADGE.cancelled
+                    return (
+                      <tr key={inc.id} className="hover:bg-cream/40 align-top transition-colors">
+                        <td className="px-4 py-2.5">
+                          <p className="font-semibold text-ink">
+                            {INCIDENT_TYPE_LABELS[inc.type] ?? inc.type}
+                          </p>
+                          {inc.description && (
+                            <p className="text-caption text-warm-500 mt-0.5 max-w-xs">
+                              {inc.description}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {inc.course ? (
+                            <Link
+                              to={`/courses/${inc.course.id}`}
+                              className="font-mono text-caption font-semibold text-ink hover:text-airmess-red"
+                            >
+                              {inc.course.reference}
+                            </Link>
+                          ) : (
+                            <span className="text-warm-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <p className="text-ink">{inc.reported_by?.name ?? '—'}</p>
+                          <p className="text-caption text-warm-500">{inc.reporter_type}</p>
+                        </td>
+                        <td className="px-4 py-2.5 text-caption text-warm-500 tabular-nums whitespace-nowrap">
+                          {formatDateTime(inc.created_at)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${badge.classes}`}
+                          >
+                            {badge.label}
+                          </span>
+                          {inc.status === 'resolved' && inc.resolution_note && (
+                            <p className="text-caption text-warm-500 mt-1 max-w-xs">
+                              → {inc.resolution_note}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          {inc.status === 'open' && (
+                            <AdminButton
+                              variant="primary"
+                              size="sm"
+                              onClick={() => openResolveModal(inc.id, inc.type)}
+                              disabled={resolveMutation.isPending}
+                            >
+                              Résoudre
+                            </AdminButton>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
-        {data && data.last_page > 1 && (
-          <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
-            <span>Page {data.current_page} / {data.last_page} — {data.total} incident(s){isFetching && ' · …'}</span>
-            <div className="flex gap-2">
-              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={data.current_page <= 1}
-                className="px-3 py-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-white">Précédent</button>
-              <button onClick={() => setPage((p) => p + 1)} disabled={data.current_page >= data.last_page}
-                className="px-3 py-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-white">Suivant</button>
-            </div>
-          </div>
+        {data && (
+          <AdminPagination
+            currentPage={data.current_page}
+            lastPage={data.last_page}
+            total={data.total}
+            itemLabel="incident"
+            onChange={setPage}
+            isFetching={isFetching}
+          />
         )}
-      </main>
-    </div>
+      </div>
+
+      {/* Modal de résolution */}
+      <AdminModal
+        open={!!resolveTarget}
+        onClose={closeResolveModal}
+        title="Résoudre cet incident"
+        subtitle={
+          resolveTarget
+            ? `Type : ${INCIDENT_TYPE_LABELS[resolveTarget.type] ?? resolveTarget.type}`
+            : undefined
+        }
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={closeResolveModal}>
+              Annuler
+            </AdminButton>
+            <AdminButton
+              variant="primary"
+              onClick={() =>
+                resolveTarget &&
+                resolveMutation.mutate({ id: resolveTarget.id, note: resolveNote.trim() })
+              }
+              disabled={resolveNote.trim().length < 3 || resolveMutation.isPending}
+            >
+              {resolveMutation.isPending ? 'Résolution…' : 'Confirmer'}
+            </AdminButton>
+          </>
+        }
+      >
+        <label className="block mb-1.5 text-caption font-medium text-warm-600">
+          Note de résolution (obligatoire)
+        </label>
+        <textarea
+          value={resolveNote}
+          onChange={(e) => setResolveNote(e.target.value)}
+          placeholder="ex : appelé le livreur, course finalement livrée à 14h12"
+          rows={3}
+          className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
+          autoFocus
+        />
+      </AdminModal>
+    </AdminPageShell>
   )
 }

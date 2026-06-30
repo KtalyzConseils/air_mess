@@ -2,8 +2,10 @@ import { useState, type ReactNode } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
-import AdminHeader from '../../components/AdminHeader'
-import KpiCard from '../../components/KpiCard'
+import AdminPageShell from '../../components/admin/AdminPageShell'
+import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import { AdminButton } from '../../components/admin/AdminToolbar'
+import { ArrowLeftIcon, SettingsIcon, CheckIcon, AlertTriangleIcon } from '../../components/ui/icons'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
 import SupportNotesPanel from '../../components/SupportNotesPanel'
 import { fetchDriver, validateDriver, openDriverDocument } from '../../api/admin'
@@ -12,42 +14,86 @@ import { hasAdminRole } from '../../lib/permissions'
 
 function formatDate(value: string | null): string {
   if (!value) return '—'
-  return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+  return new Date(value).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex justify-between py-2 border-b border-gray-50 last:border-0">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium text-airmess-dark text-right">{children}</span>
+    <div className="flex justify-between gap-4 py-2 border-b border-warm-200 last:border-0">
+      <span className="text-body-s text-warm-500">{label}</span>
+      <span className="text-body-s font-medium text-ink text-right">{children}</span>
     </div>
   )
 }
 
 const AVAILABILITY: Record<string, { label: string; classes: string }> = {
-  available: { label: 'Disponible', classes: 'bg-green-100 text-green-800' },
-  busy:      { label: 'Occupé',     classes: 'bg-amber-100 text-amber-800' },
-  on_break:  { label: 'En pause',   classes: 'bg-gray-100 text-gray-700' },
-  offline:   { label: 'Hors-ligne', classes: 'bg-gray-200 text-gray-500' },
+  available: { label: 'Disponible', classes: 'bg-success-bg text-success border border-success/20' },
+  busy: { label: 'Occupé', classes: 'bg-warning-bg text-warning border border-warning/20' },
+  on_break: { label: 'En pause', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
+  offline: { label: 'Hors-ligne', classes: 'bg-warm-100 text-warm-500 border border-warm-200' },
 }
 const ACTIVATION: Record<string, { label: string; classes: string }> = {
-  pending:   { label: 'En attente', classes: 'bg-amber-100 text-amber-800' },
-  validated: { label: 'Validé',     classes: 'bg-blue-100 text-blue-800' },
-  active:    { label: 'Actif',      classes: 'bg-green-100 text-green-800' },
-  suspended: { label: 'Suspendu',   classes: 'bg-red-100 text-red-800' },
+  pending: { label: 'En attente', classes: 'bg-warning-bg text-warning border border-warning/20' },
+  validated: { label: 'Validé', classes: 'bg-cream text-ink border border-warm-300' },
+  active: { label: 'Actif', classes: 'bg-success-bg text-success border border-success/20' },
+  suspended: { label: 'Suspendu', classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
 }
 
 const DECLINE_REASON_LABEL: Record<string, string> = {
-  too_far:        '📍 Trop loin',
-  wrong_quartier: '🗺️ Quartier mal connu',
-  no_helmet:      '⛑️ Pas de casque',
-  vehicle_unfit:  '🛵 Véhicule pas adapté',
-  personal:       '👤 Raison personnelle',
-  other:          '✍️ Autre',
+  too_far: 'Trop loin',
+  wrong_quartier: 'Quartier mal connu',
+  no_helmet: 'Pas de casque',
+  vehicle_unfit: 'Véhicule pas adapté',
+  personal: 'Raison personnelle',
+  other: 'Autre',
 }
-function Badge({ map, value }: { map: Record<string, { label: string; classes: string }>; value: string }) {
-  const meta = map[value] ?? { label: value, classes: 'bg-gray-100 text-gray-700' }
-  return <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${meta.classes}`}>{meta.label}</span>
+
+function Badge({
+  map,
+  value,
+}: {
+  map: Record<string, { label: string; classes: string }>
+  value: string
+}) {
+  const meta = map[value] ?? {
+    label: value,
+    classes: 'bg-warm-100 text-warm-600 border border-warm-200',
+  }
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${meta.classes}`}
+    >
+      {meta.label}
+    </span>
+  )
+}
+
+interface KpiBoxProps {
+  label: string
+  value: number | string
+  tone?: 'default' | 'success' | 'danger' | 'brand'
+}
+function KpiBox({ label, value, tone = 'default' }: KpiBoxProps) {
+  const styles =
+    tone === 'brand'
+      ? 'bg-airmess-yellow border-transparent'
+      : tone === 'success'
+        ? 'bg-off-white border-success/30'
+        : tone === 'danger'
+          ? 'bg-off-white border-airmess-red/30'
+          : 'bg-off-white border-warm-200'
+  const valueColor =
+    tone === 'success' ? 'text-success' : tone === 'danger' ? 'text-airmess-red' : 'text-ink'
+  return (
+    <div className={`border rounded-md px-3 py-2.5 ${styles}`}>
+      <p className="text-[10px] uppercase tracking-wider font-bold text-warm-600">{label}</p>
+      <p className={`text-h2 font-bold tabular-nums leading-none mt-1 ${valueColor}`}>{value}</p>
+    </div>
+  )
 }
 
 export default function AdminDriverDetailPage() {
@@ -57,7 +103,6 @@ export default function AdminDriverDetailPage() {
   const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
-  // Valider un livreur = action ops. Support ne fait que lire les docs et noter.
   const canManageDriver = hasAdminRole(currentUser, 'ops')
 
   const { data, isLoading, isError } = useQuery({
@@ -81,7 +126,8 @@ export default function AdminDriverDetailPage() {
     } catch (err) {
       setDocError(
         err instanceof AxiosError
-          ? (err.response?.data as { message?: string })?.message ?? 'Impossible d\'ouvrir ce document.'
+          ? (err.response?.data as { message?: string })?.message ??
+            "Impossible d'ouvrir ce document."
           : 'Erreur inattendue.',
       )
     }
@@ -89,141 +135,132 @@ export default function AdminDriverDetailPage() {
 
   const validateError =
     validateMutation.error instanceof AxiosError
-      ? (validateMutation.error.response?.data as { message?: string })?.message ?? 'Erreur lors de la validation.'
+      ? (validateMutation.error.response?.data as { message?: string })?.message ??
+        'Erreur lors de la validation.'
       : null
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AdminHeader />
-      <main className="max-w-4xl mx-auto p-4 md:p-6">
-        <Link to="/admin/drivers" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-airmess-dark mb-4">
-          ← Retour aux livreurs
-        </Link>
-
-        {isLoading && <p className="text-gray-500">Chargement…</p>}
-        {isError && <p className="text-red-600">Livreur introuvable.</p>}
-
-        {data && (
-          <>
-            {/* En-tête */}
-            <div className="flex items-center gap-3 mb-6">
-              <h2 className="text-2xl font-bold text-airmess-dark">
-                {data.driver.first_name} {data.driver.last_name}
-              </h2>
+    <AdminPageShell>
+      <AdminPageHeader
+        title={data ? `${data.driver.first_name} ${data.driver.last_name}` : 'Livreur'}
+        subtitle={
+          data
+            ? `${data.driver.vehicle_type}${data.driver.vehicle_plate ? ` · ${data.driver.vehicle_plate}` : ''}`
+            : undefined
+        }
+        actions={
+          data && (
+            <div className="flex items-center gap-2">
               <Badge map={AVAILABILITY} value={data.driver.availability_status} />
               <Badge map={ACTIVATION} value={data.driver.activation_status} />
             </div>
+          )
+        }
+      />
 
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Identité & contact */}
-              <section className="bg-white rounded-2xl shadow-sm p-6">
-                <h3 className="font-semibold text-airmess-dark mb-3">Identité & contact</h3>
+      <div className="px-4 md:px-6 lg:px-8 py-5 max-w-5xl mx-auto space-y-6">
+        <Link
+          to="/admin/drivers"
+          className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink"
+        >
+          <ArrowLeftIcon size={14} />
+          Retour aux livreurs
+        </Link>
+
+        {isLoading && <p className="text-body-s text-warm-500">Chargement…</p>}
+        {isError && <p className="text-body-s text-airmess-red">Livreur introuvable.</p>}
+
+        {data && (
+          <>
+            {/* Bandeau validation pending */}
+            {canManageDriver && data.driver.activation_status === 'pending' && (
+              <section className="bg-warning-bg border border-warning/30 rounded-lg px-5 py-4">
+                <h2 className="text-body font-bold text-warning mb-1">Validation en attente</h2>
+                <p className="text-body-s text-warning/90 mb-3">
+                  Ce livreur attend la vérification de ses documents (CNI + permis). Vérifie-les
+                  ci-dessous avant d'activer son compte.
+                </p>
+                <AdminButton
+                  variant="primary"
+                  onClick={() => validateMutation.mutate()}
+                  disabled={validateMutation.isPending}
+                  leftIcon={<CheckIcon size={14} />}
+                >
+                  {validateMutation.isPending ? 'Validation…' : 'Valider ce livreur'}
+                </AdminButton>
+                {validateError && (
+                  <p className="text-body-s text-airmess-red mt-2 flex items-center gap-1.5">
+                    <AlertTriangleIcon size={14} /> {validateError}
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* Grille identité / véhicule / urgence / performance */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <Section title="Identité & contact">
                 <Row label="Genre">{data.driver.gender ?? '—'}</Row>
                 <Row label="Naissance">{formatDate(data.driver.birth_date)}</Row>
                 <Row label="Téléphone">{data.driver.user.phone ?? '—'}</Row>
                 <Row label="Email">{data.driver.user.email}</Row>
-              </section>
+              </Section>
 
-              {/* Véhicule */}
-              <section className="bg-white rounded-2xl shadow-sm p-6">
-                <h3 className="font-semibold text-airmess-dark mb-3">Véhicule</h3>
+              <Section title="Véhicule">
                 <Row label="Type">{data.driver.vehicle_type}</Row>
                 <Row label="Plaque">{data.driver.vehicle_plate ?? '—'}</Row>
                 <Row label="Couleur">{data.driver.vehicle_color ?? '—'}</Row>
-              </section>
+              </Section>
 
-              {/* Contact d'urgence */}
-              <section className="bg-white rounded-2xl shadow-sm p-6">
-                <h3 className="font-semibold text-airmess-dark mb-3">Contact d'urgence</h3>
+              <Section title="Contact d'urgence">
                 <Row label="Nom">{data.driver.emergency_contact_name ?? '—'}</Row>
                 <Row label="Téléphone">{data.driver.emergency_contact_phone ?? '—'}</Row>
                 <Row label="Dernière position">{formatDate(data.driver.last_position_at)}</Row>
-              </section>
+              </Section>
 
-              {/* Performance */}
-              <section className="bg-white rounded-2xl shadow-sm p-6">
-                <h3 className="font-semibold text-airmess-dark mb-3">Performance</h3>
+              <Section title="Performance">
                 <Row label="Taux d'acceptation">{data.driver.acceptance_rate}%</Row>
                 <Row label="Incidents">{data.driver.incidents_count}</Row>
-              </section>
-
-              {/* Wallet caution */}
-              <section className="bg-white rounded-2xl shadow-sm p-6 md:col-span-2">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <h3 className="font-semibold text-airmess-dark">💰 Wallet caution</h3>
-                  {isSuperAdmin && data.driver.wallet && (
-                    <button
-                      onClick={() => setWalletAdjustOpen(true)}
-                      className="text-xs px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium"
-                    >
-                      ⚙️ Ajuster…
-                    </button>
-                  )}
-                </div>
-                {data.driver.wallet ? (
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="bg-airmess-yellow/10 rounded-lg p-3">
-                      <p className="text-2xl font-bold text-airmess-dark">{data.driver.wallet.balance.toLocaleString('fr-FR')}</p>
-                      <p className="text-xs text-gray-600 mt-1">Balance (FCFA)</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-lg font-semibold text-gray-700">{data.driver.wallet.total_deposited.toLocaleString('fr-FR')}</p>
-                      <p className="text-xs text-gray-600 mt-1">Total déposé</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-lg font-semibold text-gray-700">{data.driver.wallet.total_withdrawn.toLocaleString('fr-FR')}</p>
-                      <p className="text-xs text-gray-600 mt-1">Total retiré</p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">Aucun wallet associé.</p>
-                )}
-              </section>
-
-              {/* Refus de courses (rolling 30j) */}
-              <section className="bg-white rounded-2xl shadow-sm p-6 md:col-span-2">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <h3 className="font-semibold text-airmess-dark">❌ Refus de courses (30 derniers jours)</h3>
-                  <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded font-semibold">
-                    Total : {data.declines.total_30d}
-                  </span>
-                </div>
-                {data.declines.total_30d === 0 ? (
-                  <p className="text-sm text-gray-500">Aucun refus sur la période. 👍</p>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4 text-sm">
-                      {Object.entries(data.declines.by_reason).map(([reason, n]) => (
-                        <div key={reason} className="bg-gray-50 rounded-lg px-3 py-2 flex justify-between">
-                          <span className="text-gray-600">{DECLINE_REASON_LABEL[reason] ?? reason}</span>
-                          <span className="font-semibold text-gray-800">{n}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <ul className="divide-y divide-gray-100 text-sm">
-                      {data.declines.recent.map((d) => (
-                        <li key={d.id} className="py-2 flex justify-between items-start gap-3">
-                          <div>
-                            <p className="font-medium text-gray-800">
-                              {DECLINE_REASON_LABEL[d.reason] ?? d.reason}
-                              {d.custom_reason && <span className="text-gray-500 font-normal"> — « {d.custom_reason} »</span>}
-                            </p>
-                            {d.course && (
-                              <p className="text-xs text-gray-500">
-                                Course <span className="font-mono">{d.course.reference}</span> · {d.course.origin_quartier} → {d.course.destination_quartier}
-                              </p>
-                            )}
-                          </div>
-                          <span className="text-xs text-gray-400 shrink-0">{formatDate(d.created_at)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </section>
+              </Section>
             </div>
 
-            {/* Modal d'ajustement wallet (super-admin uniquement) */}
+            {/* Wallet caution */}
+            <Section
+              title="Wallet caution"
+              action={
+                isSuperAdmin && data.driver.wallet ? (
+                  <AdminButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setWalletAdjustOpen(true)}
+                    leftIcon={<SettingsIcon size={14} />}
+                  >
+                    Ajuster
+                  </AdminButton>
+                ) : null
+              }
+            >
+              {data.driver.wallet ? (
+                <div className="grid grid-cols-3 gap-2">
+                  <KpiBox
+                    label="Balance"
+                    value={data.driver.wallet.balance.toLocaleString('fr-FR')}
+                    tone="brand"
+                  />
+                  <KpiBox
+                    label="Total déposé"
+                    value={data.driver.wallet.total_deposited.toLocaleString('fr-FR')}
+                  />
+                  <KpiBox
+                    label="Total retiré"
+                    value={data.driver.wallet.total_withdrawn.toLocaleString('fr-FR')}
+                  />
+                </div>
+              ) : (
+                <p className="text-body-s text-warm-500 italic">Aucun wallet associé.</p>
+              )}
+            </Section>
+
+            {/* Modal d'ajustement wallet */}
             {isSuperAdmin && data.driver.wallet && (
               <WalletAdjustmentModal
                 open={walletAdjustOpen}
@@ -236,85 +273,146 @@ export default function AdminDriverDetailPage() {
               />
             )}
 
-            {/* Bandeau de validation (ops uniquement, et seulement si pending) */}
-            {canManageDriver && data.driver.activation_status === 'pending' && (
-              <section className="mt-6 bg-amber-50 border-2 border-amber-300 rounded-2xl p-5">
-                <h3 className="font-bold text-amber-900 mb-2">⏳ Validation en attente</h3>
-                <p className="text-sm text-amber-800 mb-3">
-                  Ce livreur attend la vérification de ses documents (CNI + permis). Vérifiez-les ci-dessous
-                  avant d'activer son compte.
-                </p>
-                <button
-                  onClick={() => validateMutation.mutate()}
-                  disabled={validateMutation.isPending}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-green-700 disabled:opacity-50"
-                >
-                  {validateMutation.isPending ? 'Validation…' : '✓ Valider ce livreur'}
-                </button>
-                {validateError && (
-                  <p className="text-sm text-red-600 mt-2">⚠️ {validateError}</p>
-                )}
-              </section>
-            )}
+            {/* Refus de courses (rolling 30j) */}
+            <Section
+              title="Refus de courses (30 derniers jours)"
+              action={
+                <span className="text-caption font-bold text-warm-600 bg-warm-100 px-2 py-0.5 rounded">
+                  Total : {data.declines.total_30d}
+                </span>
+              }
+            >
+              {data.declines.total_30d === 0 ? (
+                <p className="text-body-s text-warm-500 italic">Aucun refus sur la période.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 mb-4">
+                    {Object.entries(data.declines.by_reason).map(([reason, n]) => (
+                      <div
+                        key={reason}
+                        className="bg-cream border border-warm-200 rounded-md px-3 py-1.5 flex justify-between items-center"
+                      >
+                        <span className="text-body-s text-warm-600">
+                          {DECLINE_REASON_LABEL[reason] ?? reason}
+                        </span>
+                        <span className="text-body-s font-bold text-ink tabular-nums">{n}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <ul className="divide-y divide-warm-200">
+                    {data.declines.recent.map((d) => (
+                      <li
+                        key={d.id}
+                        className="py-2.5 flex justify-between items-start gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-body-s font-medium text-ink">
+                            {DECLINE_REASON_LABEL[d.reason] ?? d.reason}
+                            {d.custom_reason && (
+                              <span className="text-warm-500 font-normal">
+                                {' '}— « {d.custom_reason} »
+                              </span>
+                            )}
+                          </p>
+                          {d.course && (
+                            <p className="text-caption text-warm-500 mt-0.5">
+                              Course <span className="font-mono">{d.course.reference}</span> ·{' '}
+                              {d.course.origin_quartier} → {d.course.destination_quartier}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-caption text-warm-400 shrink-0 whitespace-nowrap">
+                          {formatDate(d.created_at)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Section>
 
             {/* Documents */}
-            <section className="mt-6 bg-white rounded-2xl shadow-sm p-6">
-              <h3 className="font-semibold text-airmess-dark mb-3">📄 Documents</h3>
-              <div className="flex flex-wrap gap-3">
-                <button
+            <Section title="Documents">
+              <div className="flex flex-wrap gap-2">
+                <AdminButton
+                  variant="primary"
                   onClick={() => handleOpenDocument('cni')}
                   disabled={!data.driver.cni_url}
-                  className="px-4 py-2 bg-airmess-dark text-white rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-30"
                 >
-                  🪪 Voir CNI
-                </button>
-                <button
+                  Voir CNI
+                </AdminButton>
+                <AdminButton
+                  variant="primary"
                   onClick={() => handleOpenDocument('driving_license')}
                   disabled={!data.driver.driving_license_url}
-                  className="px-4 py-2 bg-airmess-dark text-white rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-30"
                 >
-                  🛂 Voir Permis
-                </button>
-                <button
+                  Voir Permis
+                </AdminButton>
+                <AdminButton
+                  variant="secondary"
                   onClick={() => handleOpenDocument('photo')}
                   disabled={!data.driver.photo_url}
-                  className="px-4 py-2 bg-gray-200 text-airmess-dark rounded-lg text-sm font-semibold hover:bg-gray-300 disabled:opacity-30"
                 >
-                  📷 {data.driver.photo_url ? 'Voir photo' : 'Pas de photo'}
-                </button>
+                  {data.driver.photo_url ? 'Voir photo' : 'Pas de photo'}
+                </AdminButton>
               </div>
-              {docError && <p className="text-sm text-red-600 mt-2">⚠️ {docError}</p>}
-              <p className="text-xs text-gray-500 mt-3">
-                Les documents s'ouvrent dans un nouvel onglet (autorisez les popups pour ce site).
+              {docError && (
+                <p className="text-body-s text-airmess-red mt-3 flex items-center gap-1.5">
+                  <AlertTriangleIcon size={14} /> {docError}
+                </p>
+              )}
+              <p className="text-caption text-warm-500 mt-3">
+                Les documents s'ouvrent dans un nouvel onglet (autorise les popups pour ce site).
               </p>
-            </section>
+            </Section>
 
-            {/* Stats de courses */}
-            <section className="mt-6">
-              <h3 className="font-semibold text-airmess-dark mb-3">Activité — courses</h3>
-              <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-                <KpiCard label="Total" value={data.stats.courses_total} accent="dark" />
-                <KpiCard label="Livrées" value={data.stats.courses_delivered} accent="yellow" />
-                <KpiCard label="En cours" value={data.stats.courses_in_progress} accent="gray" />
-                <KpiCard label="Échecs" value={data.stats.courses_failed} accent="red" />
+            {/* Stats courses */}
+            <Section title="Activité — courses">
+              <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
+                <KpiBox label="Total" value={data.stats.courses_total} />
+                <KpiBox label="Livrées" value={data.stats.courses_delivered} tone="success" />
+                <KpiBox label="En cours" value={data.stats.courses_in_progress} />
+                <KpiBox label="Échecs" value={data.stats.courses_failed} tone="danger" />
               </div>
-              <p className="text-sm text-gray-600 mt-3">
-                Gains cumulés : <strong>{data.stats.total_earnings.toLocaleString('fr-FR')} FCFA</strong>
-                {' · '}Dernière livraison : {formatDate(data.stats.last_delivery_at)}
+              <p className="text-body-s text-warm-600 mt-3">
+                Gains cumulés :{' '}
+                <strong className="text-ink tabular-nums">
+                  {data.stats.total_earnings.toLocaleString('fr-FR')} FCFA
+                </strong>
+                {' · '}
+                Dernière livraison : {formatDate(data.stats.last_delivery_at)}
               </p>
-            </section>
+            </Section>
 
-            {/* Notes internes — tous les rôles admin peuvent lire/écrire */}
-            <section className="mt-6">
-              <SupportNotesPanel
-                notableType="user"
-                notableId={data.driver.user.id}
-                title="📝 Notes internes (livreur)"
-              />
-            </section>
+            {/* Notes internes */}
+            <SupportNotesPanel
+              notableType="user"
+              notableId={data.driver.user.id}
+              title="Notes internes (livreur)"
+            />
           </>
         )}
-      </main>
-    </div>
+      </div>
+    </AdminPageShell>
+  )
+}
+
+function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="bg-off-white border border-warm-200 rounded-lg">
+      <div className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-warm-200">
+        <h2 className="text-body-s font-bold text-ink">{title}</h2>
+        {action}
+      </div>
+      <div className="px-5 py-3">{children}</div>
+    </section>
   )
 }

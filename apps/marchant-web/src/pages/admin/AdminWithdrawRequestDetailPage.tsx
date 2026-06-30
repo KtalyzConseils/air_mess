@@ -1,8 +1,17 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
-import AdminHeader from '../../components/AdminHeader'
+import AdminPageShell from '../../components/admin/AdminPageShell'
+import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import { AdminButton } from '../../components/admin/AdminToolbar'
+import {
+  ArrowLeftIcon,
+  AlertTriangleIcon,
+  CheckIcon,
+  ClockIcon,
+  ArrowRightIcon,
+} from '../../components/ui/icons'
 import {
   fetchWithdrawRequest,
   approveWithdrawRequest,
@@ -13,18 +22,18 @@ import {
 } from '../../api/admin'
 
 const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
-  pending:   { label: 'En attente', classes: 'bg-amber-100 text-amber-800' },
-  approved:  { label: 'Approuvée',  classes: 'bg-green-100 text-green-800' },
-  rejected:  { label: 'Rejetée',    classes: 'bg-red-100 text-red-800' },
-  cancelled: { label: 'Annulée',    classes: 'bg-gray-200 text-gray-700' },
+  pending: { label: 'En attente', classes: 'bg-warning-bg text-warning border border-warning/20' },
+  approved: { label: 'Approuvée', classes: 'bg-success-bg text-success border border-success/20' },
+  rejected: { label: 'Rejetée', classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
+  cancelled: { label: 'Annulée', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
 }
 
-const TX_META: Record<WithdrawRequestRecentTx['type'], { label: string; icon: string; positive: boolean }> = {
-  deposit:      { label: 'Recharge',       icon: '⬇️', positive: true  },
-  withdraw:     { label: 'Retrait',        icon: '⬆️', positive: false },
-  pickup_debit: { label: 'Débit caution',  icon: '📤', positive: false },
-  refund:       { label: 'Remboursement',  icon: '↩️', positive: true  },
-  earning:      { label: 'Gain de course', icon: '🏆', positive: true  },
+const TX_META: Record<WithdrawRequestRecentTx['type'], { label: string; positive: boolean }> = {
+  deposit: { label: 'Recharge', positive: true },
+  withdraw: { label: 'Retrait', positive: false },
+  pickup_debit: { label: 'Débit caution', positive: false },
+  refund: { label: 'Remboursement', positive: true },
+  earning: { label: 'Gain de course', positive: true },
 }
 
 function formatFcfa(n: number | null | undefined): string {
@@ -35,8 +44,52 @@ function formatFcfa(n: number | null | undefined): string {
 function formatDateTime(value: string | null): string {
   if (!value) return '—'
   return new Date(value).toLocaleString('fr-FR', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   })
+}
+
+function Section({
+  title,
+  action,
+  children,
+  className = '',
+}: {
+  title: string
+  action?: ReactNode
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <section className={`bg-off-white border border-warm-200 rounded-lg ${className}`}>
+      <div className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-warm-200">
+        <h2 className="text-body-s font-bold text-ink">{title}</h2>
+        {action}
+      </div>
+      <div className="px-5 py-4">{children}</div>
+    </section>
+  )
+}
+
+function AlertBand({
+  tone,
+  children,
+}: {
+  tone: 'warning' | 'danger' | 'info' | 'success'
+  children: ReactNode
+}) {
+  const tones = {
+    warning: 'bg-warning-bg border-warning/30 text-warning',
+    danger: 'bg-danger-bg border-airmess-red/30 text-airmess-red',
+    info: 'bg-cream border-warm-300 text-ink',
+    success: 'bg-success-bg border-success/30 text-success',
+  }[tone]
+  return (
+    <div className={`border rounded-md px-4 py-3 text-body-s ${tones}`}>{children}</div>
+  )
 }
 
 export default function AdminWithdrawRequestDetailPage() {
@@ -54,106 +107,85 @@ export default function AdminWithdrawRequestDetailPage() {
     enabled: !!id,
   })
 
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests'] })
+    queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests', 'detail', id] })
+  }
+
+  function alertApi(err: unknown, fallback: string) {
+    const message =
+      err instanceof AxiosError ? err.response?.data?.message ?? fallback : fallback
+    window.alert(message)
+  }
+
   const approveMutation = useMutation({
     mutationFn: () => approveWithdrawRequest(Number(id)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests'] })
-      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests', 'detail', id] })
-    },
-    onError: (err) => {
-      const message =
-        err instanceof AxiosError
-          ? err.response?.data?.message ?? "Erreur lors de l'approbation."
-          : 'Erreur inattendue.'
-      window.alert(`⚠️ ${message}`)
-    },
+    onSuccess: invalidate,
+    onError: (err) => alertApi(err, "Erreur lors de l'approbation."),
   })
-
   const rejectMutation = useMutation({
     mutationFn: (reason: string) => rejectWithdrawRequest(Number(id), reason),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests'] })
-      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests', 'detail', id] })
+      invalidate()
       setShowRejectPanel(false)
       setRejectReason('')
     },
-    onError: (err) => {
-      const message =
-        err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Erreur lors du rejet.'
-          : 'Erreur inattendue.'
-      window.alert(`⚠️ ${message}`)
-    },
+    onError: (err) => alertApi(err, 'Erreur lors du rejet.'),
   })
-
   const markPaidMutation = useMutation({
     mutationFn: (reference: string) => markWithdrawRequestPaid(Number(id), reference),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests'] })
-      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests', 'detail', id] })
+      invalidate()
       setShowMarkPaidPanel(false)
       setPayoutReference('')
     },
-    onError: (err) => {
-      const message =
-        err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Erreur lors de la confirmation.'
-          : 'Erreur inattendue.'
-      window.alert(`⚠️ ${message}`)
-    },
+    onError: (err) => alertApi(err, 'Erreur lors de la confirmation.'),
   })
-
   const retryPayoutMutation = useMutation({
     mutationFn: () => retryWithdrawPayout(Number(id)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests'] })
-      queryClient.invalidateQueries({ queryKey: ['admin', 'withdraw-requests', 'detail', id] })
-    },
-    onError: (err) => {
-      const message =
-        err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Erreur lors de la retentative.'
-          : 'Erreur inattendue.'
-      window.alert(`⚠️ ${message}`)
-    },
+    onSuccess: invalidate,
+    onError: (err) => alertApi(err, 'Erreur lors de la retentative.'),
   })
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <AdminHeader />
-        <main className="max-w-4xl mx-auto p-6">
-          <div className="text-center py-20 text-gray-500">Chargement…</div>
-        </main>
-      </div>
+      <AdminPageShell>
+        <AdminPageHeader title="Demande de retrait" />
+        <div className="px-6 py-10 text-warm-500 text-body-s">Chargement…</div>
+      </AdminPageShell>
     )
   }
 
   if (isError || !data) {
     const msg = error instanceof AxiosError ? error.response?.data?.message : null
     return (
-      <div className="min-h-screen bg-gray-50">
-        <AdminHeader />
-        <main className="max-w-4xl mx-auto p-6">
-          <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
-            <p className="text-red-600 font-semibold">Demande introuvable</p>
-            <p className="text-sm text-gray-500 mt-2">{msg ?? 'Erreur de chargement.'}</p>
-            <button
+      <AdminPageShell>
+        <AdminPageHeader title="Demande de retrait" />
+        <div className="px-4 md:px-6 lg:px-8 py-5">
+          <div className="bg-off-white border border-warm-200 rounded-lg p-8 text-center">
+            <p className="text-body font-semibold text-airmess-red">Demande introuvable</p>
+            <p className="text-body-s text-warm-500 mt-2">{msg ?? 'Erreur de chargement.'}</p>
+            <AdminButton
+              variant="secondary"
+              className="mt-4"
               onClick={() => navigate('/admin/withdraw-requests')}
-              className="mt-4 px-4 py-2 bg-airmess-dark text-white rounded-lg text-sm hover:opacity-90"
+              leftIcon={<ArrowLeftIcon size={14} />}
             >
-              ← Retour à la liste
-            </button>
+              Retour à la liste
+            </AdminButton>
           </div>
-        </main>
-      </div>
+        </div>
+      </AdminPageShell>
     )
   }
 
   const { request, active_course, recent_transactions, past_requests } = data
   const { driver } = request
   const wallet = driver.wallet
-  const statusMeta = STATUS_BADGE[request.status] ?? { label: request.status, classes: 'bg-gray-100 text-gray-700' }
+  const statusMeta = STATUS_BADGE[request.status] ?? {
+    label: request.status,
+    classes: 'bg-warm-100 text-warm-600 border border-warm-200',
+  }
 
   const isBusy = !!active_course
   const balanceShort = wallet ? wallet.balance < request.amount_fcfa : false
@@ -162,376 +194,452 @@ export default function AdminWithdrawRequestDetailPage() {
   const isApproved = request.status === 'approved'
   const isPaid = request.paid_at !== null
   const canMarkPaid = isApproved && !isPaid
-  // États du payout API FedaPay
   const payoutInitiated = request.payout_initiated_at !== null
   const payoutFailed = request.payout_failed_at !== null
   const payoutInFlight = payoutInitiated && !payoutFailed && !isPaid
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AdminHeader />
-      <main className="max-w-4xl mx-auto p-4 md:p-6">
-        {/* Fil d'Ariane */}
+    <AdminPageShell>
+      <AdminPageHeader
+        title={`Demande de retrait #${request.id}`}
+        subtitle={`Demandée le ${formatDateTime(request.created_at)}`}
+        actions={
+          <span
+            className={`inline-block px-3 py-1 rounded-md text-body-s font-semibold ${statusMeta.classes}`}
+          >
+            {statusMeta.label}
+          </span>
+        }
+      />
+
+      <div className="px-4 md:px-6 lg:px-8 py-5 max-w-5xl mx-auto space-y-4">
         <button
           onClick={() => navigate('/admin/withdraw-requests')}
-          className="text-sm text-gray-500 hover:text-airmess-dark mb-4 inline-flex items-center gap-1"
+          className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink"
         >
-          ← Retour à la liste
+          <ArrowLeftIcon size={14} />
+          Retour à la liste
         </button>
 
-        {/* Bandeaux d'alerte (pending uniquement) */}
+        {/* Bandeaux d'alerte (pending) */}
         {busyBlocksApproval && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 text-sm text-red-800">
-            ⚠️ <strong>{driver.first_name}</strong> est actuellement en course (#{active_course.reference}).
-            L'approbation sera refusée tant que la course n'est pas terminée.
-          </div>
+          <AlertBand tone="danger">
+            <strong>{driver.first_name}</strong> est actuellement en course (#
+            {active_course.reference}). L'approbation sera refusée tant que la course n'est pas
+            terminée.
+          </AlertBand>
         )}
         {isPending && !isBusy && balanceShort && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 text-sm text-amber-800">
-            ⚠️ La balance actuelle ({formatFcfa(wallet?.balance ?? 0)}) est inférieure au montant demandé.
-            L'approbation échouera. Demande à revoir.
-          </div>
+          <AlertBand tone="warning">
+            La balance actuelle ({formatFcfa(wallet?.balance ?? 0)}) est inférieure au montant
+            demandé. L'approbation échouera. Demande à revoir.
+          </AlertBand>
         )}
 
-        {/* États du payout API FedaPay (3 cas possibles quand la demande est approuvée mais pas encore payée) */}
+        {/* États du payout API FedaPay */}
         {canMarkPaid && payoutInFlight && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-4 text-sm text-indigo-900">
-            ⏳ <strong>Payout FedaPay lancé automatiquement</strong> à{' '}
-            {formatDateTime(request.payout_initiated_at)} (ref :{' '}
-            <span className="font-mono">{request.payout_provider_ref}</span>). En attente du webhook de
-            confirmation. Aucune action requise — la trace sera complétée automatiquement.
-          </div>
+          <AlertBand tone="info">
+            <div className="flex items-start gap-2">
+              <ClockIcon size={16} />
+              <div>
+                <strong>Payout FedaPay lancé automatiquement</strong> à{' '}
+                {formatDateTime(request.payout_initiated_at)} (ref :{' '}
+                <span className="font-mono">{request.payout_provider_ref}</span>). En attente du
+                webhook de confirmation. Aucune action requise — la trace sera complétée
+                automatiquement.
+              </div>
+            </div>
+          </AlertBand>
         )}
         {canMarkPaid && payoutFailed && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 text-sm text-red-900">
-            🚨 <strong>Le payout FedaPay a échoué</strong> ({formatDateTime(request.payout_failed_at)}).
-            <div className="mt-1 font-mono text-xs bg-white/50 rounded px-2 py-1">
-              {request.payout_failure_reason ?? 'Erreur inconnue'}
+          <AlertBand tone="danger">
+            <div className="flex items-start gap-2">
+              <AlertTriangleIcon size={16} />
+              <div className="flex-1">
+                <strong>Le payout FedaPay a échoué</strong> (
+                {formatDateTime(request.payout_failed_at)}).
+                <div className="mt-1 font-mono text-caption bg-white/40 rounded px-2 py-1">
+                  {request.payout_failure_reason ?? 'Erreur inconnue'}
+                </div>
+                <div className="mt-2 flex gap-2 items-center flex-wrap">
+                  <AdminButton
+                    variant="danger"
+                    size="sm"
+                    onClick={() => retryPayoutMutation.mutate()}
+                    disabled={retryPayoutMutation.isPending}
+                  >
+                    {retryPayoutMutation.isPending ? 'Tentative…' : 'Retenter le payout'}
+                  </AdminButton>
+                  <span className="text-caption">
+                    ou utilise le bouton « Marquer comme viré » ci-dessous pour le faire
+                    manuellement.
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="mt-2 flex gap-2 flex-wrap">
-              <button
-                onClick={() => retryPayoutMutation.mutate()}
-                disabled={retryPayoutMutation.isPending}
-                className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 disabled:opacity-50"
-              >
-                {retryPayoutMutation.isPending ? 'Tentative…' : '🔁 Retenter le payout'}
-              </button>
-              <span className="text-xs text-red-700 self-center">
-                ou utilisez le bouton « Marquer comme viré » ci-dessous pour le faire manuellement.
-              </span>
-            </div>
-          </div>
+          </AlertBand>
         )}
         {canMarkPaid && !payoutInitiated && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 text-sm text-blue-900">
-            🏦 Le wallet du livreur a été débité.{' '}
-            {request.target_method === 'momo'
-              ? <>Le payout FedaPay n'a pas été lancé (numéro non éligible ou tentative manuelle attendue). Effectuez le virement vers <span className="font-mono">{request.target_account}</span>, puis revenez renseigner la référence.</>
-              : <>Effectuez le virement bancaire vers <span className="font-mono">{request.target_account}</span>, puis revenez renseigner la référence.</>
-            }
-          </div>
+          <AlertBand tone="info">
+            Le wallet du livreur a été débité.{' '}
+            {request.target_method === 'momo' ? (
+              <>
+                Le payout FedaPay n'a pas été lancé (numéro non éligible ou tentative manuelle
+                attendue). Effectue le virement vers{' '}
+                <span className="font-mono">{request.target_account}</span>, puis renseigne la
+                référence.
+              </>
+            ) : (
+              <>
+                Effectue le virement bancaire vers{' '}
+                <span className="font-mono">{request.target_account}</span>, puis renseigne la
+                référence.
+              </>
+            )}
+          </AlertBand>
         )}
 
-        {/* En-tête */}
-        <div className="bg-white rounded-2xl shadow-sm p-5 md:p-6 mb-4">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold text-airmess-dark">
-                Demande de retrait #{request.id}
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Demandée le {formatDateTime(request.created_at)}
-              </p>
-            </div>
-            <span className={`inline-block px-3 py-1 rounded-lg text-sm font-semibold ${statusMeta.classes}`}>
-              {statusMeta.label}
-            </span>
-          </div>
-
-          {/* Métadonnées de décision si déjà tranchée */}
-          {request.decided_at && (
-            <div className="mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600">
-              <div>
-                <span className="font-medium text-gray-700">Décidée le :</span> {formatDateTime(request.decided_at)}
+        {/* Métadonnées de décision si déjà tranchée */}
+        {request.decided_at && (
+          <Section title="Décision">
+            <dl className="text-body-s space-y-1.5">
+              <div className="flex justify-between gap-4">
+                <dt className="text-warm-500">Décidée le</dt>
+                <dd className="font-medium text-ink">{formatDateTime(request.decided_at)}</dd>
               </div>
               {request.decided_by_admin && (
-                <div className="mt-1">
-                  <span className="font-medium text-gray-700">Par :</span>{' '}
-                  {request.decided_by_admin.first_name} {request.decided_by_admin.last_name}
+                <div className="flex justify-between gap-4">
+                  <dt className="text-warm-500">Par</dt>
+                  <dd className="font-medium text-ink">
+                    {request.decided_by_admin.first_name} {request.decided_by_admin.last_name}
+                  </dd>
                 </div>
               )}
-              {request.rejection_reason && (
-                <div className="mt-2 bg-red-50 border border-red-100 rounded-lg p-3">
-                  <p className="text-xs uppercase text-red-700 font-semibold mb-1">Raison du rejet</p>
-                  <p className="text-red-900">{request.rejection_reason}</p>
-                </div>
-              )}
-
-              {/* Trace du virement réel — preuve traçable du payout (anti-litige). */}
-              {isPaid && (
-                <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-xs uppercase text-green-700 font-semibold mb-1">✅ Virement effectué</p>
-                  <div className="text-sm text-green-900 space-y-0.5">
-                    <div>
-                      <span className="font-medium">Le :</span> {formatDateTime(request.paid_at)}
-                    </div>
-                    {request.paid_by_admin && (
-                      <div>
-                        <span className="font-medium">Par :</span>{' '}
-                        {request.paid_by_admin.first_name} {request.paid_by_admin.last_name}
-                      </div>
-                    )}
-                    <div>
-                      <span className="font-medium">Référence :</span>{' '}
-                      <span className="font-mono">{request.external_payout_reference}</span>
-                    </div>
+            </dl>
+            {request.rejection_reason && (
+              <div className="mt-3 bg-danger-bg border border-airmess-red/20 rounded-md p-3">
+                <p className="text-caption uppercase tracking-wide text-airmess-red font-bold mb-1">
+                  Raison du rejet
+                </p>
+                <p className="text-body-s text-airmess-red">{request.rejection_reason}</p>
+              </div>
+            )}
+            {isPaid && (
+              <div className="mt-3 bg-success-bg border border-success/20 rounded-md p-3">
+                <p className="text-caption uppercase tracking-wide text-success font-bold mb-1 flex items-center gap-1">
+                  <CheckIcon size={12} /> Virement effectué
+                </p>
+                <dl className="text-body-s text-success space-y-0.5">
+                  <div>
+                    <span className="font-medium">Le :</span> {formatDateTime(request.paid_at)}
                   </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                  {request.paid_by_admin && (
+                    <div>
+                      <span className="font-medium">Par :</span>{' '}
+                      {request.paid_by_admin.first_name} {request.paid_by_admin.last_name}
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-medium">Référence :</span>{' '}
+                    <span className="font-mono">{request.external_payout_reference}</span>
+                  </div>
+                </dl>
+              </div>
+            )}
+          </Section>
+        )}
 
-        {/* Grille 2 colonnes md+ */}
-        <div className="grid md:grid-cols-2 gap-4 mb-4">
-          {/* Livreur */}
-          <section className="bg-white rounded-2xl shadow-sm p-5">
-            <h3 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-3">🧍 Livreur</h3>
-            <p className="text-lg font-semibold text-airmess-dark">
+        {/* Livreur + wallet */}
+        <div className="grid md:grid-cols-2 gap-4">
+          <Section title="Livreur">
+            <p className="text-body font-bold text-ink">
               {driver.first_name} {driver.last_name}
             </p>
-            <p className="text-sm text-gray-600">{driver.user.phone ?? '—'}</p>
-            <p className="text-sm text-gray-500">{driver.user.email}</p>
+            <p className="text-body-s text-warm-600">{driver.user.phone ?? '—'}</p>
+            <p className="text-body-s text-warm-500">{driver.user.email}</p>
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               {driver.availability_status === 'busy' ? (
-                <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded font-medium">🚗 En course</span>
+                <span className="bg-danger-bg text-airmess-red border border-airmess-red/30 text-caption px-2 py-0.5 rounded font-semibold">
+                  En course
+                </span>
               ) : driver.availability_status === 'available' ? (
-                <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded font-medium">✅ Disponible</span>
+                <span className="bg-success-bg text-success border border-success/20 text-caption px-2 py-0.5 rounded font-semibold">
+                  Disponible
+                </span>
               ) : (
-                <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-medium">
+                <span className="bg-warm-100 text-warm-600 border border-warm-200 text-caption px-2 py-0.5 rounded font-semibold">
                   {driver.availability_status}
                 </span>
               )}
-              <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
+              <span className="bg-warm-100 text-warm-600 border border-warm-200 text-caption px-2 py-0.5 rounded">
                 {driver.activation_status}
               </span>
             </div>
             <Link
               to={`/admin/drivers/${driver.id}`}
-              className="mt-4 inline-block text-sm text-airmess-dark underline hover:no-underline"
+              className="mt-4 inline-flex items-center gap-1 text-caption font-medium text-ink hover:text-airmess-red"
             >
-              → Voir profil livreur
+              Voir profil livreur <ArrowRightIcon size={12} />
             </Link>
-          </section>
+          </Section>
 
-          {/* État du wallet */}
-          <section className="bg-white rounded-2xl shadow-sm p-5">
-            <h3 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-3">💰 État du wallet</h3>
+          <Section title="État du wallet">
             {wallet ? (
               <>
-                <p className="text-3xl font-bold text-airmess-dark">{formatFcfa(wallet.balance)}</p>
-                <p className="text-xs text-gray-500 mt-1">Balance actuelle</p>
-                <dl className="mt-4 space-y-1 text-sm">
+                <p className="text-h1 font-bold text-ink tabular-nums leading-none">
+                  {formatFcfa(wallet.balance)}
+                </p>
+                <p className="text-caption text-warm-500 mt-1">Balance actuelle</p>
+                <dl className="mt-4 space-y-1 text-body-s">
                   <div className="flex justify-between">
-                    <dt className="text-gray-500">Total déposé</dt>
-                    <dd className="font-medium text-gray-800">{formatFcfa(wallet.total_deposited)}</dd>
+                    <dt className="text-warm-500">Total déposé</dt>
+                    <dd className="font-medium text-ink tabular-nums">
+                      {formatFcfa(wallet.total_deposited)}
+                    </dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-gray-500">Total retiré</dt>
-                    <dd className="font-medium text-gray-800">{formatFcfa(wallet.total_withdrawn)}</dd>
+                    <dt className="text-warm-500">Total retiré</dt>
+                    <dd className="font-medium text-ink tabular-nums">
+                      {formatFcfa(wallet.total_withdrawn)}
+                    </dd>
                   </div>
                 </dl>
               </>
             ) : (
-              <p className="text-sm text-gray-500">Aucun wallet (impossible — anomalie).</p>
+              <p className="text-body-s text-warm-500 italic">
+                Aucun wallet (impossible — anomalie).
+              </p>
             )}
-          </section>
+          </Section>
         </div>
 
         {/* Détail de la demande */}
-        <section className="bg-white rounded-2xl shadow-sm p-5 mb-4">
-          <h3 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-3">📤 Demande</h3>
-          <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+        <Section title="Demande">
+          <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-body-s">
             <div>
-              <dt className="text-gray-500">Montant à verser</dt>
-              <dd className="text-2xl font-bold text-airmess-dark mt-0.5">{formatFcfa(request.amount_fcfa)}</dd>
+              <dt className="text-warm-500">Montant à verser</dt>
+              <dd className="text-h1 font-bold text-ink tabular-nums mt-0.5">
+                {formatFcfa(request.amount_fcfa)}
+              </dd>
             </div>
             <div>
-              <dt className="text-gray-500">Méthode</dt>
-              <dd className="text-base font-medium mt-0.5">
-                {request.target_method === 'momo' ? '📱 Mobile Money' : '🏦 Banque'}
+              <dt className="text-warm-500">Méthode</dt>
+              <dd className="text-body font-medium text-ink mt-0.5">
+                {request.target_method === 'momo' ? 'Mobile Money' : 'Banque'}
               </dd>
             </div>
             <div className="sm:col-span-2">
-              <dt className="text-gray-500">Compte / numéro cible</dt>
-              <dd className="text-base font-mono font-semibold mt-0.5 break-all">{request.target_account}</dd>
+              <dt className="text-warm-500">Compte / numéro cible</dt>
+              <dd className="text-body font-mono font-semibold text-ink mt-0.5 break-all">
+                {request.target_account}
+              </dd>
             </div>
           </dl>
-        </section>
+        </Section>
 
         {/* Historique transactions */}
-        <section className="bg-white rounded-2xl shadow-sm p-5 mb-4">
-          <h3 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-3">
-            📜 Historique wallet (10 dernières)
-          </h3>
+        <Section title="Historique wallet (10 dernières)">
           {recent_transactions.length === 0 ? (
-            <p className="text-sm text-gray-500">Aucune transaction.</p>
+            <p className="text-body-s text-warm-500 italic">Aucune transaction.</p>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-warm-200">
               {recent_transactions.map((tx) => {
                 const meta = TX_META[tx.type]
                 return (
-                  <li key={tx.id} className="py-2 flex items-start justify-between gap-3 text-sm">
-                    <div className="flex items-start gap-2 min-w-0">
-                      <span className="text-base">{meta.icon}</span>
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-800">{meta.label}</p>
-                        <p className="text-xs text-gray-500">
-                          {formatDateTime(tx.created_at)}
-                          {tx.course && <> · course <span className="font-mono">{tx.course.reference}</span></>}
-                        </p>
-                      </div>
+                  <li
+                    key={tx.id}
+                    className="py-2 flex items-start justify-between gap-3 text-body-s"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink">{meta.label}</p>
+                      <p className="text-caption text-warm-500">
+                        {formatDateTime(tx.created_at)}
+                        {tx.course && (
+                          <>
+                            {' '}· course <span className="font-mono">{tx.course.reference}</span>
+                          </>
+                        )}
+                      </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className={`font-semibold ${meta.positive ? 'text-green-700' : 'text-red-700'}`}>
-                        {meta.positive ? '+' : ''}{tx.amount_fcfa.toLocaleString('fr-FR')}
+                      <p
+                        className={`font-bold tabular-nums ${meta.positive ? 'text-success' : 'text-airmess-red'}`}
+                      >
+                        {meta.positive ? '+' : ''}
+                        {tx.amount_fcfa.toLocaleString('fr-FR')}
                       </p>
-                      <p className="text-xs text-gray-400">solde : {tx.balance_after.toLocaleString('fr-FR')}</p>
+                      <p className="text-caption text-warm-400 tabular-nums">
+                        solde : {tx.balance_after.toLocaleString('fr-FR')}
+                      </p>
                     </div>
                   </li>
                 )
               })}
             </ul>
           )}
-        </section>
+        </Section>
 
         {/* Agrégats retraits passés */}
-        <section className="bg-white rounded-2xl shadow-sm p-5 mb-6">
-          <h3 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-3">
-            🏦 Historique des retraits du livreur
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-            <div className="bg-green-50 rounded-lg p-3">
-              <p className="text-2xl font-bold text-green-700">{past_requests.approved_count}</p>
-              <p className="text-xs text-green-700 mt-1">Approuvés</p>
-            </div>
-            <div className="bg-green-50 rounded-lg p-3">
-              <p className="text-base font-bold text-green-700">{formatFcfa(past_requests.approved_total)}</p>
-              <p className="text-xs text-green-700 mt-1">Total versé</p>
-            </div>
-            <div className="bg-red-50 rounded-lg p-3">
-              <p className="text-2xl font-bold text-red-700">{past_requests.rejected_count}</p>
-              <p className="text-xs text-red-700 mt-1">Rejetés</p>
-            </div>
-            <div className="bg-gray-100 rounded-lg p-3">
-              <p className="text-2xl font-bold text-gray-700">{past_requests.cancelled_count}</p>
-              <p className="text-xs text-gray-600 mt-1">Annulés</p>
-            </div>
+        <Section title="Historique des retraits du livreur">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <KpiBox label="Approuvés" value={past_requests.approved_count} tone="success" />
+            <KpiBox
+              label="Total versé"
+              value={formatFcfa(past_requests.approved_total)}
+              tone="success"
+              compact
+            />
+            <KpiBox label="Rejetés" value={past_requests.rejected_count} tone="danger" />
+            <KpiBox label="Annulés" value={past_requests.cancelled_count} />
           </div>
-        </section>
+        </Section>
 
-        {/* Actions — uniquement si pending */}
+        {/* Actions — pending */}
         {isPending && (
-          <section className="bg-white rounded-2xl shadow-sm p-5 sticky bottom-4">
+          <Section title="Décider">
             {!showRejectPanel ? (
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
+              <div className="flex flex-col sm:flex-row gap-2">
+                <AdminButton
+                  variant="primary"
                   onClick={() => {
-                    if (window.confirm(
-                      `Confirmer l'approbation du retrait de ${formatFcfa(request.amount_fcfa)} ?\n\nLe wallet sera débité immédiatement. Vous devrez ensuite effectuer le virement réel sur ${request.target_method === 'momo' ? 'MoMo' : 'le compte bancaire'}.`
-                    )) {
+                    if (
+                      window.confirm(
+                        `Confirmer l'approbation du retrait de ${formatFcfa(request.amount_fcfa)} ?\n\nLe wallet sera débité immédiatement. Vous devrez ensuite effectuer le virement réel sur ${request.target_method === 'momo' ? 'MoMo' : 'le compte bancaire'}.`,
+                      )
+                    ) {
                       approveMutation.mutate()
                     }
                   }}
                   disabled={approveMutation.isPending}
-                  className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 transition"
+                  className="flex-1"
+                  leftIcon={<CheckIcon size={14} />}
                 >
-                  {approveMutation.isPending ? 'Approbation…' : '✅ Approuver et débiter'}
-                </button>
-                <button
+                  {approveMutation.isPending ? 'Approbation…' : 'Approuver et débiter'}
+                </AdminButton>
+                <AdminButton
+                  variant="danger"
                   onClick={() => setShowRejectPanel(true)}
-                  className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition"
+                  className="flex-1"
                 >
-                  ❌ Rejeter…
-                </button>
+                  Rejeter…
+                </AdminButton>
               </div>
             ) : (
               <div>
-                <h4 className="font-semibold text-gray-800 mb-2">Raison du rejet</h4>
-                <p className="text-xs text-gray-500 mb-3">
+                <p className="text-body-s font-bold text-ink mb-1">Raison du rejet</p>
+                <p className="text-caption text-warm-500 mb-2">
                   Le livreur sera notifié avec cette raison. Aucun débit ne sera effectué.
                 </p>
                 <textarea
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="ex: Compte MoMo invalide, fraude suspectée…"
+                  placeholder="ex : compte MoMo invalide, fraude suspectée…"
                   rows={3}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-airmess-yellow outline-none"
+                  className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
                 />
-                <div className="flex gap-3 mt-3">
-                  <button
-                    onClick={() => { setShowRejectPanel(false); setRejectReason('') }}
-                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm font-medium"
+                <div className="flex gap-2 mt-3">
+                  <AdminButton
+                    variant="secondary"
+                    onClick={() => {
+                      setShowRejectPanel(false)
+                      setRejectReason('')
+                    }}
+                    className="flex-1"
                   >
                     Annuler
-                  </button>
-                  <button
+                  </AdminButton>
+                  <AdminButton
+                    variant="danger"
                     onClick={() => rejectMutation.mutate(rejectReason.trim())}
                     disabled={rejectReason.trim().length < 5 || rejectMutation.isPending}
-                    className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-red-700 disabled:opacity-50"
+                    className="flex-1"
                   >
                     {rejectMutation.isPending ? 'Envoi…' : 'Confirmer le rejet'}
-                  </button>
+                  </AdminButton>
                 </div>
               </div>
             )}
-          </section>
+          </Section>
         )}
 
-        {/* Actions — demande approuvée mais pas encore marquée comme virée */}
+        {/* Actions — approuvée non virée */}
         {canMarkPaid && (
-          <section className="bg-white rounded-2xl shadow-sm p-5 sticky bottom-4">
+          <Section title="Confirmer le virement">
             {!showMarkPaidPanel ? (
-              <button
+              <AdminButton
+                variant="primary"
                 onClick={() => setShowMarkPaidPanel(true)}
-                className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+                className="w-full"
               >
-                🏦 Marquer le virement comme effectué…
-              </button>
+                Marquer le virement comme effectué…
+              </AdminButton>
             ) : (
               <div>
-                <h4 className="font-semibold text-gray-800 mb-2">Référence du virement</h4>
-                <p className="text-xs text-gray-500 mb-3">
-                  Saisissez la référence retournée par {request.target_method === 'momo' ? 'MoMo' : 'votre banque'}{' '}
-                  (numéro de transaction, identifiant unique). Le livreur sera notifié.
+                <p className="text-body-s font-bold text-ink mb-1">Référence du virement</p>
+                <p className="text-caption text-warm-500 mb-2">
+                  Saisis la référence retournée par{' '}
+                  {request.target_method === 'momo' ? 'MoMo' : 'la banque'} (numéro de
+                  transaction, identifiant unique). Le livreur sera notifié.
                 </p>
                 <input
                   type="text"
                   value={payoutReference}
                   onChange={(e) => setPayoutReference(e.target.value)}
-                  placeholder="ex: MP240624.1234.A56789"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-airmess-yellow outline-none"
+                  placeholder="ex : MP240624.1234.A56789"
+                  className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s font-mono text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
                 />
-                <div className="flex gap-3 mt-3">
-                  <button
-                    onClick={() => { setShowMarkPaidPanel(false); setPayoutReference('') }}
-                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm font-medium"
+                <div className="flex gap-2 mt-3">
+                  <AdminButton
+                    variant="secondary"
+                    onClick={() => {
+                      setShowMarkPaidPanel(false)
+                      setPayoutReference('')
+                    }}
+                    className="flex-1"
                   >
                     Annuler
-                  </button>
-                  <button
+                  </AdminButton>
+                  <AdminButton
+                    variant="primary"
                     onClick={() => markPaidMutation.mutate(payoutReference.trim())}
                     disabled={payoutReference.trim().length < 3 || markPaidMutation.isPending}
-                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-50"
+                    className="flex-1"
                   >
                     {markPaidMutation.isPending ? 'Envoi…' : 'Confirmer le virement'}
-                  </button>
+                  </AdminButton>
                 </div>
               </div>
             )}
-          </section>
+          </Section>
         )}
-      </main>
+      </div>
+    </AdminPageShell>
+  )
+}
+
+interface KpiBoxProps {
+  label: string
+  value: number | string
+  tone?: 'default' | 'success' | 'danger'
+  compact?: boolean
+}
+function KpiBox({ label, value, tone = 'default', compact = false }: KpiBoxProps) {
+  const borderClass =
+    tone === 'success'
+      ? 'border-success/30'
+      : tone === 'danger'
+        ? 'border-airmess-red/30'
+        : 'border-warm-200'
+  const valueColor =
+    tone === 'success' ? 'text-success' : tone === 'danger' ? 'text-airmess-red' : 'text-ink'
+  return (
+    <div className={`bg-off-white border ${borderClass} rounded-md px-3 py-2.5`}>
+      <p className="text-[10px] uppercase tracking-wider font-bold text-warm-600">{label}</p>
+      <p
+        className={`${compact ? 'text-body font-bold' : 'text-h2 font-bold'} tabular-nums leading-none mt-1 ${valueColor}`}
+      >
+        {value}
+      </p>
     </div>
   )
 }
