@@ -18,19 +18,36 @@
 --}}
 @php
     /**
-     * Lit un SVG du dossier public et le retourne sous forme de data URI.
-     * Si le fichier n'existe pas (ex: env de test), retourne string vide
-     * et le mail tombe sur le fallback `alt` textuel.
+     * Lit un SVG et retourne son contenu INLINE (pas en data URI).
+     * Pourquoi inline et pas <img src="data:...;base64,..."> ?
+     *  → Gmail, Outlook web, Yahoo bloquent les data URIs dans les <img>
+     *    (règle anti-tracking / anti-XSS). Résultat : icônes cassées en prod.
+     *  → Le SVG inline dans le HTML est autorisé par Gmail (web + iOS) et
+     *    Apple Mail. Sur Outlook desktop c'est partiel — les emails resteront
+     *    lisibles grâce au texte du header, mais le logo peut ne pas rendre.
+     *
+     * On retire :
+     *   - la déclaration <?xml ...?> (invalide dans un contexte HTML inline)
+     *   - les attributs width/height du <svg> racine (on les fixe côté CSS
+     *     via le wrapper pour un rendu propre)
      */
-    $svgDataUri = function (string $path): string {
+    $inlineSvg = function (string $path): string {
         $abs = public_path($path);
         if (! is_file($abs)) {
             return '';
         }
-        return 'data:image/svg+xml;base64,' . base64_encode(file_get_contents($abs));
+        $content = file_get_contents($abs);
+        // Retire la déclaration XML (illégale en HTML inline)
+        $content = preg_replace('/<\?xml[^>]*\?>\s*/', '', $content);
+        // Force width/height à 100% pour que le SVG remplisse son wrapper
+        // (les dimensions finales viennent du parent <div style="width:...">).
+        $content = preg_replace('/(<svg[^>]*?)\s+width="[^"]*"/', '$1', $content, 1);
+        $content = preg_replace('/(<svg[^>]*?)\s+height="[^"]*"/', '$1', $content, 1);
+        $content = preg_replace('/<svg\b/', '<svg width="100%" height="100%" style="display:block"', $content, 1);
+        return $content;
     };
-    $markSrc = $svgDataUri('images/airmess-mark.svg');
-    $wordmarkSrc = $svgDataUri('images/airmess-wordmark.svg');
+    $markSvg = $inlineSvg('images/airmess-mark.svg');
+    $wordmarkSvg = $inlineSvg('images/airmess-wordmark-white.svg');
 @endphp
 <!DOCTYPE html>
 <html lang="fr">
@@ -71,22 +88,17 @@
                                     <td style="vertical-align:middle;">
                                         <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                                             <tr>
-                                                <td style="vertical-align:middle; padding-right:12px;">
-                                                    <img
-                                                        src="{{ $markSrc }}"
-                                                        alt="A"
-                                                        width="36"
-                                                        height="36"
-                                                        style="display:block; width:36px; height:36px; border:0;"
-                                                    />
+                                                {{-- Mark : SVG inline, dimensions forcées par le wrapper --}}
+                                                <td style="vertical-align:middle; padding-right:12px; width:36px; line-height:0;">
+                                                    <div style="width:36px; height:36px;" role="img" aria-label="Air Mess">
+                                                        {!! $markSvg !!}
+                                                    </div>
                                                 </td>
-                                                <td style="vertical-align:middle;">
-                                                    <img
-                                                        src="{{ $wordmarkSrc }}"
-                                                        alt="Air Mess"
-                                                        height="24"
-                                                        style="display:block; height:24px; width:auto; border:0;"
-                                                    />
+                                                {{-- Wordmark : SVG inline, hauteur 24, largeur auto --}}
+                                                <td style="vertical-align:middle; line-height:0;">
+                                                    <div style="height:24px; width:auto; display:inline-block;">
+                                                        {!! $wordmarkSvg !!}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         </table>
