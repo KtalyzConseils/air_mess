@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Models\ApiApplication;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,20 +22,30 @@ class StoreIntegrationCourseRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $user = $this->user();
+        $authenticatable = $this->user();
 
-        if (! $user || ! $user->is_active || ! $user->isMarchant()) {
-            return false;
+        // ─── Nouveau flow : token porté par une ApiApplication (mode dev) ───
+        // Le middleware `api.quota` a déjà vérifié activation + quota.
+        // On revalide juste que le user propriétaire est actif.
+        if ($authenticatable instanceof ApiApplication) {
+            return $authenticatable->isActive()
+                && $authenticatable->user
+                && $authenticatable->user->is_active;
         }
 
-        $marchant = $user->marchant;
+        // ─── Ancien flow : token porté directement par un User marchand ───
+        // (clés Gbandjo/Systige générées via IntegrationKeyController).
+        if ($authenticatable instanceof User) {
+            if (! $authenticatable->is_active || ! $authenticatable->isMarchant()) {
+                return false;
+            }
+            $marchant = $authenticatable->marchant;
+            return $marchant
+                && $marchant->validated_at
+                && $marchant->hasApiAccess();
+        }
 
-        // L'accès API est réservé aux plans avec `api_access` (Starter/Pro/Business).
-        // On revérifie ici (pas seulement à la génération de clé) pour invalider une
-        // clé existante si le marchand rétrograde vers un plan sans API.
-        return $marchant
-            && $marchant->validated_at
-            && $marchant->hasApiAccess();
+        return false;
     }
 
     public function rules(): array

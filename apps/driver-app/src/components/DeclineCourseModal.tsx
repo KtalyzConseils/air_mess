@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import { Modal, View, Text, Pressable, TextInput, Alert } from 'react-native'
+import { View, Text, Pressable, TextInput, Alert } from 'react-native'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Ionicons } from '@expo/vector-icons'
 import { declineCourse, type DeclineReason } from '../api/driver'
+import BottomSheet from './ui/BottomSheet'
+import Button from './ui/Button'
 
 interface Props {
   visible: boolean
@@ -13,22 +16,18 @@ interface Props {
 interface ReasonOption {
   value: DeclineReason
   label: string
-  icon: string
+  icon: keyof typeof Ionicons.glyphMap
 }
 
 const REASONS: ReasonOption[] = [
-  { value: 'too_far',        label: 'Trop loin',                icon: '📍' },
-  { value: 'wrong_quartier', label: 'Quartier que je connais mal', icon: '🗺️' },
-  { value: 'no_helmet',      label: 'Pas de casque adapté',     icon: '⛑️' },
-  { value: 'vehicle_unfit',  label: 'Véhicule pas adapté',      icon: '🛵' },
-  { value: 'personal',       label: 'Raison personnelle',       icon: '👤' },
-  { value: 'other',          label: 'Autre (préciser)',         icon: '✍️' },
+  { value: 'too_far',        label: 'Trop loin',                    icon: 'location' },
+  { value: 'wrong_quartier', label: 'Quartier que je connais mal',  icon: 'map' },
+  { value: 'no_helmet',      label: 'Pas de casque adapté',         icon: 'shield-half' },
+  { value: 'vehicle_unfit',  label: 'Véhicule pas adapté',          icon: 'bicycle' },
+  { value: 'personal',       label: 'Raison personnelle',           icon: 'person' },
+  { value: 'other',          label: 'Autre (préciser)',             icon: 'create' },
 ]
 
-/**
- * Modal pour refuser explicitement une course offerte.
- * Le driver choisit une raison parmi la liste ; "other" demande un texte libre min 5 chars.
- */
 export default function DeclineCourseModal({ visible, courseId, courseReference, onClose }: Props) {
   const queryClient = useQueryClient()
   const [reason, setReason] = useState<DeclineReason | null>(null)
@@ -70,68 +69,83 @@ export default function DeclineCourseModal({ visible, courseId, courseReference,
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View className="flex-1 bg-black/50 justify-end">
-        <View className="bg-white rounded-t-3xl p-5 pb-8">
-          <Text className="text-xl font-bold text-airmess-dark">Refuser la course</Text>
-          <Text className="text-xs text-gray-500 mt-1">
-            Course <Text className="font-mono">{courseReference}</Text> — elle ne réapparaîtra plus dans tes offres.
-          </Text>
-
-          <View className="mt-4 gap-2">
-            {REASONS.map((opt) => {
-              const selected = reason === opt.value
-              return (
-                <Pressable
-                  key={opt.value}
-                  onPress={() => setReason(opt.value)}
-                  className={`flex-row items-center gap-3 px-4 py-3 rounded-lg border ${
-                    selected ? 'bg-airmess-yellow/20 border-airmess-yellow' : 'border-gray-200'
-                  }`}
-                >
-                  <Text className="text-lg">{opt.icon}</Text>
-                  <Text className={`flex-1 text-sm ${selected ? 'font-semibold text-airmess-dark' : 'text-gray-700'}`}>
-                    {opt.label}
-                  </Text>
-                  {selected && <Text className="text-airmess-dark font-bold">✓</Text>}
-                </Pressable>
-              )
-            })}
+    <BottomSheet
+      visible={visible}
+      onClose={handleClose}
+      title="Refuser la course"
+      subtitle={`${courseReference} — elle ne réapparaîtra plus dans tes offres.`}
+      footer={
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Button variant="outline" size="md" onPress={handleClose} disabled={mutation.isPending}>
+              Annuler
+            </Button>
           </View>
-
-          {reason === 'other' && (
-            <TextInput
-              value={customReason}
-              onChangeText={setCustomReason}
-              placeholder="Précise la raison (min 5 caractères)"
-              multiline
-              numberOfLines={3}
-              className="mt-3 border border-gray-300 rounded-lg p-3 text-sm"
-              style={{ textAlignVertical: 'top' }}
-            />
-          )}
-
-          <View className="flex-row gap-2 mt-5">
-            <Pressable
-              onPress={handleClose}
-              disabled={mutation.isPending}
-              className="flex-1 py-3 rounded-lg border border-gray-300 items-center"
-            >
-              <Text className="text-gray-700 font-semibold">Annuler</Text>
-            </Pressable>
-            <Pressable
+          <View className="flex-1">
+            <Button
+              variant="danger"
+              size="md"
               onPress={submit}
-              disabled={mutation.isPending || !reason}
-              className="flex-1 py-3 rounded-lg items-center bg-red-600"
-              style={{ opacity: mutation.isPending || !reason ? 0.5 : 1 }}
+              loading={mutation.isPending}
+              disabled={!reason}
             >
-              <Text className="text-white font-semibold">
-                {mutation.isPending ? 'Envoi...' : 'Confirmer le refus'}
-              </Text>
-            </Pressable>
+              Confirmer
+            </Button>
           </View>
         </View>
+      }
+    >
+      <View className="gap-2">
+        {REASONS.map((opt) => {
+          const selected = reason === opt.value
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => setReason(opt.value)}
+              className={[
+                'flex-row items-center px-4 py-3 rounded-2xl border-2',
+                selected
+                  ? 'bg-airmess-yellow/15 border-airmess-yellow'
+                  : 'bg-off-white border-warm-200',
+              ].join(' ')}
+              style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+            >
+              <View
+                className={[
+                  'w-9 h-9 rounded-xl items-center justify-center mr-3',
+                  selected ? 'bg-airmess-yellow' : 'bg-warm-100',
+                ].join(' ')}
+              >
+                <Ionicons name={opt.icon} size={18} color="#1A1614" />
+              </View>
+              <Text className={[
+                'flex-1 text-base',
+                selected ? 'font-extrabold text-ink' : 'font-semibold text-ink',
+              ].join(' ')}>
+                {opt.label}
+              </Text>
+              {selected && (
+                <View className="w-6 h-6 rounded-full bg-ink items-center justify-center">
+                  <Ionicons name="checkmark" size={14} color="#FFCC00" />
+                </View>
+              )}
+            </Pressable>
+          )
+        })}
       </View>
-    </Modal>
+
+      {reason === 'other' && (
+        <TextInput
+          value={customReason}
+          onChangeText={setCustomReason}
+          placeholder="Précise la raison (min 5 caractères)"
+          placeholderTextColor="#B8AF9F"
+          multiline
+          numberOfLines={3}
+          className="mt-3 border-2 border-warm-300 rounded-2xl p-3 text-base text-ink bg-off-white"
+          style={{ textAlignVertical: 'top', minHeight: 88 }}
+        />
+      )}
+    </BottomSheet>
   )
 }

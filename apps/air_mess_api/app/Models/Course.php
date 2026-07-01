@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Observers\CourseObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
+#[ObservedBy(CourseObserver::class)]
 class Course extends Model
 {
     use HasFactory;
@@ -119,6 +122,15 @@ class Course extends Model
     public function sender()
     {
         return $this->belongsTo(User::class, 'sender_id');
+    }
+
+    /**
+     * Application API qui a créé la course (null si course interne).
+     * Utile pour le reporting et le décompte de quota.
+     */
+    public function apiApplication()
+    {
+        return $this->belongsTo(ApiApplication::class);
     }
 
     public function driver()

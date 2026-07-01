@@ -10,6 +10,11 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\IntegrationKeyController;
 use App\Http\Controllers\Api\IntegrationCourseController;
+use App\Http\Controllers\Api\ApiPlanController;
+use App\Http\Controllers\Api\MyApiApplicationController;
+use App\Http\Controllers\Api\ApiApplicationKeyController;
+use App\Http\Controllers\Api\ApiApplicationWebhookController;
+use App\Http\Controllers\Api\AdminApiApplicationController;
 use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\UserWalletController;
 use Illuminate\Http\Request;
@@ -117,11 +122,43 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/top-up', [UserWalletController::class, 'topUp']);
     });
 
+    // ─── Mode développeur — apps API du user connecté ────────────────
+    // Le user (marchand ou particulier) peut créer plusieurs apps, chacune
+    // avec son plan API et ses clés. Voir MyApiApplicationController.
+    Route::get('/api-plans', [ApiPlanController::class, 'index']);
+    Route::apiResource('me/api-apps', MyApiApplicationController::class)
+        ->parameters(['api-apps' => 'app']);
+    Route::post('/me/api-apps/{app}/subscribe', [MyApiApplicationController::class, 'subscribe']);
+
+    // Clés d'accès scopées à une app
+    Route::prefix('me/api-apps/{app}/keys')->group(function () {
+        Route::get('/',        [ApiApplicationKeyController::class, 'index']);
+        Route::post('/',       [ApiApplicationKeyController::class, 'store']);
+        Route::delete('/{keyId}', [ApiApplicationKeyController::class, 'destroy']);
+    });
+
+    // Config webhook + historique deliveries d'une app
+    Route::put('/me/api-apps/{app}/webhook',    [ApiApplicationWebhookController::class, 'configure']);
+    Route::delete('/me/api-apps/{app}/webhook', [ApiApplicationWebhookController::class, 'destroy']);
+    Route::get('/me/api-apps/{app}/deliveries', [ApiApplicationWebhookController::class, 'deliveries']);
+    Route::post('/me/api-apps/{app}/deliveries/{delivery}/retry',
+        [ApiApplicationWebhookController::class, 'retry']);
 });
 
 // ===== API d'intégration externe (serveur-à-serveur) =====
-// Auth par clé d'intégration (token Sanctum portant l'ability dédiée) + throttle.
-Route::middleware(['auth:sanctum', 'abilities:integration:create-course', 'throttle:60,1'])
+// Auth par clé Sanctum + ability + rate-limit dur + quota mensuel (uniquement
+// pour les tokens portés par une ApiApplication ; les clés marchand Gbandjo
+// passent sans quota pour compat rétro).
+//
+// Les DEUX abilities sont acceptées via le middleware `ability` (any) :
+//   - integration:create-course  (ancien flow Gbandjo)
+//   - api:create-course          (nouveau flow app dev)
+Route::middleware([
+    'auth:sanctum',
+    'ability:integration:create-course,api:create-course',
+    'throttle:60,1',
+    'api.quota',
+])
     ->prefix('integration')
     ->group(function () {
         Route::post('/courses', [IntegrationCourseController::class, 'store']);
@@ -149,6 +186,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/drivers/{driver}/document/{type}', [AdminController::class, 'driverDocument'])
             ->whereIn('type', ['photo', 'cni', 'driving_license']);
         Route::get('/incidents',                 [AdminController::class, 'incidents']);
+
+        // API dev apps — lecture partagée (utile au support pour aider un dev)
+        Route::get('/api-apps',            [AdminApiApplicationController::class, 'index']);
+        Route::get('/api-apps/{app}',      [AdminApiApplicationController::class, 'show']);
     });
 
     // === ÉCRITURE COMMERCIALE (validation/suspension marchands & particuliers) ===
@@ -161,6 +202,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 
         Route::post('/individuals/{individual}/suspend',    [AdminController::class, 'suspendIndividual']);
         Route::post('/individuals/{individual}/reactivate', [AdminController::class, 'reactivateIndividual']);
+
+        // Suspension d'app dev — même hiérarchie que suspension marchand.
+        Route::post('/api-apps/{app}/suspend',    [AdminApiApplicationController::class, 'suspend']);
+        Route::post('/api-apps/{app}/reactivate', [AdminApiApplicationController::class, 'reactivate']);
     });
 
     // === ÉCRITURE OPS (réassignation course, validation driver, retraits) ===

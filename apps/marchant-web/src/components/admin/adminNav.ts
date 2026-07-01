@@ -14,6 +14,7 @@ import {
   BarChartIcon,
   SettingsIcon,
   BellIcon,
+  CodeIcon,
   type IconProps,
 } from '../ui/icons'
 
@@ -64,6 +65,7 @@ export function useAdminNav() {
         { to: '/admin/marchants', label: 'Marchands', Icon: StoreIcon, visible: canBrowseEntities },
         { to: '/admin/individuals', label: 'Particuliers', Icon: UsersIcon, visible: canBrowseEntities },
         { to: '/admin/drivers', label: 'Livreurs', Icon: BikeIcon, visible: canBrowseEntities },
+        { to: '/admin/api-apps', label: 'Apps dev', Icon: CodeIcon, visible: canBrowseEntities },
       ]),
     },
     {

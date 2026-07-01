@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { View, Text, Pressable, TextInput, Modal, ScrollView } from 'react-native'
+import { View, Text, Pressable, TextInput } from 'react-native'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { reportIncident, INCIDENT_TYPES } from '../api/driver'
+import BottomSheet from './ui/BottomSheet'
+import Button from './ui/Button'
 
 interface Props {
   courseId: number
@@ -9,71 +11,108 @@ interface Props {
   onClose: () => void
 }
 
+/**
+ * Signalement d'un incident pendant la course.
+ * L'incident continue la course — c'est différent de "Abandonner" (FailCourseModal).
+ *
+ * Design : liste de tags cliquables (chips) + description libre.
+ * Action principale = warning (orange) — pas danger, l'incident n'est pas final.
+ */
 export default function IncidentModal({ courseId, visible, onClose }: Props) {
   const queryClient = useQueryClient()
   const [type, setType] = useState<string | null>(null)
   const [description, setDescription] = useState('')
 
   const mutation = useMutation({
-    mutationFn: () => reportIncident(courseId, { type: type!, description: description || undefined }),
+    mutationFn: () =>
+      reportIncident(courseId, {
+        type: type!,
+        description: description || undefined,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-active'] })
-      setType(null)
-      setDescription('')
-      onClose()
+      handleClose()
     },
   })
 
+  function handleClose() {
+    setType(null)
+    setDescription('')
+    onClose()
+  }
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 bg-black/50 justify-end">
-        <View className="bg-white rounded-t-3xl p-5 max-h-[85%]">
-          <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-lg font-bold text-airmess-dark">⚠️ Signaler un incident</Text>
-            <Pressable onPress={onClose}><Text className="text-gray-400 text-base">Fermer</Text></Pressable>
+    <BottomSheet
+      visible={visible}
+      onClose={handleClose}
+      title="Signaler un incident"
+      subtitle="Sans abandonner la course. On te recontacte si besoin."
+      footer={
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Button variant="outline" size="md" onPress={handleClose} disabled={mutation.isPending}>
+              Annuler
+            </Button>
           </View>
-
-          <Text className="text-xs uppercase text-gray-500 font-semibold mb-2">Type d'incident</Text>
-          <ScrollView className="max-h-64 mb-3">
-            <View className="flex-row flex-wrap gap-2">
-              {INCIDENT_TYPES.map((t) => (
-                <Pressable
-                  key={t.value}
-                  onPress={() => setType(t.value)}
-                  className={`px-3 py-2 rounded-full border ${
-                    type === t.value ? 'bg-airmess-dark border-airmess-dark' : 'bg-white border-gray-200'
-                  }`}
-                >
-                  <Text className={`text-sm ${type === t.value ? 'text-white font-semibold' : 'text-gray-700'}`}>
-                    {t.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
-
-          <Text className="text-xs uppercase text-gray-500 font-semibold mb-1">Description (optionnel)</Text>
-          <TextInput
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            placeholder="Détaille ce qui s'est passé…"
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4"
-            style={{ textAlignVertical: 'top', minHeight: 70 }}
-          />
-
-          <Pressable
-            onPress={() => mutation.mutate()}
-            disabled={!type || mutation.isPending}
-            className="bg-airmess-red rounded-xl py-4 items-center"
-            style={{ opacity: !type || mutation.isPending ? 0.5 : 1 }}
-          >
-            <Text className="text-white font-bold text-base">
-              {mutation.isPending ? 'Envoi…' : 'Envoyer le signalement'}
-            </Text>
-          </Pressable>
+          <View className="flex-1">
+            <Button
+              variant="dark"
+              size="md"
+              onPress={() => mutation.mutate()}
+              loading={mutation.isPending}
+              disabled={!type}
+            >
+              Envoyer
+            </Button>
+          </View>
         </View>
+      }
+    >
+      {/* Chips type d'incident */}
+      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mb-2">
+        Type d'incident
+      </Text>
+      <View className="flex-row flex-wrap gap-2 mb-4">
+        {INCIDENT_TYPES.map((t) => {
+          const selected = type === t.value
+          return (
+            <Pressable
+              key={t.value}
+              onPress={() => setType(t.value)}
+              className={[
+                'px-4 py-2.5 rounded-full border-2',
+                selected
+                  ? 'bg-ink border-ink'
+                  : 'bg-off-white border-warm-200',
+              ].join(' ')}
+              style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+            >
+              <Text
+                className={[
+                  'text-sm',
+                  selected ? 'text-airmess-yellow font-extrabold' : 'text-ink font-semibold',
+                ].join(' ')}
+              >
+                {t.label}
+              </Text>
+            </Pressable>
+          )
+        })}
       </View>
-    </Modal>
+
+      {/* Description libre */}
+      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mb-2">
+        Description (facultatif)
+      </Text>
+      <TextInput
+        value={description}
+        onChangeText={setDescription}
+        multiline
+        placeholder="Détaille ce qui s'est passé…"
+        placeholderTextColor="#B8AF9F"
+        className="border-2 border-warm-300 rounded-2xl px-4 py-3 text-base text-ink bg-off-white"
+        style={{ textAlignVertical: 'top', minHeight: 90 }}
+      />
+    </BottomSheet>
   )
 }

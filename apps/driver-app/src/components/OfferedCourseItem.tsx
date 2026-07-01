@@ -1,10 +1,21 @@
 import { useState } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Ionicons } from '@expo/vector-icons'
 import { acceptCourse, type DriverCourseSummary } from '../api/driver'
 import CourseDetailModal from './CourseDetailModal'
 import DeclineCourseModal from './DeclineCourseModal'
+import Button from './ui/Button'
 
+/**
+ * Item d'une course proposée dans la liste "propositions".
+ *
+ * Design :
+ *   - Tap sur la carte → modal détail (pas d'action destructrice au tap)
+ *   - Boutons Refuser (1/3) + Accepter (2/3) en bas, 48px
+ *   - Express : bordure rouge brand + bandeau discret. Pas d'orange (hors palette).
+ *   - Trajet : dots verts/rouges + connecteur, pas d'emojis
+ */
 export default function OfferedCourseItem({ course }: { course: DriverCourseSummary }) {
   const queryClient = useQueryClient()
   const [detailOpen, setDetailOpen] = useState(false)
@@ -24,17 +35,18 @@ export default function OfferedCourseItem({ course }: { course: DriverCourseSumm
     <>
       <Pressable
         onPress={() => setDetailOpen(true)}
-        className={`rounded-2xl mb-3 overflow-hidden ${
-          isExpress
-            ? 'bg-orange-50 border-2 border-orange-500'
-            : 'bg-white border border-gray-100'
-        }`}
+        className={[
+          'rounded-2xl mb-3 overflow-hidden bg-off-white',
+          isExpress ? 'border-2 border-airmess-red' : 'border border-warm-200',
+        ].join(' ')}
+        style={({ pressed }) => (pressed ? { opacity: 0.9 } : undefined)}
       >
-        {/* Bandeau express en haut */}
+        {/* Bandeau express — brand-aligné (rouge) */}
         {isExpress && (
-          <View className="bg-orange-500 px-3 py-1.5 items-center">
-            <Text className="text-white text-xs font-bold tracking-widest">
-              ⚡ EXPRESS
+          <View className="bg-airmess-red px-3 py-1.5 flex-row items-center justify-center">
+            <Ionicons name="flash" size={12} color="#ffffff" />
+            <Text className="text-white text-[10px] font-extrabold tracking-widest ml-1">
+              EXPRESS · PRIORITAIRE
             </Text>
           </View>
         )}
@@ -42,90 +54,96 @@ export default function OfferedCourseItem({ course }: { course: DriverCourseSumm
         <View className="p-4">
           {/* Ligne du haut : référence + distance */}
           <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-xs font-mono text-gray-400">{course.reference}</Text>
+            <Text className="text-[10px] font-mono text-warm-400">{course.reference}</Text>
             {typeof course.distance_km === 'number' && (
-              <View className="bg-green-50 px-2 py-1 rounded-full">
-                <Text className="text-xs text-green-700 font-bold">
-                  🛣️ {course.distance_km.toFixed(1)} km au total
+              <View className="bg-cream border border-warm-300 px-2 py-0.5 rounded-md flex-row items-center">
+                <Ionicons name="bicycle" size={11} color="#6B6250" />
+                <Text className="text-[11px] text-warm-600 font-bold ml-1">
+                  {course.distance_km.toFixed(1)} km
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Trajet — empilement vertical */}
-          <View>
-            <View className="flex-row items-center gap-2">
-              <Text className="text-base">🟢</Text>
-              <Text className="text-lg font-bold text-airmess-dark flex-1" numberOfLines={1}>
+          {/* Trajet — pins + connecteur */}
+          <View className="mb-3">
+            <View className="flex-row items-center">
+              <View className="w-2.5 h-2.5 rounded-full bg-success mr-2.5" />
+              <Text className="text-base font-extrabold text-ink flex-1" numberOfLines={1}>
                 {course.origin_quartier}
               </Text>
             </View>
-            <View className="ml-2 my-1">
-              <Text className="text-gray-300 text-sm leading-none">│</Text>
-              <Text className="text-gray-300 text-sm leading-none">│</Text>
+            <View className="ml-[5px] my-0.5">
+              <View className="w-0.5 h-3 bg-warm-300" />
             </View>
-            <View className="flex-row items-center gap-2">
-              <Text className="text-base">🔴</Text>
-              <Text className="text-lg font-bold text-airmess-dark flex-1" numberOfLines={1}>
+            <View className="flex-row items-center">
+              <View className="w-2.5 h-2.5 rounded-full bg-airmess-red mr-2.5" />
+              <Text className="text-base font-extrabold text-ink flex-1" numberOfLines={1}>
                 {course.destination_quartier}
               </Text>
             </View>
           </View>
 
           {/* Description du colis */}
-          <Text className="text-sm text-gray-500 mt-3" numberOfLines={1}>
-            📦 {course.package_description}
-          </Text>
+          <View className="flex-row items-center">
+            <Ionicons name="cube-outline" size={12} color="#8A7E68" />
+            <Text className="text-xs text-warm-500 ml-1.5 flex-1" numberOfLines={1}>
+              {course.package_description}
+            </Text>
+          </View>
 
-          {/* Footer : gains */}
-          <View className="flex-row justify-between items-end mt-3 pt-3 border-t border-gray-100">
+          {/* Gains + à encaisser */}
+          <View className="flex-row justify-between items-end mt-3 pt-3 border-t border-warm-200">
             <View>
-              <Text className="text-xs text-gray-500">Gain</Text>
-              <Text className="text-xl font-bold text-airmess-dark">
+              <Text className="text-[10px] text-warm-500 uppercase tracking-widest font-bold">Gain</Text>
+              <Text className="text-xl font-extrabold text-ink mt-0.5">
                 {course.driver_earnings.toLocaleString('fr-FR')}
-                <Text className="text-xs font-normal text-gray-500"> FCFA</Text>
+                <Text className="text-xs font-medium text-warm-500"> FCFA</Text>
               </Text>
             </View>
             {course.has_collection && (
-              <View className="items-end">
-                <Text className="text-xs text-gray-500">À encaisser</Text>
-                <Text className="text-sm font-bold text-airmess-dark">
+              <View className="items-end bg-airmess-yellow/20 px-3 py-1.5 rounded-lg">
+                <Text className="text-[10px] text-ink uppercase font-extrabold tracking-widest">
+                  À encaisser
+                </Text>
+                <Text className="text-sm font-extrabold text-ink mt-0.5">
                   {course.collection_amount?.toLocaleString('fr-FR')} FCFA
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Boutons d'action : Refuser + Accepter */}
-          <View className="flex-row gap-2 mt-3">
-            <Pressable
-              onPress={() => setDeclineOpen(true)}
-              disabled={mutation.isPending}
-              className="flex-1 rounded-lg py-3 items-center border border-gray-300 bg-white"
-              style={{ opacity: mutation.isPending ? 0.5 : 1 }}
-            >
-              <Text className="text-gray-700 font-semibold">✕ Refuser</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => mutation.mutate()}
-              disabled={mutation.isPending}
-              className={`flex-[2] rounded-lg py-3 items-center ${
-                isExpress ? 'bg-orange-500' : 'bg-airmess-yellow'
-              }`}
-              style={{ opacity: mutation.isPending ? 0.5 : 1 }}
-            >
-              <Text
-                className={`font-bold ${
-                  isExpress ? 'text-white' : 'text-airmess-dark'
-                }`}
+          {/* Actions Refuser (1/3) + Accepter (2/3) */}
+          <View className="flex-row gap-2 mt-4">
+            <View className="flex-1">
+              <Button
+                variant="outline"
+                size="md"
+                onPress={() => setDeclineOpen(true)}
+                disabled={mutation.isPending}
+                fullWidth
               >
-                {mutation.isPending
-                  ? 'Acceptation...'
-                  : isExpress
-                  ? '⚡ Accepter'
-                  : '✓ Accepter'}
-              </Text>
-            </Pressable>
+                Refuser
+              </Button>
+            </View>
+            <View className="flex-[2]">
+              <Button
+                variant={isExpress ? 'danger' : 'primary'}
+                size="md"
+                onPress={() => mutation.mutate()}
+                loading={mutation.isPending}
+                fullWidth
+                leftIcon={
+                  isExpress ? (
+                    <Ionicons name="flash" size={16} color="#ffffff" />
+                  ) : (
+                    <Ionicons name="checkmark" size={16} color="#1A1614" />
+                  )
+                }
+              >
+                Accepter
+              </Button>
+            </View>
           </View>
         </View>
       </Pressable>
@@ -134,6 +152,7 @@ export default function OfferedCourseItem({ course }: { course: DriverCourseSumm
         course={course}
         visible={detailOpen}
         onClose={() => setDetailOpen(false)}
+        onDecline={() => setDeclineOpen(true)}
       />
 
       <DeclineCourseModal

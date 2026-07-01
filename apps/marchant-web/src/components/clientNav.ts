@@ -8,6 +8,7 @@ import {
   BellIcon,
   UserIcon,
   BankIcon,
+  CodeIcon,
 } from './ui/icons'
 import type { QuickNavItem } from './ui/QuickNav'
 
@@ -32,6 +33,7 @@ export function useClientNav(): { items: QuickNavItem[] } {
     { to: '/courses', label: 'Mes courses', Icon: PackageIcon },
     { to: '/addresses', label: "Carnet d'adresses", Icon: UsersIcon },
     { to: '/wallet', label: 'Wallet', Icon: BankIcon },
+    { to: '/dev', label: 'Mode dev', Icon: CodeIcon },
     { to: '/notifications', label: 'Notifications', Icon: BellIcon, badge: unread },
     { to: '/profile', label: 'Mon profil', Icon: UserIcon },
   ]

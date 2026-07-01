@@ -22,9 +22,11 @@ import DriverRegisterSuccessPage from './pages/DriverRegisterSuccessPage'
 import AdminDriversPage from './pages/admin/AdminDriversPage'
 import AdminDriverDetailPage from './pages/admin/AdminDriverDetailPage'
 import AdminIncidentsPage from './pages/admin/AdminIncidentsPage'
+import AdminApiApplicationsPage from './pages/admin/AdminApiApplicationsPage'
 import AdminNotificationsPage from './pages/admin/AdminNotificationsPage'
 import BillingReturnPage from './pages/BillingReturnPage'
 import MyWalletPage from './pages/MyWalletPage'
+import DevPage from './pages/DevPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
 import AdminWithdrawRequestsPage from './pages/admin/AdminWithdrawRequestsPage'
 import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDetailPage'
@@ -67,6 +69,7 @@ function App() {
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/wallet" element={<MyWalletPage />} />
+            <Route path="/dev" element={<DevPage />} />
           </Route>
 
           {/* Détail d'une course : le marchand/particulier (la sienne) ET l'admin (supervision).
@@ -104,6 +107,7 @@ function App() {
             <Route path="/admin/drivers" element={<AdminDriversPage />} />
             <Route path="/admin/drivers/:id" element={<AdminDriverDetailPage />} />
             <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
+            <Route path="/admin/api-apps" element={<AdminApiApplicationsPage />} />
           </Route>
 
 

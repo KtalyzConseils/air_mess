@@ -13,6 +13,7 @@ class Payment extends Model
     public const TYPE_COD            = 'cod';
     public const TYPE_WALLET_DEPOSIT      = 'wallet_deposit';      // top-up caution driver
     public const TYPE_USER_WALLET_DEPOSIT = 'user_wallet_deposit'; // top-up wallet marchand/particulier
+    public const TYPE_API_APP_ACTIVATION  = 'api_app_activation';  // activation/renouvellement plan API dev
 
     // Cycle de vie
     public const STATUS_PENDING    = 'pending';

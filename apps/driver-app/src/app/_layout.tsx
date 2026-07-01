@@ -1,18 +1,25 @@
 import '../global.css'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ActivityIndicator, View } from 'react-native'
 import { useAuthStore } from '../stores/authStore'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
+import BrandSplash from '../components/BrandSplash'
 
 const queryClient = new QueryClient()
+
+/**
+ * Durée minimum d'affichage du BrandSplash — assure que la marque a le temps
+ * d'être vue même si l'hydratation du store est instantanée (cas fréquent).
+ */
+const MIN_SPLASH_MS = 1200
 
 export default function RootLayout() {
   const { user, hydrated, hydrate } = useAuthStore()
   const router = useRouter()
   const segments = useSegments()
+  const [minElapsed, setMinElapsed] = useState(false)
 
   // Setup du handler (lazy : noop en Expo Go)
   useEffect(() => { initNotifications() }, [])
@@ -36,6 +43,12 @@ export default function RootLayout() {
 
   useEffect(() => { hydrate() }, [hydrate])
 
+  // Timer pour la durée minimum du BrandSplash
+  useEffect(() => {
+    const t = setTimeout(() => setMinElapsed(true), MIN_SPLASH_MS)
+    return () => clearTimeout(t)
+  }, [])
+
   useEffect(() => {
     if (!hydrated) return
     const inLogin = segments[0] === 'login'
@@ -46,12 +59,9 @@ export default function RootLayout() {
     }
   }, [hydrated, user, segments, router])
 
-  if (!hydrated) {
-    return (
-      <View className="flex-1 items-center justify-center bg-airmess-dark">
-        <ActivityIndicator color="#FFC300" size="large" />
-      </View>
-    )
+  // Splash React tant que : store pas hydraté OU durée minimum pas écoulée
+  if (!hydrated || !minElapsed) {
+    return <BrandSplash />
   }
 
   return (

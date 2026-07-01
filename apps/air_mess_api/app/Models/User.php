@@ -78,6 +78,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Apps dev créées par ce user (mode développeur API).
+     * Un marchand OU un particulier peut en avoir.
+     */
+    public function apiApplications()
+    {
+        return $this->hasMany(ApiApplication::class);
+    }
+
+    /**
      * Wallet payeur (marchand + particulier). Créé à l'inscription, 1 par user.
      * Les drivers ont leur propre wallet (DriverWallet) — pas celui-ci.
      */

@@ -14,3 +14,10 @@ Schedule::command('subscription:check')
     ->timezone('Africa/Porto-Novo')
     ->onOneServer()       // au cas où on aurait plusieurs serveurs un jour
     ->withoutOverlapping(); // si la commande tourne déjà, ne pas la relancer
+
+// Suspend les apps dev dont le plan est expiré (payant impayé).
+Schedule::command('api-apps:expire')
+    ->dailyAt('03:00')
+    ->timezone('Africa/Porto-Novo')
+    ->onOneServer()
+    ->withoutOverlapping();

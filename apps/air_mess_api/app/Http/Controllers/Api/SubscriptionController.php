@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ApiApplication;
 use App\Models\Marchant;
 use App\Models\Payment;
 use App\Models\SubscriptionPlan;
@@ -209,6 +210,37 @@ class SubscriptionController extends Controller
                             'user_id'    => $user->id,
                             'user_type'  => $user->type,
                         ]);
+                    }
+                }
+                 elseif ($payment->type === Payment::TYPE_API_APP_ACTIVATION) {
+                    // Activation / renouvellement d'un plan API dev.
+                    $appId  = $payment->metadata['api_application_id'] ?? null;
+                    $planId = $payment->metadata['plan_id'] ?? null;
+                    if ($appId && $planId) {
+                        $app = ApiApplication::find($appId);
+                        $plan = SubscriptionPlan::find($planId);
+                        if ($app && $plan && $plan->is_api_plan) {
+                            // Prolonge de 30 jours à partir de max(paid_until, now)
+                            // pour ne pas perdre les jours restants si renouvellement anticipé.
+                            $base = $app->paid_until && $app->paid_until->isFuture()
+                                ? $app->paid_until
+                                : now();
+
+                            $app->update([
+                                'subscription_plan_id' => $plan->id,
+                                'paid_until'           => $base->copy()->addDays(30),
+                                'status'               => ApiApplication::STATUS_ACTIVE,
+                            ]);
+
+                            $notifier->sendToUser(
+                                $user->id,
+                                'api_app.activated',
+                                '⚡ Plan API activé',
+                                "Ton plan {$plan->name} est actif jusqu'au " . $app->fresh()->paid_until->translatedFormat('d F Y') . '.',
+                                ['api_application_id' => $app->id, 'payment_id' => $payment->id],
+                                null,
+                            );
+                        }
                     }
                 }
                  elseif ($payment->type === Payment::TYPE_USER_WALLET_DEPOSIT) {

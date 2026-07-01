@@ -1,13 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { View, Text, SectionList, RefreshControl, ActivityIndicator, Pressable } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useFocusEffect } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { fetchDriverHistory, type CourseHistoryItem } from '../../api/driver'
-
-const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  delivered: { label: '✅ Livrée',   color: 'text-green-700' },
-  failed:    { label: '❌ Échouée', color: 'text-red-700' },
-}
 
 type FilterKey = 'all' | 'delivered' | 'failed'
 
@@ -17,81 +14,72 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'failed',    label: 'Échouées' },
 ]
 
-function HistoryItem({ course }: { course: CourseHistoryItem }) {
-  const s = STATUS_LABEL[course.status] ?? { label: course.status, color: 'text-gray-700' }
-
-  return (
-    <View className="bg-white rounded-xl p-4 mb-3">
-      <View className="flex-row justify-between items-start">
-        <View className="flex-1">
-          <Text className="text-xs font-mono text-gray-400">{course.reference}</Text>
-          <Text className="text-base font-bold text-airmess-dark mt-1" numberOfLines={1}>
-            {course.origin_quartier} → {course.destination_quartier}
-          </Text>
-          <Text className="text-xs text-gray-500 mt-0.5">{course.destination_city}</Text>
-        </View>
-        <Text className={`text-xs font-semibold ${s.color}`}>{s.label}</Text>
-      </View>
-      <View className="flex-row justify-between items-center mt-3 pt-3 border-t border-gray-100">
-        <Text className="text-xs text-gray-500">
-          {new Date(course.delivered_at ?? course.created_at).toLocaleTimeString('fr-FR', {
-            hour: '2-digit', minute: '2-digit',
-          })}
-        </Text>
-        {course.status === 'delivered' ? (
-          <Text className="text-sm font-bold text-green-600">
-            +{course.driver_earnings.toLocaleString('fr-FR')} FCFA
-          </Text>
-        ) : (
-          <Text className="text-sm font-bold text-gray-400 line-through">0 FCFA</Text>
-        )}
-      </View>
-    </View>
-  )
+const STATUS_META: Record<
+  string,
+  {
+    label: string
+    icon: keyof typeof Ionicons.glyphMap
+    dotColor: string
+    textClass: string
+    bgClass: string
+  }
+> = {
+  delivered: {
+    label: 'Livrée',
+    icon: 'checkmark',
+    dotColor: '#16A34A',
+    textClass: 'text-success',
+    bgClass: 'bg-success-bg',
+  },
+  failed: {
+    label: 'Échouée',
+    icon: 'close',
+    dotColor: '#D40511',
+    textClass: 'text-airmess-red',
+    bgClass: 'bg-danger-bg',
+  },
 }
 
-// Renvoie le bucket de date d'un ISO : "Aujourd'hui", "Hier", "Cette semaine", "Plus ancien"
-function bucketOf(iso: string | null, nowMs: number): string {
-  if (!iso) return 'Plus ancien'
-  const date = new Date(iso)
-  const today = new Date(nowMs)
-  today.setHours(0, 0, 0, 0)
-  const yesterday = new Date(today.getTime() - 86_400_000)
-  const weekAgo = new Date(today.getTime() - 7 * 86_400_000)
-
-  if (date >= today)     return "Aujourd'hui"
-  if (date >= yesterday) return 'Hier'
-  if (date >= weekAgo)   return 'Cette semaine'
-  return 'Plus ancien'
-}
-
+/**
+ * Historique des courses clôturées.
+ *
+ *   Header sticky : titre + trio stats (Livrées / Échouées / Gains dark) + filter chips
+ *   SectionList : bucket "Aujourd'hui / Hier / Cette semaine / Plus ancien"
+ *   Item : reference + trajet timeline + status pill + gain ou 0 FCFA barré
+ */
 export default function HistoryScreen() {
   const [filter, setFilter] = useState<FilterKey>('all')
   const [nowMs] = useState(() => Date.now())
 
   const {
-    data, isLoading, isRefetching, refetch, error,
-    fetchNextPage, hasNextPage, isFetchingNextPage,
+    data,
+    isLoading,
+    isRefetching,
+    refetch,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   } = useInfiniteQuery({
     queryKey: ['driver-history'],
     queryFn: ({ pageParam = 1 }) => fetchDriverHistory(pageParam as number),
     initialPageParam: 1,
-    getNextPageParam: (last) => last.current_page < last.last_page ? last.current_page + 1 : undefined,
+    getNextPageParam: (last) =>
+      last.current_page < last.last_page ? last.current_page + 1 : undefined,
     refetchOnMount: 'always',
     staleTime: 0,
   })
 
-  // Refetch automatique chaque fois que la tab redevient active
   useFocusEffect(
     useCallback(() => {
       refetch()
-    }, [refetch])
+    }, [refetch]),
   )
 
-  // Items aplatis + filtre + déduplication défensive
   const allItems = useMemo(() => {
-    return (data?.pages.flatMap((p) => p?.data ?? []) ?? [])
-      .filter((c): c is CourseHistoryItem => c != null && c.id != null)
+    return (data?.pages.flatMap((p) => p?.data ?? []) ?? []).filter(
+      (c): c is CourseHistoryItem => c != null && c.id != null,
+    )
   }, [data])
 
   const filteredItems = useMemo(() => {
@@ -99,7 +87,6 @@ export default function HistoryScreen() {
     return allItems.filter((c) => c.status === filter)
   }, [allItems, filter])
 
-  // Stats résumées (sur les items reçus, pas tous les items du backend)
   const stats = useMemo(() => {
     const delivered = allItems.filter((c) => c.status === 'delivered')
     const failed = allItems.filter((c) => c.status === 'failed')
@@ -107,7 +94,6 @@ export default function HistoryScreen() {
     return { delivered: delivered.length, failed: failed.length, earnings }
   }, [allItems])
 
-  // Groupement par bucket pour SectionList
   const sections = useMemo(() => {
     const buckets: Record<string, CourseHistoryItem[]> = {}
     for (const c of filteredItems) {
@@ -115,7 +101,6 @@ export default function HistoryScreen() {
       if (!buckets[key]) buckets[key] = []
       buckets[key].push(c)
     }
-    // Ordre fixe et cohérent
     const order = ["Aujourd'hui", 'Hier', 'Cette semaine', 'Plus ancien']
     return order
       .filter((k) => buckets[k]?.length > 0)
@@ -123,30 +108,44 @@ export default function HistoryScreen() {
   }, [filteredItems, nowMs])
 
   return (
-    <View className="flex-1 bg-gray-100">
-      <View className="p-4 pt-12 bg-white border-b border-gray-100">
-        <Text className="text-2xl font-bold text-airmess-dark">Historique 🕓</Text>
+    <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
+      {/* Header — hors ScrollView pour rester en haut */}
+      <View className="bg-off-white border-b border-warm-200 px-5 pt-3 pb-4">
+        <Text className="text-3xl font-extrabold text-ink">Historique</Text>
+        <Text className="text-sm text-warm-500 mt-0.5">
+          Tes courses clôturées (livrées ou échouées).
+        </Text>
 
-        {/* Stats résumées */}
-        <View className="flex-row gap-2 mt-3">
-          <View className="flex-1 bg-green-50 rounded-lg p-2.5">
-            <Text className="text-xs text-gray-500 uppercase">Livrées</Text>
-            <Text className="text-lg font-bold text-green-700">{stats.delivered}</Text>
-          </View>
-          <View className="flex-1 bg-red-50 rounded-lg p-2.5">
-            <Text className="text-xs text-gray-500 uppercase">Échouées</Text>
-            <Text className="text-lg font-bold text-red-700">{stats.failed}</Text>
-          </View>
-          <View className="flex-[1.4] bg-airmess-dark rounded-lg p-2.5">
-            <Text className="text-xs text-airmess-yellow uppercase">Gains</Text>
-            <Text className="text-lg font-bold text-white">
-              {stats.earnings.toLocaleString('fr-FR')}
-              <Text className="text-xs text-gray-400 font-normal"> FCFA</Text>
-            </Text>
+        {/* Trio stats */}
+        <View className="flex-row gap-2 mt-4">
+          <StatCell
+            label="Livrées"
+            value={String(stats.delivered)}
+            icon="checkmark-circle-outline"
+            tone="success"
+          />
+          <StatCell
+            label="Échouées"
+            value={String(stats.failed)}
+            icon="close-circle-outline"
+            tone="danger"
+          />
+          {/* Gains : signature dark + stripe jaune */}
+          <View className="flex-[1.5] bg-airmess-dark rounded-2xl overflow-hidden flex-row">
+            <View className="w-1 bg-airmess-yellow" />
+            <View className="flex-1 px-3 py-2.5">
+              <Text className="text-[9px] uppercase text-airmess-yellow tracking-widest font-extrabold">
+                Gains
+              </Text>
+              <Text className="text-lg font-extrabold text-white mt-0.5" numberOfLines={1}>
+                {stats.earnings.toLocaleString('fr-FR')}
+                <Text className="text-[10px] font-bold text-warm-400"> FCFA</Text>
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Pills de filtre */}
+        {/* Chips filtre */}
         <View className="flex-row gap-2 mt-3">
           {FILTERS.map((f) => {
             const active = f.key === filter
@@ -154,11 +153,20 @@ export default function HistoryScreen() {
               <Pressable
                 key={f.key}
                 onPress={() => setFilter(f.key)}
-                className={`px-3 py-1.5 rounded-full border ${
-                  active ? 'bg-airmess-yellow border-airmess-yellow' : 'bg-white border-gray-300'
-                }`}
+                className={[
+                  'px-3.5 py-1.5 rounded-full border-2',
+                  active
+                    ? 'bg-ink border-ink'
+                    : 'bg-off-white border-warm-200',
+                ].join(' ')}
+                style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
               >
-                <Text className={`text-xs ${active ? 'font-bold text-airmess-dark' : 'text-gray-700'}`}>
+                <Text
+                  className={[
+                    'text-xs',
+                    active ? 'text-airmess-yellow font-extrabold' : 'text-ink font-semibold',
+                  ].join(' ')}
+                >
                   {f.label}
                 </Text>
               </Pressable>
@@ -168,20 +176,22 @@ export default function HistoryScreen() {
       </View>
 
       {isLoading ? (
-        <ActivityIndicator color="#FFC300" size="large" style={{ marginTop: 40 }} />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color="#1A1614" size="large" />
+        </View>
       ) : error ? (
-        <View className="bg-red-50 rounded-xl p-6 m-4 items-center">
-          <Text className="text-red-700 font-semibold text-center mb-2">
+        <View className="bg-danger-bg border-2 border-airmess-red/30 rounded-2xl p-6 m-5 items-center">
+          <View className="w-10 h-10 rounded-full bg-airmess-red items-center justify-center mb-3">
+            <Ionicons name="alert" size={18} color="#ffffff" />
+          </View>
+          <Text className="text-airmess-red font-extrabold text-center mb-1">
             Erreur de chargement
           </Text>
-          <Text className="text-red-600 text-xs text-center mb-3">
+          <Text className="text-airmess-red text-xs text-center mb-4">
             {error instanceof Error ? error.message : 'Réessaie dans un instant.'}
           </Text>
-          <Pressable
-            onPress={() => refetch()}
-            className="bg-airmess-dark rounded-lg px-4 py-2"
-          >
-            <Text className="text-white text-sm font-semibold">Réessayer</Text>
+          <Pressable onPress={() => refetch()} className="bg-ink rounded-2xl px-5 py-3">
+            <Text className="text-white text-sm font-bold">Réessayer</Text>
           </Pressable>
         </View>
       ) : (
@@ -190,31 +200,145 @@ export default function HistoryScreen() {
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => <HistoryItem course={item} />}
           renderSectionHeader={({ section: { title } }) => (
-            <Text className="text-xs uppercase font-bold text-gray-500 tracking-wider mt-4 mb-2 px-1">
-              {title}
-            </Text>
+            <View className="flex-row items-center mt-5 mb-2">
+              <View className="w-1 h-3 rounded-full bg-airmess-yellow mr-2" />
+              <Text className="text-[10px] uppercase font-extrabold text-warm-500 tracking-widest">
+                {title}
+              </Text>
+            </View>
           )}
           stickySectionHeadersEnabled={false}
-          contentContainerStyle={{ padding: 16, paddingTop: 8 }}
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 }}
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#1A1614" />
+          }
           onEndReached={() => hasNextPage && !isFetchingNextPage && fetchNextPage()}
           onEndReachedThreshold={0.5}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View className="bg-white rounded-xl p-6 items-center mt-4">
-              <Text className="text-gray-500 text-center">
+            <View className="bg-off-white border border-warm-200 rounded-2xl p-8 items-center mt-6">
+              <Ionicons name="file-tray-outline" size={32} color="#B8AF9F" />
+              <Text className="text-warm-500 text-sm mt-2 text-center">
                 {filter === 'all'
-                  ? 'Aucune course clôturée pour le moment.'
-                  : `Aucune course "${FILTERS.find((f) => f.key === filter)?.label.toLowerCase()}".`}
+                  ? "Aucune course clôturée pour l'instant."
+                  : `Aucune course ${FILTERS.find((f) => f.key === filter)?.label.toLowerCase()}.`}
               </Text>
             </View>
           }
           ListFooterComponent={
-            isFetchingNextPage
-              ? <ActivityIndicator color="#FFC300" style={{ marginVertical: 16 }} />
-              : null
+            isFetchingNextPage ? (
+              <ActivityIndicator color="#1A1614" style={{ marginVertical: 20 }} />
+            ) : null
           }
         />
       )}
+    </SafeAreaView>
+  )
+}
+
+function StatCell({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  label: string
+  value: string
+  icon: keyof typeof Ionicons.glyphMap
+  tone: 'success' | 'danger'
+}) {
+  const bg = tone === 'success' ? 'bg-success-bg' : 'bg-danger-bg'
+  const iconColor = tone === 'success' ? '#16A34A' : '#D40511'
+  const textColor = tone === 'success' ? 'text-success' : 'text-airmess-red'
+  return (
+    <View className={`flex-1 ${bg} rounded-2xl px-3 py-2.5`}>
+      <View className="flex-row items-center">
+        <Ionicons name={icon} size={12} color={iconColor} />
+        <Text
+          className={`text-[9px] uppercase ${textColor} tracking-widest font-extrabold ml-1`}
+        >
+          {label}
+        </Text>
+      </View>
+      <Text className={`text-lg font-extrabold ${textColor} mt-0.5`}>{value}</Text>
     </View>
   )
+}
+
+function HistoryItem({ course }: { course: CourseHistoryItem }) {
+  const meta = STATUS_META[course.status] ?? {
+    label: course.status,
+    icon: 'help-circle' as const,
+    dotColor: '#8A7E68',
+    textClass: 'text-warm-600',
+    bgClass: 'bg-warm-100',
+  }
+  const time = new Date(course.delivered_at ?? course.created_at).toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+  return (
+    <View className="bg-off-white border border-warm-200 rounded-2xl p-4 mb-2.5">
+      <View className="flex-row items-center justify-between mb-3">
+        <Text className="text-[10px] font-mono text-warm-400">{course.reference}</Text>
+        <View className={`flex-row items-center px-2 py-1 rounded-full ${meta.bgClass}`}>
+          <Ionicons name={meta.icon} size={10} color={meta.dotColor} />
+          <Text className={`text-[10px] font-extrabold ml-1 ${meta.textClass}`}>{meta.label}</Text>
+        </View>
+      </View>
+
+      {/* Trajet dots */}
+      <View>
+        <View className="flex-row items-center">
+          <View className="w-2 h-2 rounded-full bg-success mr-2.5" />
+          <Text className="text-sm font-extrabold text-ink flex-1" numberOfLines={1}>
+            {course.origin_quartier}
+          </Text>
+        </View>
+        <View className="ml-[3px] my-0.5">
+          <View className="w-0.5 h-2.5 bg-warm-300" />
+        </View>
+        <View className="flex-row items-center">
+          <View className="w-2 h-2 rounded-full bg-airmess-red mr-2.5" />
+          <Text className="text-sm font-extrabold text-ink flex-1" numberOfLines={1}>
+            {course.destination_quartier}
+            {course.destination_city ? (
+              <Text className="text-xs text-warm-500 font-medium"> · {course.destination_city}</Text>
+            ) : null}
+          </Text>
+        </View>
+      </View>
+
+      {/* Footer time + gain */}
+      <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-warm-200">
+        <View className="flex-row items-center">
+          <Ionicons name="time-outline" size={11} color="#8A7E68" />
+          <Text className="text-xs text-warm-500 font-semibold ml-1">{time}</Text>
+        </View>
+        {course.status === 'delivered' ? (
+          <Text className="text-sm font-extrabold text-success">
+            +{course.driver_earnings.toLocaleString('fr-FR')}
+            <Text className="text-[10px] font-bold text-success/80"> FCFA</Text>
+          </Text>
+        ) : (
+          <Text className="text-sm font-bold text-warm-400 line-through">0 FCFA</Text>
+        )}
+      </View>
+    </View>
+  )
+}
+
+function bucketOf(iso: string | null, nowMs: number): string {
+  if (!iso) return 'Plus ancien'
+  const date = new Date(iso)
+  const today = new Date(nowMs)
+  today.setHours(0, 0, 0, 0)
+  const yesterday = new Date(today.getTime() - 86_400_000)
+  const weekAgo = new Date(today.getTime() - 7 * 86_400_000)
+
+  if (date >= today) return "Aujourd'hui"
+  if (date >= yesterday) return 'Hier'
+  if (date >= weekAgo) return 'Cette semaine'
+  return 'Plus ancien'
 }

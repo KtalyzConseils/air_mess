@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreIntegrationCourseRequest;
+use App\Models\ApiApplication;
 use App\Models\Course;
 use App\Models\PackageCategory;
+use App\Models\User;
 use App\Models\UserWallet;
 use App\Services\CourseCreationService;
 use App\Services\GeocodingService;
@@ -35,12 +37,20 @@ class IntegrationCourseController extends Controller
         UserWalletService $walletService,
     ): JsonResponse {
         $data = $request->validated();
-        $marchant = $request->user();
+
+        // Résolution du "payeur" (user dont on débite le wallet) selon le type
+        // de token utilisé :
+        //   - ApiApplication (nouveau flow "mode dev") → payer = $app->user
+        //   - User marchand (ancienne clé Gbandjo)     → payer = $user
+        $authenticatable = $request->user();
+        $apiApp = $authenticatable instanceof ApiApplication ? $authenticatable : null;
+        /** @var User $payer */
+        $payer = $apiApp ? $apiApp->user : $authenticatable;
 
         // ===== Idempotence : même commande externe → on renvoie la course existante.
         $externalRef = $data['external_reference'] ?? null;
         if ($externalRef !== null) {
-            $existing = Course::where('sender_id', $marchant->id)
+            $existing = Course::where('sender_id', $payer->id)
                 ->where('external_reference', $externalRef)
                 ->first();
 
@@ -54,9 +64,10 @@ class IntegrationCourseController extends Controller
         ['delivery_fee' => $deliveryFee, 'driver_earnings' => $driverEarnings] = $creator->pricing($urgency);
 
         // ===== Paiement wallet : pré-check du solde disponible.
-        // Le marchand est toujours payeur. Solde insuffisant → 402 (recharger le wallet) :
-        // un appel serveur-à-serveur ne peut pas suivre un checkout Fedapay interactif.
-        $wallet = UserWallet::firstOrCreate(['user_id' => $marchant->id]);
+        // Le user propriétaire (de l'app dev ou de la clé marchand) est payeur.
+        // Solde insuffisant → 402 : un appel serveur-à-serveur ne peut pas
+        // suivre un checkout Fedapay interactif.
+        $wallet = UserWallet::firstOrCreate(['user_id' => $payer->id]);
         if (! $wallet->canReserve($deliveryFee)) {
             return response()->json([
                 'message'           => 'Solde wallet insuffisant. Rechargez votre wallet pour créer des courses via l\'API.',
@@ -118,23 +129,29 @@ class IntegrationCourseController extends Controller
             'collection_method' => $data['collection_method'] ?? null,
         ];
 
-        // Création de la course + hold wallet, atomiques : si la réservation
-        // échoue (race : wallet vidé entre le pré-check et le hold), tout est
-        // annulé et on renvoie 402 sans laisser de course fantôme.
+        // Création de la course + hold wallet + décompte de quota, atomiques :
+        // si la réservation échoue (race : wallet vidé entre le pré-check et le
+        // hold), tout est annulé et on renvoie 402 sans laisser de course
+        // fantôme ni consommer de requête.
         try {
-            $course = DB::transaction(function () use ($creator, $marchant, $attributes, $status, $urgency, $deliveryFee, $driverEarnings, $data, $externalRef, $walletService) {
-                $course = $creator->persist($marchant, $attributes, [
-                    'status'             => $status,
-                    'urgency'            => $urgency,
-                    'delivery_fee'       => $deliveryFee,
-                    'driver_earnings'    => $driverEarnings,
-                    'source'             => $data['source'] ?? 'integration',
-                    'external_reference' => $externalRef,
+            $course = DB::transaction(function () use ($creator, $payer, $apiApp, $attributes, $status, $urgency, $deliveryFee, $driverEarnings, $data, $externalRef, $walletService) {
+                $course = $creator->persist($payer, $attributes, [
+                    'status'              => $status,
+                    'urgency'             => $urgency,
+                    'delivery_fee'        => $deliveryFee,
+                    'driver_earnings'     => $driverEarnings,
+                    'source'              => $data['source'] ?? 'integration',
+                    'external_reference'  => $externalRef,
+                    'api_application_id'  => $apiApp?->id,
                 ]);
 
-                if (! $walletService->reserveForCourse($marchant, $course, $deliveryFee)) {
+                if (! $walletService->reserveForCourse($payer, $course, $deliveryFee)) {
                     throw new \DomainException('Wallet insuffisant à la réservation (race).');
                 }
+
+                // Décompte de quota UNIQUEMENT si l'appel provient d'une app dev.
+                // Les clés Gbandjo (ancien flow) ne sont pas soumises au quota.
+                $apiApp?->consumeRequest();
 
                 return $course;
             });

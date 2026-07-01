@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import { AxiosError } from 'axios'
@@ -20,14 +20,34 @@ import {
   requestWithdraw,
   cancelWithdrawRequest,
   type WalletTransactionItem,
+  type WalletTransactionType,
 } from '../../api/wallet'
+import BottomSheet from '../../components/ui/BottomSheet'
+import Button from '../../components/ui/Button'
 
-const TX_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string }> = {
-  deposit:      { label: 'Dépôt',         icon: 'arrow-down-circle', color: '#16a34a' },
-  earning:      { label: 'Gain de course', icon: 'trophy',           color: '#16a34a' },
-  withdraw:     { label: 'Retrait',       icon: 'arrow-up-circle',   color: '#dc2626' },
-  pickup_debit: { label: 'Encaissement',  icon: 'cube',              color: '#d97706' },
-  refund:       { label: 'Remboursement', icon: 'refresh',           color: '#2563eb' },
+/**
+ * Wallet driver — caution + gains + retraits.
+ *
+ * Hiérarchie visuelle :
+ *   1. Header "Ma caution" + baseline
+ *   2. Hero balance (dark card + yellow stripe signature)
+ *   3. Row 2 boutons Recharger / Retirer
+ *   4. Bandeau retrait en attente si présent (warning)
+ *   5. Info seuil min si en dessous
+ *   6. Liste dernières opérations
+ *
+ * Modals passent tous les deux par BottomSheet — cohérence multi-app.
+ */
+
+const TX_META: Record<
+  WalletTransactionType,
+  { label: string; icon: keyof typeof Ionicons.glyphMap; positive: boolean }
+> = {
+  deposit:      { label: 'Dépôt',          icon: 'arrow-down-outline', positive: true },
+  earning:      { label: 'Gain de course', icon: 'trophy-outline',     positive: true },
+  withdraw:     { label: 'Retrait',        icon: 'arrow-up-outline',   positive: false },
+  pickup_debit: { label: 'Encaissement',   icon: 'cube-outline',       positive: false },
+  refund:       { label: 'Remboursement',  icon: 'refresh-outline',    positive: true },
 }
 
 function fcfa(n: number): string {
@@ -36,7 +56,10 @@ function fcfa(n: number): string {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('fr-FR', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   })
 }
 
@@ -48,22 +71,23 @@ export default function WalletScreen() {
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['wallet'],
     queryFn: fetchWallet,
-    refetchInterval: 15_000, // auto-refresh toutes les 15s pour voir l'effet du webhook
+    refetchInterval: 15_000,
   })
 
   const cancelMutation = useMutation({
     mutationFn: cancelWithdrawRequest,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['wallet'] }),
     onError: (err) => {
-      const msg = err instanceof AxiosError
-        ? (err.response?.data as { message?: string })?.message ?? 'Erreur'
-        : 'Erreur'
+      const msg =
+        err instanceof AxiosError
+          ? (err.response?.data as { message?: string })?.message ?? 'Erreur'
+          : 'Erreur'
       Alert.alert('Annulation impossible', msg)
     },
   })
 
   function handleCancelPending(id: number) {
-    Alert.alert('Annuler la demande ?', 'Vous pourrez en refaire une plus tard.', [
+    Alert.alert('Annuler la demande ?', 'Tu pourras en refaire une plus tard.', [
       { text: 'Non', style: 'cancel' },
       { text: 'Oui, annuler', style: 'destructive', onPress: () => cancelMutation.mutate(id) },
     ])
@@ -71,138 +95,149 @@ export default function WalletScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator />
-      </View>
+      <SafeAreaView className="flex-1 bg-cream items-center justify-center">
+        <ActivityIndicator color="#1A1614" />
+      </SafeAreaView>
     )
   }
   if (!data) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50 p-6">
-        <Text className="text-gray-500">Erreur de chargement du wallet.</Text>
-      </View>
+      <SafeAreaView className="flex-1 bg-cream items-center justify-center p-6">
+        <Ionicons name="cloud-offline-outline" size={40} color="#8A7E68" />
+        <Text className="text-warm-500 mt-3 text-center">Erreur de chargement du wallet.</Text>
+      </SafeAreaView>
     )
   }
 
+  const canWithdraw = data.balance >= data.min_withdraw_fcfa && !data.pending_withdraw_request
+
   return (
-    <View className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingTop: 60 }}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
+        contentContainerStyle={{ padding: 20, paddingTop: 12, paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#1A1614" />
+        }
+        showsVerticalScrollIndicator={false}
       >
-        <Text className="text-2xl font-bold text-gray-900">Ma caution</Text>
-        <Text className="text-sm text-gray-500 mt-1">
-          Garantit les courses avec encaissement client.
+        {/* Header */}
+        <Text className="text-3xl font-extrabold text-ink">Ma caution</Text>
+        <Text className="text-sm text-warm-500 mt-1">
+          Garantit tes courses avec encaissement client.
         </Text>
 
-        {/* Carte balance */}
-        <View className="bg-airmess-dark mt-4 rounded-2xl p-5">
-          <Text className="text-gray-300 text-xs uppercase tracking-wider">Caution disponible</Text>
-          <Text className="text-white text-3xl font-bold mt-2">{fcfa(data.balance)}</Text>
-          <View className="flex-row justify-between mt-4 pt-3 border-t border-white/10">
-            <View>
-              <Text className="text-gray-400 text-xs">Cumul déposé</Text>
-              <Text className="text-white font-semibold">{fcfa(data.total_deposited)}</Text>
+        {/* Hero balance — dark card + stripe jaune signature */}
+        <View className="bg-airmess-dark mt-5 rounded-3xl overflow-hidden flex-row">
+          <View className="w-1.5 bg-airmess-yellow" />
+          <View className="flex-1 p-5">
+            <View className="flex-row items-center">
+              <Text className="text-[10px] uppercase text-airmess-yellow tracking-widest font-extrabold">
+                Caution disponible
+              </Text>
             </View>
-            <View>
-              <Text className="text-gray-400 text-xs">Cumul retiré</Text>
-              <Text className="text-white font-semibold">{fcfa(data.total_withdrawn)}</Text>
+            <Text className="text-white text-4xl font-extrabold mt-2">{fcfa(data.balance)}</Text>
+            <View className="flex-row mt-5 pt-4 border-t border-white/10">
+              <View className="flex-1">
+                <Text className="text-warm-400 text-[10px] uppercase tracking-widest font-bold">
+                  Cumul déposé
+                </Text>
+                <Text className="text-white font-bold mt-1">{fcfa(data.total_deposited)}</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-warm-400 text-[10px] uppercase tracking-widest font-bold">
+                  Cumul retiré
+                </Text>
+                <Text className="text-white font-bold mt-1">{fcfa(data.total_withdrawn)}</Text>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* Actions */}
+        {/* Actions Recharger / Retirer */}
         <View className="flex-row gap-3 mt-4">
-          <Pressable
-            onPress={() => setTopUpVisible(true)}
-            className="flex-1 bg-airmess-yellow rounded-xl py-3 items-center"
-          >
-            <Ionicons name="arrow-down-circle" size={22} color="#0F172A" />
-            <Text className="font-bold text-airmess-dark mt-1">Recharger</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setWithdrawVisible(true)}
-            disabled={data.balance < data.min_withdraw_fcfa || !!data.pending_withdraw_request}
-            className={`flex-1 rounded-xl py-3 items-center ${
-              data.balance < data.min_withdraw_fcfa || data.pending_withdraw_request
-                ? 'bg-gray-200'
-                : 'bg-white border-2 border-airmess-dark'
-            }`}
-          >
-            <Ionicons
-              name="arrow-up-circle"
-              size={22}
-              color={data.balance < data.min_withdraw_fcfa || data.pending_withdraw_request ? '#9CA3AF' : '#0F172A'}
-            />
-            <Text className={`font-bold mt-1 ${
-              data.balance < data.min_withdraw_fcfa || data.pending_withdraw_request ? 'text-gray-400' : 'text-airmess-dark'
-            }`}>
+          <View className="flex-1">
+            <Button
+              variant="primary"
+              size="lg"
+              onPress={() => setTopUpVisible(true)}
+              leftIcon={<Ionicons name="add-circle-outline" size={18} color="#1A1614" />}
+            >
+              Recharger
+            </Button>
+          </View>
+          <View className="flex-1">
+            <Button
+              variant="outline"
+              size="lg"
+              onPress={() => setWithdrawVisible(true)}
+              disabled={!canWithdraw}
+              leftIcon={<Ionicons name="arrow-up-outline" size={18} color="#1A1614" />}
+            >
               Retirer
-            </Text>
-          </Pressable>
+            </Button>
+          </View>
         </View>
 
-        {/* Demande de retrait en attente */}
+        {/* Retrait en attente */}
         {data.pending_withdraw_request && (
-          <View className="mt-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-4">
-            <View className="flex-row items-center justify-between">
+          <View className="mt-4 bg-warning-bg border-2 border-warning/40 rounded-2xl p-4">
+            <View className="flex-row items-start">
+              <View className="w-9 h-9 rounded-full bg-warning items-center justify-center mr-3">
+                <Ionicons name="hourglass-outline" size={16} color="#ffffff" />
+              </View>
               <View className="flex-1">
-                <Text className="font-bold text-amber-900">⏳ Retrait en attente</Text>
-                <Text className="text-sm text-amber-800 mt-1">
-                  {fcfa(data.pending_withdraw_request.amount_fcfa)} vers{' '}
-                  {data.pending_withdraw_request.target_method === 'momo' ? 'MoMo' : 'Banque'}
+                <Text className="text-[10px] uppercase text-warm-600 tracking-widest font-extrabold">
+                  Retrait en attente
                 </Text>
-                <Text className="text-xs text-amber-700 mt-0.5">
-                  Demandé le {formatDate(data.pending_withdraw_request.created_at)}
+                <Text className="text-lg font-extrabold text-ink mt-0.5">
+                  {fcfa(data.pending_withdraw_request.amount_fcfa)}
+                </Text>
+                <Text className="text-xs text-warm-600 mt-0.5">
+                  vers{' '}
+                  {data.pending_withdraw_request.target_method === 'momo' ? 'MoMo' : 'Banque'}
+                  {' · '}
+                  {formatDate(data.pending_withdraw_request.created_at)}
                 </Text>
               </View>
               <Pressable
                 onPress={() => handleCancelPending(data.pending_withdraw_request!.id)}
-                className="px-3 py-1.5 bg-amber-200 rounded-lg"
+                className="px-3 py-2 bg-off-white border border-warm-300 rounded-xl"
+                hitSlop={6}
               >
-                <Text className="text-xs font-bold text-amber-900">Annuler</Text>
+                <Text className="text-xs font-bold text-ink">Annuler</Text>
               </Pressable>
             </View>
           </View>
         )}
 
-        {/* Info caution insuffisante */}
+        {/* Info seuil min */}
         {data.balance < data.min_withdraw_fcfa && !data.pending_withdraw_request && (
-          <Text className="text-xs text-gray-500 mt-2 px-1">
-            ℹ️ Retrait possible à partir de {fcfa(data.min_withdraw_fcfa)} de caution.
-          </Text>
+          <View className="mt-3 flex-row items-center bg-info-bg border border-info/30 rounded-xl px-3 py-2.5">
+            <Ionicons name="information-circle" size={16} color="#0284C7" />
+            <Text className="text-xs text-info ml-2 flex-1 font-semibold">
+              Retrait possible dès {fcfa(data.min_withdraw_fcfa)} de caution.
+            </Text>
+          </View>
         )}
 
-        {/* Historique transactions */}
-        <Text className="text-lg font-bold text-gray-900 mt-6 mb-2">Dernières opérations</Text>
+        {/* Historique */}
+        <View className="mt-7 mb-2 flex-row items-center">
+          <Ionicons name="time-outline" size={14} color="#8A7E68" />
+          <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold ml-1.5">
+            Dernières opérations
+          </Text>
+        </View>
+
         {data.recent_transactions.length === 0 ? (
-          <View className="bg-white rounded-xl p-6 items-center">
-            <Text className="text-gray-400">Aucune opération.</Text>
+          <View className="bg-off-white border border-warm-200 rounded-2xl p-8 items-center">
+            <Ionicons name="receipt-outline" size={32} color="#B8AF9F" />
+            <Text className="text-warm-500 mt-2 text-sm">Aucune opération pour l'instant.</Text>
           </View>
         ) : (
-          <View className="bg-white rounded-xl overflow-hidden">
-            {data.recent_transactions.map((t: WalletTransactionItem, idx: number) => {
-              const meta = TX_META[t.type] ?? { label: t.type, icon: 'help-circle' as const, color: '#6B7280' }
-              const isPositive = t.amount_fcfa > 0
-              return (
-                <View
-                  key={t.id}
-                  className={`flex-row items-center px-4 py-3 ${idx > 0 ? 'border-t border-gray-100' : ''}`}
-                >
-                  <Ionicons name={meta.icon} size={26} color={meta.color} />
-                  <View className="flex-1 ml-3">
-                    <Text className="font-semibold text-gray-900">{meta.label}</Text>
-                    <Text className="text-xs text-gray-500">{formatDate(t.created_at)}</Text>
-                  </View>
-                  <View className="items-end">
-                    <Text className={`font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                      {isPositive ? '+' : ''}{fcfa(t.amount_fcfa)}
-                    </Text>
-                    <Text className="text-xs text-gray-400">après: {fcfa(t.balance_after)}</Text>
-                  </View>
-                </View>
-              )
-            })}
+          <View className="bg-off-white border border-warm-200 rounded-2xl overflow-hidden">
+            {data.recent_transactions.map((t: WalletTransactionItem, idx: number) => (
+              <TxRow key={t.id} tx={t} isFirst={idx === 0} />
+            ))}
           </View>
         )}
       </ScrollView>
@@ -219,39 +254,92 @@ export default function WalletScreen() {
         minAmount={data.min_withdraw_fcfa}
         maxAmount={data.balance}
       />
+    </SafeAreaView>
+  )
+}
+
+function TxRow({ tx, isFirst }: { tx: WalletTransactionItem; isFirst: boolean }) {
+  const meta = TX_META[tx.type] ?? {
+    label: tx.type,
+    icon: 'help-circle-outline' as const,
+    positive: false,
+  }
+  const isPositive = tx.amount_fcfa > 0
+  return (
+    <View
+      className={[
+        'flex-row items-center px-4 py-3.5',
+        isFirst ? '' : 'border-t border-warm-200',
+      ].join(' ')}
+    >
+      <View
+        className={[
+          'w-10 h-10 rounded-full items-center justify-center mr-3',
+          meta.positive ? 'bg-success-bg' : 'bg-warm-100',
+        ].join(' ')}
+      >
+        <Ionicons name={meta.icon} size={18} color={meta.positive ? '#16A34A' : '#6B6250'} />
+      </View>
+      <View className="flex-1">
+        <Text className="font-bold text-ink">{meta.label}</Text>
+        <Text className="text-xs text-warm-500 mt-0.5">{formatDate(tx.created_at)}</Text>
+      </View>
+      <View className="items-end">
+        <Text
+          className={[
+            'font-extrabold',
+            isPositive ? 'text-success' : 'text-airmess-red',
+          ].join(' ')}
+        >
+          {isPositive ? '+' : ''}
+          {fcfa(tx.amount_fcfa)}
+        </Text>
+        <Text className="text-[10px] text-warm-400 mt-0.5">Solde {fcfa(tx.balance_after)}</Text>
+      </View>
     </View>
   )
 }
 
-// ============== Modal top-up ==============
+// ============== Modal top-up (BottomSheet) ==============
 
-function TopUpModal({ visible, onClose, minAmount }: { visible: boolean; onClose: () => void; minAmount: number }) {
+function TopUpModal({
+  visible,
+  onClose,
+  minAmount,
+}: {
+  visible: boolean
+  onClose: () => void
+  minAmount: number
+}) {
   const [amount, setAmount] = useState('')
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
-    // Pas de callback_url passé : le backend utilise config('app.frontend_url')/billing/return
     mutationFn: (n: number) => requestTopUp(n),
     onSuccess: async (data) => {
-      onClose()
-      setAmount('')
-      // Ouvrir Fedapay dans le navigateur du téléphone
+      handleClose()
       const supported = await Linking.canOpenURL(data.checkout_url)
       if (supported) {
         Linking.openURL(data.checkout_url)
-        // Au retour de l'utilisateur, on rafraîchira via le poll auto (15s) ou pull-to-refresh
       } else {
-        Alert.alert('Erreur', 'Impossible d\'ouvrir la page de paiement.')
+        Alert.alert('Erreur', "Impossible d'ouvrir la page de paiement.")
       }
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
     },
     onError: (err) => {
-      const msg = err instanceof AxiosError
-        ? (err.response?.data as { message?: string })?.message ?? 'Erreur lors de la création du paiement.'
-        : 'Erreur inattendue.'
+      const msg =
+        err instanceof AxiosError
+          ? (err.response?.data as { message?: string })?.message ??
+            'Erreur lors de la création du paiement.'
+          : 'Erreur inattendue.'
       Alert.alert('Recharge impossible', msg)
     },
   })
+
+  function handleClose() {
+    setAmount('')
+    onClose()
+  }
 
   function handleSubmit() {
     const n = parseInt(amount, 10)
@@ -262,48 +350,66 @@ function TopUpModal({ visible, onClose, minAmount }: { visible: boolean; onClose
     mutation.mutate(n)
   }
 
+  const suggestions = [5000, 10000, 25000, 50000]
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 bg-black/50 justify-end">
-        <View className="bg-white rounded-t-3xl p-6 pb-10">
-          <Text className="text-xl font-bold text-gray-900">Recharger ma caution</Text>
-          <Text className="text-sm text-gray-500 mt-1">
-            Vous serez redirigé(e) vers Fedapay pour payer en MoMo / Moov.
-          </Text>
-
-          <Text className="text-sm font-medium text-gray-700 mt-4 mb-1">Montant (FCFA)</Text>
-          <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="number-pad"
-            placeholder={`Min ${minAmount}`}
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-          />
-
-          <View className="flex-row gap-3 mt-5">
-            <Pressable
-              onPress={onClose}
-              className="flex-1 py-3 rounded-xl border border-gray-300 items-center"
-            >
-              <Text className="font-semibold text-gray-700">Annuler</Text>
-            </Pressable>
-            <Pressable
+    <BottomSheet
+      visible={visible}
+      onClose={handleClose}
+      title="Recharger la caution"
+      subtitle="Paiement MoMo / Moov via Fedapay."
+      footer={
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Button variant="outline" size="md" onPress={handleClose} disabled={mutation.isPending}>
+              Annuler
+            </Button>
+          </View>
+          <View className="flex-[2]">
+            <Button
+              variant="primary"
+              size="md"
               onPress={handleSubmit}
-              disabled={mutation.isPending}
-              className="flex-1 py-3 rounded-xl bg-airmess-yellow items-center"
+              loading={mutation.isPending}
+              rightIcon={<Ionicons name="arrow-forward" size={16} color="#1A1614" />}
             >
-              <Text className="font-bold text-airmess-dark">
-                {mutation.isPending ? '...' : 'Continuer vers Fedapay'}
-              </Text>
-            </Pressable>
+              Continuer
+            </Button>
           </View>
         </View>
+      }
+    >
+      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mb-1.5">
+        Montant (FCFA)
+      </Text>
+      <TextInput
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="number-pad"
+        placeholder={`Min ${minAmount.toLocaleString('fr-FR')}`}
+        placeholderTextColor="#B8AF9F"
+        className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-2xl font-extrabold text-ink bg-off-white"
+      />
+
+      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mt-4 mb-2">
+        Suggestions
+      </Text>
+      <View className="flex-row flex-wrap gap-2 mb-2">
+        {suggestions.map((s) => (
+          <Pressable
+            key={s}
+            onPress={() => setAmount(String(s))}
+            className="px-4 py-2 rounded-full bg-off-white border border-warm-300"
+          >
+            <Text className="text-sm font-bold text-ink">{s.toLocaleString('fr-FR')}</Text>
+          </Pressable>
+        ))}
       </View>
-    </Modal>
+    </BottomSheet>
   )
 }
 
-// ============== Modal demande retrait ==============
+// ============== Modal demande retrait (BottomSheet) ==============
 
 function WithdrawModal({
   visible,
@@ -322,25 +428,31 @@ function WithdrawModal({
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
-    mutationFn: () => requestWithdraw({
-      amount: parseInt(amount, 10),
-      target_method: method,
-      target_account: account.trim(),
-    }),
+    mutationFn: () =>
+      requestWithdraw({
+        amount: parseInt(amount, 10),
+        target_method: method,
+        target_account: account.trim(),
+      }),
     onSuccess: () => {
-      onClose()
-      setAmount('')
-      setAccount('')
+      handleClose()
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
-      Alert.alert('Demande envoyée', 'Un administrateur va la traiter. Vous serez notifié(e).')
+      Alert.alert('Demande envoyée', 'Un administrateur va la traiter. Tu seras notifié.')
     },
     onError: (err) => {
-      const msg = err instanceof AxiosError
-        ? (err.response?.data as { message?: string })?.message ?? 'Erreur'
-        : 'Erreur inattendue.'
+      const msg =
+        err instanceof AxiosError
+          ? (err.response?.data as { message?: string })?.message ?? 'Erreur'
+          : 'Erreur inattendue.'
       Alert.alert('Demande impossible', msg)
     },
   })
+
+  function handleClose() {
+    setAmount('')
+    setAccount('')
+    onClose()
+  }
 
   function handleSubmit() {
     const n = parseInt(amount, 10)
@@ -349,79 +461,117 @@ function WithdrawModal({
       return
     }
     if (n > maxAmount) {
-      Alert.alert('Solde insuffisant', `Vous ne pouvez retirer que ${fcfa(maxAmount)} max.`)
+      Alert.alert('Solde insuffisant', `Tu ne peux retirer que ${fcfa(maxAmount)} max.`)
       return
     }
     if (account.trim().length < 5) {
-      Alert.alert('Compte invalide', 'Renseignez votre numéro MoMo ou IBAN.')
+      Alert.alert('Compte invalide', 'Renseigne ton numéro MoMo ou IBAN.')
       return
     }
     mutation.mutate()
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 bg-black/50 justify-end">
-        <View className="bg-white rounded-t-3xl p-6 pb-10">
-          <Text className="text-xl font-bold text-gray-900">Demander un retrait</Text>
-          <Text className="text-sm text-gray-500 mt-1">
-            Un admin validera votre demande sous peu. L'argent partira sur votre compte.
-          </Text>
-
-          <Text className="text-sm font-medium text-gray-700 mt-4 mb-1">Montant (FCFA)</Text>
-          <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="number-pad"
-            placeholder={`Entre ${minAmount} et ${maxAmount}`}
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-          />
-
-          <Text className="text-sm font-medium text-gray-700 mt-4 mb-1">Méthode</Text>
-          <View className="flex-row gap-2">
-            <Pressable
-              onPress={() => setMethod('momo')}
-              className={`flex-1 py-3 rounded-xl items-center border-2 ${method === 'momo' ? 'border-airmess-yellow bg-yellow-50' : 'border-gray-200'}`}
-            >
-              <Text className={method === 'momo' ? 'font-bold text-airmess-dark' : 'text-gray-600'}>📱 MoMo</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setMethod('bank')}
-              className={`flex-1 py-3 rounded-xl items-center border-2 ${method === 'bank' ? 'border-airmess-yellow bg-yellow-50' : 'border-gray-200'}`}
-            >
-              <Text className={method === 'bank' ? 'font-bold text-airmess-dark' : 'text-gray-600'}>🏦 Banque</Text>
-            </Pressable>
+    <BottomSheet
+      visible={visible}
+      onClose={handleClose}
+      title="Demander un retrait"
+      subtitle="Un admin validera dans les heures qui suivent."
+      footer={
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Button variant="outline" size="md" onPress={handleClose} disabled={mutation.isPending}>
+              Annuler
+            </Button>
           </View>
-
-          <Text className="text-sm font-medium text-gray-700 mt-4 mb-1">
-            {method === 'momo' ? 'Numéro MoMo' : 'IBAN / numéro de compte'}
-          </Text>
-          <TextInput
-            value={account}
-            onChangeText={setAccount}
-            placeholder={method === 'momo' ? '+229...' : 'BJ06...'}
-            className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-          />
-
-          <View className="flex-row gap-3 mt-5">
-            <Pressable
-              onPress={onClose}
-              className="flex-1 py-3 rounded-xl border border-gray-300 items-center"
-            >
-              <Text className="font-semibold text-gray-700">Annuler</Text>
-            </Pressable>
-            <Pressable
+          <View className="flex-[2]">
+            <Button
+              variant="dark"
+              size="md"
               onPress={handleSubmit}
-              disabled={mutation.isPending}
-              className="flex-1 py-3 rounded-xl bg-airmess-dark items-center"
+              loading={mutation.isPending}
+              rightIcon={<Ionicons name="paper-plane" size={14} color="#ffffff" />}
             >
-              <Text className="font-bold text-white">
-                {mutation.isPending ? '...' : 'Envoyer la demande'}
-              </Text>
-            </Pressable>
+              Envoyer la demande
+            </Button>
           </View>
         </View>
+      }
+    >
+      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mb-1.5">
+        Montant (FCFA)
+      </Text>
+      <TextInput
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="number-pad"
+        placeholder={`${minAmount.toLocaleString('fr-FR')} — ${maxAmount.toLocaleString('fr-FR')}`}
+        placeholderTextColor="#B8AF9F"
+        className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-2xl font-extrabold text-ink bg-off-white"
+      />
+
+      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mt-4 mb-2">
+        Méthode
+      </Text>
+      <View className="flex-row gap-2">
+        <MethodChip
+          active={method === 'momo'}
+          onPress={() => setMethod('momo')}
+          icon="phone-portrait-outline"
+          label="MoMo"
+        />
+        <MethodChip
+          active={method === 'bank'}
+          onPress={() => setMethod('bank')}
+          icon="business-outline"
+          label="Banque"
+        />
       </View>
-    </Modal>
+
+      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mt-4 mb-1.5">
+        {method === 'momo' ? 'Numéro MoMo' : 'IBAN / numéro'}
+      </Text>
+      <TextInput
+        value={account}
+        onChangeText={setAccount}
+        placeholder={method === 'momo' ? '+229 ...' : 'BJ06...'}
+        placeholderTextColor="#B8AF9F"
+        autoCapitalize="none"
+        className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white mb-2"
+      />
+    </BottomSheet>
+  )
+}
+
+function MethodChip({
+  active,
+  onPress,
+  icon,
+  label,
+}: {
+  active: boolean
+  onPress: () => void
+  icon: keyof typeof Ionicons.glyphMap
+  label: string
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className={[
+        'flex-1 flex-row items-center justify-center py-3.5 rounded-2xl border-2',
+        active ? 'bg-airmess-yellow/15 border-airmess-yellow' : 'bg-off-white border-warm-200',
+      ].join(' ')}
+      style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+    >
+      <Ionicons name={icon} size={16} color="#1A1614" />
+      <Text
+        className={[
+          'ml-2 text-base',
+          active ? 'font-extrabold text-ink' : 'font-semibold text-ink',
+        ].join(' ')}
+      >
+        {label}
+      </Text>
+    </Pressable>
   )
 }
