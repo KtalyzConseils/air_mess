@@ -28,9 +28,12 @@ class StoreIntegrationCourseRequest extends FormRequest
 
         $marchant = $user->marchant;
 
+        // L'accès API est réservé aux plans avec `api_access` (Starter/Pro/Business).
+        // On revérifie ici (pas seulement à la génération de clé) pour invalider une
+        // clé existante si le marchand rétrograde vers un plan sans API.
         return $marchant
             && $marchant->validated_at
-            && in_array($marchant->subscription_status, ['trial', 'active'], true);
+            && $marchant->hasApiAccess();
     }
 
     public function rules(): array

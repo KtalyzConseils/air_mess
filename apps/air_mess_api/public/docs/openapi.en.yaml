@@ -1,45 +1,45 @@
 openapi: 3.1.0
 info:
-  title: Air Mess — API d'intégration
+  title: Air Mess — Integration API
   version: "1.0.0"
   description: |
-    Créez des courses (livraisons) Air Mess automatiquement depuis votre propre
-    application (site e-commerce, ERP, backend…).
+    Create Air Mess deliveries ("courses") automatically from your own
+    application (e-commerce site, ERP, backend…).
 
-    **Cas d'usage** : une commande est passée sur votre boutique → vous appelez
-    Air Mess en serveur-à-serveur → une course est créée et proposée aux livreurs
-    autour de votre point de retrait.
+    **Use case**: an order is placed on your store → you call Air Mess
+    server-to-server → a delivery is created and offered to drivers around your
+    pickup point.
 
-    ## Authentification
-    Toutes les requêtes utilisent une **clé d'intégration** (jeton Bearer)
-    portant l'autorisation `integration:create-course`. La clé est générée
-    depuis votre compte marchand (plan incluant `api_access`). Elle est
-    **secrète** : ne l'exposez jamais côté navigateur.
+    ## Authentication
+    Every request uses an **integration key** (Bearer token) carrying the
+    `integration:create-course` ability. The key is generated from your merchant
+    account (plan including `api_access`). It is **secret**: never expose it in
+    the browser.
 
-    ## Facturation (wallet)
-    Chaque course créée via l'API est facturée au marchand via son **wallet**
-    Air Mess (le montant `delivery_fee` est réservé à la création, puis débité à
-    la livraison). Si le solde est insuffisant, l'appel renvoie `402` et la
-    course n'est pas créée : rechargez le wallet depuis votre tableau de bord.
+    ## Billing (wallet)
+    Each delivery created via the API is billed to the merchant through their
+    Air Mess **wallet** (the `delivery_fee` is reserved on creation, then charged
+    on delivery). If the balance is insufficient, the call returns `402` and the
+    delivery is not created: top up the wallet from your dashboard.
 
-    ## Idempotence
-    Renvoyez le même `external_reference` (votre n° de commande) pour éviter les
-    doublons : un second appel renvoie la course existante avec un statut `200`.
+    ## Idempotency
+    Send the same `external_reference` (your order number) to avoid duplicates:
+    a second call returns the existing delivery with a `200` status.
   contact:
-    name: Support Air Mess
+    name: Air Mess Support
     email: support@airmess-logistics.com
 
 servers:
   - url: https://api.airmess-logistics.com/api
     description: Production
   - url: http://127.0.0.1:8000/api
-    description: Local (développement)
+    description: Local (development)
 
 tags:
-  - name: Courses
-    description: Création de courses depuis un système externe.
-  - name: Clés
-    description: Gestion des clés d'intégration (depuis le compte marchand).
+  - name: Deliveries
+    description: Create deliveries from an external system.
+  - name: Keys
+    description: Manage integration keys (from the merchant account).
 
 security:
   - integrationKey: []
@@ -47,15 +47,15 @@ security:
 paths:
   /integration/courses:
     post:
-      tags: [Courses]
-      summary: Créer une course
+      tags: [Deliveries]
+      summary: Create a delivery
       description: |
-        Crée une course de livraison. **Idempotent** sur `external_reference`.
+        Creates a delivery. **Idempotent** on `external_reference`.
 
-        Le rapprochement livreurs se fait autour du point de **retrait**
-        (`origin`). Si `origin.lat`/`origin.lng` sont fournis, la course passe en
-        `awaiting_assignment` (proposée immédiatement). Sinon elle reste en
-        `awaiting_geo` jusqu'à géolocalisation du retrait.
+        Driver matching happens around the **pickup** point (`origin`). If
+        `origin.lat`/`origin.lng` are provided, the delivery moves to
+        `awaiting_assignment` (offered immediately). Otherwise it stays in
+        `awaiting_geo` until the pickup point is geolocated.
       operationId: createCourse
       requestBody:
         required: true
@@ -64,8 +64,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CourseRequest'
             examples:
-              avecGps:
-                summary: Avec coordonnées de retrait (dispatch immédiat)
+              withGps:
+                summary: With pickup coordinates (immediate dispatch)
                 value:
                   external_reference: "GB-ORD-10293"
                   source: "gbandjo"
@@ -80,76 +80,76 @@ paths:
                   destination:
                     name: "Koffi"
                     phone: "+22997000002"
-                    address: "Maison bleue, en face du marché"
+                    address: "Blue house, opposite the market"
                     quartier: "Calavi"
                     city: "Abomey-Calavi"
                   package:
-                    description: "Commande #10293"
+                    description: "Order #10293"
                     size: "M"
       responses:
         '201':
-          description: Course créée.
+          description: Delivery created.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CourseResponse' }
               example:
-                message: "Course créée. En attente d'attribution."
+                message: "Delivery created. Awaiting assignment."
                 reference: "AM-2026-00042"
                 status: "awaiting_assignment"
                 tracking_url: "https://api.airmess-logistics.com/t/EqVC0WhyTs"
                 delivery_fee: 1500
         '200':
-          description: Course déjà existante pour cet `external_reference` (idempotence).
+          description: Delivery already exists for this `external_reference` (idempotency).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CourseResponse' }
         '401':
-          description: Clé absente ou invalide.
+          description: Missing or invalid key.
         '403':
           description: |
-            Clé sans l'autorisation, compte marchand non validé, ou plan
-            n'incluant pas `api_access` (réservé à Starter, Pro et Business).
+            Key without the ability, merchant account not validated, or a plan
+            without `api_access` (reserved to Starter, Pro and Business).
         '402':
           description: |
-            Solde wallet insuffisant pour facturer la course. Le marchand doit
-            recharger son wallet (la course n'est pas créée).
+            Insufficient wallet balance to bill the delivery. The merchant must
+            top up their wallet (the delivery is not created).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InsufficientFundsError' }
         '422':
-          description: Validation échouée.
+          description: Validation failed.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
         '429':
-          description: Trop de requêtes (limite 60/min par clé).
+          description: Too many requests (limit 60/min per key).
 
   /integration/keys:
     get:
-      tags: [Clés]
-      summary: Lister ses clés d'intégration
-      description: Authentifié avec la **session marchand** (pas la clé). Ne renvoie pas la valeur des clés.
+      tags: [Keys]
+      summary: List your integration keys
+      description: Authenticated with the **merchant session** (not the key). Does not return the key values.
       operationId: listKeys
       responses:
-        '200': { description: Liste des clés. }
+        '200': { description: List of keys. }
     post:
-      tags: [Clés]
-      summary: Générer une clé d'intégration
-      description: Authentifié avec la **session marchand**. La valeur en clair n'est renvoyée qu'ici, une seule fois.
+      tags: [Keys]
+      summary: Generate an integration key
+      description: Authenticated with the **merchant session**. The plaintext value is returned here only once.
       operationId: createKey
       responses:
         '201':
-          description: Clé créée.
+          description: Key created.
           content:
             application/json:
               example:
-                message: "Clé d'intégration générée. Copiez-la maintenant : elle ne sera plus affichée."
+                message: "Integration key generated. Copy it now: it will not be shown again."
                 id: 146
                 key: "146|k71gsCLTNMkLGWPZQMbTTb9tqygexUAcupMN9yzxff902cc3"
   /integration/keys/{id}:
     delete:
-      tags: [Clés]
-      summary: Révoquer une clé
+      tags: [Keys]
+      summary: Revoke a key
       operationId: revokeKey
       parameters:
         - name: id
@@ -157,15 +157,15 @@ paths:
           required: true
           schema: { type: integer }
       responses:
-        '200': { description: Clé révoquée. }
-        '404': { description: Clé introuvable. }
+        '200': { description: Key revoked. }
+        '404': { description: Key not found. }
 
 components:
   securitySchemes:
     integrationKey:
       type: http
       scheme: bearer
-      description: Clé d'intégration (jeton Bearer, ability `integration:create-course`).
+      description: Integration key (Bearer token, ability `integration:create-course`).
 
   schemas:
     Origin:
@@ -176,7 +176,7 @@ components:
         phone: { type: string, maxLength: 20, example: "+22990000001" }
         street: { type: string, nullable: true }
         landmark: { type: string, nullable: true }
-        quartier: { type: string, maxLength: 100, example: "Gbegamey" }
+        quartier: { type: string, maxLength: 100, description: "Neighbourhood.", example: "Gbegamey" }
         city: { type: string, maxLength: 100, example: "Cotonou" }
         lat: { type: number, format: float, nullable: true, example: 6.37 }
         lng: { type: number, format: float, nullable: true, example: 2.41 }
@@ -187,10 +187,10 @@ components:
       required: [phone]
       properties:
         name: { type: string, nullable: true, example: "Koffi" }
-        phone: { type: string, maxLength: 20, description: "Numéro WhatsApp du client.", example: "+22997000002" }
-        address: { type: string, nullable: true, description: "Adresse texte libre." }
+        phone: { type: string, maxLength: 20, description: "Customer's WhatsApp number.", example: "+22997000002" }
+        address: { type: string, nullable: true, description: "Free-text address." }
         landmark: { type: string, nullable: true }
-        quartier: { type: string, nullable: true }
+        quartier: { type: string, nullable: true, description: "Neighbourhood." }
         city: { type: string, nullable: true }
         lat: { type: number, format: float, nullable: true }
         lng: { type: number, format: float, nullable: true }
@@ -199,7 +199,7 @@ components:
     Package:
       type: object
       properties:
-        category_id: { type: integer, nullable: true, description: "Défaut : catégorie « standard »." }
+        category_id: { type: integer, nullable: true, description: "Default: the standard category." }
         description: { type: string, nullable: true }
         size: { type: string, enum: [S, M, L, XL], default: M }
 
@@ -210,14 +210,14 @@ components:
         external_reference:
           type: string
           maxLength: 100
-          description: "Identifiant de la commande dans VOTRE système (idempotence)."
+          description: "The order identifier in YOUR system (idempotency)."
           example: "GB-ORD-10293"
         source: { type: string, maxLength: 30, example: "gbandjo" }
         urgency: { type: string, enum: [standard, express], default: standard }
         origin: { $ref: '#/components/schemas/Origin' }
         destination: { $ref: '#/components/schemas/Destination' }
         package: { $ref: '#/components/schemas/Package' }
-        collection_amount: { type: number, nullable: true, description: "Si présent, encaissement à la livraison activé." }
+        collection_amount: { type: number, nullable: true, description: "If present, cash-on-delivery is enabled." }
         collection_method: { type: string, enum: [cash, mobile_money, prepaid], nullable: true }
 
     CourseResponse:
@@ -235,10 +235,10 @@ components:
     InsufficientFundsError:
       type: object
       properties:
-        message: { type: string, example: "Solde wallet insuffisant. Rechargez votre wallet pour créer des courses via l'API." }
+        message: { type: string, example: "Insufficient wallet balance. Top up your wallet to create deliveries via the API." }
         insufficient_funds: { type: boolean, example: true }
-        available: { type: integer, description: "Solde disponible (FCFA).", example: 500 }
-        required: { type: integer, description: "Montant nécessaire (delivery_fee, FCFA).", example: 1500 }
+        available: { type: integer, description: "Available balance (FCFA).", example: 500 }
+        required: { type: integer, description: "Amount required (delivery_fee, FCFA).", example: 1500 }
 
     ValidationError:
       type: object

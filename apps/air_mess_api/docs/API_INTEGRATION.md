@@ -15,6 +15,9 @@ application (site e-commerce, ERP, backend…) via une API REST simple.
   la fonctionnalité **`api_access`** (plan **Business**).
 - Une **clé d'intégration** (voir §3). Les appels sont **serveur-à-serveur** :
   la clé est secrète et ne doit **jamais** être exposée côté navigateur.
+- Un **wallet AirMess approvisionné** : chaque course est facturée au marchand
+  (montant `delivery_fee` réservé à la création, débité à la livraison). Solde
+  insuffisant → `402`, course non créée.
 
 ## 2. URL de base
 
@@ -181,14 +184,14 @@ statut `200 OK` (au lieu de `201`). Vos *retries* réseau sont donc sans danger.
 | `200` | Course déjà existante (idempotence) | Aucun doublon créé. |
 | `401` | Clé absente / invalide | Vérifier l'en-tête `Authorization`. |
 | `403` | Clé sans l'autorisation, marchand non validé / abo inactif | Vérifier le plan (api_access) et la validation du compte. |
-| `402` | Quota mensuel de courses atteint | Passer à un plan supérieur / renouveler. |
+| `402` | Solde wallet insuffisant | Recharger le wallet du marchand (la course n'est pas créée). |
 | `422` | Validation échouée | Lire `errors` (détail par champ). |
 | `429` | Trop de requêtes (rate limit) | Respecter la limite (voir §8) et réessayer. |
 
-Exemple `402` (quota atteint) :
+Exemple `402` (solde insuffisant) :
 
 ```json
-{ "message": "Quota mensuel atteint.", "quota_reached": true, "used": 500, "limit": 500 }
+{ "message": "Solde wallet insuffisant. Rechargez votre wallet pour créer des courses via l'API.", "insufficient_funds": true, "available": 500, "required": 1500 }
 ```
 
 Exemple `422` (validation) :

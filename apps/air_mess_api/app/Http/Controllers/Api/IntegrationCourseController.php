@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreIntegrationCourseRequest;
 use App\Models\Course;
 use App\Models\PackageCategory;
+use App\Models\UserWallet;
 use App\Services\CourseCreationService;
 use App\Services\GeocodingService;
+use App\Services\UserWalletService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Création de course depuis un site externe (Gbandjo → Systige → AirMess).
@@ -17,6 +20,11 @@ use Illuminate\Http\JsonResponse;
  * serveur-à-serveur. L'origine est le vendeur ; la destination est le client,
  * parfois sans GPS. Idempotent sur (marchand, external_reference) pour
  * absorber les retries du site externe sans créer de doublon.
+ *
+ * Paiement : comme pour le canal applicatif, le marchand est payeur. La course
+ * est facturée via le wallet (modèle hold → débit à la livraison). Comme un
+ * appel serveur-à-serveur ne peut pas suivre un checkout Fedapay interactif,
+ * un solde insuffisant renvoie 402 (au marchand de recharger son wallet).
  */
 class IntegrationCourseController extends Controller
 {
@@ -24,6 +32,7 @@ class IntegrationCourseController extends Controller
         StoreIntegrationCourseRequest $request,
         CourseCreationService $creator,
         GeocodingService $geocoder,
+        UserWalletService $walletService,
     ): JsonResponse {
         $data = $request->validated();
         $marchant = $request->user();
@@ -40,19 +49,22 @@ class IntegrationCourseController extends Controller
             }
         }
 
-        // ===== Quota marchand.
-        if ($marchant->marchant->hasReachedMonthlyLimit()) {
-            return response()->json([
-                'message'       => 'Quota mensuel atteint.',
-                'quota_reached' => true,
-                'used'          => $marchant->marchant->monthly_courses_used,
-                'limit'         => $marchant->marchant->monthlyCoursesLimit(),
-            ], 402);
-        }
-
         // ===== Tarif.
         $urgency = $data['urgency'] ?? 'standard';
         ['delivery_fee' => $deliveryFee, 'driver_earnings' => $driverEarnings] = $creator->pricing($urgency);
+
+        // ===== Paiement wallet : pré-check du solde disponible.
+        // Le marchand est toujours payeur. Solde insuffisant → 402 (recharger le wallet) :
+        // un appel serveur-à-serveur ne peut pas suivre un checkout Fedapay interactif.
+        $wallet = UserWallet::firstOrCreate(['user_id' => $marchant->id]);
+        if (! $wallet->canReserve($deliveryFee)) {
+            return response()->json([
+                'message'           => 'Solde wallet insuffisant. Rechargez votre wallet pour créer des courses via l\'API.',
+                'insufficient_funds' => true,
+                'available'         => $wallet->available(),
+                'required'          => $deliveryFee,
+            ], 402);
+        }
 
         // ===== Coordonnées de retrait : fournies, sinon géocodage best-effort.
         $origin = $data['origin'];
@@ -106,14 +118,33 @@ class IntegrationCourseController extends Controller
             'collection_method' => $data['collection_method'] ?? null,
         ];
 
-        $course = $creator->persist($marchant, $attributes, [
-            'status'             => $status,
-            'urgency'            => $urgency,
-            'delivery_fee'       => $deliveryFee,
-            'driver_earnings'    => $driverEarnings,
-            'source'             => $data['source'] ?? 'integration',
-            'external_reference' => $externalRef,
-        ]);
+        // Création de la course + hold wallet, atomiques : si la réservation
+        // échoue (race : wallet vidé entre le pré-check et le hold), tout est
+        // annulé et on renvoie 402 sans laisser de course fantôme.
+        try {
+            $course = DB::transaction(function () use ($creator, $marchant, $attributes, $status, $urgency, $deliveryFee, $driverEarnings, $data, $externalRef, $walletService) {
+                $course = $creator->persist($marchant, $attributes, [
+                    'status'             => $status,
+                    'urgency'            => $urgency,
+                    'delivery_fee'       => $deliveryFee,
+                    'driver_earnings'    => $driverEarnings,
+                    'source'             => $data['source'] ?? 'integration',
+                    'external_reference' => $externalRef,
+                ]);
+
+                if (! $walletService->reserveForCourse($marchant, $course, $deliveryFee)) {
+                    throw new \DomainException('Wallet insuffisant à la réservation (race).');
+                }
+
+                return $course;
+            });
+        } catch (\DomainException $e) {
+            return response()->json([
+                'message'            => 'Solde wallet insuffisant. Rechargez votre wallet pour créer des courses via l\'API.',
+                'insufficient_funds' => true,
+                'required'           => $deliveryFee,
+            ], 402);
+        }
 
         // Push aux livreurs seulement si on a les coordonnées de retrait.
         if ($hasOrigin) {

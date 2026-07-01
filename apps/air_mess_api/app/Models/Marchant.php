@@ -60,6 +60,15 @@ class Marchant extends Model
         return $this->belongsTo(SubscriptionPlan::class, 'subscription_plan', 'code');
     }
 
+    /**
+     * Le plan du marchand inclut-il l'accès à l'API d'intégration ?
+     * (feature `api_access` — actuellement sur Starter/Pro/Business, pas Essai.)
+     */
+    public function hasApiAccess(): bool
+    {
+        return in_array('api_access', $this->plan?->features ?? [], true);
+    }
+
     // ===== Helpers quota =====
 
     /**

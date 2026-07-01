@@ -6,17 +6,15 @@ use App\Models\AppSetting;
 use App\Models\Course;
 use App\Models\Driver;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Logique de création + dispatch d'une course, partagée entre :
- *   - le endpoint applicatif (CourseController@store, formulaire web/app),
- *   - le endpoint d'intégration externe (IntegrationCourseController@store).
+ * Logique de création + dispatch d'une course pour le endpoint d'intégration
+ * externe (IntegrationCourseController@store).
  *
- * On centralise ici ce qui était dupliqué : calcul du tarif, génération des
- * identifiants (référence, token de tracking, codes), incrément du quota, et
- * push aux livreurs disponibles autour du point de retrait.
+ * Regroupe : calcul du tarif, génération des identifiants (référence, token de
+ * tracking, codes), et push aux livreurs disponibles autour du point de retrait.
+ * Le paiement (hold wallet) est orchestré par le contrôleur appelant.
  */
 class CourseCreationService
 {
@@ -43,7 +41,7 @@ class CourseCreationService
     }
 
     /**
-     * Persiste la course (+ identifiants + incrément quota) dans une transaction.
+     * Persiste la course + ses identifiants (référence, token, codes).
      *
      * @param array $attributes Champs métier déjà validés (origine, destination,
      *                          colis…). Les identifiants et le sender sont posés ici.
@@ -52,24 +50,15 @@ class CourseCreationService
      */
     public function persist(User $sender, array $attributes, array $overrides = []): Course
     {
-        return DB::transaction(function () use ($sender, $attributes, $overrides) {
-            $course = Course::create(array_merge($attributes, [
-                'sender_id'      => $sender->id,
-                'reference'      => $this->generateReference(),
-                'tracking_token' => Str::random(10),
-                'pickup_code'    => Course::generateCode(),
-                'delivery_code'  => Course::generateCode(),
-            ], $overrides));
-
-            // Le quota se compte à la création, quel que soit le canal.
-            if ($sender->isIndividual()) {
-                $sender->individual->increment('monthly_courses_used');
-            } elseif ($sender->isMarchant()) {
-                $sender->marchant->increment('monthly_courses_used');
-            }
-
-            return $course;
-        });
+        // Crée uniquement la course + ses identifiants. Le paiement (hold wallet)
+        // et le push livreurs sont orchestrés par l'appelant.
+        return Course::create(array_merge($attributes, [
+            'sender_id'      => $sender->id,
+            'reference'      => $this->generateReference(),
+            'tracking_token' => Str::random(10),
+            'pickup_code'    => Course::generateCode(),
+            'delivery_code'  => Course::generateCode(),
+        ], $overrides));
     }
 
     /**
