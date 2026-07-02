@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import AppHeader from '../components/AppHeader'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -8,27 +10,28 @@ import PageEyebrow from '../components/ui/PageEyebrow'
 import { cn } from '../lib/cn'
 import { fetchNotifications, markNotificationRead, type AppNotification } from '../api/notifications'
 
-const TYPE_META: Record<string, { icon: string; label: string }> = {
-  'course.accepted':         { icon: '✅', label: 'Course acceptée' },
-  'course.driver_to_pickup': { icon: '🚀', label: 'Livreur en route' },
-  'course.at_pickup':        { icon: '📍', label: 'Livreur au retrait' },
-  'course.picked_up':        { icon: '📦', label: 'Colis récupéré' },
-  'course.at_dropoff':       { icon: '🚦', label: 'Livreur arrive' },
-  'course.delivered':        { icon: '🎉', label: 'Livré' },
-  'course.failed':           { icon: '⚠️', label: 'Échec' },
-  'wallet.deposited':        { icon: '💰', label: 'Wallet crédité' },
-  'wallet.low':              { icon: '⚠️', label: 'Wallet bas' },
+const TYPE_META: Record<string, { icon: string; labelKey: string }> = {
+  'course.accepted':         { icon: '✅', labelKey: 'notifications.types.courseAccepted' },
+  'course.driver_to_pickup': { icon: '🚀', labelKey: 'notifications.types.courseDriverToPickup' },
+  'course.at_pickup':        { icon: '📍', labelKey: 'notifications.types.courseAtPickup' },
+  'course.picked_up':        { icon: '📦', labelKey: 'notifications.types.coursePickedUp' },
+  'course.at_dropoff':       { icon: '🚦', labelKey: 'notifications.types.courseAtDropoff' },
+  'course.delivered':        { icon: '🎉', labelKey: 'notifications.types.courseDelivered' },
+  'course.failed':           { icon: '⚠️', labelKey: 'notifications.types.courseFailed' },
+  'wallet.deposited':        { icon: '💰', labelKey: 'notifications.types.walletDeposited' },
+  'wallet.low':              { icon: '⚠️', labelKey: 'notifications.types.walletLow' },
 }
 
-function timeAgo(iso: string, nowMs: number): string {
+function timeAgo(iso: string, nowMs: number, t: TFunction): string {
   const diff = (nowMs - new Date(iso).getTime()) / 1000
-  if (diff < 60)    return "à l'instant"
-  if (diff < 3600)  return `il y a ${Math.floor(diff / 60)} min`
-  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`
+  if (diff < 60)    return t('notifications.justNow')
+  if (diff < 3600)  return t('notifications.minutesAgo', { count: Math.floor(diff / 60) })
+  if (diff < 86400) return t('notifications.hoursAgo', { count: Math.floor(diff / 3600) })
   return new Date(iso).toLocaleDateString('fr-FR')
 }
 
 export default function NotificationsPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [nowMs] = useState(() => Date.now())
@@ -59,40 +62,41 @@ export default function NotificationsPage() {
     <div className="min-h-screen bg-cream">
       <AppHeader />
       <main className="max-w-3xl mx-auto px-4 md:px-6 py-8 md:py-12">
-        <PageEyebrow label="Notifications" className="mb-4" />
+        <PageEyebrow label={t('notifications.eyebrow')} className="mb-4" />
         <div className="flex items-end justify-between gap-4 mb-10">
           <div>
             <h1 className="text-h1 md:text-display-2 text-ink leading-tight">
-              🔔 Centre de notifications
+              {t('notifications.center')}
             </h1>
             {unreadCount > 0 && (
               <p className="text-body-l text-warm-500 mt-3">
-                <strong className="text-ink tabular-nums">{unreadCount}</strong> notification{unreadCount > 1 ? 's' : ''} non lue{unreadCount > 1 ? 's' : ''}.
+                <strong className="text-ink tabular-nums">{unreadCount}</strong>{' '}
+                {unreadCount > 1 ? t('notifications.unreadSuffixOther') : t('notifications.unreadSuffixOne')}
               </p>
             )}
           </div>
           {unreadCount > 0 && (
             <Button variant="dark" size="md" pill onClick={handleMarkAllRead}>
-              Tout marquer lu
+              {t('notifications.markAllReadShort')}
             </Button>
           )}
         </div>
 
         {isLoading && (
-          <Card padding="lg" className="text-center text-warm-500">Chargement…</Card>
+          <Card padding="lg" className="text-center text-warm-500">{t('common.loading')}</Card>
         )}
 
         {error && (
           <Card padding="lg" className="text-center bg-danger-bg! border-airmess-red/20! text-airmess-red">
-            Erreur de chargement. Vérifie que l'API tourne.
+            {t('common.loadingError')}
           </Card>
         )}
 
         {!isLoading && !error && notifications.length === 0 && (
           <Card padding="lg" className="text-center">
-            <p className="text-h3 text-ink mb-2">📭 Aucune notification</p>
+            <p className="text-h3 text-ink mb-2">{t('notifications.emptyTitle')}</p>
             <p className="text-body-s text-warm-500">
-              Vous serez notifié à chaque étape de vos courses et mouvements de wallet.
+              {t('notifications.emptyBody')}
             </p>
           </Card>
         )}
@@ -100,7 +104,7 @@ export default function NotificationsPage() {
         {notifications.length > 0 && (
           <div className="space-y-2">
             {notifications.map((notif) => {
-              const meta = TYPE_META[notif.type] ?? { icon: '🔔', label: 'Notification' }
+              const meta = TYPE_META[notif.type] ?? { icon: '🔔', labelKey: 'notifications.defaultLabel' }
               const isUnread = notif.read_at === null
               const reference =
                 notif.data && typeof notif.data.reference === 'string' ? notif.data.reference : null
@@ -124,18 +128,18 @@ export default function NotificationsPage() {
                       {isUnread && (
                         <span
                           className="w-2 h-2 rounded-full bg-airmess-red shrink-0"
-                          aria-label="Non lue"
+                          aria-label={t('notifications.unreadAria')}
                         />
                       )}
                     </div>
                     <p className="text-body-s text-warm-600 mt-0.5">{notif.body}</p>
                     {reference && (
-                      <p className="text-caption font-mono text-warm-400 mt-1">Réf : {reference}</p>
+                      <p className="text-caption font-mono text-warm-400 mt-1">{t('notifications.reference')} {reference}</p>
                     )}
                   </div>
 
                   <div className="text-caption text-warm-500 shrink-0 whitespace-nowrap">
-                    {timeAgo(notif.created_at, nowMs)}
+                    {timeAgo(notif.created_at, nowMs, t)}
                   </div>
                 </button>
               )

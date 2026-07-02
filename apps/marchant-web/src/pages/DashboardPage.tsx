@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import Highlight from '../components/Highlight'
 import Card from '../components/ui/Card'
@@ -15,6 +16,7 @@ import { useAuthStore } from '../stores/authStore'
 const IN_PROGRESS_STATUSES = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff']
 
 export default function DashboardPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const [copiedId, setCopiedId] = useState<number | null>(null)
@@ -57,7 +59,7 @@ export default function DashboardPage() {
       setCopiedId(course.id)
       setTimeout(() => setCopiedId(null), 2000)
     } catch {
-      alert('Impossible de copier.')
+      alert(t('common.copyImpossible'))
     }
   }
 
@@ -75,10 +77,9 @@ export default function DashboardPage() {
           >
             <span className="text-h3 leading-none">⏳</span>
             <div>
-              <p className="font-bold text-warning text-body">Compte en attente de validation</p>
+              <p className="font-bold text-warning text-body">{t('dashboard.pendingTitle')}</p>
               <p className="text-body-s text-warm-600 mt-0.5">
-                Votre compte marchand est en cours de validation par un administrateur (sous 24h).
-                Vous serez notifié dès qu'il sera actif.
+                {t('dashboard.pendingBody')}
               </p>
             </div>
           </Card>
@@ -90,12 +91,12 @@ export default function DashboardPage() {
             ============================================================ */}
         <div className="grid gap-8 md:grid-cols-3 mb-12">
           <div className="md:col-span-2">
-            <PageEyebrow label="Tableau de bord" className="mb-4" />
+            <PageEyebrow label={t('dashboard.eyebrow')} className="mb-4" />
             <h1 className="text-h1 md:text-display-2 text-ink leading-tight">
-              Bonjour {greetingName}.
+              {t('dashboard.greeting')} {greetingName}.
             </h1>
             <p className="text-body-l text-warm-500 mt-3">
-              Voici vos <Highlight>courses</Highlight> du jour.
+              {t('dashboard.subtitleStart')} <Highlight>{t('dashboard.subtitleHighlight')}</Highlight> {t('dashboard.subtitleEnd')}
             </p>
           </div>
 
@@ -103,8 +104,8 @@ export default function DashboardPage() {
             {/* Wallet card */}
             <Card variant="elevated" padding="md">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-eyebrow text-warm-500 uppercase">💰 Wallet</span>
-                {wallet?.is_low && <Badge variant="warning" size="sm">Bas</Badge>}
+                <span className="text-eyebrow text-warm-500 uppercase">💰 {t('nav.wallet')}</span>
+                {wallet?.is_low && <Badge variant="warning" size="sm">{t('userMenu.walletLow')}</Badge>}
               </div>
               <p className="text-h2 text-ink tabular-nums mt-2">
                 {wallet ? wallet.balance.toLocaleString('fr-FR') : '—'}
@@ -112,26 +113,26 @@ export default function DashboardPage() {
               </p>
               <Link to="/wallet">
                 <Button variant="secondary" size="sm" fullWidth className="mt-3">
-                  + Recharger
+                  {t('dashboard.walletTopUp')}
                 </Button>
               </Link>
               <Link
                 to="/wallet"
                 className="block mt-2 text-center text-caption font-medium text-warm-600 hover:text-ink"
               >
-                Voir l'historique →
+                {t('common.seeHistory')}
               </Link>
             </Card>
 
             {/* CTA Nouvelle course */}
             {isPendingMarchant ? (
               <Button variant="primary" size="lg" pill fullWidth disabled>
-                + Nouvelle livraison
+                {t('dashboard.newDelivery')}
               </Button>
             ) : (
               <Link to="/courses/new" className="block">
                 <Button variant="primary" size="lg" pill fullWidth rightIcon={<span aria-hidden>→</span>}>
-                  ⚡ Créer une course
+                  {t('dashboard.createCourse')}
                 </Button>
               </Link>
             )}
@@ -142,14 +143,14 @@ export default function DashboardPage() {
             KPI GRID — 5 chiffres clés (incluant CA mensuel mis en avant)
             ============================================================ */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mb-12">
-          <KpiTile label="Aujourd'hui" value={totalToday} hint="courses créées" />
-          <KpiTile label="En cours" value={inProgressCourses.length} accent="brand" />
-          <KpiTile label="En attribution" value={awaitingCount} hint="livreur recherché" />
-          <KpiTile label="Livrées (mois)" value={deliveredMonth} />
+          <KpiTile label={t('dashboard.kpiToday')} value={totalToday} hint={t('dashboard.kpiTodayHint')} />
+          <KpiTile label={t('dashboard.kpiInProgress')} value={inProgressCourses.length} accent="brand" />
+          <KpiTile label={t('dashboard.kpiAwaiting')} value={awaitingCount} hint={t('dashboard.kpiAwaitingHint')} />
+          <KpiTile label={t('dashboard.kpiDeliveredMonth')} value={deliveredMonth} />
           <KpiTile
-            label="CA du mois"
+            label={t('dashboard.kpiRevenueMonth')}
             value={`${caMonth.toLocaleString('fr-FR')}`}
-            hint="FCFA encaissés"
+            hint={t('dashboard.kpiRevenueHint')}
           />
         </div>
 
@@ -158,30 +159,30 @@ export default function DashboardPage() {
             ============================================================ */}
         <div className="flex items-end justify-between mb-5 gap-4 border-b border-warm-200 pb-3">
           <h2 className="text-h2 text-ink font-bold">
-            Vos livraisons actives
+            {t('dashboard.activeDeliveries')}
           </h2>
           <Link to="/courses" className="text-body-s font-medium text-ink hover:text-airmess-red shrink-0">
-            Voir tout →
+            {t('common.seeAll')}
           </Link>
         </div>
 
         {isLoading && (
-          <Card padding="lg" className="text-center text-warm-500">Chargement…</Card>
+          <Card padding="lg" className="text-center text-warm-500">{t('common.loading')}</Card>
         )}
 
         {error && (
           <Card padding="lg" className="text-center bg-danger-bg! border-airmess-red/20! text-airmess-red">
-            Erreur de chargement. Vérifie que l'API tourne.
+            {t('common.loadingError')}
           </Card>
         )}
 
         {!isLoading && !error && inProgressCourses.length === 0 && (
           <Card padding="lg" className="text-center">
-            <p className="text-body text-warm-600 mb-3">Aucune course en cours.</p>
+            <p className="text-body text-warm-600 mb-3">{t('dashboard.noActive')}</p>
             {!isPendingMarchant && (
               <Link to="/courses/new">
                 <Button variant="primary" size="md" pill>
-                  Créer ma première course
+                  {t('dashboard.createFirst')}
                 </Button>
               </Link>
             )}
@@ -214,7 +215,7 @@ export default function DashboardPage() {
                 <div className="shrink-0 flex items-center gap-2">
                   <button
                     onClick={(e) => copyTrackingLink(c, e)}
-                    title="Copier le lien de suivi"
+                    title={t('dashboard.copyTracking')}
                     className="p-2 rounded-md text-warm-500 hover:text-ink hover:bg-warm-100"
                   >
                     {copiedId === c.id ? '✓' : '🔗'}

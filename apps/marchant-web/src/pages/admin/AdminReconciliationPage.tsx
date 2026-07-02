@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import { AdminButton } from '../../components/admin/AdminToolbar'
@@ -21,8 +22,8 @@ function todayIso(): string {
 function formatFcfa(n: number): string {
   return n.toLocaleString('fr-FR') + ' FCFA'
 }
-function formatDateTime(value: string | null): string {
-  if (!value) return 'Jamais'
+function formatDateTime(value: string | null, neverLabel: string): string {
+  if (!value) return neverLabel
   return new Date(value).toLocaleString('fr-FR', {
     day: '2-digit',
     month: '2-digit',
@@ -32,19 +33,20 @@ function formatDateTime(value: string | null): string {
   })
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  deposit: 'Recharges',
-  withdraw: 'Retraits',
-  pickup_debit: 'Débit caution (pickup)',
-  refund: 'Remboursements',
-  earning: 'Gains course',
-  adjustment_credit: 'Crédits admin',
-  adjustment_debit: 'Débits admin',
-  course_charge: 'Charges course (livraison)',
+const TYPE_I18N_KEY: Record<string, string> = {
+  deposit: 'admin.reconciliation.flowTypeDeposit',
+  withdraw: 'admin.reconciliation.flowTypeWithdraw',
+  pickup_debit: 'admin.reconciliation.flowTypePickupDebit',
+  refund: 'admin.reconciliation.flowTypeRefund',
+  earning: 'admin.reconciliation.flowTypeEarning',
+  adjustment_credit: 'admin.reconciliation.flowTypeAdjustmentCredit',
+  adjustment_debit: 'admin.reconciliation.flowTypeAdjustmentDebit',
+  course_charge: 'admin.reconciliation.flowTypeCourseCharge',
 }
 
 function FlowRow({ flow }: { flow: ReconciliationFlow }) {
-  const label = TYPE_LABEL[flow.type] ?? flow.type
+  const { t } = useTranslation()
+  const label = TYPE_I18N_KEY[flow.type] ? t(TYPE_I18N_KEY[flow.type]) : flow.type
   const positive = flow.total >= 0
   return (
     <li className="flex justify-between items-center py-1.5 text-body-s">
@@ -85,6 +87,7 @@ function Section({
 }
 
 export default function AdminReconciliationPage() {
+  const { t } = useTranslation()
   const [from, setFrom] = useState<string>(isoDateNDaysAgo(30))
   const [to, setTo] = useState<string>(todayIso())
   const [isDownloading, setIsDownloading] = useState(false)
@@ -99,7 +102,7 @@ export default function AdminReconciliationPage() {
     try {
       await downloadReconciliationCsv(from, to)
     } catch {
-      window.alert("Erreur lors de l'export CSV.")
+      window.alert(t('admin.reconciliation.exportError'))
     } finally {
       setIsDownloading(false)
     }
@@ -116,13 +119,13 @@ export default function AdminReconciliationPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Réconciliation comptable"
-        subtitle="Dashboard financier — argent en circulation, flux, marge plateforme, anomalies."
+        title={t('admin.reconciliation.title')}
+        subtitle={t('admin.reconciliation.subtitleFull')}
         toolbar={
           <div className="flex flex-wrap items-end gap-2 w-full">
             <div>
               <label className="block text-[10px] uppercase tracking-wider font-bold text-warm-600 mb-1">
-                Du
+                {t('admin.reconciliation.dateFrom')}
               </label>
               <input
                 type="date"
@@ -133,7 +136,7 @@ export default function AdminReconciliationPage() {
             </div>
             <div>
               <label className="block text-[10px] uppercase tracking-wider font-bold text-warm-600 mb-1">
-                Au
+                {t('admin.reconciliation.dateTo')}
               </label>
               <input
                 type="date"
@@ -150,7 +153,7 @@ export default function AdminReconciliationPage() {
                   size="sm"
                   onClick={() => setPreset(n)}
                 >
-                  {n} j
+                  {t('admin.reconciliation.presetDays', { n })}
                 </AdminButton>
               ))}
             </div>
@@ -159,7 +162,9 @@ export default function AdminReconciliationPage() {
               onClick={() => refetch()}
               disabled={isFetching}
             >
-              {isFetching ? 'Chargement…' : 'Actualiser'}
+              {isFetching
+                ? t('admin.reconciliation.loadingLabel')
+                : t('admin.reconciliation.refresh')}
             </AdminButton>
             <AdminButton
               variant="primary"
@@ -167,7 +172,9 @@ export default function AdminReconciliationPage() {
               disabled={isDownloading || isLoading}
               className="ml-auto"
             >
-              {isDownloading ? 'Export…' : 'Export CSV'}
+              {isDownloading
+                ? t('admin.reconciliation.exportingLabel')
+                : t('admin.reconciliation.exportCsv')}
             </AdminButton>
           </div>
         }
@@ -175,7 +182,9 @@ export default function AdminReconciliationPage() {
 
       <div className="px-4 md:px-6 lg:px-8 py-5 space-y-4">
         {isLoading && (
-          <p className="text-body-s text-warm-500 text-center py-10">Chargement…</p>
+          <p className="text-body-s text-warm-500 text-center py-10">
+            {t('admin.reconciliation.loadingLabel')}
+          </p>
         )}
 
         {data && (
@@ -184,55 +193,65 @@ export default function AdminReconciliationPage() {
             <section className="grid md:grid-cols-3 gap-3">
               <div className="bg-airmess-dark text-white rounded-lg px-5 py-4">
                 <p className="text-[10px] uppercase tracking-wider font-bold text-white/60 mb-1">
-                  Argent total en circulation
+                  {t('admin.reconciliation.snapshotTotalMoney')}
                 </p>
                 <p className="text-h1 font-bold tabular-nums leading-none">
                   {formatFcfa(data.snapshot.grand_total)}
                 </p>
-                <p className="text-caption text-white/60 mt-2">Snapshot temps réel</p>
+                <p className="text-caption text-white/60 mt-2">
+                  {t('admin.reconciliation.snapshotRealtime')}
+                </p>
               </div>
               <div className="bg-off-white border border-warm-200 rounded-lg px-5 py-4">
                 <p className="text-[10px] uppercase tracking-wider font-bold text-warm-600 mb-1">
-                  Wallets drivers
+                  {t('admin.reconciliation.driversWallets')}
                 </p>
                 <p className="text-h2 font-bold text-ink tabular-nums leading-none">
                   {formatFcfa(data.snapshot.drivers.total_balance)}
                 </p>
                 <p className="text-caption text-warm-500 mt-2">
-                  {data.snapshot.drivers.wallets_count} wallets
+                  {t('admin.reconciliation.walletsCount', {
+                    count: data.snapshot.drivers.wallets_count,
+                  })}
                 </p>
               </div>
               <div className="bg-off-white border border-warm-200 rounded-lg px-5 py-4">
                 <p className="text-[10px] uppercase tracking-wider font-bold text-warm-600 mb-1">
-                  Wallets marchands/particuliers
+                  {t('admin.reconciliation.merchantIndividualWallets')}
                 </p>
                 <p className="text-h2 font-bold text-ink tabular-nums leading-none">
                   {formatFcfa(data.snapshot.users.total_balance)}
                 </p>
                 <p className="text-caption text-warm-500 mt-2">
-                  {data.snapshot.users.wallets_count} wallets ·{' '}
-                  {formatFcfa(data.snapshot.users.total_reserved)} réservés
+                  {t('admin.reconciliation.walletsCount', {
+                    count: data.snapshot.users.wallets_count,
+                  })}{' '}
+                  · {formatFcfa(data.snapshot.users.total_reserved)}{' '}
+                  {t('admin.reconciliation.walletsReservedSuffix')}
                 </p>
               </div>
             </section>
 
             {/* Marge brute */}
-            <Section title="Marge brute plateforme (période)">
+            <Section title={t('admin.reconciliation.marginTitle')}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <MarginTile label="Courses livrées" value={data.margin.delivered_courses} />
                 <MarginTile
-                  label="Revenu brut"
+                  label={t('admin.reconciliation.deliveredCourses')}
+                  value={data.margin.delivered_courses}
+                />
+                <MarginTile
+                  label={t('admin.reconciliation.grossRevenue')}
                   value={formatFcfa(data.margin.gross_revenue)}
                   compact
                 />
                 <MarginTile
-                  label="Part driver"
+                  label={t('admin.reconciliation.driverShare')}
                   value={`−${formatFcfa(data.margin.driver_commission)}`}
                   tone="warning"
                   compact
                 />
                 <MarginTile
-                  label="Marge plateforme"
+                  label={t('admin.reconciliation.platformMargin')}
                   value={formatFcfa(data.margin.platform_margin)}
                   tone="brand"
                   compact
@@ -242,10 +261,10 @@ export default function AdminReconciliationPage() {
 
             {/* Flux */}
             <section className="grid md:grid-cols-2 gap-4">
-              <Section title="Flux wallets drivers">
+              <Section title={t('admin.reconciliation.flowsDriversTitle')}>
                 {Object.values(data.flows.driver).length === 0 ? (
                   <p className="text-body-s text-warm-500 italic">
-                    Aucun mouvement sur la période.
+                    {t('admin.reconciliation.noMovementInPeriod')}
                   </p>
                 ) : (
                   <ul className="divide-y divide-warm-200">
@@ -256,7 +275,9 @@ export default function AdminReconciliationPage() {
                 )}
                 {data.flows.withdraws_paid.count > 0 && (
                   <div className="mt-3 pt-3 border-t border-warm-200 flex justify-between text-body-s">
-                    <span className="text-warm-700">Virements MoMo/banque versés</span>
+                    <span className="text-warm-700">
+                      {t('admin.reconciliation.withdrawsPaid')}
+                    </span>
                     <span className="font-bold text-airmess-red tabular-nums">
                       −{data.flows.withdraws_paid.total.toLocaleString('fr-FR')} (
                       {data.flows.withdraws_paid.count})
@@ -264,10 +285,10 @@ export default function AdminReconciliationPage() {
                   </div>
                 )}
               </Section>
-              <Section title="Flux wallets marchands/particuliers">
+              <Section title={t('admin.reconciliation.flowsUsersTitle')}>
                 {Object.values(data.flows.user).length === 0 ? (
                   <p className="text-body-s text-warm-500 italic">
-                    Aucun mouvement sur la période.
+                    {t('admin.reconciliation.noMovementInPeriod')}
                   </p>
                 ) : (
                   <ul className="divide-y divide-warm-200">
@@ -281,11 +302,11 @@ export default function AdminReconciliationPage() {
 
             {/* Anomalies */}
             <Section
-              title="Anomalies à vérifier"
+              title={t('admin.reconciliation.anomaliesTitle')}
               action={
                 !data.anomalies.has_any && (
                   <span className="text-caption font-bold text-success uppercase flex items-center gap-1">
-                    <CheckIcon size={12} /> Aucune anomalie
+                    <CheckIcon size={12} /> {t('admin.reconciliation.noAnomalies')}
                   </span>
                 )
               }
@@ -293,7 +314,7 @@ export default function AdminReconciliationPage() {
               {data.anomalies.dormant_drivers.length > 0 && (
                 <div className="mb-4">
                   <h3 className="text-body-s font-bold text-ink mb-2">
-                    Drivers dormants (balance &gt; 5k, sans TX depuis 60 j)
+                    {t('admin.reconciliation.dormantDriversTitle')}
                   </h3>
                   <ul className="text-body-s divide-y divide-warm-200">
                     {data.anomalies.dormant_drivers.map((d) => (
@@ -302,7 +323,9 @@ export default function AdminReconciliationPage() {
                           {d.first_name} {d.last_name}
                         </span>
                         <span className="text-warm-500 tabular-nums">
-                          {formatFcfa(d.balance)} · dernière TX : {formatDateTime(d.last_tx)}
+                          {formatFcfa(d.balance)} ·{' '}
+                          {t('admin.reconciliation.lastTxLabel')}{' '}
+                          {formatDateTime(d.last_tx, t('admin.reconciliation.neverLabel'))}
                         </span>
                       </li>
                     ))}
@@ -313,7 +336,7 @@ export default function AdminReconciliationPage() {
               {data.anomalies.high_balance_drivers.length > 0 && (
                 <div className="mb-4">
                   <h3 className="text-body-s font-bold text-ink mb-2">
-                    Drivers à balance élevée (&gt; 100k FCFA)
+                    {t('admin.reconciliation.highBalanceDriversTitle')}
                   </h3>
                   <ul className="text-body-s divide-y divide-warm-200">
                     {data.anomalies.high_balance_drivers.map((d) => (
@@ -334,11 +357,10 @@ export default function AdminReconciliationPage() {
                 <div className="mb-4 bg-danger-bg border border-airmess-red/30 rounded-md p-3">
                   <h3 className="text-body-s font-bold text-airmess-red mb-1 flex items-center gap-1.5">
                     <AlertTriangleIcon size={14} />
-                    Drift driver — incohérence SUM(transactions) ≠ balance
+                    {t('admin.reconciliation.driftDriversTitle')}
                   </h3>
                   <p className="text-caption text-airmess-red/80 mb-2">
-                    Signal d'un bug grave (mutation directe en BDD bypassing service). À enquêter
-                    d'urgence.
+                    {t('admin.reconciliation.driftDriversDesc')}
                   </p>
                   <ul className="text-body-s divide-y divide-airmess-red/20">
                     {data.anomalies.drift_drivers.map((d) => (
@@ -359,7 +381,7 @@ export default function AdminReconciliationPage() {
                 <div className="bg-danger-bg border border-airmess-red/30 rounded-md p-3">
                   <h3 className="text-body-s font-bold text-airmess-red mb-1 flex items-center gap-1.5">
                     <AlertTriangleIcon size={14} />
-                    Drift user — incohérence SUM(transactions) ≠ balance
+                    {t('admin.reconciliation.driftUsersTitle')}
                   </h3>
                   <ul className="text-body-s divide-y divide-airmess-red/20">
                     {data.anomalies.drift_users.map((d) => (

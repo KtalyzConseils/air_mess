@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { fetchUnreadCount } from '../api/notifications'
 import UserMenu from './UserMenu'
 import { useDesktopNotifications } from '../hooks/useDesktopNotifications'
@@ -17,6 +18,7 @@ import { useUiPrefsStore } from '../stores/uiPrefsStore'
  * - À droite : notifs + UserMenu + burger mobile
  */
 export default function AppHeader() {
+  const { t } = useTranslation()
   const clientNavMode = useUiPrefsStore((s) => s.clientNavMode)
 
   const { data: unreadCount = 0 } = useQuery({
@@ -64,17 +66,17 @@ export default function AppHeader() {
         />
         <div className="min-w-0 hidden sm:block">
           <h1 className="text-body font-bold leading-none truncate">Air Mess</h1>
-          <p className="text-caption text-warm-400 truncate mt-0.5">Espace marchand</p>
+          <p className="text-caption text-warm-400 truncate mt-0.5">{t('header.workspace')}</p>
         </div>
       </Link>
 
       {/* ============ NAV DESKTOP ============ */}
       <nav className="hidden md:flex items-center gap-1">
-        <NavLink to="/dashboard" className={linkClass}>Tableau de bord</NavLink>
-        <NavLink to="/courses" end className={linkClass}>Courses</NavLink>
-        <NavLink to="/addresses" className={linkClass}>Carnet</NavLink>
-        <NavLink to="/wallet" className={linkClass}>Wallet</NavLink>
-        <NavLink to="/dev" className={linkClass}>Mode dev</NavLink>
+        <NavLink to="/dashboard" className={linkClass}>{t('nav.dashboard')}</NavLink>
+        <NavLink to="/courses" end className={linkClass}>{t('nav.courses')}</NavLink>
+        <NavLink to="/addresses" className={linkClass}>{t('nav.addresses')}</NavLink>
+        <NavLink to="/wallet" className={linkClass}>{t('nav.wallet')}</NavLink>
+        <NavLink to="/dev" className={linkClass}>{t('nav.devMode')}</NavLink>
       </nav>
 
       {/* ============ DROITE ============ */}
@@ -90,7 +92,7 @@ export default function AppHeader() {
               isActive ? 'bg-warm-600/30' : 'hover:bg-warm-600/20'
             }`
           }
-          title="Notifications"
+          title={t('header.notificationsTitle')}
         >
           <span className="text-lg leading-none" aria-hidden>🔔</span>
           {unreadCount > 0 && (
@@ -106,7 +108,7 @@ export default function AppHeader() {
         <button
           onClick={() => setMobileOpen((v) => !v)}
           className="md:hidden p-2 rounded-md text-warm-300 hover:text-cream hover:bg-warm-600/20"
-          aria-label="Menu"
+          aria-label={t('header.menu')}
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             {mobileOpen ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M3 6h18M3 12h18M3 18h18" />}
@@ -124,25 +126,25 @@ export default function AppHeader() {
           <div className="md:hidden absolute top-full left-0 right-0 bg-airmess-dark border-t border-warm-600/20 p-4 z-50 shadow-lg ams-anim-slide-up">
             <nav className="flex flex-col gap-1">
               <NavLink to="/dashboard" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
-                Tableau de bord
+                {t('nav.dashboard')}
               </NavLink>
               <NavLink to="/courses" end className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
-                Mes courses
+                {t('nav.myCourses')}
               </NavLink>
               <NavLink to="/courses/new" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
-                + Nouvelle livraison
+                + {t('nav.newDelivery')}
               </NavLink>
               <NavLink to="/addresses" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
-                Carnet d'adresses
+                {t('nav.addressBook')}
               </NavLink>
               <NavLink to="/wallet" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
-                💰 Mon wallet
+                💰 {t('userMenu.myWallet')}
               </NavLink>
               <NavLink to="/dev" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
-                Mode dev
+                {t('nav.devMode')}
               </NavLink>
               <NavLink to="/profile" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
-                👤 Mon profil
+                👤 {t('nav.profile')}
               </NavLink>
             </nav>
             <div className="mt-4 pt-4 border-t border-warm-600/20">

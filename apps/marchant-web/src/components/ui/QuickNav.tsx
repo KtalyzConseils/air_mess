@@ -23,6 +23,10 @@ export interface QuickNavItem {
   label: string
   Icon: ComponentType<IconProps>
   badge?: number
+  /** Action custom qui remplace la navigation (ex : logout). */
+  onClick?: () => void
+  /** Style visuel (utile pour un item destructif type déconnexion). */
+  tone?: 'default' | 'danger'
 }
 
 interface QuickNavProps {
@@ -36,9 +40,9 @@ interface Position {
   y: number
 }
 
-/** Rayon adapté au nombre d'items — espace ~16px entre 2 items. */
+/** Rayon adapté au nombre d'items — laisse quelques px d'air entre chaque cercle. */
 function radiusForItems(n: number): number {
-  return Math.max(110, Math.min(190, Math.round(60 + n * 13)))
+  return Math.max(118, Math.min(200, Math.round(65 + n * 14)))
 }
 
 function loadPosition(key: string): Position | null {
@@ -199,12 +203,15 @@ export default function QuickNav({ items, positionKey }: QuickNavProps) {
       >
         {items.map((item, i) => {
           const offset = getItemOffset(i, items.length)
-          const isActive = location.pathname.startsWith(item.to)
+          const isAction = !!item.onClick
+          const isActive = !isAction && location.pathname.startsWith(item.to)
+          const isDanger = item.tone === 'danger'
           return (
             <button
               key={item.to}
               onClick={() => {
-                navigate(item.to)
+                if (item.onClick) item.onClick()
+                else navigate(item.to)
                 setIsOpen(false)
               }}
               aria-label={item.label}
@@ -215,7 +222,9 @@ export default function QuickNav({ items, positionKey }: QuickNavProps) {
                 isOpen ? 'pointer-events-auto' : 'pointer-events-none',
                 isActive
                   ? 'bg-airmess-yellow text-ink ring-2 ring-airmess-yellow/40 ring-offset-2 ring-offset-airmess-dark/30'
-                  : 'bg-airmess-dark text-white hover:bg-airmess-red',
+                  : isDanger
+                    ? 'bg-airmess-dark text-airmess-red hover:bg-airmess-red hover:text-white'
+                    : 'bg-airmess-dark text-white hover:bg-airmess-red',
               ].join(' ')}
               style={{
                 width: ITEM_SIZE,

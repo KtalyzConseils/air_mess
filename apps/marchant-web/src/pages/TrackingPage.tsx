@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { useTranslation } from 'react-i18next'
 import StatusBadge from '../components/StatusBadge'
 import Card from '../components/ui/Card'
 import Highlight from '../components/Highlight'
@@ -8,19 +9,8 @@ import { fetchTracking } from '../api/tracking'
 import mark from '../assets/logo/airmess-mark.svg'
 import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
 
-const STATUS_FR: Record<string, string> = {
-  awaiting_assignment: 'Recherche de livreur en cours',
-  assigned:            'Un livreur a accepté votre course',
-  driver_to_pickup:    'Le livreur va chercher votre colis',
-  at_pickup:           'Le livreur est sur place pour le retrait',
-  picked_up:           'Le colis est en route vers vous',
-  at_dropoff:          'Votre livreur est arrivé',
-  delivered:           'Colis livré ✅',
-  cancelled:           'Livraison annulée',
-  failed:              'Livraison échouée',
-}
-
 export default function TrackingPage() {
+  const { t } = useTranslation()
   const { token } = useParams<{ token: string }>()
 
   const { data, isLoading, error } = useQuery({
@@ -30,12 +20,18 @@ export default function TrackingPage() {
     refetchInterval: 10_000,
   })
 
+  const statusLabel = (s: string) => {
+    const key = `tracking.status.${s}`
+    const translated = t(key)
+    return translated === key ? s : translated
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cream">
         <div className="text-center">
           <img src={mark} alt="" aria-hidden className="h-12 w-auto mx-auto mb-4 opacity-50 ams-anim-fade-in" />
-          <p className="text-body text-warm-500">Chargement de votre livraison…</p>
+          <p className="text-body text-warm-500">{t('tracking.loadingDelivery')}</p>
         </div>
       </div>
     )
@@ -46,9 +42,9 @@ export default function TrackingPage() {
       <div className="min-h-screen flex items-center justify-center bg-cream p-6">
         <Card variant="signature" padding="lg" className="max-w-md w-full text-center">
           <img src={mark} alt="" aria-hidden className="h-12 w-auto mx-auto mb-4 opacity-30" />
-          <h1 className="text-h2 text-airmess-red">Lien invalide</h1>
+          <h1 className="text-h2 text-airmess-red">{t('tracking.invalidLink')}</h1>
           <p className="text-body-s text-warm-500 mt-2">
-            Ce lien de suivi n'existe pas ou a expiré.
+            {t('tracking.invalidLinkBody')}
           </p>
         </Card>
       </div>
@@ -73,7 +69,7 @@ export default function TrackingPage() {
           <img src={mark} alt="" aria-hidden className="h-9 w-auto md:h-10" />
           <div className="min-w-0">
             <h1 className="text-body font-bold leading-none">Air Mess</h1>
-            <p className="text-caption text-warm-400 mt-0.5">Suivi de votre livraison</p>
+            <p className="text-caption text-warm-400 mt-0.5">{t('tracking.headerSubtitle')}</p>
           </div>
         </div>
       </header>
@@ -85,7 +81,7 @@ export default function TrackingPage() {
         <Card variant="signature" padding="lg" className="mb-4 text-center">
           <p className="text-eyebrow text-warm-500 uppercase font-mono">{data.reference}</p>
           <h2 className="text-h2 md:text-h1 text-ink mt-3">
-            {STATUS_FR[data.status] ?? data.status}
+            {statusLabel(data.status)}
           </h2>
           <div className="mt-4">
             <StatusBadge status={data.status} />
@@ -93,7 +89,7 @@ export default function TrackingPage() {
 
           {data.driver && (
             <div className="mt-6 p-4 bg-warm-100 rounded-lg">
-              <p className="text-eyebrow text-warm-500 uppercase">Votre livreur</p>
+              <p className="text-eyebrow text-warm-500 uppercase">{t('tracking.yourDriver')}</p>
               <p className="text-h3 text-ink mt-1.5 font-bold">
                 {data.driver.first_name}
               </p>
@@ -102,7 +98,7 @@ export default function TrackingPage() {
                   href={`tel:${data.driver.phone}`}
                   className="inline-flex items-center gap-2 mt-3 bg-airmess-yellow text-ink font-bold px-5 py-2.5 rounded-full hover:bg-airmess-yellow-light transition-colors shadow-sm"
                 >
-                  📞 Appeler le livreur
+                  {t('tracking.callDriver')}
                 </a>
               )}
             </div>
@@ -118,15 +114,15 @@ export default function TrackingPage() {
             <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-airmess-yellow/10 blur-3xl pointer-events-none" aria-hidden />
 
             <p className="text-eyebrow text-warm-300 uppercase relative">
-              🔑 Votre code de livraison
+              {t('tracking.deliveryCodeLabel')}
             </p>
             <p className="text-display-2 font-bold font-mono text-airmess-yellow tracking-[0.4em] mt-4 relative">
               {data.delivery_code}
             </p>
             <p className="text-body-s text-warm-300 mt-4 leading-relaxed relative">
-              Donnez ce code au livreur à l'arrivée
+              {t('tracking.deliveryCodeHintLine1')}
               <br />
-              pour confirmer la réception du colis.
+              {t('tracking.deliveryCodeHintLine2')}
             </p>
           </Card>
         )}
@@ -141,11 +137,11 @@ export default function TrackingPage() {
               attribution="&copy; OpenStreetMap"
             />
             <Marker position={destPosition}>
-              <Popup>📍 Votre adresse</Popup>
+              <Popup>{t('tracking.mapYourAddress')}</Popup>
             </Marker>
             {driverPosition && (
               <Marker position={driverPosition}>
-                <Popup>🛵 Votre livreur</Popup>
+                <Popup>{t('tracking.mapYourDriver')}</Popup>
               </Marker>
             )}
           </MapContainer>
@@ -155,7 +151,9 @@ export default function TrackingPage() {
             Colis
             ============================================================ */}
         <Card variant="default" padding="md" className="mb-4">
-          <h3 className="text-h3 text-ink mb-2 font-bold">Votre <Highlight>colis</Highlight></h3>
+          <h3 className="text-h3 text-ink mb-2 font-bold">
+            {t('tracking.yourPackagePrefix')} <Highlight>{t('tracking.yourPackageHighlight')}</Highlight>
+          </h3>
           <p className="text-body text-ink">{data.package.description}</p>
           {data.package.category && (
             <p className="text-caption text-warm-500 mt-1">{data.package.category}</p>
@@ -166,9 +164,9 @@ export default function TrackingPage() {
             Timeline
             ============================================================ */}
         <Card variant="default" padding="md" className="mb-6">
-          <h3 className="text-h3 text-ink mb-4 font-bold">Historique</h3>
+          <h3 className="text-h3 text-ink mb-4 font-bold">{t('tracking.history')}</h3>
           <ol className="relative border-l-2 border-warm-200 ml-2">
-            {data.timeline.map((t, idx) => {
+            {data.timeline.map((tItem, idx) => {
               const isLast = idx === data.timeline.length - 1
               return (
                 <li key={idx} className="mb-4 ml-5 last:mb-0">
@@ -179,10 +177,10 @@ export default function TrackingPage() {
                     }
                   />
                   <p className={'text-body-s ' + (isLast ? 'font-bold text-ink' : 'text-warm-600')}>
-                    {STATUS_FR[t.status] ?? t.status}
+                    {statusLabel(tItem.status)}
                   </p>
                   <p className="text-caption text-warm-500">
-                    {new Date(t.created_at).toLocaleString('fr-FR', {
+                    {new Date(tItem.created_at).toLocaleString('fr-FR', {
                       day: '2-digit',
                       month: '2-digit',
                       hour: '2-digit',
@@ -199,7 +197,7 @@ export default function TrackingPage() {
         <div className="text-center pt-4 pb-2 flex flex-col items-center gap-3 opacity-60">
           <img src={wordmarkWhite} alt="" aria-hidden className="h-5 w-auto invert opacity-40" />
           <p className="text-caption text-warm-500">
-            © 2026 Air Mess · Auto-rafraîchissement toutes les 10 secondes
+            {t('tracking.footerAutoRefresh')}
           </p>
         </div>
       </main>

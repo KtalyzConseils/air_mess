@@ -1,5 +1,6 @@
 import { useEffect, type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -9,13 +10,13 @@ import { useAuthStore } from '../stores/authStore'
 import type { Marchant } from '../types/auth'
 import { useUiPrefsStore, type ClientNavMode } from '../stores/uiPrefsStore'
 
-const SECTEUR_LABEL: Record<Marchant['secteur_activite'], string> = {
-  supermarche: '🛒 Supermarché',
-  restaurant:  '🍽️ Restaurant',
-  boutique:    '🛍️ Boutique',
-  pharmacie:   '💊 Pharmacie',
-  ecommerce:   '📦 E-commerce',
-  autre:       '🏷️ Autre',
+const SECTEUR_KEY: Record<Marchant['secteur_activite'], string> = {
+  supermarche: 'profile.sectorSupermarche',
+  restaurant:  'profile.sectorRestaurant',
+  boutique:    'profile.sectorBoutique',
+  pharmacie:   'profile.sectorPharmacie',
+  ecommerce:   'profile.sectorEcommerce',
+  autre:       'profile.sectorAutre',
 }
 
 function formatDate(iso: string | null | undefined): string {
@@ -44,6 +45,7 @@ function initialsOf(name: string): string {
 }
 
 export default function ProfilePage() {
+  const { t } = useTranslation()
   const { user, fetchMe } = useAuthStore()
 
   useEffect(() => {
@@ -55,14 +57,14 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-cream">
         <AppHeader />
         <main className="max-w-4xl mx-auto px-4 md:px-6 py-12 text-center text-warm-500">
-          Chargement du profil…
+          {t('profile.loadingProfile')}
         </main>
       </div>
     )
   }
 
   const marchant = user.marchant
-  const secteur = marchant ? SECTEUR_LABEL[marchant.secteur_activite] : null
+  const secteur = marchant ? t(SECTEUR_KEY[marchant.secteur_activite]) : null
   const displayName = marchant?.raison_sociale || user.name
   const initials = initialsOf(displayName)
 
@@ -70,12 +72,12 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-cream">
       <AppHeader />
       <main className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
-        <PageEyebrow label="Mon profil" className="mb-4" />
+        <PageEyebrow label={t('profile.eyebrow')} className="mb-4" />
         <h1 className="text-h1 md:text-display-2 text-ink leading-tight mb-2">
           {displayName}.
         </h1>
         <p className="text-body-l text-warm-500 mb-10">
-          Informations de votre compte Air Mess.
+          {t('profile.subtitleAccount')}
         </p>
 
         {/* ============================================================
@@ -99,31 +101,31 @@ export default function ProfilePage() {
             COMPTE
             ============================================================ */}
         <Card variant="default" padding="lg" className="mb-6">
-          <h3 className="text-h3 text-ink font-bold mb-5">Compte</h3>
+          <h3 className="text-h3 text-ink font-bold mb-5">{t('profile.account')}</h3>
           <dl className="grid grid-cols-[140px_1fr] md:grid-cols-[180px_1fr] gap-y-3 items-center text-body-s">
-            <dt className="text-warm-500 font-medium">Nom complet</dt>
+            <dt className="text-warm-500 font-medium">{t('profile.fullName')}</dt>
             <dd className="text-ink">{user.name}</dd>
 
-            <dt className="text-warm-500 font-medium">Email</dt>
+            <dt className="text-warm-500 font-medium">{t('common.email')}</dt>
             <dd className="text-ink flex items-center gap-2 flex-wrap">
               <span>{user.email}</span>
               {user.email_verified_at ? (
-                <Badge variant="success" size="sm">✓ Vérifié</Badge>
+                <Badge variant="success" size="sm">{t('profile.verified')}</Badge>
               ) : (
-                <Badge variant="warning" size="sm">⚠ Non vérifié</Badge>
+                <Badge variant="warning" size="sm">{t('profile.notVerified')}</Badge>
               )}
             </dd>
 
-            <dt className="text-warm-500 font-medium">Téléphone</dt>
+            <dt className="text-warm-500 font-medium">{t('common.phone')}</dt>
             <dd className="text-ink">{user.phone ?? '—'}</dd>
 
-            <dt className="text-warm-500 font-medium">Dernière connexion</dt>
+            <dt className="text-warm-500 font-medium">{t('profile.lastLogin')}</dt>
             <dd className="text-warm-600">{formatDateTime(user.last_login_at)}</dd>
           </dl>
 
           <div className="mt-6 pt-5 border-t border-warm-100 flex flex-wrap gap-3">
             <Link to="/forgot-password">
-              <Button variant="secondary" size="sm">Changer mon mot de passe</Button>
+              <Button variant="secondary" size="sm">{t('profile.changePasswordShort')}</Button>
             </Link>
           </div>
         </Card>
@@ -133,26 +135,26 @@ export default function ProfilePage() {
             ============================================================ */}
         {marchant && (
           <Card variant="default" padding="lg">
-            <h3 className="text-h3 text-ink font-bold mb-5">Entreprise</h3>
+            <h3 className="text-h3 text-ink font-bold mb-5">{t('profile.company')}</h3>
             <dl className="grid grid-cols-[140px_1fr] md:grid-cols-[180px_1fr] gap-y-3 items-center text-body-s">
-              <dt className="text-warm-500 font-medium">Raison sociale</dt>
+              <dt className="text-warm-500 font-medium">{t('profile.legalName')}</dt>
               <dd className="text-ink font-medium">{marchant.raison_sociale}</dd>
 
-              <dt className="text-warm-500 font-medium">Secteur</dt>
+              <dt className="text-warm-500 font-medium">{t('profile.sectorLabel')}</dt>
               <dd className="text-ink">{secteur}</dd>
 
-              <dt className="text-warm-500 font-medium">IFU / RCCM</dt>
+              <dt className="text-warm-500 font-medium">{t('profile.ifuRccm')}</dt>
               <dd className="text-ink">{marchant.ifu_rccm || '—'}</dd>
 
-              <dt className="text-warm-500 font-medium">Validation</dt>
+              <dt className="text-warm-500 font-medium">{t('profile.validation')}</dt>
               <dd className="flex items-center gap-2 flex-wrap">
                 {marchant.validated_at ? (
                   <>
                     <span className="text-ink">{formatDate(marchant.validated_at)}</span>
-                    <Badge variant="success" size="sm">✓ Validé</Badge>
+                    <Badge variant="success" size="sm">{t('profile.validated')}</Badge>
                   </>
                 ) : (
-                  <Badge variant="warning" size="sm">⏳ En attente</Badge>
+                  <Badge variant="warning" size="sm">{t('profile.pendingValidation')}</Badge>
                 )}
               </dd>
             </dl>
@@ -163,14 +165,14 @@ export default function ProfilePage() {
             Préférences d'affichage — navigation
             ============================================================ */}
         <div className="mt-10">
-          <PageEyebrow label="Préférences d'affichage" className="mb-4" />
+          <PageEyebrow label={t('profile.displayPrefs')} className="mb-4" />
           <h2 className="text-h2 md:text-h1 text-ink font-bold leading-tight">
-            Style de navigation
+            {t('profile.navStyle')}
           </h2>
           <p className="text-body-l text-warm-500 mt-2 mb-6">
-            Choisis comment tu veux naviguer dans Air Mess.{' '}
+            {t('profile.navStyleHint')}{' '}
             <span className="text-warm-400 text-body-s">
-              Réglage sauvegardé sur cet appareil.
+              {t('profile.navStyleHintSaved')}
             </span>
           </p>
 
@@ -190,8 +192,8 @@ export default function ProfilePage() {
    ============================================================ */
 interface NavModeOption {
   value: ClientNavMode
-  title: string
-  description: string
+  titleKey: string
+  descriptionKey: string
   preview: () => ReactElement
 }
 
@@ -240,19 +242,20 @@ function FabPreview() {
 const NAV_OPTIONS: NavModeOption[] = [
   {
     value: 'horizontal',
-    title: 'Barre horizontale',
-    description: 'Classique. Le menu est toujours visible en haut de l\'écran.',
+    titleKey: 'profile.navHorizontal',
+    descriptionKey: 'profile.navHorizontalDesc',
     preview: HorizontalPreview,
   },
   {
     value: 'fab',
-    title: 'Bouton flottant',
-    description: 'Minimaliste. Un point déplaçable ouvre la nav en demi-cercle.',
+    titleKey: 'profile.navFab',
+    descriptionKey: 'profile.navFabDesc',
     preview: FabPreview,
   },
 ]
 
 function NavModeCards() {
+  const { t } = useTranslation()
   const mode = useUiPrefsStore((s) => s.clientNavMode)
   const setMode = useUiPrefsStore((s) => s.setClientNavMode)
 
@@ -286,8 +289,8 @@ function NavModeCards() {
               <opt.preview />
             </div>
 
-            <h3 className="text-body font-bold text-ink">{opt.title}</h3>
-            <p className="text-body-s text-warm-500 mt-1">{opt.description}</p>
+            <h3 className="text-body font-bold text-ink">{t(opt.titleKey)}</h3>
+            <p className="text-body-s text-warm-500 mt-1">{t(opt.descriptionKey)}</p>
           </button>
         )
       })}

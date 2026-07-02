@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import { AdminButton } from '../../components/admin/AdminToolbar'
@@ -21,19 +22,19 @@ import {
   type WithdrawRequestRecentTx,
 } from '../../api/admin'
 
-const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
-  pending: { label: 'En attente', classes: 'bg-warning-bg text-warning border border-warning/20' },
-  approved: { label: 'Approuvée', classes: 'bg-success-bg text-success border border-success/20' },
-  rejected: { label: 'Rejetée', classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
-  cancelled: { label: 'Annulée', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
+const STATUS_BADGE_CLASSES: Record<string, string> = {
+  pending: 'bg-warning-bg text-warning border border-warning/20',
+  approved: 'bg-success-bg text-success border border-success/20',
+  rejected: 'bg-danger-bg text-airmess-red border border-airmess-red/30',
+  cancelled: 'bg-warm-100 text-warm-600 border border-warm-200',
 }
 
-const TX_META: Record<WithdrawRequestRecentTx['type'], { label: string; positive: boolean }> = {
-  deposit: { label: 'Recharge', positive: true },
-  withdraw: { label: 'Retrait', positive: false },
-  pickup_debit: { label: 'Débit caution', positive: false },
-  refund: { label: 'Remboursement', positive: true },
-  earning: { label: 'Gain de course', positive: true },
+const TX_META: Record<WithdrawRequestRecentTx['type'], { i18nKey: string; positive: boolean }> = {
+  deposit: { i18nKey: 'admin.withdraws.txDeposit', positive: true },
+  withdraw: { i18nKey: 'admin.withdraws.txWithdraw', positive: false },
+  pickup_debit: { i18nKey: 'admin.withdraws.txPickupDebit', positive: false },
+  refund: { i18nKey: 'admin.withdraws.txRefund', positive: true },
+  earning: { i18nKey: 'admin.withdraws.txEarning', positive: true },
 }
 
 function formatFcfa(n: number | null | undefined): string {
@@ -41,9 +42,9 @@ function formatFcfa(n: number | null | undefined): string {
   return n.toLocaleString('fr-FR') + ' FCFA'
 }
 
-function formatDateTime(value: string | null): string {
+function formatDateTime(value: string | null, locale: string = 'fr-FR'): string {
   if (!value) return '—'
-  return new Date(value).toLocaleString('fr-FR', {
+  return new Date(value).toLocaleString(locale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -96,6 +97,7 @@ export default function AdminWithdrawRequestDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
   const [showRejectPanel, setShowRejectPanel] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [showMarkPaidPanel, setShowMarkPaidPanel] = useState(false)
@@ -121,7 +123,7 @@ export default function AdminWithdrawRequestDetailPage() {
   const approveMutation = useMutation({
     mutationFn: () => approveWithdrawRequest(Number(id)),
     onSuccess: invalidate,
-    onError: (err) => alertApi(err, "Erreur lors de l'approbation."),
+    onError: (err) => alertApi(err, t('admin.withdraws.approveError')),
   })
   const rejectMutation = useMutation({
     mutationFn: (reason: string) => rejectWithdrawRequest(Number(id), reason),
@@ -130,7 +132,7 @@ export default function AdminWithdrawRequestDetailPage() {
       setShowRejectPanel(false)
       setRejectReason('')
     },
-    onError: (err) => alertApi(err, 'Erreur lors du rejet.'),
+    onError: (err) => alertApi(err, t('admin.withdraws.rejectErrorMsg')),
   })
   const markPaidMutation = useMutation({
     mutationFn: (reference: string) => markWithdrawRequestPaid(Number(id), reference),
@@ -139,19 +141,19 @@ export default function AdminWithdrawRequestDetailPage() {
       setShowMarkPaidPanel(false)
       setPayoutReference('')
     },
-    onError: (err) => alertApi(err, 'Erreur lors de la confirmation.'),
+    onError: (err) => alertApi(err, t('admin.withdraws.markPaidError')),
   })
   const retryPayoutMutation = useMutation({
     mutationFn: () => retryWithdrawPayout(Number(id)),
     onSuccess: invalidate,
-    onError: (err) => alertApi(err, 'Erreur lors de la retentative.'),
+    onError: (err) => alertApi(err, t('admin.withdraws.retryPayoutError')),
   })
 
   if (isLoading) {
     return (
       <AdminPageShell>
-        <AdminPageHeader title="Demande de retrait" />
-        <div className="px-6 py-10 text-warm-500 text-body-s">Chargement…</div>
+        <AdminPageHeader title={t('admin.withdraws.detailHeader')} />
+        <div className="px-6 py-10 text-warm-500 text-body-s">{t('admin.common.loading')}</div>
       </AdminPageShell>
     )
   }
@@ -160,18 +162,22 @@ export default function AdminWithdrawRequestDetailPage() {
     const msg = error instanceof AxiosError ? error.response?.data?.message : null
     return (
       <AdminPageShell>
-        <AdminPageHeader title="Demande de retrait" />
+        <AdminPageHeader title={t('admin.withdraws.detailHeader')} />
         <div className="px-4 md:px-6 lg:px-8 py-5">
           <div className="bg-off-white border border-warm-200 rounded-lg p-8 text-center">
-            <p className="text-body font-semibold text-airmess-red">Demande introuvable</p>
-            <p className="text-body-s text-warm-500 mt-2">{msg ?? 'Erreur de chargement.'}</p>
+            <p className="text-body font-semibold text-airmess-red">
+              {t('admin.withdraws.notFoundTitle')}
+            </p>
+            <p className="text-body-s text-warm-500 mt-2">
+              {msg ?? t('common.loadingError')}
+            </p>
             <AdminButton
               variant="secondary"
               className="mt-4"
               onClick={() => navigate('/admin/withdraw-requests')}
               leftIcon={<ArrowLeftIcon size={14} />}
             >
-              Retour à la liste
+              {t('admin.withdraws.backToList')}
             </AdminButton>
           </div>
         </div>
@@ -182,10 +188,15 @@ export default function AdminWithdrawRequestDetailPage() {
   const { request, active_course, recent_transactions, past_requests } = data
   const { driver } = request
   const wallet = driver.wallet
-  const statusMeta = STATUS_BADGE[request.status] ?? {
-    label: request.status,
-    classes: 'bg-warm-100 text-warm-600 border border-warm-200',
+  const statusClasses =
+    STATUS_BADGE_CLASSES[request.status] ?? 'bg-warm-100 text-warm-600 border border-warm-200'
+  const statusLabels: Record<string, string> = {
+    pending: t('admin.withdraws.statusPending'),
+    approved: t('admin.withdraws.statusApproved'),
+    rejected: t('admin.withdraws.statusRejected'),
+    cancelled: t('admin.withdraws.statusCancelled'),
   }
+  const statusLabel = statusLabels[request.status] ?? request.status
 
   const isBusy = !!active_course
   const balanceShort = wallet ? wallet.balance < request.amount_fcfa : false
@@ -201,13 +212,13 @@ export default function AdminWithdrawRequestDetailPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title={`Demande de retrait #${request.id}`}
-        subtitle={`Demandée le ${formatDateTime(request.created_at)}`}
+        title={t('admin.withdraws.detailTitle', { id: request.id })}
+        subtitle={t('admin.withdraws.requestedOn', { date: formatDateTime(request.created_at) })}
         actions={
           <span
-            className={`inline-block px-3 py-1 rounded-md text-body-s font-semibold ${statusMeta.classes}`}
+            className={`inline-block px-3 py-1 rounded-md text-body-s font-semibold ${statusClasses}`}
           >
-            {statusMeta.label}
+            {statusLabel}
           </span>
         }
       />
@@ -218,21 +229,23 @@ export default function AdminWithdrawRequestDetailPage() {
           className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink"
         >
           <ArrowLeftIcon size={14} />
-          Retour à la liste
+          {t('admin.withdraws.backToList')}
         </button>
 
         {/* Bandeaux d'alerte (pending) */}
         {busyBlocksApproval && (
           <AlertBand tone="danger">
-            <strong>{driver.first_name}</strong> est actuellement en course (#
-            {active_course.reference}). L'approbation sera refusée tant que la course n'est pas
-            terminée.
+            <strong>{driver.first_name}</strong>{' '}
+            {t('admin.withdraws.driverInCourseWarningPart1')}
+            {active_course.reference}
+            {t('admin.withdraws.driverInCourseWarningPart2')}
           </AlertBand>
         )}
         {isPending && !isBusy && balanceShort && (
           <AlertBand tone="warning">
-            La balance actuelle ({formatFcfa(wallet?.balance ?? 0)}) est inférieure au montant
-            demandé. L'approbation échouera. Demande à revoir.
+            {t('admin.withdraws.balanceShortWarning', {
+              balance: formatFcfa(wallet?.balance ?? 0),
+            })}
           </AlertBand>
         )}
 
@@ -242,11 +255,12 @@ export default function AdminWithdrawRequestDetailPage() {
             <div className="flex items-start gap-2">
               <ClockIcon size={16} />
               <div>
-                <strong>Payout FedaPay lancé automatiquement</strong> à{' '}
-                {formatDateTime(request.payout_initiated_at)} (ref :{' '}
-                <span className="font-mono">{request.payout_provider_ref}</span>). En attente du
-                webhook de confirmation. Aucune action requise — la trace sera complétée
-                automatiquement.
+                <strong>{t('admin.withdraws.payoutInFlightTitle')}</strong>{' '}
+                {t('admin.withdraws.payoutInFlightBodyPart1', {
+                  date: formatDateTime(request.payout_initiated_at),
+                })}
+                <span className="font-mono">{request.payout_provider_ref}</span>
+                {t('admin.withdraws.payoutInFlightBodyPart2')}
               </div>
             </div>
           </AlertBand>
@@ -256,10 +270,12 @@ export default function AdminWithdrawRequestDetailPage() {
             <div className="flex items-start gap-2">
               <AlertTriangleIcon size={16} />
               <div className="flex-1">
-                <strong>Le payout FedaPay a échoué</strong> (
-                {formatDateTime(request.payout_failed_at)}).
+                <strong>{t('admin.withdraws.payoutFailedTitle')}</strong>{' '}
+                {t('admin.withdraws.payoutFailedAt', {
+                  date: formatDateTime(request.payout_failed_at),
+                })}
                 <div className="mt-1 font-mono text-caption bg-white/40 rounded px-2 py-1">
-                  {request.payout_failure_reason ?? 'Erreur inconnue'}
+                  {request.payout_failure_reason ?? t('admin.withdraws.payoutFailureUnknown')}
                 </div>
                 <div className="mt-2 flex gap-2 items-center flex-wrap">
                   <AdminButton
@@ -268,11 +284,12 @@ export default function AdminWithdrawRequestDetailPage() {
                     onClick={() => retryPayoutMutation.mutate()}
                     disabled={retryPayoutMutation.isPending}
                   >
-                    {retryPayoutMutation.isPending ? 'Tentative…' : 'Retenter le payout'}
+                    {retryPayoutMutation.isPending
+                      ? t('admin.withdraws.payoutRetrying')
+                      : t('admin.withdraws.payoutRetryCta')}
                   </AdminButton>
                   <span className="text-caption">
-                    ou utilise le bouton « Marquer comme viré » ci-dessous pour le faire
-                    manuellement.
+                    {t('admin.withdraws.payoutRetryHint')}
                   </span>
                 </div>
               </div>
@@ -281,19 +298,18 @@ export default function AdminWithdrawRequestDetailPage() {
         )}
         {canMarkPaid && !payoutInitiated && (
           <AlertBand tone="info">
-            Le wallet du livreur a été débité.{' '}
+            {t('admin.withdraws.payoutManualIntro')}
             {request.target_method === 'momo' ? (
               <>
-                Le payout FedaPay n'a pas été lancé (numéro non éligible ou tentative manuelle
-                attendue). Effectue le virement vers{' '}
-                <span className="font-mono">{request.target_account}</span>, puis renseigne la
-                référence.
+                {t('admin.withdraws.payoutManualMomoIntro')}
+                <span className="font-mono">{request.target_account}</span>
+                {t('admin.withdraws.payoutManualEnd')}
               </>
             ) : (
               <>
-                Effectue le virement bancaire vers{' '}
-                <span className="font-mono">{request.target_account}</span>, puis renseigne la
-                référence.
+                {t('admin.withdraws.payoutManualBankIntro')}
+                <span className="font-mono">{request.target_account}</span>
+                {t('admin.withdraws.payoutManualEnd')}
               </>
             )}
           </AlertBand>
@@ -301,15 +317,15 @@ export default function AdminWithdrawRequestDetailPage() {
 
         {/* Métadonnées de décision si déjà tranchée */}
         {request.decided_at && (
-          <Section title="Décision">
+          <Section title={t('admin.withdraws.decisionTitle')}>
             <dl className="text-body-s space-y-1.5">
               <div className="flex justify-between gap-4">
-                <dt className="text-warm-500">Décidée le</dt>
+                <dt className="text-warm-500">{t('admin.withdraws.decidedOn')}</dt>
                 <dd className="font-medium text-ink">{formatDateTime(request.decided_at)}</dd>
               </div>
               {request.decided_by_admin && (
                 <div className="flex justify-between gap-4">
-                  <dt className="text-warm-500">Par</dt>
+                  <dt className="text-warm-500">{t('admin.withdraws.decidedBy')}</dt>
                   <dd className="font-medium text-ink">
                     {request.decided_by_admin.first_name} {request.decided_by_admin.last_name}
                   </dd>
@@ -319,7 +335,7 @@ export default function AdminWithdrawRequestDetailPage() {
             {request.rejection_reason && (
               <div className="mt-3 bg-danger-bg border border-airmess-red/20 rounded-md p-3">
                 <p className="text-caption uppercase tracking-wide text-airmess-red font-bold mb-1">
-                  Raison du rejet
+                  {t('admin.withdraws.rejectionReasonLabel')}
                 </p>
                 <p className="text-body-s text-airmess-red">{request.rejection_reason}</p>
               </div>
@@ -327,20 +343,21 @@ export default function AdminWithdrawRequestDetailPage() {
             {isPaid && (
               <div className="mt-3 bg-success-bg border border-success/20 rounded-md p-3">
                 <p className="text-caption uppercase tracking-wide text-success font-bold mb-1 flex items-center gap-1">
-                  <CheckIcon size={12} /> Virement effectué
+                  <CheckIcon size={12} /> {t('admin.withdraws.transferDoneTitle')}
                 </p>
                 <dl className="text-body-s text-success space-y-0.5">
                   <div>
-                    <span className="font-medium">Le :</span> {formatDateTime(request.paid_at)}
+                    <span className="font-medium">{t('admin.withdraws.transferDoneOn')}</span>{' '}
+                    {formatDateTime(request.paid_at)}
                   </div>
                   {request.paid_by_admin && (
                     <div>
-                      <span className="font-medium">Par :</span>{' '}
+                      <span className="font-medium">{t('admin.withdraws.transferDoneBy')}</span>{' '}
                       {request.paid_by_admin.first_name} {request.paid_by_admin.last_name}
                     </div>
                   )}
                   <div>
-                    <span className="font-medium">Référence :</span>{' '}
+                    <span className="font-medium">{t('admin.withdraws.transferDoneRef')}</span>{' '}
                     <span className="font-mono">{request.external_payout_reference}</span>
                   </div>
                 </dl>
@@ -351,7 +368,7 @@ export default function AdminWithdrawRequestDetailPage() {
 
         {/* Livreur + wallet */}
         <div className="grid md:grid-cols-2 gap-4">
-          <Section title="Livreur">
+          <Section title={t('admin.withdraws.driverTitle')}>
             <p className="text-body font-bold text-ink">
               {driver.first_name} {driver.last_name}
             </p>
@@ -360,11 +377,11 @@ export default function AdminWithdrawRequestDetailPage() {
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               {driver.availability_status === 'busy' ? (
                 <span className="bg-danger-bg text-airmess-red border border-airmess-red/30 text-caption px-2 py-0.5 rounded font-semibold">
-                  En course
+                  {t('admin.withdraws.busyBadge')}
                 </span>
               ) : driver.availability_status === 'available' ? (
                 <span className="bg-success-bg text-success border border-success/20 text-caption px-2 py-0.5 rounded font-semibold">
-                  Disponible
+                  {t('admin.withdraws.availableBadge')}
                 </span>
               ) : (
                 <span className="bg-warm-100 text-warm-600 border border-warm-200 text-caption px-2 py-0.5 rounded font-semibold">
@@ -379,26 +396,28 @@ export default function AdminWithdrawRequestDetailPage() {
               to={`/admin/drivers/${driver.id}`}
               className="mt-4 inline-flex items-center gap-1 text-caption font-medium text-ink hover:text-airmess-red"
             >
-              Voir profil livreur <ArrowRightIcon size={12} />
+              {t('admin.withdraws.viewDriverProfile')} <ArrowRightIcon size={12} />
             </Link>
           </Section>
 
-          <Section title="État du wallet">
+          <Section title={t('admin.withdraws.walletTitle')}>
             {wallet ? (
               <>
                 <p className="text-h1 font-bold text-ink tabular-nums leading-none">
                   {formatFcfa(wallet.balance)}
                 </p>
-                <p className="text-caption text-warm-500 mt-1">Balance actuelle</p>
+                <p className="text-caption text-warm-500 mt-1">
+                  {t('admin.withdraws.balanceCurrent')}
+                </p>
                 <dl className="mt-4 space-y-1 text-body-s">
                   <div className="flex justify-between">
-                    <dt className="text-warm-500">Total déposé</dt>
+                    <dt className="text-warm-500">{t('admin.withdraws.totalDeposited')}</dt>
                     <dd className="font-medium text-ink tabular-nums">
                       {formatFcfa(wallet.total_deposited)}
                     </dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-warm-500">Total retiré</dt>
+                    <dt className="text-warm-500">{t('admin.withdraws.totalWithdrawn')}</dt>
                     <dd className="font-medium text-ink tabular-nums">
                       {formatFcfa(wallet.total_withdrawn)}
                     </dd>
@@ -407,29 +426,31 @@ export default function AdminWithdrawRequestDetailPage() {
               </>
             ) : (
               <p className="text-body-s text-warm-500 italic">
-                Aucun wallet (impossible — anomalie).
+                {t('admin.withdraws.noWalletAnomaly')}
               </p>
             )}
           </Section>
         </div>
 
         {/* Détail de la demande */}
-        <Section title="Demande">
+        <Section title={t('admin.withdraws.requestSectionTitle')}>
           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-body-s">
             <div>
-              <dt className="text-warm-500">Montant à verser</dt>
+              <dt className="text-warm-500">{t('admin.withdraws.amountToTransfer')}</dt>
               <dd className="text-h1 font-bold text-ink tabular-nums mt-0.5">
                 {formatFcfa(request.amount_fcfa)}
               </dd>
             </div>
             <div>
-              <dt className="text-warm-500">Méthode</dt>
+              <dt className="text-warm-500">{t('admin.withdraws.methodLabel')}</dt>
               <dd className="text-body font-medium text-ink mt-0.5">
-                {request.target_method === 'momo' ? 'Mobile Money' : 'Banque'}
+                {request.target_method === 'momo'
+                  ? t('admin.withdraws.methodMomo')
+                  : t('admin.withdraws.methodBank')}
               </dd>
             </div>
             <div className="sm:col-span-2">
-              <dt className="text-warm-500">Compte / numéro cible</dt>
+              <dt className="text-warm-500">{t('admin.withdraws.targetAccount')}</dt>
               <dd className="text-body font-mono font-semibold text-ink mt-0.5 break-all">
                 {request.target_account}
               </dd>
@@ -438,9 +459,11 @@ export default function AdminWithdrawRequestDetailPage() {
         </Section>
 
         {/* Historique transactions */}
-        <Section title="Historique wallet (10 dernières)">
+        <Section title={t('admin.withdraws.walletHistoryTitle')}>
           {recent_transactions.length === 0 ? (
-            <p className="text-body-s text-warm-500 italic">Aucune transaction.</p>
+            <p className="text-body-s text-warm-500 italic">
+              {t('admin.withdraws.noTransactions')}
+            </p>
           ) : (
             <ul className="divide-y divide-warm-200">
               {recent_transactions.map((tx) => {
@@ -451,12 +474,13 @@ export default function AdminWithdrawRequestDetailPage() {
                     className="py-2 flex items-start justify-between gap-3 text-body-s"
                   >
                     <div className="min-w-0">
-                      <p className="font-medium text-ink">{meta.label}</p>
+                      <p className="font-medium text-ink">{t(meta.i18nKey)}</p>
                       <p className="text-caption text-warm-500">
                         {formatDateTime(tx.created_at)}
                         {tx.course && (
                           <>
-                            {' '}· course <span className="font-mono">{tx.course.reference}</span>
+                            {' '}· {t('admin.withdraws.courseLine')}{' '}
+                            <span className="font-mono">{tx.course.reference}</span>
                           </>
                         )}
                       </p>
@@ -469,7 +493,8 @@ export default function AdminWithdrawRequestDetailPage() {
                         {tx.amount_fcfa.toLocaleString('fr-FR')}
                       </p>
                       <p className="text-caption text-warm-400 tabular-nums">
-                        solde : {tx.balance_after.toLocaleString('fr-FR')}
+                        {t('admin.withdraws.balancePrefix')}{' '}
+                        {tx.balance_after.toLocaleString('fr-FR')}
                       </p>
                     </div>
                   </li>
@@ -480,23 +505,34 @@ export default function AdminWithdrawRequestDetailPage() {
         </Section>
 
         {/* Agrégats retraits passés */}
-        <Section title="Historique des retraits du livreur">
+        <Section title={t('admin.withdraws.pastRequestsTitle')}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <KpiBox label="Approuvés" value={past_requests.approved_count} tone="success" />
             <KpiBox
-              label="Total versé"
+              label={t('admin.withdraws.kpiApproved')}
+              value={past_requests.approved_count}
+              tone="success"
+            />
+            <KpiBox
+              label={t('admin.withdraws.kpiTotalPaid')}
               value={formatFcfa(past_requests.approved_total)}
               tone="success"
               compact
             />
-            <KpiBox label="Rejetés" value={past_requests.rejected_count} tone="danger" />
-            <KpiBox label="Annulés" value={past_requests.cancelled_count} />
+            <KpiBox
+              label={t('admin.withdraws.kpiRejected')}
+              value={past_requests.rejected_count}
+              tone="danger"
+            />
+            <KpiBox
+              label={t('admin.withdraws.kpiCancelled')}
+              value={past_requests.cancelled_count}
+            />
           </div>
         </Section>
 
         {/* Actions — pending */}
         {isPending && (
-          <Section title="Décider">
+          <Section title={t('admin.withdraws.decideTitle')}>
             {!showRejectPanel ? (
               <div className="flex flex-col sm:flex-row gap-2">
                 <AdminButton
@@ -504,7 +540,13 @@ export default function AdminWithdrawRequestDetailPage() {
                   onClick={() => {
                     if (
                       window.confirm(
-                        `Confirmer l'approbation du retrait de ${formatFcfa(request.amount_fcfa)} ?\n\nLe wallet sera débité immédiatement. Vous devrez ensuite effectuer le virement réel sur ${request.target_method === 'momo' ? 'MoMo' : 'le compte bancaire'}.`,
+                        t('admin.withdraws.approveConfirm', {
+                          amount: formatFcfa(request.amount_fcfa),
+                          method:
+                            request.target_method === 'momo'
+                              ? t('admin.withdraws.momoShort')
+                              : t('admin.withdraws.bankAccountShort'),
+                        }),
                       )
                     ) {
                       approveMutation.mutate()
@@ -514,26 +556,30 @@ export default function AdminWithdrawRequestDetailPage() {
                   className="flex-1"
                   leftIcon={<CheckIcon size={14} />}
                 >
-                  {approveMutation.isPending ? 'Approbation…' : 'Approuver et débiter'}
+                  {approveMutation.isPending
+                    ? t('admin.withdraws.approvingLabel')
+                    : t('admin.withdraws.approveAndDebit')}
                 </AdminButton>
                 <AdminButton
                   variant="danger"
                   onClick={() => setShowRejectPanel(true)}
                   className="flex-1"
                 >
-                  Rejeter…
+                  {t('admin.withdraws.rejectAction')}
                 </AdminButton>
               </div>
             ) : (
               <div>
-                <p className="text-body-s font-bold text-ink mb-1">Raison du rejet</p>
+                <p className="text-body-s font-bold text-ink mb-1">
+                  {t('admin.withdraws.rejectReasonTitle')}
+                </p>
                 <p className="text-caption text-warm-500 mb-2">
-                  Le livreur sera notifié avec cette raison. Aucun débit ne sera effectué.
+                  {t('admin.withdraws.rejectReasonHint')}
                 </p>
                 <textarea
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="ex : compte MoMo invalide, fraude suspectée…"
+                  placeholder={t('admin.withdraws.rejectPlaceholder')}
                   rows={3}
                   className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
                 />
@@ -546,7 +592,7 @@ export default function AdminWithdrawRequestDetailPage() {
                     }}
                     className="flex-1"
                   >
-                    Annuler
+                    {t('common.cancel')}
                   </AdminButton>
                   <AdminButton
                     variant="danger"
@@ -554,7 +600,9 @@ export default function AdminWithdrawRequestDetailPage() {
                     disabled={rejectReason.trim().length < 5 || rejectMutation.isPending}
                     className="flex-1"
                   >
-                    {rejectMutation.isPending ? 'Envoi…' : 'Confirmer le rejet'}
+                    {rejectMutation.isPending
+                      ? t('admin.withdraws.sendingLabel')
+                      : t('admin.withdraws.confirmRejectCta')}
                   </AdminButton>
                 </div>
               </div>
@@ -564,28 +612,30 @@ export default function AdminWithdrawRequestDetailPage() {
 
         {/* Actions — approuvée non virée */}
         {canMarkPaid && (
-          <Section title="Confirmer le virement">
+          <Section title={t('admin.withdraws.markPaidTitle')}>
             {!showMarkPaidPanel ? (
               <AdminButton
                 variant="primary"
                 onClick={() => setShowMarkPaidPanel(true)}
                 className="w-full"
               >
-                Marquer le virement comme effectué…
+                {t('admin.withdraws.markPaidCta')}
               </AdminButton>
             ) : (
               <div>
-                <p className="text-body-s font-bold text-ink mb-1">Référence du virement</p>
+                <p className="text-body-s font-bold text-ink mb-1">
+                  {t('admin.withdraws.payoutReferenceTitle')}
+                </p>
                 <p className="text-caption text-warm-500 mb-2">
-                  Saisis la référence retournée par{' '}
-                  {request.target_method === 'momo' ? 'MoMo' : 'la banque'} (numéro de
-                  transaction, identifiant unique). Le livreur sera notifié.
+                  {request.target_method === 'momo'
+                    ? t('admin.withdraws.payoutReferenceHintMomo')
+                    : t('admin.withdraws.payoutReferenceHintBank')}
                 </p>
                 <input
                   type="text"
                   value={payoutReference}
                   onChange={(e) => setPayoutReference(e.target.value)}
-                  placeholder="ex : MP240624.1234.A56789"
+                  placeholder={t('admin.withdraws.payoutReferencePlaceholder')}
                   className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s font-mono text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
                 />
                 <div className="flex gap-2 mt-3">
@@ -597,7 +647,7 @@ export default function AdminWithdrawRequestDetailPage() {
                     }}
                     className="flex-1"
                   >
-                    Annuler
+                    {t('common.cancel')}
                   </AdminButton>
                   <AdminButton
                     variant="primary"
@@ -605,7 +655,9 @@ export default function AdminWithdrawRequestDetailPage() {
                     disabled={payoutReference.trim().length < 3 || markPaidMutation.isPending}
                     className="flex-1"
                   >
-                    {markPaidMutation.isPending ? 'Envoi…' : 'Confirmer le virement'}
+                    {markPaidMutation.isPending
+                      ? t('admin.withdraws.sendingLabel')
+                      : t('admin.withdraws.confirmTransferCta')}
                   </AdminButton>
                 </div>
               </div>

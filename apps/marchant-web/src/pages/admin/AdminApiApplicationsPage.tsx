@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation, Trans } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import AdminTabs from '../../components/admin/AdminTabs'
@@ -28,13 +29,14 @@ import {
 
 type FilterKey = 'all' | 'active' | 'suspended'
 
-const FILTERS: readonly { key: FilterKey; label: string; params: AdminApiAppListParams }[] = [
-  { key: 'all',       label: 'Toutes',    params: {} },
-  { key: 'active',    label: 'Actives',   params: { status: 'active' } },
-  { key: 'suspended', label: 'Suspendues', params: { status: 'suspended' } },
-] as const
+const FILTER_PARAMS: Record<FilterKey, AdminApiAppListParams> = {
+  all: {},
+  active: { status: 'active' },
+  suspended: { status: 'suspended' },
+}
 
 export default function AdminApiApplicationsPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const canManage = hasAdminRole(currentUser, 'commercial')
@@ -44,12 +46,18 @@ export default function AdminApiApplicationsPage() {
   const [page, setPage] = useState(1)
   const [confirmSuspend, setConfirmSuspend] = useState<AdminApiApp | null>(null)
 
+  const FILTERS: readonly { key: FilterKey; label: string }[] = [
+    { key: 'all', label: t('admin.apiApps.tabAll') },
+    { key: 'active', label: t('admin.apiApps.tabActive') },
+    { key: 'suspended', label: t('admin.apiApps.tabSuspended') },
+  ]
+
   const activeFilter = FILTERS.find((f) => f.key === filterKey)!
   const search = q.trim()
 
   const params: AdminApiAppListParams = search
     ? { search, page }
-    : { ...activeFilter.params, page }
+    : { ...FILTER_PARAMS[filterKey], page }
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['admin', 'api-apps', search ? `search:${search}` : filterKey, page],
@@ -65,8 +73,8 @@ export default function AdminApiApplicationsPage() {
     },
     onError: (err) => {
       const msg = err instanceof AxiosError
-        ? err.response?.data?.message ?? 'Suspension impossible.'
-        : 'Suspension impossible.'
+        ? err.response?.data?.message ?? t('admin.apiApps.suspendError')
+        : t('admin.apiApps.suspendError')
       window.alert(msg)
     },
   })
@@ -76,8 +84,8 @@ export default function AdminApiApplicationsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'api-apps'] }),
     onError: (err) => {
       const msg = err instanceof AxiosError
-        ? err.response?.data?.message ?? 'Réactivation impossible.'
-        : 'Réactivation impossible.'
+        ? err.response?.data?.message ?? t('admin.apiApps.reactivateError')
+        : t('admin.apiApps.reactivateError')
       window.alert(msg)
     },
   })
@@ -92,8 +100,8 @@ export default function AdminApiApplicationsPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Apps dev"
-        subtitle="Applications tierces autorisées à créer des courses via l'API"
+        title={t('admin.apiApps.title')}
+        subtitle={t('admin.apiApps.subtitleAdmin')}
         toolbar={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full">
             <AdminTabs tabs={FILTERS} value={filterKey} onChange={changeFilter} />
@@ -103,7 +111,7 @@ export default function AdminApiApplicationsPage() {
                 setQ(e.target.value)
                 setPage(1)
               }}
-              placeholder="Nom de l'app, email ou téléphone du propriétaire…"
+              placeholder={t('admin.apiApps.searchPlaceholder')}
               minWidthClass="min-w-[280px]"
             />
           </div>
@@ -113,35 +121,39 @@ export default function AdminApiApplicationsPage() {
       <div className="px-4 md:px-6 lg:px-8 py-5">
         {search && (
           <p className="text-caption text-warm-500 mb-3">
-            Recherche globale — le filtre <strong className="text-ink">{activeFilter.label}</strong> est ignoré.{' '}
+            <Trans
+              i18nKey="admin.apiApps.globalSearchNotice"
+              values={{ filter: activeFilter.label }}
+              components={{ strong: <strong className="text-ink" /> }}
+            />{' '}
             <button
               onClick={() => setQ('')}
               className="text-airmess-red font-semibold hover:underline"
             >
-              Effacer
+              {t('admin.apiApps.clear')}
             </button>
           </p>
         )}
 
         <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="p-10 text-center text-warm-500 text-body-s">Chargement…</div>
+            <div className="p-10 text-center text-warm-500 text-body-s">{t('common.loading')}</div>
           ) : apps.length === 0 ? (
             <div className="p-10 text-center text-warm-500 text-body-s italic">
-              Aucune app trouvée.
+              {t('admin.apiApps.noneFound')}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-body-s min-w-[800px]">
                 <thead className="bg-cream/60 text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
                   <tr>
-                    <th className="px-5 py-2.5 text-left">App</th>
-                    <th className="px-5 py-2.5 text-left">Propriétaire</th>
-                    <th className="px-5 py-2.5 text-left">Plan</th>
-                    <th className="px-5 py-2.5 text-left">Quota</th>
-                    <th className="px-5 py-2.5 text-left">Courses</th>
-                    <th className="px-5 py-2.5 text-left">Statut</th>
-                    <th className="px-5 py-2.5 text-right">Actions</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.apiApps.colApp')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.apiApps.colOwner')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.apiApps.colPlan')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.apiApps.colQuota')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.apiApps.colCourses')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.apiApps.colStatus')}</th>
+                    <th className="px-5 py-2.5 text-right">{t('admin.apiApps.colActions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-warm-200">
@@ -166,7 +178,7 @@ export default function AdminApiApplicationsPage() {
             currentPage={data.current_page}
             lastPage={data.last_page}
             total={data.total}
-            itemLabel="app"
+            itemLabel={t('admin.apiApps.itemLabel')}
             onChange={setPage}
             isFetching={isFetching}
           />
@@ -175,9 +187,9 @@ export default function AdminApiApplicationsPage() {
 
       <ConfirmModal
         visible={confirmSuspend !== null}
-        title={`Suspendre « ${confirmSuspend?.name ?? ''} » ?`}
-        description="Les prochaines requêtes API de cette app seront rejetées (403). Les clés restent, tu pourras réactiver plus tard sans les régénérer."
-        confirmLabel="Suspendre"
+        title={t('admin.apiApps.confirmSuspendTitle', { name: confirmSuspend?.name ?? '' })}
+        description={t('admin.apiApps.confirmSuspendBody')}
+        confirmLabel={t('admin.apiApps.suspend')}
         confirmVariant="danger"
         isPending={suspendMut.isPending}
         onConfirm={() => confirmSuspend && suspendMut.mutate(confirmSuspend.id)}
@@ -200,6 +212,7 @@ function AppRow({
   onReactivate: () => void
   isPending: boolean
 }) {
+  const { t } = useTranslation()
   const unlimited = app.quota_limit === 0
   const usedPct = unlimited ? 0 : Math.min(100, Math.round((app.quota_used / app.quota_limit) * 100))
   const atLimit = !unlimited && app.quota_used >= app.quota_limit
@@ -229,7 +242,9 @@ function AppRow({
       <td className="px-5 py-2.5">
         <p className="font-semibold text-ink">{app.plan?.name ?? '—'}</p>
         <p className="text-caption text-warm-500">
-          {unlimited ? 'illimité' : `${app.quota_limit} req/mois`}
+          {unlimited
+            ? t('admin.apiApps.unlimited')
+            : t('admin.apiApps.reqPerMonth', { count: app.quota_limit })}
         </p>
       </td>
       <td className="px-5 py-2.5 min-w-[160px]">
@@ -254,9 +269,9 @@ function AppRow({
       <td className="px-5 py-2.5 text-ink font-semibold">{app.courses_count}</td>
       <td className="px-5 py-2.5">
         {app.status === 'active' ? (
-          <Badge variant="success" size="sm" dot>Active</Badge>
+          <Badge variant="success" size="sm" dot>{t('admin.apiApps.statusActive')}</Badge>
         ) : (
-          <Badge variant="danger" size="sm">Suspendue</Badge>
+          <Badge variant="danger" size="sm">{t('admin.apiApps.statusSuspended')}</Badge>
         )}
       </td>
       <td className="px-5 py-2.5 text-right whitespace-nowrap">
@@ -269,7 +284,7 @@ function AppRow({
                 onClick={onSuspend}
                 disabled={isPending}
               >
-                Suspendre
+                {t('admin.apiApps.suspend')}
               </AdminButton>
             ) : (
               <AdminButton
@@ -278,7 +293,7 @@ function AppRow({
                 onClick={onReactivate}
                 disabled={isPending}
               >
-                Réactiver
+                {t('admin.apiApps.reactivate')}
               </AdminButton>
             )}
           </>

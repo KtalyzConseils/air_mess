@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import AdminTabs from '../../components/admin/AdminTabs'
@@ -11,16 +12,10 @@ import { fetchIncidents, resolveIncident, INCIDENT_TYPE_LABELS } from '../../api
 
 type StatusFilter = 'open' | 'all' | 'resolved'
 
-const FILTERS: readonly { key: StatusFilter; label: string; status?: string }[] = [
-  { key: 'open', label: 'Ouverts', status: 'open' },
-  { key: 'all', label: 'Tous' },
-  { key: 'resolved', label: 'Résolus', status: 'resolved' },
-] as const
-
-const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
-  open: { label: 'Ouvert', classes: 'bg-warning-bg text-warning border border-warning/20' },
-  resolved: { label: 'Résolu', classes: 'bg-success-bg text-success border border-success/20' },
-  cancelled: { label: 'Annulé', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
+const STATUS_CLASSES: Record<string, string> = {
+  open: 'bg-warning-bg text-warning border border-warning/20',
+  resolved: 'bg-success-bg text-success border border-success/20',
+  cancelled: 'bg-warm-100 text-warm-600 border border-warm-200',
 }
 
 function formatDateTime(value: string): string {
@@ -33,11 +28,18 @@ function formatDateTime(value: string): string {
 }
 
 export default function AdminIncidentsPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [filterKey, setFilterKey] = useState<StatusFilter>('open')
   const [page, setPage] = useState(1)
   const [resolveTarget, setResolveTarget] = useState<{ id: number; type: string } | null>(null)
   const [resolveNote, setResolveNote] = useState('')
+
+  const FILTERS: readonly { key: StatusFilter; label: string; status?: string }[] = [
+    { key: 'open', label: t('admin.incidents.tabOpen'), status: 'open' },
+    { key: 'all', label: t('admin.incidents.tabAll') },
+    { key: 'resolved', label: t('admin.incidents.tabResolved'), status: 'resolved' },
+  ]
 
   const activeFilter = FILTERS.find((f) => f.key === filterKey)!
 
@@ -65,13 +67,26 @@ export default function AdminIncidentsPage() {
     setResolveNote('')
   }
 
+  function statusLabel(status: string): string {
+    switch (status) {
+      case 'open':
+        return t('admin.incidents.statusOpen')
+      case 'resolved':
+        return t('admin.incidents.statusResolved')
+      case 'cancelled':
+        return t('admin.incidents.statusCancelled')
+      default:
+        return status
+    }
+  }
+
   const incidents = data?.data ?? []
 
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Incidents"
-        subtitle="Signalements livreurs et clients à traiter"
+        title={t('admin.incidents.title')}
+        subtitle={t('admin.incidents.subtitleAdmin')}
         toolbar={
           <AdminTabs
             tabs={FILTERS}
@@ -87,25 +102,27 @@ export default function AdminIncidentsPage() {
       <div className="px-4 md:px-6 lg:px-8 py-5">
         <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="p-10 text-center text-warm-500 text-body-s">Chargement…</div>
+            <div className="p-10 text-center text-warm-500 text-body-s">{t('common.loading')}</div>
           ) : incidents.length === 0 ? (
-            <div className="p-10 text-center text-warm-500 text-body-s italic">Aucun incident.</div>
+            <div className="p-10 text-center text-warm-500 text-body-s italic">
+              {t('admin.incidents.empty')}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-body-s min-w-[800px]">
                 <thead className="bg-cream/60 text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
                   <tr>
-                    <th className="px-4 py-2.5 text-left">Type</th>
-                    <th className="px-4 py-2.5 text-left">Course</th>
-                    <th className="px-4 py-2.5 text-left">Signalé par</th>
-                    <th className="px-4 py-2.5 text-left">Date</th>
-                    <th className="px-4 py-2.5 text-left">Statut</th>
-                    <th className="px-4 py-2.5 text-right">Action</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.incidents.colType')}</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.incidents.colCourse')}</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.incidents.colReportedBy')}</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.incidents.colDate')}</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.incidents.colStatus')}</th>
+                    <th className="px-4 py-2.5 text-right">{t('admin.incidents.colAction')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-warm-200">
                   {incidents.map((inc) => {
-                    const badge = STATUS_BADGE[inc.status] ?? STATUS_BADGE.cancelled
+                    const badgeClasses = STATUS_CLASSES[inc.status] ?? STATUS_CLASSES.cancelled
                     return (
                       <tr key={inc.id} className="hover:bg-cream/40 align-top transition-colors">
                         <td className="px-4 py-2.5">
@@ -139,9 +156,9 @@ export default function AdminIncidentsPage() {
                         </td>
                         <td className="px-4 py-2.5">
                           <span
-                            className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${badge.classes}`}
+                            className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${badgeClasses}`}
                           >
-                            {badge.label}
+                            {statusLabel(inc.status)}
                           </span>
                           {inc.status === 'resolved' && inc.resolution_note && (
                             <p className="text-caption text-warm-500 mt-1 max-w-xs">
@@ -157,7 +174,7 @@ export default function AdminIncidentsPage() {
                               onClick={() => openResolveModal(inc.id, inc.type)}
                               disabled={resolveMutation.isPending}
                             >
-                              Résoudre
+                              {t('admin.incidents.resolveAction')}
                             </AdminButton>
                           )}
                         </td>
@@ -175,7 +192,7 @@ export default function AdminIncidentsPage() {
             currentPage={data.current_page}
             lastPage={data.last_page}
             total={data.total}
-            itemLabel="incident"
+            itemLabel={t('admin.incidents.itemLabel')}
             onChange={setPage}
             isFetching={isFetching}
           />
@@ -186,16 +203,18 @@ export default function AdminIncidentsPage() {
       <AdminModal
         open={!!resolveTarget}
         onClose={closeResolveModal}
-        title="Résoudre cet incident"
+        title={t('admin.incidents.resolveModalTitle')}
         subtitle={
           resolveTarget
-            ? `Type : ${INCIDENT_TYPE_LABELS[resolveTarget.type] ?? resolveTarget.type}`
+            ? t('admin.incidents.resolveModalSubtitle', {
+                type: INCIDENT_TYPE_LABELS[resolveTarget.type] ?? resolveTarget.type,
+              })
             : undefined
         }
         footer={
           <>
             <AdminButton variant="secondary" onClick={closeResolveModal}>
-              Annuler
+              {t('common.cancel')}
             </AdminButton>
             <AdminButton
               variant="primary"
@@ -205,18 +224,20 @@ export default function AdminIncidentsPage() {
               }
               disabled={resolveNote.trim().length < 3 || resolveMutation.isPending}
             >
-              {resolveMutation.isPending ? 'Résolution…' : 'Confirmer'}
+              {resolveMutation.isPending
+                ? t('admin.incidents.resolving')
+                : t('common.confirm')}
             </AdminButton>
           </>
         }
       >
         <label className="block mb-1.5 text-caption font-medium text-warm-600">
-          Note de résolution (obligatoire)
+          {t('admin.incidents.noteRequired')}
         </label>
         <textarea
           value={resolveNote}
           onChange={(e) => setResolveNote(e.target.value)}
-          placeholder="ex : appelé le livreur, course finalement livrée à 14h12"
+          placeholder={t('admin.incidents.notePlaceholder')}
           rows={3}
           className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
           autoFocus

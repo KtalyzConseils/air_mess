@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate, Link } from 'react-router-dom'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Highlight from '../components/Highlight'
 import { cn } from '../lib/cn'
 import { EyeIcon, EyeOffIcon, ArrowRightIcon } from '../components/ui/icons'
+import LanguageToggle from '../components/ui/LanguageToggle'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 
@@ -32,6 +34,7 @@ const selectClass =
   'transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow'
 
 export default function RegisterPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const registerIndividual = useAuthStore((s) => s.registerIndividual)
   const registerMarchant = useAuthStore((s) => s.registerMarchant)
@@ -75,14 +78,17 @@ export default function RegisterPage() {
     } catch (err) {
       const message =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? "Erreur lors de l'inscription."
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('auth.register.registerError')
+          : t('common.unexpectedError')
       setError(message)
     }
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-cream">
+    <div className="min-h-screen flex flex-col md:flex-row bg-cream relative">
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageToggle variant="light" />
+      </div>
       {/* ============================================================
           GAUCHE — Formulaire d'inscription
           ============================================================ */}
@@ -92,26 +98,26 @@ export default function RegisterPage() {
             <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
           </Link>
 
-          <h1 className="text-h1 text-ink mb-2">Créer un compte.</h1>
+          <h1 className="text-h1 text-ink mb-2">{t('auth.register.title')}</h1>
           <p className="text-body-l text-warm-500 mb-8">
-            Rejoignez Air Mess en moins de 2 minutes.
+            {t('auth.register.subtitle')}
           </p>
 
           {/* Toggle Particulier / Entreprise */}
           <div className="grid grid-cols-2 gap-2 mb-6 p-1 bg-warm-100 rounded-md">
-            {(['individual', 'marchant'] as const).map((t) => (
+            {(['individual', 'marchant'] as const).map((kind) => (
               <button
-                key={t}
+                key={kind}
                 type="button"
-                onClick={() => setType(t)}
+                onClick={() => setType(kind)}
                 className={cn(
                   'py-2 rounded-md text-body-s font-semibold transition-all duration-200',
-                  type === t
+                  type === kind
                     ? 'bg-airmess-dark text-cream shadow-sm'
                     : 'text-warm-600 hover:text-ink',
                 )}
               >
-                {t === 'individual' ? '👤 Particulier' : '🏢 Entreprise'}
+                {kind === 'individual' ? t('auth.register.typeIndividual') : t('auth.register.typeMarchant')}
               </button>
             ))}
           </div>
@@ -121,15 +127,15 @@ export default function RegisterPage() {
             {type === 'individual' && (
               <div className="grid grid-cols-2 gap-3">
                 <Input
-                  label="Prénom"
-                  placeholder="Mariam"
-                  {...register('first_name', { required: 'Prénom requis' })}
+                  label={t('auth.register.firstName')}
+                  placeholder={t('auth.register.firstNamePlaceholder')}
+                  {...register('first_name', { required: t('auth.register.firstNameRequired') })}
                   error={errors.first_name?.message}
                 />
                 <Input
-                  label="Nom"
-                  placeholder="Tognon"
-                  {...register('last_name', { required: 'Nom requis' })}
+                  label={t('auth.register.lastName')}
+                  placeholder={t('auth.register.lastNamePlaceholder')}
+                  {...register('last_name', { required: t('auth.register.lastNameRequired') })}
                   error={errors.last_name?.message}
                 />
               </div>
@@ -139,33 +145,33 @@ export default function RegisterPage() {
             {type === 'marchant' && (
               <>
                 <Input
-                  label="Nom du responsable"
-                  placeholder="Jean Dossou"
-                  {...register('name', { required: 'Nom du responsable requis' })}
+                  label={t('auth.register.responsibleName')}
+                  placeholder={t('auth.register.responsibleNamePlaceholder')}
+                  {...register('name', { required: t('auth.register.responsibleNameRequired') })}
                   error={errors.name?.message}
                 />
                 <Input
-                  label="Raison sociale"
-                  placeholder="Maison de Ganhi SARL"
-                  {...register('raison_sociale', { required: 'Raison sociale requise' })}
+                  label={t('auth.register.raisonSociale')}
+                  placeholder={t('auth.register.raisonSocialePlaceholder')}
+                  {...register('raison_sociale', { required: t('auth.register.raisonSocialeRequired') })}
                   error={errors.raison_sociale?.message}
                 />
                 <div>
                   <label className="block mb-1.5 text-caption text-warm-600 font-medium">
-                    Secteur d'activité <span className="text-airmess-red">*</span>
+                    {t('auth.register.sector')} <span className="text-airmess-red">*</span>
                   </label>
                   <select
-                    {...register('secteur_activite', { required: 'Secteur requis' })}
+                    {...register('secteur_activite', { required: t('auth.register.sectorRequired') })}
                     className={selectClass}
                     defaultValue=""
                   >
-                    <option value="" disabled>— Choisir —</option>
-                    <option value="supermarche">🛒 Supermarché</option>
-                    <option value="restaurant">🍽️ Restaurant</option>
-                    <option value="boutique">🛍️ Boutique</option>
-                    <option value="pharmacie">💊 Pharmacie</option>
-                    <option value="ecommerce">📦 E-commerce</option>
-                    <option value="autre">🏷️ Autre</option>
+                    <option value="" disabled>{t('auth.register.sectorChoose')}</option>
+                    <option value="supermarche">{t('auth.register.sectorSupermarche')}</option>
+                    <option value="restaurant">{t('auth.register.sectorRestaurant')}</option>
+                    <option value="boutique">{t('auth.register.sectorBoutique')}</option>
+                    <option value="pharmacie">{t('auth.register.sectorPharmacie')}</option>
+                    <option value="ecommerce">{t('auth.register.sectorEcommerce')}</option>
+                    <option value="autre">{t('auth.register.sectorAutre')}</option>
                   </select>
                   {errors.secteur_activite && (
                     <p className="mt-1.5 text-caption text-airmess-red">
@@ -174,9 +180,9 @@ export default function RegisterPage() {
                   )}
                 </div>
                 <Input
-                  label="IFU / RCCM"
-                  helper="Optionnel — peut être ajouté plus tard"
-                  placeholder="ex: 3201912345678"
+                  label={t('auth.register.ifuRccm')}
+                  helper={t('auth.register.ifuRccmHelper')}
+                  placeholder={t('auth.register.ifuRccmPlaceholder')}
                   {...register('ifu_rccm')}
                 />
               </>
@@ -185,27 +191,27 @@ export default function RegisterPage() {
             {/* ====== Champs communs ====== */}
             <Input
               type="email"
-              label="Email"
-              placeholder="contact@example.com"
-              {...register('email', { required: 'Email requis' })}
+              label={t('common.email')}
+              placeholder={t('auth.register.emailPlaceholder')}
+              {...register('email', { required: t('auth.register.emailRequired') })}
               error={errors.email?.message}
               autoComplete="email"
             />
             <Input
               type="tel"
-              label="Téléphone"
-              placeholder="+229 90 12 34 56"
-              {...register('phone', { required: 'Téléphone requis' })}
+              label={t('common.phone')}
+              placeholder={t('auth.register.phonePlaceholder')}
+              {...register('phone', { required: t('auth.register.phoneRequired') })}
               error={errors.phone?.message}
               autoComplete="tel"
             />
             <Input
               type={showPassword ? 'text' : 'password'}
-              label="Mot de passe"
-              helper="8 caractères minimum"
+              label={t('common.password')}
+              helper={t('auth.register.passwordHelper')}
               {...register('password', {
-                required: 'Mot de passe requis',
-                minLength: { value: 8, message: '8 caractères minimum' },
+                required: t('auth.register.passwordRequired'),
+                minLength: { value: 8, message: t('auth.register.passwordMinLength') },
               })}
               error={errors.password?.message}
               autoComplete="new-password"
@@ -214,7 +220,7 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   className="p-2 text-warm-500 hover:text-ink transition-colors"
-                  aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  aria-label={showPassword ? t('common.hidePassword') : t('common.showPassword')}
                 >
                   {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
                 </button>
@@ -222,8 +228,8 @@ export default function RegisterPage() {
             />
             <Input
               type={showConfirmation ? 'text' : 'password'}
-              label="Confirmer le mot de passe"
-              {...register('password_confirmation', { required: 'Confirmation requise' })}
+              label={t('common.passwordConfirm')}
+              {...register('password_confirmation', { required: t('auth.register.confirmRequired') })}
               error={errors.password_confirmation?.message}
               autoComplete="new-password"
               rightSlot={
@@ -231,7 +237,7 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => setShowConfirmation((v) => !v)}
                   className="p-2 text-warm-500 hover:text-ink transition-colors"
-                  aria-label={showConfirmation ? 'Masquer la confirmation' : 'Afficher la confirmation'}
+                  aria-label={showConfirmation ? t('common.hideConfirmation') : t('common.showConfirmation')}
                 >
                   {showConfirmation ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
                 </button>
@@ -256,22 +262,22 @@ export default function RegisterPage() {
               loading={isSubmitting}
               rightIcon={!isSubmitting && <ArrowRightIcon size={18} />}
             >
-              Créer mon compte
+              {t('auth.register.submit')}
             </Button>
           </form>
 
           <p className="text-center text-body-s text-warm-500 mt-8">
-            Déjà un compte ?{' '}
+            {t('auth.register.alreadyRegistered')}{' '}
             <Link to="/login" className="text-ink font-semibold hover:text-airmess-red">
-              Se connecter
+              {t('auth.register.loginLink')}
             </Link>
           </p>
 
           <div className="border-t border-warm-200 mt-6 pt-4 text-center">
             <p className="text-body-s text-warm-500">
-              🛵 Vous êtes livreur ?{' '}
+              {t('auth.register.driverPrompt')}{' '}
               <Link to="/register/driver" className="text-ink font-semibold hover:text-airmess-red">
-                Inscrivez-vous ici
+                {t('auth.register.driverLink')}
               </Link>
             </p>
           </div>
@@ -291,30 +297,32 @@ export default function RegisterPage() {
             <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-airmess-red text-cream text-caption font-bold tabular-nums">
               01
             </span>
-            <span className="text-eyebrow text-warm-300 uppercase">Rejoignez Air Mess</span>
+            <span className="text-eyebrow text-warm-300 uppercase">{t('auth.register.sidePanel.eyebrow')}</span>
           </div>
 
           <h2 className="text-display-2 leading-tight mb-10">
-            Faites livrer vos <Highlight>commandes</Highlight> partout dans Cotonou.
+            {t('auth.register.sidePanel.taglineStart')}{' '}
+            <Highlight>{t('auth.register.sidePanel.taglineHighlight')}</Highlight>{' '}
+            {t('auth.register.sidePanel.taglineEnd')}
           </h2>
 
           {/* 3 bénéfices, chacun avec un numéro à la signature */}
           <div className="space-y-5">
-            <Benefit number={1} title="Inscription gratuite">
-              Aucun frais d'ouverture. Vous ne payez que les livraisons effectuées.
+            <Benefit number={1} title={t('auth.register.sidePanel.benefit1Title')}>
+              {t('auth.register.sidePanel.benefit1Body')}
             </Benefit>
-            <Benefit number={2} title="Validation sous 24h">
-              Un commercial vérifie votre dossier et active votre compte le jour même.
+            <Benefit number={2} title={t('auth.register.sidePanel.benefit2Title')}>
+              {t('auth.register.sidePanel.benefit2Body')}
             </Benefit>
-            <Benefit number={3} title="Réseau de livreurs vérifiés">
-              Chaque livreur est identifié, formé et noté par les marchands.
+            <Benefit number={3} title={t('auth.register.sidePanel.benefit3Title')}>
+              {t('auth.register.sidePanel.benefit3Body')}
             </Benefit>
           </div>
 
           {/* Petit mark décoratif en bas */}
           <div className="mt-12 flex items-center gap-3 opacity-40">
             <img src={mark} alt="" aria-hidden className="h-6 w-auto" />
-            <span className="text-caption text-warm-400">Livraison express à Cotonou</span>
+            <span className="text-caption text-warm-400">{t('auth.register.sidePanel.footer')}</span>
           </div>
         </div>
       </div>

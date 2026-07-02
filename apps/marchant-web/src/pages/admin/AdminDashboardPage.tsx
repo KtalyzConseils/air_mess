@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import StatusBadge from '../../components/StatusBadge'
@@ -15,23 +16,6 @@ import { fetchAdminDashboard, INCIDENT_TYPE_LABELS } from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 
-// "il y a 12 min" à partir d'une date ISO
-function ago(dateStr: string): string {
-  const min = Math.round((Date.now() - new Date(dateStr).getTime()) / 60000)
-  if (min < 1) return "à l'instant"
-  if (min < 60) return `il y a ${min} min`
-  const h = Math.floor(min / 60)
-  if (h < 24) return `il y a ${h} h`
-  return `il y a ${Math.floor(h / 24)} j`
-}
-
-const AVAILABILITY_LABELS: Record<string, string> = {
-  available: 'Disponibles',
-  busy: 'Occupés',
-  on_break: 'En pause',
-  offline: 'Hors-ligne',
-}
-
 const AVAILABILITY_ACCENTS: Record<string, string> = {
   available: 'text-success',
   busy: 'text-warning',
@@ -40,9 +24,27 @@ const AVAILABILITY_ACCENTS: Record<string, string> = {
 }
 
 export default function AdminDashboardPage() {
+  const { t } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const canOps = hasAdminRole(user, 'ops')
   const canCommercial = hasAdminRole(user, 'commercial')
+
+  // "il y a 12 min" à partir d'une date ISO
+  function ago(dateStr: string): string {
+    const min = Math.round((Date.now() - new Date(dateStr).getTime()) / 60000)
+    if (min < 1) return t('admin.dashboard.timeJustNow')
+    if (min < 60) return t('admin.dashboard.timeMinAgo', { count: min })
+    const h = Math.floor(min / 60)
+    if (h < 24) return t('admin.dashboard.timeHoursAgo', { count: h })
+    return t('admin.dashboard.timeDaysAgo', { count: Math.floor(h / 24) })
+  }
+
+  const AVAILABILITY_LABELS: Record<string, string> = {
+    available: t('admin.dashboard.availabilityAvailable'),
+    busy: t('admin.dashboard.availabilityBusy'),
+    on_break: t('admin.dashboard.availabilityOnBreak'),
+    offline: t('admin.dashboard.availabilityOffline'),
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'dashboard'],
@@ -53,8 +55,8 @@ export default function AdminDashboardPage() {
   if (isLoading || !data) {
     return (
       <AdminPageShell>
-        <AdminPageHeader title="Vue d'ensemble" subtitle="Pilotage temps réel" />
-        <div className="p-6 text-warm-500 text-body-s">Chargement…</div>
+        <AdminPageHeader title={t('admin.dashboard.pageTitle')} subtitle={t('admin.dashboard.pageSubtitle')} />
+        <div className="p-6 text-warm-500 text-body-s">{t('admin.common.loading')}</div>
       </AdminPageShell>
     )
   }
@@ -66,19 +68,19 @@ export default function AdminDashboardPage() {
     canOps && kpi.courses_awaiting > 0 && {
       to: '/admin/courses',
       Icon: ClockIcon,
-      label: `${kpi.courses_awaiting} course${kpi.courses_awaiting > 1 ? 's' : ''} à attribuer`,
+      label: t('admin.dashboard.alertCoursesToAssign', { count: kpi.courses_awaiting }),
       tone: 'warning' as const,
     },
     canOps && kpi.incidents_open > 0 && {
       to: '/admin/incidents',
       Icon: AlertTriangleIcon,
-      label: `${kpi.incidents_open} incident${kpi.incidents_open > 1 ? 's' : ''} ouvert${kpi.incidents_open > 1 ? 's' : ''}`,
+      label: t('admin.dashboard.alertOpenIncidents', { count: kpi.incidents_open }),
       tone: 'danger' as const,
     },
     canCommercial && kpi.marchants_pending > 0 && {
       to: '/admin/marchants',
       Icon: StoreIcon,
-      label: `${kpi.marchants_pending} marchand${kpi.marchants_pending > 1 ? 's' : ''} à valider`,
+      label: t('admin.dashboard.alertMarchantsToValidate', { count: kpi.marchants_pending }),
       tone: 'info' as const,
     },
   ].filter(Boolean) as Array<{
@@ -91,14 +93,14 @@ export default function AdminDashboardPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Vue d'ensemble"
-        subtitle="Pilotage temps réel — rafraîchi toutes les 15 s"
+        title={t('admin.dashboard.pageTitle')}
+        subtitle={t('admin.dashboard.pageSubtitleRefresh')}
       />
 
       <div className="px-4 md:px-6 lg:px-8 py-5 md:py-6 space-y-6">
         {/* Bandeau d'alertes actionnables ─ s'affiche uniquement si quelque chose réclame attention */}
         {alerts.length > 0 && (
-          <section aria-label="Alertes" className="flex flex-wrap gap-2">
+          <section aria-label={t('admin.dashboard.alertsLabel')} className="flex flex-wrap gap-2">
             {alerts.map((a) => (
               <AlertChip key={a.to} {...a} />
             ))}
@@ -106,16 +108,16 @@ export default function AdminDashboardPage() {
         )}
 
         {/* KPI ─ 6 chiffres clés, neutres + 1 seul accent brand sur le plus stratégique */}
-        <section aria-label="Chiffres clés" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
-          <KpiTile label="Courses jour" value={kpi.courses_today} />
-          <KpiTile label="En cours" value={kpi.courses_in_progress} accent="brand" />
-          <KpiTile label="Attribution" value={kpi.courses_awaiting} hint="livreur recherché" />
-          <KpiTile label="Livrées jour" value={kpi.courses_delivered_today} />
-          <KpiTile label="Livreurs online" value={kpi.drivers_online} />
+        <section aria-label={t('admin.dashboard.kpiLabel')} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
+          <KpiTile label={t('admin.dashboard.kpiCoursesDay')} value={kpi.courses_today} />
+          <KpiTile label={t('admin.dashboard.kpiInProgress')} value={kpi.courses_in_progress} accent="brand" />
+          <KpiTile label={t('admin.dashboard.kpiAwaiting')} value={kpi.courses_awaiting} hint={t('admin.dashboard.kpiAwaitingHint')} />
+          <KpiTile label={t('admin.dashboard.kpiDeliveredDay')} value={kpi.courses_delivered_today} />
+          <KpiTile label={t('admin.dashboard.kpiDriversOnline')} value={kpi.drivers_online} />
           {canOps ? (
-            <KpiTile label="Incidents" value={kpi.incidents_open} danger={kpi.incidents_open > 0} />
+            <KpiTile label={t('admin.dashboard.kpiIncidents')} value={kpi.incidents_open} danger={kpi.incidents_open > 0} />
           ) : (
-            <KpiTile label="Marchands à valider" value={kpi.marchants_pending} />
+            <KpiTile label={t('admin.dashboard.kpiMarchantsPending')} value={kpi.marchants_pending} />
           )}
         </section>
 
@@ -125,12 +127,12 @@ export default function AdminDashboardPage() {
             {/* File d'attribution — colonne large */}
             <Panel
               className="lg:col-span-2"
-              title="File d'attribution"
+              title={t('admin.dashboard.queueTitle')}
               icon={<PackageIcon size={16} />}
-              link={{ to: '/admin/courses', label: 'Toutes les courses' }}
+              link={{ to: '/admin/courses', label: t('admin.dashboard.queueAllCourses') }}
             >
               {awaiting_queue.length === 0 ? (
-                <EmptyState text="Aucune course en attente." />
+                <EmptyState text={t('admin.dashboard.queueEmpty')} />
               ) : (
                 <ul className="divide-y divide-warm-200">
                   {awaiting_queue.map((c) => (
@@ -148,7 +150,7 @@ export default function AdminDashboardPage() {
                           </Link>
                           {c.urgency === 'express' && (
                             <span className="text-caption font-bold text-airmess-red uppercase tracking-wide">
-                              Express
+                              {t('admin.dashboard.expressBadge')}
                             </span>
                           )}
                         </div>
@@ -166,7 +168,7 @@ export default function AdminDashboardPage() {
             </Panel>
 
             {/* Livreurs ─ disponibilité */}
-            <Panel title="Livreurs" icon={<BikeIcon size={16} />}>
+            <Panel title={t('admin.dashboard.driversTitle')} icon={<BikeIcon size={16} />}>
               <ul className="space-y-1.5">
                 {['available', 'busy', 'on_break', 'offline'].map((k) => (
                   <li key={k} className="flex items-center justify-between py-1">
@@ -185,12 +187,12 @@ export default function AdminDashboardPage() {
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {canOps && (
             <Panel
-              title="Incidents ouverts"
+              title={t('admin.dashboard.incidentsTitle')}
               icon={<AlertTriangleIcon size={16} className="text-airmess-red" />}
-              link={{ to: '/admin/incidents', label: 'Tout voir' }}
+              link={{ to: '/admin/incidents', label: t('admin.dashboard.seeAll') }}
             >
               {recent_incidents.length === 0 ? (
-                <EmptyState text="Aucun incident ouvert." />
+                <EmptyState text={t('admin.dashboard.incidentsEmpty')} />
               ) : (
                 <ul className="divide-y divide-warm-200">
                   {recent_incidents.map((i) => (
@@ -214,9 +216,9 @@ export default function AdminDashboardPage() {
             </Panel>
           )}
 
-          <Panel title="Courses par statut" className={canOps ? '' : 'lg:col-span-2'}>
+          <Panel title={t('admin.dashboard.statusesTitle')} className={canOps ? '' : 'lg:col-span-2'}>
             {Object.keys(courses_by_status).length === 0 ? (
-              <EmptyState text="Aucune course pour le moment." />
+              <EmptyState text={t('admin.dashboard.statusesEmpty')} />
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(courses_by_status).map(([status, count]) => (

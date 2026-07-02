@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import AddressFormModal from '../components/AddressFormModal'
 import Card from '../components/ui/Card'
@@ -13,6 +14,7 @@ type View = 'cards' | 'list'
 const VIEW_STORAGE_KEY = 'airmess.addresses.view'
 
 export default function AddressesPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Address | null>(null)
@@ -62,7 +64,7 @@ export default function AddressesPage() {
   }
 
   function confirmDelete(addr: Address) {
-    if (confirm(`Supprimer l'adresse "${addr.recipient_name}" ?`)) {
+    if (confirm(t('addresses.deletePrompt', { name: addr.recipient_name }))) {
       deleteMutation.mutate(addr.id)
     }
   }
@@ -72,18 +74,18 @@ export default function AddressesPage() {
       <AppHeader />
 
       <main className="max-w-5xl mx-auto px-4 md:px-6 py-8 md:py-12">
-        <PageEyebrow label="Carnet d'adresses" className="mb-4" />
+        <PageEyebrow label={t('addresses.eyebrow')} className="mb-4" />
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-h1 md:text-display-2 text-ink leading-tight">
-              Vos <Highlight>adresses</Highlight> récurrentes.
+              {t('addresses.titleStart')} <Highlight>{t('addresses.titleHighlight')}</Highlight> {t('addresses.titleEndRecurring')}
             </h1>
             <p className="text-body-l text-warm-500 mt-3">
-              Gagnez du temps : enregistrez vos destinataires fréquents pour les réutiliser en un clic.
+              {t('addresses.subtitleReuse')}
             </p>
           </div>
           <Button variant="primary" size="lg" pill onClick={openCreate}>
-            + Nouvelle adresse
+            {t('addresses.addNew')}
           </Button>
         </div>
 
@@ -101,7 +103,7 @@ export default function AddressesPage() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher par nom, téléphone, quartier…"
+                placeholder={t('addresses.searchPlaceholder')}
                 className="w-full pl-10 pr-3 py-2.5 bg-off-white border border-warm-300 rounded-md text-body text-ink placeholder:text-warm-400 transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
               />
             </div>
@@ -110,12 +112,12 @@ export default function AddressesPage() {
             <div
               className="hidden md:inline-flex items-center bg-off-white border border-warm-300 rounded-md p-0.5"
               role="group"
-              aria-label="Mode d'affichage"
+              aria-label={t('addresses.viewMode')}
             >
               <ViewToggleButton
                 active={view === 'cards'}
                 onClick={() => setView('cards')}
-                label="Vue cartes"
+                label={t('addresses.viewCards')}
               >
                 {/* Icône grille 2×2 */}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -128,7 +130,7 @@ export default function AddressesPage() {
               <ViewToggleButton
                 active={view === 'list'}
                 onClick={() => setView('list')}
-                label="Vue liste"
+                label={t('addresses.viewList')}
               >
                 {/* Icône lignes */}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -148,7 +150,7 @@ export default function AddressesPage() {
               {filtered.length !== addresses.length && (
                 <span className="text-warm-400"> / {addresses.length}</span>
               )}{' '}
-              adresse{filtered.length > 1 ? 's' : ''}
+              {filtered.length > 1 ? t('addresses.countOther') : t('addresses.countOne')}
             </p>
           </div>
         )}
@@ -157,26 +159,26 @@ export default function AddressesPage() {
             CONTENU
             ============================================================ */}
         {isLoading && (
-          <Card padding="lg" className="text-center text-warm-500">Chargement…</Card>
+          <Card padding="lg" className="text-center text-warm-500">{t('common.loading')}</Card>
         )}
 
         {!isLoading && addresses.length === 0 && (
           <Card padding="lg" className="text-center">
-            <p className="text-h3 text-ink mb-2">📒 Carnet vide.</p>
+            <p className="text-h3 text-ink mb-2">{t('addresses.emptyTitle')}</p>
             <p className="text-body-s text-warm-500 mb-4">
-              Créez votre première adresse pour la réutiliser sur vos prochaines courses.
+              {t('addresses.emptyBody')}
             </p>
             <Button variant="primary" size="md" pill onClick={openCreate}>
-              + Première adresse
+              {t('addresses.firstAddress')}
             </Button>
           </Card>
         )}
 
         {!isLoading && addresses.length > 0 && filtered.length === 0 && (
           <Card padding="lg" className="text-center text-warm-500">
-            Aucun résultat pour <strong className="text-ink">« {search} »</strong>.
+            {t('addresses.noResultsFor')} <strong className="text-ink">« {search} »</strong>.
             <button onClick={() => setSearch('')} className="ml-2 underline">
-              Effacer
+              {t('addresses.clear')}
             </button>
           </Card>
         )}
@@ -207,11 +209,11 @@ export default function AddressesPage() {
               className="grid items-center px-4 py-3 bg-warm-100 border-b border-warm-200 text-eyebrow uppercase text-warm-600"
               style={{ gridTemplateColumns: '180px 1fr 140px minmax(200px,1.2fr) 80px' }}
             >
-              <span>Étiquette</span>
-              <span>Destinataire</span>
-              <span>Téléphone</span>
-              <span>Quartier</span>
-              <span className="text-center">Usage</span>
+              <span>{t('addresses.headerLabel')}</span>
+              <span>{t('addresses.headerRecipient')}</span>
+              <span>{t('addresses.headerPhone')}</span>
+              <span>{t('addresses.headerQuartier')}</span>
+              <span className="text-center">{t('addresses.headerUsage')}</span>
             </div>
 
             {/* Lignes */}
@@ -262,13 +264,13 @@ export default function AddressesPage() {
                       onClick={() => openEdit(addr)}
                       className="px-3 py-1.5 text-caption font-semibold text-ink bg-off-white border border-warm-300 rounded-md hover:bg-warm-100 hover:border-warm-400 shadow-xs"
                     >
-                      ✏️ Modifier
+                      {t('addresses.editBtn')}
                     </button>
                     <button
                       onClick={() => confirmDelete(addr)}
                       className="px-3 py-1.5 text-caption font-semibold text-airmess-red bg-off-white border border-airmess-red/30 rounded-md hover:bg-danger-bg hover:border-airmess-red/50 shadow-xs"
                     >
-                      🗑 Supprimer
+                      {t('addresses.deleteBtn')}
                     </button>
                   </div>
                 </li>
@@ -327,6 +329,7 @@ interface AddressCardProps {
 }
 
 function AddressCard({ addr, onEdit, onDelete }: AddressCardProps) {
+  const { t } = useTranslation()
   return (
     // Padding réduit sur mobile (p-3) puis md+ revient au standard
     <div className="flex flex-col bg-off-white border border-warm-200 shadow-xs rounded-lg p-3 md:p-5">
@@ -370,14 +373,14 @@ function AddressCard({ addr, onEdit, onDelete }: AddressCardProps) {
           onClick={onEdit}
           className="px-2.5 md:px-3 py-1 text-caption font-medium text-warm-600 hover:text-ink hover:bg-warm-100 rounded"
         >
-          Modifier
+          {t('addresses.edit')}
         </button>
         <button
           type="button"
           onClick={onDelete}
           className="px-2.5 md:px-3 py-1 text-caption font-medium text-airmess-red hover:bg-danger-bg rounded"
         >
-          Supprimer
+          {t('addresses.delete')}
         </button>
       </div>
     </div>

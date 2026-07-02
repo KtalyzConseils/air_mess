@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import AdminTabs from '../../components/admin/AdminTabs'
@@ -10,26 +11,18 @@ import { fetchIndividuals, type IndividualListParams } from '../../api/admin'
 
 type FilterKey = 'all' | 'free' | 'active' | 'expired' | 'suspended'
 
-const FILTERS: readonly { key: FilterKey; label: string; params: IndividualListParams }[] = [
-  { key: 'all', label: 'Tous', params: {} },
-  { key: 'free', label: 'Quota gratuit', params: { subscription_status: 'free' } },
-  { key: 'active', label: 'Abonnés', params: { subscription_status: 'active' } },
-  { key: 'expired', label: 'Expirés', params: { subscription_status: 'expired' } },
-  { key: 'suspended', label: 'Suspendus', params: { subscription_status: 'suspended' } },
-] as const
-
-const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
-  active: { label: 'Abonné', classes: 'bg-success-bg text-success border border-success/20' },
-  expired: { label: 'Abo expiré', classes: 'bg-warning-bg text-warning border border-warning/20' },
-  suspended: { label: 'Suspendu', classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
-  churned: { label: 'Désabonné', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
-}
-
 function Badge({ status }: { status: string | null }) {
+  const { t } = useTranslation()
+  const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
+    active: { label: t('admin.individuals.badgeSubscribed'), classes: 'bg-success-bg text-success border border-success/20' },
+    expired: { label: t('admin.individuals.badgeExpired'), classes: 'bg-warning-bg text-warning border border-warning/20' },
+    suspended: { label: t('admin.individuals.badgeSuspended'), classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
+    churned: { label: t('admin.individuals.badgeChurned'), classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
+  }
   if (!status) {
     return (
       <span className="inline-block px-2 py-0.5 rounded text-caption font-semibold bg-cream text-ink border border-warm-300">
-        Quota gratuit
+        {t('admin.individuals.badgeQuotaFree')}
       </span>
     )
   }
@@ -47,9 +40,18 @@ function Badge({ status }: { status: string | null }) {
 }
 
 export default function AdminIndividualsPage() {
+  const { t } = useTranslation()
   const [filterKey, setFilterKey] = useState<FilterKey>('all')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
+
+  const FILTERS: readonly { key: FilterKey; label: string; params: IndividualListParams }[] = [
+    { key: 'all', label: t('admin.individuals.tabAll'), params: {} },
+    { key: 'free', label: t('admin.individuals.tabFreeQuota'), params: { subscription_status: 'free' } },
+    { key: 'active', label: t('admin.individuals.tabSubscribed'), params: { subscription_status: 'active' } },
+    { key: 'expired', label: t('admin.individuals.tabExpired'), params: { subscription_status: 'expired' } },
+    { key: 'suspended', label: t('admin.individuals.tabSuspended'), params: { subscription_status: 'suspended' } },
+  ] as const
 
   const activeFilter = FILTERS.find((f) => f.key === filterKey)!
   const search = q.trim()
@@ -74,8 +76,8 @@ export default function AdminIndividualsPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Particuliers"
-        subtitle="Comptes individuels et leur consommation de quota"
+        title={t('admin.individuals.title')}
+        subtitle={t('admin.individuals.pageSubtitle')}
         toolbar={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full">
             <AdminTabs tabs={FILTERS} value={filterKey} onChange={changeFilter} />
@@ -85,7 +87,7 @@ export default function AdminIndividualsPage() {
                 setQ(e.target.value)
                 setPage(1)
               }}
-              placeholder="Nom, email, téléphone…"
+              placeholder={t('admin.individuals.searchPlaceholder')}
               minWidthClass="min-w-[260px]"
             />
           </div>
@@ -95,34 +97,34 @@ export default function AdminIndividualsPage() {
       <div className="px-4 md:px-6 lg:px-8 py-5">
         {search && (
           <p className="text-caption text-warm-500 mb-3">
-            Recherche globale — filtre <strong className="text-ink">{activeFilter.label}</strong>{' '}
-            ignoré.{' '}
+            {t('admin.common.globalSearchIgnoredPrefix')}{' '}
+            <strong className="text-ink">{activeFilter.label}</strong> {t('admin.common.globalSearchIgnoredSuffix')}{' '}
             <button
               onClick={() => setQ('')}
               className="text-airmess-red font-semibold hover:underline"
             >
-              Effacer
+              {t('admin.common.clearFilter')}
             </button>
           </p>
         )}
 
         <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="p-10 text-center text-warm-500 text-body-s">Chargement…</div>
+            <div className="p-10 text-center text-warm-500 text-body-s">{t('admin.common.loading')}</div>
           ) : individuals.length === 0 ? (
             <div className="p-10 text-center text-warm-500 text-body-s italic">
-              Aucun particulier trouvé.
+              {t('admin.individuals.emptyResults')}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-body-s min-w-[700px]">
                 <thead className="bg-cream/60 text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
                   <tr>
-                    <th className="px-5 py-2.5 text-left">Nom</th>
-                    <th className="px-5 py-2.5 text-left">Contact</th>
-                    <th className="px-5 py-2.5 text-left">Quota</th>
-                    <th className="px-5 py-2.5 text-left">Statut</th>
-                    <th className="px-5 py-2.5 text-right">Action</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.individuals.colName')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.individuals.colContact')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.individuals.colQuota')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.individuals.colStatus')}</th>
+                    <th className="px-5 py-2.5 text-right">{t('admin.individuals.colAction')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-warm-200">
@@ -151,7 +153,7 @@ export default function AdminIndividualsPage() {
                       <td className="px-5 py-2.5 text-right whitespace-nowrap">
                         <Link to={`/admin/individuals/${p.id}`}>
                           <AdminButton variant="ghost" size="sm">
-                            Voir
+                            {t('admin.common.view')}
                           </AdminButton>
                         </Link>
                       </td>
@@ -168,7 +170,7 @@ export default function AdminIndividualsPage() {
             currentPage={data.current_page}
             lastPage={data.last_page}
             total={data.total}
-            itemLabel="particulier"
+            itemLabel={t('admin.individuals.itemLabel')}
             onChange={setPage}
             isFetching={isFetching}
           />

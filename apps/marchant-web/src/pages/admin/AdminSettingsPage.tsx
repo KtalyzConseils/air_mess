@@ -1,6 +1,7 @@
 import { useState, type ComponentType } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import { AdminButton } from '../../components/admin/AdminToolbar'
@@ -24,25 +25,32 @@ interface GroupMeta {
   Icon: ComponentType<IconProps>
 }
 
-const GROUP_META: Record<string, GroupMeta> = {
+interface GroupMetaConfig {
+  labelKey: string
+  descKey: string
+  Icon: ComponentType<IconProps>
+}
+
+const GROUP_META_CONFIG: Record<string, GroupMetaConfig> = {
   pricing: {
-    label: 'Tarification',
-    description: 'Tarifs, commissions et prix appliqués aux courses.',
+    labelKey: 'admin.settings.groupPricingLabel',
+    descKey: 'admin.settings.groupPricingDesc',
     Icon: BarChartIcon,
   },
   quotas: {
-    label: 'Quotas & limites',
-    description: "Plafonds d'usage et seuils déclencheurs.",
+    labelKey: 'admin.settings.groupQuotasLabel',
+    descKey: 'admin.settings.groupQuotasDesc',
     Icon: PackageIcon,
   },
   general: {
-    label: 'Général',
-    description: "Paramètres divers du système.",
+    labelKey: 'admin.settings.groupGeneralLabel',
+    descKey: 'admin.settings.groupGeneralDesc',
     Icon: SettingsIcon,
   },
 }
 
 export default function AdminSettingsPage() {
+  const { t } = useTranslation()
   const { data: settings, isLoading, isError } = useQuery({
     queryKey: ['admin', 'settings'],
     queryFn: fetchSettings,
@@ -51,24 +59,27 @@ export default function AdminSettingsPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Paramètres globaux"
-        subtitle="Réglages plateforme — réservé au super-admin."
+        title={t('admin.settings.title')}
+        subtitle={t('admin.settings.subtitleShort')}
       />
 
       <div className="px-4 md:px-8 lg:px-12 py-6 max-w-4xl mx-auto space-y-8">
         {/* Préférences UI — locale (par-device), pas un setting serveur */}
         <NavPreferenceSection />
 
-        {isLoading && <p className="text-body-s text-warm-500">Chargement…</p>}
-        {isError && <p className="text-body-s text-airmess-red">Erreur de chargement.</p>}
+        {isLoading && (
+          <p className="text-body-s text-warm-500">{t('admin.settings.loadingLabel')}</p>
+        )}
+        {isError && (
+          <p className="text-body-s text-airmess-red">{t('admin.settings.loadingError')}</p>
+        )}
 
         {settings &&
           Object.entries(settings).map(([group, items]) => {
-            const meta = GROUP_META[group] ?? {
-              label: group,
-              description: '',
-              Icon: SettingsIcon,
-            }
+            const cfg = GROUP_META_CONFIG[group]
+            const meta: GroupMeta = cfg
+              ? { label: t(cfg.labelKey), description: t(cfg.descKey), Icon: cfg.Icon }
+              : { label: group, description: '', Icon: SettingsIcon }
             return (
               <SettingsGroup key={group} meta={meta}>
                 <ul className="divide-y divide-warm-200">
@@ -118,6 +129,7 @@ function SettingsGroup({
    Section plans abonnements — pareil mais sans data dynamique
    ============================================================ */
 function PlansSection() {
+  const { t } = useTranslation()
   const { data: plans, isLoading, isError } = useQuery({
     queryKey: ['admin', 'plans'],
     queryFn: fetchAdminPlans,
@@ -126,16 +138,20 @@ function PlansSection() {
   return (
     <SettingsGroup
       meta={{
-        label: "Plans d'abonnement marchands",
-        description: "Prix mensuel et quota inclus dans chaque plan.",
+        label: t('admin.settings.plansSectionLabel'),
+        description: t('admin.settings.plansSectionDesc'),
         Icon: PackageIcon,
       }}
     >
       {isLoading && (
-        <p className="text-body-s text-warm-500 px-6 py-4">Chargement des plans…</p>
+        <p className="text-body-s text-warm-500 px-6 py-4">
+          {t('admin.settings.loadingPlans')}
+        </p>
       )}
       {isError && (
-        <p className="text-body-s text-airmess-red px-6 py-4">Erreur de chargement.</p>
+        <p className="text-body-s text-airmess-red px-6 py-4">
+          {t('admin.settings.loadingError')}
+        </p>
       )}
 
       {plans && (
@@ -150,6 +166,7 @@ function PlansSection() {
 }
 
 function PlanRow({ plan }: { plan: AdminPlan }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [price, setPrice] = useState(String(plan.monthly_price_fcfa))
@@ -170,8 +187,8 @@ function PlanRow({ plan }: { plan: AdminPlan }) {
     onError: (err) => {
       setError(
         err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Mise à jour impossible.'
-          : 'Mise à jour impossible.',
+          ? err.response?.data?.message ?? t('admin.settings.updateError')
+          : t('admin.settings.updateError'),
       )
     },
   })
@@ -203,14 +220,16 @@ function PlanRow({ plan }: { plan: AdminPlan }) {
             <div className="text-right">
               <p className="text-body font-bold text-ink tabular-nums whitespace-nowrap">
                 {plan.monthly_price_fcfa.toLocaleString('fr-FR')}{' '}
-                <span className="text-caption text-warm-500 font-normal">FCFA/mois</span>
+                <span className="text-caption text-warm-500 font-normal">
+                  {t('admin.settings.perMonthUnit')}
+                </span>
               </p>
               <p className="text-caption text-warm-500 tabular-nums">
-                {plan.included_courses} courses incluses
+                {plan.included_courses} {t('admin.settings.coursesIncludedSuffix')}
               </p>
             </div>
             <AdminButton variant="secondary" size="sm" onClick={() => setEditing(true)}>
-              Modifier
+              {t('admin.settings.modify')}
             </AdminButton>
           </div>
         ) : (
@@ -219,15 +238,15 @@ function PlanRow({ plan }: { plan: AdminPlan }) {
               value={price}
               onChange={setPrice}
               disabled={mutation.isPending}
-              unit="FCFA/mois"
-              placeholder="Prix"
+              unit={t('admin.settings.perMonthUnit')}
+              placeholder={t('admin.settings.pricePlaceholder')}
             />
             <NumberFieldWithUnit
               value={quota}
               onChange={setQuota}
               disabled={mutation.isPending}
-              unit="courses"
-              placeholder="Quota"
+              unit={t('admin.settings.coursesUnit')}
+              placeholder={t('admin.settings.quotaPlaceholder')}
             />
             <EditActions
               onSave={() => mutation.mutate()}
@@ -247,6 +266,7 @@ function PlanRow({ plan }: { plan: AdminPlan }) {
    Ligne de paramètre individuel
    ============================================================ */
 function SettingRow({ setting }: { setting: AppSetting }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState<string>(String(setting.value))
@@ -265,8 +285,8 @@ function SettingRow({ setting }: { setting: AppSetting }) {
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Mise à jour impossible.'
-          : 'Mise à jour impossible.'
+          ? err.response?.data?.message ?? t('admin.settings.updateError')
+          : t('admin.settings.updateError')
       setError(msg)
     },
   })
@@ -298,7 +318,7 @@ function SettingRow({ setting }: { setting: AppSetting }) {
             )}
             {justSaved && (
               <span className="inline-flex items-center gap-1 text-caption font-semibold text-success">
-                <CheckIcon size={12} /> Enregistré
+                <CheckIcon size={12} /> {t('admin.settings.savedBadge')}
               </span>
             )}
           </div>
@@ -307,7 +327,7 @@ function SettingRow({ setting }: { setting: AppSetting }) {
           )}
           {setting.updated_by && !editing && (
             <p className="text-caption text-warm-400 mt-1.5">
-              Dernière modif par {setting.updated_by.name}
+              {t('admin.settings.lastEditedByPrefix')} {setting.updated_by.name}
             </p>
           )}
         </div>
@@ -326,7 +346,7 @@ function SettingRow({ setting }: { setting: AppSetting }) {
               </span>
             </div>
             <AdminButton variant="secondary" size="sm" onClick={() => setEditing(true)}>
-              Modifier
+              {t('admin.settings.modify')}
             </AdminButton>
           </div>
         ) : (
@@ -403,13 +423,14 @@ function EditActions({
   onCancel: () => void
   isPending: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <div className="inline-flex items-center gap-1.5">
       <AdminButton variant="secondary" size="sm" onClick={onCancel} disabled={isPending}>
-        Annuler
+        {t('common.cancel')}
       </AdminButton>
       <AdminButton variant="primary" size="sm" onClick={onSave} disabled={isPending}>
-        {isPending ? 'Enregistrement…' : 'Enregistrer'}
+        {isPending ? t('admin.settings.savingLabel') : t('admin.settings.saveCta')}
       </AdminButton>
     </div>
   )
@@ -437,41 +458,42 @@ function parseValue(raw: string, type: AppSetting['type']) {
 
 interface NavOption {
   value: NavMode
-  label: string
-  description: string
+  labelKey: string
+  descKey: string
   Icon: ComponentType<IconProps>
 }
 
 const NAV_OPTIONS: NavOption[] = [
   {
     value: 'both',
-    label: 'Sidebar + bouton flottant',
-    description: "Sidebar verticale toujours visible + bouton radial déplaçable. C'est le défaut.",
+    labelKey: 'admin.settings.navBothLabel',
+    descKey: 'admin.settings.navBothDesc',
     Icon: DashboardIcon,
   },
   {
     value: 'sidebar',
-    label: 'Sidebar uniquement',
-    description: 'Mode classique : seule la barre verticale est affichée. Cache le bouton flottant.',
+    labelKey: 'admin.settings.navSidebarLabel',
+    descKey: 'admin.settings.navSidebarDesc',
     Icon: MenuIcon,
   },
   {
     value: 'fab',
-    label: 'Bouton flottant uniquement',
-    description: 'Mode minimaliste : pas de sidebar, navigation exclusivement par le bouton radial.',
+    labelKey: 'admin.settings.navFabLabel',
+    descKey: 'admin.settings.navFabDesc',
     Icon: SettingsIcon,
   },
 ]
 
 function NavPreferenceSection() {
+  const { t } = useTranslation()
   const navMode = useUiPrefsStore((s) => s.navMode)
   const setNavMode = useUiPrefsStore((s) => s.setNavMode)
 
   return (
     <SettingsGroup
       meta={{
-        label: 'Préférences de navigation',
-        description: "Choix local — sauvegardé sur cet appareil uniquement.",
+        label: t('admin.settings.navPrefsLabel'),
+        description: t('admin.settings.navPrefsDesc'),
         Icon: DashboardIcon,
       }}
     >
@@ -505,14 +527,14 @@ function NavPreferenceSection() {
 
                 <span className="min-w-0 flex-1">
                   <p className="text-body-s font-bold text-ink flex items-center gap-2">
-                    {opt.label}
+                    {t(opt.labelKey)}
                     {active && (
                       <span className="inline-flex items-center gap-1 text-caption font-semibold text-success">
-                        <CheckIcon size={12} /> Actif
+                        <CheckIcon size={12} /> {t('admin.settings.activeBadge')}
                       </span>
                     )}
                   </p>
-                  <p className="text-body-s text-warm-500 mt-0.5">{opt.description}</p>
+                  <p className="text-body-s text-warm-500 mt-0.5">{t(opt.descKey)}</p>
                 </span>
               </button>
             </li>

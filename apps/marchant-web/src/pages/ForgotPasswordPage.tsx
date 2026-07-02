@@ -2,14 +2,17 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import { forgotPassword } from '../api/password'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
 import { ArrowRightIcon } from '../components/ui/icons'
+import LanguageToggle from '../components/ui/LanguageToggle'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 
 export default function ForgotPasswordPage() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
 
@@ -20,16 +23,17 @@ export default function ForgotPasswordPage() {
 
   const apiError =
     mutation.error instanceof AxiosError
-      ? mutation.error.response?.data?.message ?? 'Erreur lors de la demande.'
+      ? mutation.error.response?.data?.message ?? t('auth.forgot.requestError')
       : null
 
   return (
     <div className="min-h-screen bg-cream flex flex-col">
       {/* Logo top */}
-      <div className="p-6 md:p-8">
+      <div className="p-6 md:p-8 flex items-center justify-between gap-4">
         <Link to="/" className="inline-block">
           <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
         </Link>
+        <LanguageToggle variant="light" />
       </div>
 
       {/* Card centrée */}
@@ -39,26 +43,25 @@ export default function ForgotPasswordPage() {
             to="/login"
             className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink mb-4"
           >
-            ← Retour à la connexion
+            {t('auth.forgot.backToLogin')}
           </Link>
 
-          <h1 className="text-h1 text-ink">Mot de passe oublié ?</h1>
+          <h1 className="text-h1 text-ink">{t('auth.forgot.title')}</h1>
 
           {submitted ? (
             <div className="mt-6 bg-success-bg border border-success/20 text-success rounded-md p-4">
-              <p className="font-bold text-body">📧 Demande prise en compte</p>
+              <p className="font-bold text-body">{t('auth.forgot.submittedTitle')}</p>
               <p className="text-body-s mt-2">
-                Si cet email est associé à un compte Air Mess, un lien de réinitialisation
-                y a été envoyé. Vérifiez votre boîte (et vos spams).
+                {t('auth.forgot.submittedBody')}
               </p>
               <p className="text-body-s mt-2 text-warm-600">
-                Le lien expire dans 60 minutes.
+                {t('auth.forgot.submittedExpiry')}
               </p>
             </div>
           ) : (
             <>
               <p className="text-body-s text-warm-500 mt-2 mb-6">
-                Entrez votre email — nous vous enverrons un lien pour réinitialiser votre mot de passe.
+                {t('auth.forgot.subtitle')}
               </p>
 
               <form
@@ -70,8 +73,8 @@ export default function ForgotPasswordPage() {
               >
                 <Input
                   type="email"
-                  label="Email"
-                  placeholder="vous@exemple.com"
+                  label={t('common.email')}
+                  placeholder={t('auth.forgot.emailPlaceholder')}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -99,7 +102,7 @@ export default function ForgotPasswordPage() {
                   disabled={!email}
                   rightIcon={!mutation.isPending && <ArrowRightIcon size={18} />}
                 >
-                  Envoyer le lien
+                  {t('auth.forgot.submit')}
                 </Button>
               </form>
             </>

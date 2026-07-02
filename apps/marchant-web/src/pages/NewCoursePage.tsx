@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import FormSection from '../components/FormSection'
 import Field from '../components/Field'
@@ -29,6 +30,7 @@ const inputClass =
   'disabled:opacity-60 disabled:cursor-not-allowed'
 
 export default function NewCoursePage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
@@ -123,8 +125,7 @@ export default function NewCoursePage() {
       }
       if (result.quota_reached) {
         setQuotaError(
-          `Quota mensuel atteint (${result.used}/${result.limit}). ` +
-          'Passez à un plan supérieur pour continuer.',
+          t('courses.new.quotaMonthlyReached', { used: result.used, limit: result.limit }),
         )
       }
     },
@@ -146,12 +147,12 @@ export default function NewCoursePage() {
     const dLat = Number(values.destination_lat)
     const dLng = Number(values.destination_lng)
     if (!Number.isFinite(oLat) || !Number.isFinite(oLng) || oLat === 0 || oLng === 0) {
-      setQuotaError("Position d'origine manquante. Cliquez sur la carte d'origine pour la définir.")
+      setQuotaError(t('courses.new.originPositionMissing'))
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
     if (!Number.isFinite(dLat) || !Number.isFinite(dLng) || dLat === 0 || dLng === 0) {
-      setQuotaError("Position de destination manquante. Cliquez sur la carte de destination pour la définir.")
+      setQuotaError(t('courses.new.destinationPositionMissing'))
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
@@ -175,7 +176,7 @@ export default function NewCoursePage() {
 
   const apiError =
     mutation.error instanceof AxiosError
-      ? mutation.error.response?.data?.message ?? 'Erreur de création.'
+      ? mutation.error.response?.data?.message ?? t('courses.new.createErrorShort')
       : null
 
   function fillDestinationFromAddress(addr: Address) {
@@ -206,16 +207,16 @@ export default function NewCoursePage() {
             to="/dashboard"
             className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink"
           >
-            ← Retour au tableau de bord
+            {t('courses.new.backToDashboard')}
           </Link>
         </div>
 
-        <PageEyebrow label="Nouvelle course" className="mb-4" />
+        <PageEyebrow label={t('courses.new.eyebrow')} className="mb-4" />
         <h1 className="text-h1 md:text-display-2 text-ink leading-tight mb-2">
-          Créez une <Highlight>livraison</Highlight>.
+          {t('courses.new.title')} <Highlight>{t('courses.new.titleHighlight')}</Highlight>{t('courses.new.titleEnd')}
         </h1>
         <p className="text-body-l text-warm-500 mb-10">
-          Remplissez les informations ci-dessous, le livreur est attribué automatiquement.
+          {t('courses.new.subtitle')}
         </p>
 
         {/* ============================================================
@@ -232,7 +233,7 @@ export default function NewCoursePage() {
               <p className="text-body-s text-warning">{quotaError}</p>
             </div>
             <Link to="/wallet">
-              <Button variant="primary" size="sm" pill>Recharger</Button>
+              <Button variant="primary" size="sm" pill>{t('courses.new.topUpCta')}</Button>
             </Link>
           </Card>
         )}
@@ -252,11 +253,10 @@ export default function NewCoursePage() {
               <div className="flex items-center gap-2 text-body-s text-success">
                 <span>💰</span>
                 <span>
-                  <strong className="tabular-nums">{wallet.available.toLocaleString('fr-FR')} FCFA</strong> dans votre wallet.
-                  Cette course (<span className="tabular-nums">{currentFee.toLocaleString('fr-FR')} FCFA</span>) sera débitée à la livraison.
+                  <strong className="tabular-nums">{wallet.available.toLocaleString('fr-FR')} FCFA</strong> {t('courses.new.walletCoveredPrefix')}<span className="tabular-nums">{currentFee.toLocaleString('fr-FR')} FCFA</span>{t('courses.new.walletCoveredSuffix')}
                 </span>
               </div>
-              <Link to="/wallet" className="text-caption text-success underline shrink-0">Gérer →</Link>
+              <Link to="/wallet" className="text-caption text-success underline shrink-0">{t('courses.new.manageWallet')}</Link>
             </Card>
           ) : (
             <Card padding="md" className="mb-4 bg-warning-bg! border-warning/30! flex items-start justify-between gap-3">
@@ -264,15 +264,15 @@ export default function NewCoursePage() {
                 <span>⚠️</span>
                 <div>
                   <p className="font-semibold">
-                    Wallet insuffisant (<span className="tabular-nums">{wallet.available.toLocaleString('fr-FR')} FCFA</span>)
+                    {t('courses.new.walletInsufficientTitle')} (<span className="tabular-nums">{wallet.available.toLocaleString('fr-FR')} FCFA</span>)
                   </p>
                   <p className="text-caption mt-0.5">
-                    Cette course (<span className="tabular-nums">{currentFee.toLocaleString('fr-FR')} FCFA</span>) sera réglée par paiement direct Fedapay à la création.
+                    {t('courses.new.walletCourseLabel')} (<span className="tabular-nums">{currentFee.toLocaleString('fr-FR')} FCFA</span>) {t('courses.new.walletInsufficientBody')}
                   </p>
                 </div>
               </div>
               <Link to="/wallet" className="shrink-0">
-                <Button variant="primary" size="sm" pill>Recharger</Button>
+                <Button variant="primary" size="sm" pill>{t('courses.new.topUpCta')}</Button>
               </Link>
             </Card>
           )
@@ -295,12 +295,12 @@ export default function NewCoursePage() {
               <div className={reached ? 'text-warning' : 'text-info'}>
                 <p className="font-semibold text-body-s">
                   {reached
-                    ? `Quota mensuel atteint (${used}/${limit})`
-                    : `Quota mensuel : ${used}/${limit} courses utilisées`}
+                    ? t('courses.new.quotaReachedTitle', { used, limit })
+                    : t('courses.new.quotaProgress', { used, limit })}
                 </p>
                 {reached && (
                   <p className="text-caption mt-0.5">
-                    Cette course sera débitée de votre wallet si le solde le permet, sinon par paiement direct Fedapay.
+                    {t('courses.new.quotaReachedBody')}
                   </p>
                 )}
               </div>
@@ -313,79 +313,79 @@ export default function NewCoursePage() {
             ============================================================ */}
         <form onSubmit={handleSubmit(onSubmit)}>
           {/* COLIS */}
-          <FormSection title="Colis" description="Que livrons-nous ?">
+          <FormSection title={t('courses.new.packageSectionTitle')} description={t('courses.new.packageSectionDesc')}>
             <div className="mb-3">
               <AddressPicker onSelect={fillDestinationFromAddress} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Field label="Catégorie" required error={errors.package_category_id?.message}>
+              <Field label={t('courses.new.categoryLabel')} required error={errors.package_category_id?.message}>
                 <select
-                  {...register('package_category_id', { required: 'Obligatoire' })}
+                  {...register('package_category_id', { required: t('courses.new.required') })}
                   className={inputClass}
                 >
-                  <option value="">— Choisir —</option>
+                  <option value="">{t('courses.new.categoryChoose')}</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </Field>
 
-              <Field label="Taille" required>
+              <Field label={t('courses.new.sizeLabel')} required>
                 <select {...register('package_size')} className={inputClass}>
-                  <option value="S">S — petit</option>
-                  <option value="M">M — moyen</option>
-                  <option value="L">L — grand</option>
-                  <option value="XL">XL — encombrant</option>
+                  <option value="S">{t('courses.new.sizeSmall')}</option>
+                  <option value="M">{t('courses.new.sizeMedium')}</option>
+                  <option value="L">{t('courses.new.sizeLarge')}</option>
+                  <option value="XL">{t('courses.new.sizeXL')}</option>
                 </select>
               </Field>
 
-              <Field label="Poids (kg)">
+              <Field label={t('courses.new.packageWeight')}>
                 <input
                   type="number"
                   step="0.1"
                   {...register('package_weight_kg')}
                   className={inputClass}
-                  placeholder="ex: 2.5"
+                  placeholder={t('courses.new.packageWeightPlaceholder')}
                 />
               </Field>
 
-              <Field label="Description" required error={errors.package_description?.message} className="md:col-span-2">
+              <Field label={t('courses.new.packageDescription')} required error={errors.package_description?.message} className="md:col-span-2">
                 <input
-                  {...register('package_description', { required: 'Obligatoire' })}
+                  {...register('package_description', { required: t('courses.new.required') })}
                   className={inputClass}
-                  placeholder="ex: 2 pizzas Margherita + Reine"
+                  placeholder={t('courses.new.packageDescPlaceholder')}
                 />
               </Field>
 
-              <Field label="Urgence">
+              <Field label={t('courses.new.urgencyLabel')}>
                 <select {...register('urgency')} className={inputClass}>
-                  <option value="standard">Standard — {fees.standard.toLocaleString('fr-FR')} FCFA</option>
-                  <option value="express">Express — {fees.express.toLocaleString('fr-FR')} FCFA</option>
+                  <option value="standard">{t('courses.new.urgencyStandardOption', { fee: fees.standard.toLocaleString('fr-FR') })}</option>
+                  <option value="express">{t('courses.new.urgencyExpressOption', { fee: fees.express.toLocaleString('fr-FR') })}</option>
                 </select>
               </Field>
             </div>
           </FormSection>
 
           {/* ORIGINE */}
-          <FormSection title="Origine" description="D'où part le colis (pré-rempli depuis votre profil)">
+          <FormSection title={t('courses.new.originSectionTitle')} description={t('courses.new.originSectionDesc')}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Nom expéditeur" required error={errors.origin_name?.message}>
-                <input {...register('origin_name', { required: 'Obligatoire' })} className={inputClass} />
+              <Field label={t('courses.new.senderName')} required error={errors.origin_name?.message}>
+                <input {...register('origin_name', { required: t('courses.new.required') })} className={inputClass} />
               </Field>
-              <Field label="Téléphone" required error={errors.origin_phone?.message}>
-                <input {...register('origin_phone', { required: 'Obligatoire' })} className={inputClass} />
+              <Field label={t('courses.new.phoneLabel')} required error={errors.origin_phone?.message}>
+                <input {...register('origin_phone', { required: t('courses.new.required') })} className={inputClass} />
               </Field>
-              <Field label="Adresse / rue">
+              <Field label={t('courses.new.streetLabel')}>
                 <input {...register('origin_street')} className={inputClass} />
               </Field>
-              <Field label="Quartier" required>
-                <input {...register('origin_quartier', { required: 'Obligatoire' })} className={inputClass} placeholder="ex: Ganhi" />
+              <Field label={t('courses.new.originQuartier')} required>
+                <input {...register('origin_quartier', { required: t('courses.new.required') })} className={inputClass} placeholder={t('courses.new.quartierPlaceholder')} />
               </Field>
-              <Field label="Ville" required>
-                <input {...register('origin_city', { required: 'Obligatoire' })} className={inputClass} />
+              <Field label={t('courses.new.originCity')} required>
+                <input {...register('origin_city', { required: t('courses.new.required') })} className={inputClass} />
               </Field>
               <div className="md:col-span-2">
-                <p className="text-caption text-warm-600 font-medium mb-1.5">Position sur la carte</p>
+                <p className="text-caption text-warm-600 font-medium mb-1.5">{t('courses.new.mapPosition')}</p>
                 <LocationPicker
                   lat={Number(watch('origin_lat')) || undefined}
                   lng={Number(watch('origin_lng')) || undefined}
@@ -397,38 +397,38 @@ export default function NewCoursePage() {
                 <input type="hidden" {...register('origin_lat', { required: true })} />
                 <input type="hidden" {...register('origin_lng', { required: true })} />
                 {geoStatus === 'success' && (
-                  <p className="text-caption text-success mt-1.5">✓ Position détectée automatiquement. Vous pouvez l'ajuster ci-dessus.</p>
+                  <p className="text-caption text-success mt-1.5">{t('courses.new.geoSuccess')}</p>
                 )}
                 {geoStatus === 'denied' && (
-                  <p className="text-caption text-warning mt-1.5">Géolocalisation auto refusée — utilisez « Ma position actuelle » ou cliquez sur la carte.</p>
+                  <p className="text-caption text-warning mt-1.5">{t('courses.new.geoDenied')}</p>
                 )}
               </div>
             </div>
           </FormSection>
 
           {/* DESTINATION */}
-          <FormSection title="Destination" description="À qui et où livrer">
+          <FormSection title={t('courses.new.destinationSectionTitle')} description={t('courses.new.destinationSectionDesc')}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Nom destinataire" required>
-                <input {...register('destination_name', { required: 'Obligatoire' })} className={inputClass} />
+              <Field label={t('courses.new.recipientNameLabel')} required>
+                <input {...register('destination_name', { required: t('courses.new.required') })} className={inputClass} />
               </Field>
-              <Field label="Téléphone destinataire" required>
-                <input {...register('destination_phone', { required: 'Obligatoire' })} className={inputClass} />
+              <Field label={t('courses.new.recipientPhoneLabel')} required>
+                <input {...register('destination_phone', { required: t('courses.new.required') })} className={inputClass} />
               </Field>
-              <Field label="Adresse / rue">
+              <Field label={t('courses.new.streetLabel')}>
                 <input {...register('destination_street')} className={inputClass} />
               </Field>
-              <Field label="Point de repère">
-                <input {...register('destination_landmark')} className={inputClass} placeholder="ex: Maison à portail bleu" />
+              <Field label={t('courses.new.landmarkLabel')}>
+                <input {...register('destination_landmark')} className={inputClass} placeholder={t('courses.new.landmarkPlaceholder')} />
               </Field>
-              <Field label="Quartier" required>
-                <input {...register('destination_quartier', { required: 'Obligatoire' })} className={inputClass} />
+              <Field label={t('courses.new.destinationQuartier')} required>
+                <input {...register('destination_quartier', { required: t('courses.new.required') })} className={inputClass} />
               </Field>
-              <Field label="Ville" required>
-                <input {...register('destination_city', { required: 'Obligatoire' })} className={inputClass} />
+              <Field label={t('courses.new.destinationCity')} required>
+                <input {...register('destination_city', { required: t('courses.new.required') })} className={inputClass} />
               </Field>
               <div className="md:col-span-2">
-                <p className="text-caption text-warm-600 font-medium mb-1.5">Position sur la carte</p>
+                <p className="text-caption text-warm-600 font-medium mb-1.5">{t('courses.new.mapPosition')}</p>
                 <LocationPicker
                   lat={Number(watch('destination_lat')) || undefined}
                   lng={Number(watch('destination_lng')) || undefined}
@@ -439,16 +439,16 @@ export default function NewCoursePage() {
                 />
                 <input type="hidden" {...register('destination_lat', { required: true })} />
                 <input type="hidden" {...register('destination_lng', { required: true })} />
-                <p className="text-caption text-warm-400 mt-1.5">Cliquez sur la carte pour positionner.</p>
+                <p className="text-caption text-warm-400 mt-1.5">{t('courses.new.mapClickHint')}</p>
               </div>
-              <Field label="Instructions livreur" className="md:col-span-2">
-                <textarea {...register('destination_instructions')} className={inputClass} rows={2} placeholder="ex: Appeler 5 min avant" />
+              <Field label={t('courses.new.driverInstructions')} className="md:col-span-2">
+                <textarea {...register('destination_instructions')} className={inputClass} rows={2} placeholder={t('courses.new.driverInstructionsPlaceholder')} />
               </Field>
             </div>
           </FormSection>
 
           {/* ENCAISSEMENT */}
-          <FormSection title="Encaissement à la livraison" description="Le livreur doit-il encaisser de l'argent ?">
+          <FormSection title={t('courses.new.collectionSectionTitle')} description={t('courses.new.collectionSectionDesc')}>
             <label className="inline-flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -456,19 +456,19 @@ export default function NewCoursePage() {
                 onClick={() => setCollectionDecided(true)}
                 className="h-4 w-4 accent-airmess-yellow"
               />
-              <span className="text-body text-ink">Oui, le livreur doit encaisser</span>
+              <span className="text-body text-ink">{t('courses.new.collectionYes')}</span>
             </label>
 
             {hasCollection && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <Field label="Montant (FCFA)" required>
+                <Field label={t('courses.new.collectionAmount')} required>
                   <input type="number" {...register('collection_amount')} className={inputClass} />
                 </Field>
-                <Field label="Méthode" required>
+                <Field label={t('courses.new.collectionMethod')} required>
                   <select {...register('collection_method')} className={inputClass}>
-                    <option value="cash">Cash</option>
-                    <option value="mobile_money">Mobile Money</option>
-                    <option value="prepaid">Déjà payé</option>
+                    <option value="cash">{t('courses.new.collectionCash')}</option>
+                    <option value="mobile_money">{t('courses.new.collectionMobileMoney')}</option>
+                    <option value="prepaid">{t('courses.new.collectionPrepaid')}</option>
                   </select>
                 </Field>
               </div>
@@ -483,7 +483,7 @@ export default function NewCoursePage() {
 
           <div className="flex flex-col md:flex-row justify-end gap-3 mt-6">
             <Link to="/dashboard" className="md:order-1">
-              <Button variant="secondary" size="lg" fullWidth>Annuler</Button>
+              <Button variant="secondary" size="lg" fullWidth>{t('common.cancel')}</Button>
             </Link>
             <Button
               type="submit"
@@ -494,7 +494,7 @@ export default function NewCoursePage() {
               rightIcon={!mutation.isPending && <span aria-hidden>→</span>}
               className="md:order-2"
             >
-              {mutation.isPending ? 'Création…' : 'Confirmer la course'}
+              {mutation.isPending ? t('courses.new.creating') : t('courses.new.confirmCta')}
             </Button>
           </div>
         </form>
@@ -506,10 +506,9 @@ export default function NewCoursePage() {
       {pendingValues && (
         <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 ams-anim-fade-in">
           <Card variant="signature" padding="lg" className="max-w-md w-full ams-anim-scale-in">
-            <h2 className="text-h2 text-ink font-bold">💰 Encaissement à la livraison ?</h2>
+            <h2 className="text-h2 text-ink font-bold">{t('courses.new.collectionModalTitle')}</h2>
             <p className="text-body-s text-warm-600 mt-2">
-              Vous n'avez pas précisé si le livreur doit récupérer un montant à la livraison.
-              Souhaitez-vous activer l'encaissement ?
+              {t('courses.new.collectionModalBody')}
             </p>
             <div className="flex gap-3 mt-6">
               <Button
@@ -523,7 +522,7 @@ export default function NewCoursePage() {
                   performCreate({ ...values, has_collection: false })
                 }}
               >
-                Non, pas d'encaissement
+                {t('courses.new.collectionModalNo')}
               </Button>
               <Button
                 variant="primary"
@@ -540,7 +539,7 @@ export default function NewCoursePage() {
                   }, 100)
                 }}
               >
-                Oui, je précise
+                {t('courses.new.collectionModalYes')}
               </Button>
             </div>
           </Card>

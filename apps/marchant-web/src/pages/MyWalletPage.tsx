@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -15,12 +16,12 @@ import {
   type WalletTransactionType,
 } from '../api/wallet'
 
-const TX_META: Record<WalletTransactionType, { label: string; icon: string; positive: boolean }> = {
-  deposit:           { label: 'Rechargement',  icon: '⬇️', positive: true  },
-  course_charge:     { label: 'Course livrée', icon: '📦', positive: false },
-  refund:            { label: 'Remboursement', icon: '↩️', positive: true  },
-  adjustment_credit: { label: 'Crédit admin',  icon: '✨', positive: true  },
-  adjustment_debit:  { label: 'Débit admin',   icon: '⚠️', positive: false },
+const TX_META: Record<WalletTransactionType, { labelKey: string; icon: string; positive: boolean }> = {
+  deposit:           { labelKey: 'wallet.txDeposit',          icon: '⬇️', positive: true  },
+  course_charge:     { labelKey: 'wallet.txCourseCharge',     icon: '📦', positive: false },
+  refund:            { labelKey: 'wallet.txRefund',           icon: '↩️', positive: true  },
+  adjustment_credit: { labelKey: 'wallet.txAdjustmentCredit', icon: '✨', positive: true  },
+  adjustment_debit:  { labelKey: 'wallet.txAdjustmentDebit',  icon: '⚠️', positive: false },
 }
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000]
@@ -36,6 +37,7 @@ function formatDateTime(value: string): string {
 }
 
 export default function MyWalletPage() {
+  const { t } = useTranslation()
   const [showTopUp, setShowTopUp] = useState(false)
   const [topUpAmount, setTopUpAmount] = useState<string>('5000')
 
@@ -53,8 +55,8 @@ export default function MyWalletPage() {
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Erreur lors de la création du paiement.'
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('wallet.paymentCreateError')
+          : t('common.unexpectedError')
       window.alert(`⚠️ ${msg}`)
     },
   })
@@ -62,7 +64,7 @@ export default function MyWalletPage() {
   function submitTopUp() {
     const n = parseInt(topUpAmount, 10)
     if (!n || n < 500) {
-      window.alert('Le montant minimum de rechargement est de 500 FCFA.')
+      window.alert(t('wallet.minTopUpError'))
       return
     }
     topUpMutation.mutate(n)
@@ -73,7 +75,7 @@ export default function MyWalletPage() {
       <div className="min-h-screen bg-cream">
         <AppHeader />
         <main className="max-w-3xl mx-auto px-4 md:px-6 py-12 text-center text-warm-500">
-          Chargement du wallet…
+          {t('wallet.loadingWallet')}
         </main>
       </div>
     )
@@ -83,13 +85,12 @@ export default function MyWalletPage() {
     <div className="min-h-screen bg-cream">
       <AppHeader />
       <main className="max-w-3xl mx-auto px-4 md:px-6 py-8 md:py-12">
-        <PageEyebrow label="Mon wallet" className="mb-4" />
+        <PageEyebrow label={t('wallet.eyebrow')} className="mb-4" />
         <h1 className="text-h1 md:text-display-2 text-ink leading-tight mb-2">
-          Votre <Highlight>wallet</Highlight>.
+          {t('wallet.titleStart')} <Highlight>{t('wallet.titleHighlight')}</Highlight>{t('wallet.titleEnd')}
         </h1>
         <p className="text-body-l text-warm-500 mb-8">
-          Rechargez votre wallet pour payer vos courses automatiquement. Solde insuffisant ?
-          La course passe en paiement direct.
+          {t('wallet.subtitle')}
         </p>
 
         {/* Bandeau si solde bas */}
@@ -97,10 +98,9 @@ export default function MyWalletPage() {
           <Card padding="md" className="mb-4 bg-warning-bg! border-warning/30! flex items-start gap-3">
             <span className="text-h3" aria-hidden>⚠️</span>
             <div className="text-warning">
-              <p className="font-bold text-body">Solde bas</p>
+              <p className="font-bold text-body">{t('wallet.lowBalance')}</p>
               <p className="text-body-s mt-0.5">
-                Votre solde est inférieur au minimum recommandé ({formatFcfa(data.min_recommended_fcfa)}).
-                Rechargez maintenant pour éviter les paiements directs à chaque course.
+                {t('wallet.lowBalanceBody', { amount: formatFcfa(data.min_recommended_fcfa) })}
               </p>
             </div>
           </Card>
@@ -112,7 +112,7 @@ export default function MyWalletPage() {
         <Card variant="dark" padding="lg" className="mb-6 relative overflow-hidden">
           <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-airmess-yellow/10 blur-3xl pointer-events-none" aria-hidden />
           <div className="relative">
-            <p className="text-eyebrow uppercase text-warm-300 mb-2">Solde disponible</p>
+            <p className="text-eyebrow uppercase text-warm-300 mb-2">{t('wallet.availableBalance')}</p>
             <p className="text-display-1 text-airmess-yellow tabular-nums leading-none">
               {data.available.toLocaleString('fr-FR')}
               <span className="text-h2 text-warm-300 ml-2 font-normal">FCFA</span>
@@ -120,17 +120,17 @@ export default function MyWalletPage() {
 
             {data.pending_reserved > 0 && (
               <p className="text-caption text-warm-300 mt-3">
-                dont <span className="tabular-nums">{formatFcfa(data.pending_reserved)}</span> réservés pour des courses en cours
+                {t('wallet.reservedForOngoing', { amount: formatFcfa(data.pending_reserved) })}
               </p>
             )}
 
             <div className="mt-6 pt-5 border-t border-warm-600/30 grid grid-cols-2 gap-4 text-body-s">
               <div>
-                <p className="text-caption text-warm-400">Total rechargé</p>
+                <p className="text-caption text-warm-400">{t('wallet.totalDeposited')}</p>
                 <p className="font-bold text-cream tabular-nums">{formatFcfa(data.total_deposited)}</p>
               </div>
               <div>
-                <p className="text-caption text-warm-400">Total dépensé</p>
+                <p className="text-caption text-warm-400">{t('wallet.totalSpent')}</p>
                 <p className="font-bold text-cream tabular-nums">{formatFcfa(data.total_spent)}</p>
               </div>
             </div>
@@ -144,7 +144,7 @@ export default function MyWalletPage() {
               onClick={() => setShowTopUp(true)}
               rightIcon={<span aria-hidden>→</span>}
             >
-              + Recharger
+              {t('wallet.topUp')}
             </Button>
           </div>
         </Card>
@@ -154,15 +154,15 @@ export default function MyWalletPage() {
             ============================================================ */}
         <Card variant="default" padding="md">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-h3 text-ink font-bold">Historique</h3>
+            <h3 className="text-h3 text-ink font-bold">{t('wallet.history')}</h3>
             <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isFetching}>
-              {isFetching ? '…' : '↻ Actualiser'}
+              {isFetching ? '…' : t('wallet.refresh')}
             </Button>
           </div>
 
           {data.recent_transactions.length === 0 ? (
             <p className="text-body-s text-warm-500 py-10 text-center">
-              Aucune transaction pour l'instant. Rechargez votre wallet pour commencer.
+              {t('wallet.historyEmpty')}
             </p>
           ) : (
             <ul className="divide-y divide-warm-100">
@@ -173,11 +173,11 @@ export default function MyWalletPage() {
                     <div className="flex items-start gap-3 min-w-0">
                       <span className="text-h3 leading-none shrink-0" aria-hidden>{meta.icon}</span>
                       <div className="min-w-0">
-                        <p className="text-body font-medium text-ink">{meta.label}</p>
+                        <p className="text-body font-medium text-ink">{t(meta.labelKey)}</p>
                         <p className="text-caption text-warm-500">
                           {formatDateTime(tx.created_at)}
                           {tx.course && (
-                            <> · course <span className="font-mono text-warm-400">{tx.course.reference}</span></>
+                            <> · {t('wallet.onCourse')} <span className="font-mono text-warm-400">{tx.course.reference}</span></>
                           )}
                         </p>
                       </div>
@@ -192,7 +192,7 @@ export default function MyWalletPage() {
                         {meta.positive ? '+' : '−'}{tx.amount_fcfa.toLocaleString('fr-FR')}
                       </p>
                       <p className="text-caption text-warm-400 tabular-nums">
-                        solde : {tx.balance_after.toLocaleString('fr-FR')}
+                        {t('wallet.balanceLabel')} : {tx.balance_after.toLocaleString('fr-FR')}
                       </p>
                     </div>
                   </li>
@@ -209,13 +209,13 @@ export default function MyWalletPage() {
       {showTopUp && (
         <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-4 ams-anim-fade-in">
           <Card variant="signature" padding="lg" className="w-full max-w-md ams-anim-scale-in">
-            <h3 className="text-h2 text-ink font-bold">Recharger le wallet</h3>
+            <h3 className="text-h2 text-ink font-bold">{t('wallet.topUpModalTitle')}</h3>
             <p className="text-body-s text-warm-500 mt-1 mb-5">
-              Vous serez redirigé vers Fedapay pour le paiement. Le wallet sera crédité dès confirmation.
+              {t('wallet.topUpModalSub')}
             </p>
 
             {/* Quick amounts */}
-            <Badge variant="neutral" size="sm" className="mb-2">Montants rapides</Badge>
+            <Badge variant="neutral" size="sm" className="mb-2">{t('wallet.quickAmounts')}</Badge>
             <div className="grid grid-cols-2 gap-2 mb-5">
               {QUICK_AMOUNTS.map((a) => (
                 <button
@@ -234,7 +234,7 @@ export default function MyWalletPage() {
             </div>
 
             <label className="block text-caption text-warm-600 font-medium mb-1.5">
-              Montant personnalisé
+              {t('wallet.customAmount')}
             </label>
             <div className="relative">
               <input
@@ -250,7 +250,7 @@ export default function MyWalletPage() {
               </span>
             </div>
             <p className="text-caption text-warm-500 mt-1.5">
-              Minimum 500 FCFA — recommandé {formatFcfa(data.min_recommended_fcfa)}
+              {t('wallet.minRecommended', { amount: formatFcfa(data.min_recommended_fcfa) })}
             </p>
 
             <div className="flex gap-3 mt-6">
@@ -260,7 +260,7 @@ export default function MyWalletPage() {
                 fullWidth
                 onClick={() => setShowTopUp(false)}
               >
-                Annuler
+                {t('common.cancel')}
               </Button>
               <Button
                 variant="dark"
@@ -271,7 +271,7 @@ export default function MyWalletPage() {
                 loading={topUpMutation.isPending}
                 rightIcon={!topUpMutation.isPending && <span aria-hidden>→</span>}
               >
-                Payer
+                {t('wallet.pay')}
               </Button>
             </div>
           </Card>

@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import { hasAdminRole } from '../lib/permissions'
 import { fetchUnreadCount } from '../api/notifications'
 
 export default function AdminHeader() {
+  const { t } = useTranslation()
   const { user, logout } = useAuthStore()
   // Lecture partagée : commercial + ops + support voient tous les liens d'entités.
   // Les actions sensibles (valider, suspendre, retraits, settings) restent gatées
@@ -30,29 +32,29 @@ export default function AdminHeader() {
   // Liste des liens (DRY pour desktop + mobile)
   const navLinks = (
     <>
-      <NavLink to="/admin/dashboard" className={linkClass}>Tableau de bord</NavLink>
-      {canBrowseEntities && <NavLink to="/admin/marchants" className={linkClass}>Marchands</NavLink>}
-      {canBrowseEntities && <NavLink to="/admin/individuals" className={linkClass}>Particuliers</NavLink>}
-      {canBrowseEntities && <NavLink to="/admin/courses" className={linkClass}>Courses</NavLink>}
-      {canBrowseEntities && <NavLink to="/admin/drivers" className={linkClass}>Livreurs</NavLink>}
-      {canBrowseEntities && <NavLink to="/admin/incidents" className={linkClass}>Incidents</NavLink>}
-      {isSuperAdmin && <NavLink to="/admin/withdraw-requests" className={linkClass}>🏦 Retraits</NavLink>}
-      {isSuperAdmin && <NavLink to="/admin/reconciliation" className={linkClass}>📊 Compta</NavLink>}
-      {isSuperAdmin && <NavLink to="/admin/settings" className={linkClass}>⚙️ Paramètres</NavLink>}
+      <NavLink to="/admin/dashboard" className={linkClass}>{t('nav.dashboard')}</NavLink>
+      {canBrowseEntities && <NavLink to="/admin/marchants" className={linkClass}>{t('admin.nav.marchants')}</NavLink>}
+      {canBrowseEntities && <NavLink to="/admin/individuals" className={linkClass}>{t('admin.nav.individuals')}</NavLink>}
+      {canBrowseEntities && <NavLink to="/admin/courses" className={linkClass}>{t('admin.nav.courses')}</NavLink>}
+      {canBrowseEntities && <NavLink to="/admin/drivers" className={linkClass}>{t('admin.nav.drivers')}</NavLink>}
+      {canBrowseEntities && <NavLink to="/admin/incidents" className={linkClass}>{t('admin.nav.incidents')}</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/withdraw-requests" className={linkClass}>🏦 {t('admin.nav.withdraws')}</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/reconciliation" className={linkClass}>📊 {t('admin.nav.reconciliation')}</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/settings" className={linkClass}>⚙️ {t('admin.nav.settings')}</NavLink>}
     </>
   )
 
   const mobileNavLinks = (
     <>
-      <NavLink to="/admin/dashboard" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Tableau de bord</NavLink>
-      {canBrowseEntities && <NavLink to="/admin/marchants" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Marchands</NavLink>}
-      {canBrowseEntities && <NavLink to="/admin/individuals" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Particuliers</NavLink>}
-      {canBrowseEntities && <NavLink to="/admin/courses" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Courses</NavLink>}
-      {canBrowseEntities && <NavLink to="/admin/drivers" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Livreurs</NavLink>}
-      {canBrowseEntities && <NavLink to="/admin/incidents" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>Incidents</NavLink>}
-      {isSuperAdmin && <NavLink to="/admin/withdraw-requests" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>🏦 Retraits</NavLink>}
-      {isSuperAdmin && <NavLink to="/admin/reconciliation" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>📊 Compta</NavLink>}
-      {isSuperAdmin && <NavLink to="/admin/settings" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>⚙️ Paramètres</NavLink>}
+      <NavLink to="/admin/dashboard" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>{t('nav.dashboard')}</NavLink>
+      {canBrowseEntities && <NavLink to="/admin/marchants" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>{t('admin.nav.marchants')}</NavLink>}
+      {canBrowseEntities && <NavLink to="/admin/individuals" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>{t('admin.nav.individuals')}</NavLink>}
+      {canBrowseEntities && <NavLink to="/admin/courses" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>{t('admin.nav.courses')}</NavLink>}
+      {canBrowseEntities && <NavLink to="/admin/drivers" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>{t('admin.nav.drivers')}</NavLink>}
+      {canBrowseEntities && <NavLink to="/admin/incidents" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>{t('admin.nav.incidents')}</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/withdraw-requests" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>🏦 {t('admin.nav.withdraws')}</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/reconciliation" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>📊 {t('admin.nav.reconciliation')}</NavLink>}
+      {isSuperAdmin && <NavLink to="/admin/settings" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>⚙️ {t('admin.nav.settings')}</NavLink>}
     </>
   )
 
@@ -64,7 +66,7 @@ export default function AdminHeader() {
         </div>
         <div className="min-w-0">
           <h1 className="text-base md:text-lg font-bold leading-none truncate">Air Mess</h1>
-          <p className="text-xs text-gray-400 truncate">Administration KTALYZ</p>
+          <p className="text-xs text-gray-400 truncate">{t('admin.common.administration')}</p>
         </div>
       </Link>
 
@@ -74,7 +76,7 @@ export default function AdminHeader() {
       </nav>
 
       <div className="flex items-center gap-2 md:gap-4">
-        <NavLink to="/admin/notifications" className="relative text-gray-300 hover:text-white" title="Notifications">
+        <NavLink to="/admin/notifications" className="relative text-gray-300 hover:text-white" title={t('admin.nav.notifications')}>
           <span className="text-xl">🔔</span>
           {unread > 0 && (
             <span className="absolute -top-1.5 -right-2 bg-airmess-red text-white text-[10px] leading-none rounded-full px-1.5 py-0.5 font-bold">
@@ -89,14 +91,14 @@ export default function AdminHeader() {
           <p className="text-xs text-gray-400">{user?.admin?.sub_role}</p>
         </div>
         <button onClick={() => logout()} className="hidden md:block text-sm text-gray-300 hover:text-white">
-          Déconnexion
+          {t('nav.logout')}
         </button>
 
         {/* Burger menu mobile (hidden à partir de lg) */}
         <button
           onClick={() => setMobileOpen((v) => !v)}
           className="lg:hidden p-2 rounded text-gray-300 hover:text-white hover:bg-white/10"
-          aria-label="Menu"
+          aria-label={t('admin.common.menu')}
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             {mobileOpen ? (
@@ -127,7 +129,7 @@ export default function AdminHeader() {
               }}
               className="w-full mt-4 px-4 py-3 rounded-lg text-base text-airmess-red hover:bg-white/10 text-left"
             >
-              ↪ Déconnexion
+              ↪ {t('nav.logout')}
             </button>
           </div>
         </>

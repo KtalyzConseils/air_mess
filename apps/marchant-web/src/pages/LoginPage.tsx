@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Highlight from '../components/Highlight'
 import { EyeIcon, EyeOffIcon, ArrowRightIcon } from '../components/ui/icons'
+import LanguageToggle from '../components/ui/LanguageToggle'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
 
@@ -36,8 +39,8 @@ export default function LoginPage() {
     } catch (err) {
       const message =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Erreur de connexion.'
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('auth.login.loginError')
+          : t('common.unexpectedError')
       setError(message)
     } finally {
       setLoading(false)
@@ -45,7 +48,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-cream">
+    <div className="min-h-screen flex flex-col md:flex-row bg-cream relative">
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageToggle variant="light" />
+      </div>
       {/* ============================================================
           GAUCHE — Form (sur mobile : prend toute la largeur)
           ============================================================ */}
@@ -57,16 +63,16 @@ export default function LoginPage() {
           </Link>
 
           {/* Headline */}
-          <h1 className="text-h1 text-ink mb-2">Bon retour.</h1>
+          <h1 className="text-h1 text-ink mb-2">{t('auth.login.title')}</h1>
           <p className="text-body-l text-warm-500 mb-8">
-            Connectez-vous à votre espace marchand.
+            {t('auth.login.subtitle')}
           </p>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               type="email"
-              label="Email"
+              label={t('common.email')}
               placeholder="contact@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -77,7 +83,7 @@ export default function LoginPage() {
 
             <Input
               type={showPassword ? 'text' : 'password'}
-              label="Mot de passe"
+              label={t('common.password')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -87,7 +93,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   className="p-2 text-warm-500 hover:text-ink transition-colors"
-                  aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  aria-label={showPassword ? t('common.hidePassword') : t('common.showPassword')}
                 >
                   {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
                 </button>
@@ -99,7 +105,7 @@ export default function LoginPage() {
                 to="/forgot-password"
                 className="text-caption text-warm-600 hover:text-ink"
               >
-                Mot de passe oublié ?
+                {t('auth.login.forgotPassword')}
               </Link>
             </div>
 
@@ -121,26 +127,26 @@ export default function LoginPage() {
               loading={loading}
               rightIcon={!loading && <ArrowRightIcon size={18} />}
             >
-              Se connecter
+              {t('auth.login.submit')}
             </Button>
           </form>
 
           {/* Séparateur */}
           <div className="flex items-center gap-3 my-8">
             <div className="h-px flex-1 bg-warm-200" />
-            <span className="text-caption text-warm-400">ou</span>
+            <span className="text-caption text-warm-400">{t('common.or')}</span>
             <div className="h-px flex-1 bg-warm-200" />
           </div>
 
           {/* Inscription */}
           <Link to="/register" className="block">
             <Button variant="secondary" size="lg" pill fullWidth>
-              Créer un compte marchand
+              {t('auth.login.createAccount')}
             </Button>
           </Link>
 
           <p className="text-caption text-warm-400 mt-10">
-            © 2026 KTALYZ — Air Mess
+            {t('auth.login.copyright')}
           </p>
         </div>
       </div>
@@ -162,15 +168,15 @@ export default function LoginPage() {
             <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-airmess-red text-cream text-caption font-bold tabular-nums">
               01
             </span>
-            <span className="text-eyebrow text-warm-300 uppercase">Marchands</span>
+            <span className="text-eyebrow text-warm-300 uppercase">{t('auth.login.sidePanel.eyebrow')}</span>
           </div>
 
           {/* Tagline avec highlight signature */}
           <h2 className="text-display-2 leading-tight mb-10">
-            Pilotez vos{' '}
-            <Highlight>livraisons</Highlight>
+            {t('auth.login.sidePanel.taglineStart')}{' '}
+            <Highlight>{t('auth.login.sidePanel.taglineHighlight')}</Highlight>
             <br />
-            en temps réel.
+            {t('auth.login.sidePanel.taglineEnd')}
           </h2>
 
           {/* Mockup dashboard — vrais KPIs réalistes */}
@@ -178,20 +184,20 @@ export default function LoginPage() {
             <img src={wordmarkWhite} alt="" className="h-5 w-auto mb-5 opacity-60" />
 
             <div className="space-y-3">
-              <MockKpi label="À livrer" value="3" dot="yellow" />
-              <MockKpi label="En cours" value="7" dot="red" pulse />
-              <MockKpi label="Livrées (mois)" value="142" />
-              <MockKpi label="CA mensuel" value="284 K" suffix="FCFA" />
+              <MockKpi label={t('auth.login.sidePanel.mockToDeliver')} value="3" dot="yellow" />
+              <MockKpi label={t('auth.login.sidePanel.mockInProgress')} value="7" dot="red" pulse />
+              <MockKpi label={t('auth.login.sidePanel.mockDeliveredMonth')} value="142" />
+              <MockKpi label={t('auth.login.sidePanel.mockRevenueMonth')} value="284 K" suffix="FCFA" />
             </div>
 
             <div className="mt-5 pt-4 border-t border-warm-600/30 flex items-center justify-between">
-              <span className="text-caption text-warm-300">Wallet</span>
+              <span className="text-caption text-warm-300">{t('auth.login.sidePanel.mockWalletLabel')}</span>
               <span className="text-body font-bold text-airmess-yellow">12 500 FCFA</span>
             </div>
           </div>
 
           <p className="mt-8 text-body-s text-warm-300 max-w-sm">
-            Suivez chaque course en direct, encaissez automatiquement, retirez vos fonds quand vous voulez.
+            {t('auth.login.sidePanel.subtext')}
           </p>
         </div>
       </div>

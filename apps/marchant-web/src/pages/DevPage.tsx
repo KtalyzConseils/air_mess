@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -39,8 +40,8 @@ import {
  * Toutes les données côté back : /api-plans + /me/api-apps + /me/api-apps/{id}/keys
  */
 
-function formatFcfa(n: number): string {
-  if (n === 0) return 'Gratuit'
+function formatFcfa(n: number, freeLabel: string): string {
+  if (n === 0) return freeLabel
   return n.toLocaleString('fr-FR') + ' FCFA'
 }
 
@@ -58,6 +59,7 @@ function extractMessage(err: unknown, fallback: string): string {
 }
 
 export default function DevPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   const [newAppOpen, setNewAppOpen] = useState(false)
@@ -75,7 +77,7 @@ export default function DevPage() {
       queryClient.invalidateQueries({ queryKey: ['api-apps'] })
       setConfirmDeleteId(null)
     },
-    onError: (err) => window.alert(extractMessage(err, 'Suppression impossible.')),
+    onError: (err) => window.alert(extractMessage(err, t('dev.deleteError'))),
   })
 
   const subscribeMut = useMutation({
@@ -88,7 +90,7 @@ export default function DevPage() {
         queryClient.invalidateQueries({ queryKey: ['api-apps'] })
       }
     },
-    onError: (err) => window.alert(extractMessage(err, 'Renouvellement impossible.')),
+    onError: (err) => window.alert(extractMessage(err, t('dev.renewError'))),
   })
 
   const currentKeysApp = useMemo(
@@ -105,28 +107,27 @@ export default function DevPage() {
     <div className="min-h-screen bg-cream">
       <AppHeader />
       <main className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
-        <PageEyebrow label="Mode développeur" className="mb-4" />
+        <PageEyebrow label={t('dev.eyebrow')} className="mb-4" />
         <h1 className="text-h1 md:text-display-2 text-ink leading-tight mb-2">
-          Ton accès <Highlight>API</Highlight>.
+          {t('dev.titleStart')} <Highlight>{t('dev.titleHighlight')}</Highlight>{t('dev.titleEnd')}
         </h1>
         <p className="text-body-l text-warm-500 mb-2">
-          Utilise Air Mess depuis ton propre site : ton e-commerce crée une commande, la course
-          part chez nous. Choisis un plan, génère une clé, lance ta première requête.
+          {t('dev.subtitle')}
         </p>
         <p className="text-body-s text-warm-500 mb-8">
-          Doc API :{' '}
+          {t('dev.docApiLabel')}{' '}
           <a
             href="https://api.airmess-logistics.com/docs"
             target="_blank"
             rel="noopener noreferrer"
             className="text-ink font-semibold underline hover:text-airmess-red"
           >
-            docs/API_INTEGRATION
+            {t('dev.docsLinkText')}
           </a>
         </p>
 
         {appsQ.isLoading && (
-          <p className="text-warm-500 text-center py-12">Chargement…</p>
+          <p className="text-warm-500 text-center py-12">{t('common.loading')}</p>
         )}
 
         {!appsQ.isLoading && appsQ.data?.length === 0 && (
@@ -137,7 +138,7 @@ export default function DevPage() {
           <>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-h3 font-bold text-ink">
-                Mes apps ({appsQ.data.length})
+                {t('dev.myAppsCount', { count: appsQ.data.length })}
               </h2>
               <Button
                 variant="primary"
@@ -145,7 +146,7 @@ export default function DevPage() {
                 onClick={() => setNewAppOpen(true)}
                 leftIcon={<span className="text-lg leading-none">+</span>}
               >
-                Nouvelle app
+                {t('dev.newApp')}
               </Button>
             </div>
             <div className="space-y-4">
@@ -185,7 +186,7 @@ export default function DevPage() {
         app={currentKeysApp}
         onClose={() => setKeysAppId(null)}
         onKeyCreated={(key) =>
-          currentKeysApp && setFreshKey({ appName: currentKeysApp.name, key, label: 'Clé' })
+          currentKeysApp && setFreshKey({ appName: currentKeysApp.name, key, label: t('dev.webhookLabel') })
         }
       />
 
@@ -194,7 +195,7 @@ export default function DevPage() {
         app={currentWebhookApp}
         onClose={() => setWebhookAppId(null)}
         onSecretCreated={(secret) =>
-          currentWebhookApp && setFreshKey({ appName: currentWebhookApp.name, key: secret, label: 'Secret webhook' })
+          currentWebhookApp && setFreshKey({ appName: currentWebhookApp.name, key: secret, label: t('dev.secretLabel') })
         }
       />
 
@@ -207,9 +208,9 @@ export default function DevPage() {
       {/* Confirm suppression */}
       <ConfirmModal
         visible={confirmDeleteId !== null}
-        title="Supprimer cette app ?"
-        description="Toutes ses clés seront révoquées immédiatement. Les courses déjà créées restent inchangées. Action définitive."
-        confirmLabel="Supprimer"
+        title={t('dev.deleteApp')}
+        description={t('dev.deleteAppBody')}
+        confirmLabel={t('dev.deleteConfirmLabel')}
         confirmVariant="danger"
         isPending={deleteMut.isPending}
         onConfirm={() => confirmDeleteId && deleteMut.mutate(confirmDeleteId)}
@@ -222,20 +223,20 @@ export default function DevPage() {
 // ─── Empty state ────────────────────────────────────────────────────────
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
+  const { t } = useTranslation()
   return (
     <Card variant="signature" padding="lg" className="text-center">
       <p className="text-caption uppercase text-warm-500 tracking-widest font-bold mb-3">
-        Aucune app pour l'instant
+        {t('dev.emptyLabel')}
       </p>
       <h2 className="text-h2 text-ink font-bold mb-3">
-        Air Mess depuis ton système
+        {t('dev.emptyTitle')}
       </h2>
       <p className="text-body text-warm-600 max-w-md mx-auto mb-6">
-        Crée une app pour obtenir une clé, choisis ton plan (15, 100 ou 500 requêtes / mois)
-        et lance des courses depuis ton propre back-office.
+        {t('dev.emptyBody')}
       </p>
       <Button variant="primary" size="lg" onClick={onCreate} pill>
-        Créer ma première app
+        {t('dev.createFirst')}
       </Button>
     </Card>
   )
@@ -258,6 +259,7 @@ function AppCard({
   onRenew: () => void
   isRenewing: boolean
 }) {
+  const { t } = useTranslation()
   const unlimited = app.quota_limit === 0
   const usedPct = unlimited ? 0 : Math.min(100, Math.round((app.quota_used / app.quota_limit) * 100))
   const nearLimit = !unlimited && usedPct >= 80
@@ -270,15 +272,15 @@ function AppCard({
       {/* Bandeau expiration si concerné */}
       {app.is_expired && (
         <div className="mb-3 bg-danger-bg border border-airmess-red/30 rounded-md px-3 py-2 flex items-center gap-3">
-          <span className="text-airmess-red font-bold text-body-s">Abonnement expiré</span>
+          <span className="text-airmess-red font-bold text-body-s">{t('dev.subscriptionExpired')}</span>
           <span className="text-body-s text-warm-600 flex-1">
-            L'app est suspendue. Renouvelle pour reprendre les requêtes.
+            {t('dev.expiredBody')}
           </span>
         </div>
       )}
       {!app.is_expired && app.paid_until && (
         <div className="mb-3 text-caption text-warm-500">
-          Abonnement actif jusqu'au{' '}
+          {t('dev.subscriptionActive')}{' '}
           <strong className="text-ink">
             {new Date(app.paid_until).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
           </strong>
@@ -290,9 +292,9 @@ function AppCard({
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-h3 text-ink font-bold truncate">{app.name}</h3>
             {app.status === 'suspended' ? (
-              <Badge variant="danger" size="sm">Suspendue</Badge>
+              <Badge variant="danger" size="sm">{t('dev.suspended')}</Badge>
             ) : (
-              <Badge variant="success" size="sm" dot>Active</Badge>
+              <Badge variant="success" size="sm" dot>{t('dev.active')}</Badge>
             )}
           </div>
           {app.description && (
@@ -300,11 +302,11 @@ function AppCard({
           )}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-caption uppercase text-warm-500 tracking-widest font-bold">Plan</p>
+          <p className="text-caption uppercase text-warm-500 tracking-widest font-bold">{t('dev.planLabel')}</p>
           <p className="text-body font-bold text-ink">{app.plan?.name ?? '—'}</p>
           {app.plan && (
             <p className="text-body-s text-warm-500">
-              {formatFcfa(app.plan.monthly_price_fcfa)}/mois
+              {formatFcfa(app.plan.monthly_price_fcfa, t('dev.priceFree'))}{t('dev.monthlyUnit')}
             </p>
           )}
         </div>
@@ -314,13 +316,13 @@ function AppCard({
       <div className="mb-4">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-caption uppercase text-warm-500 tracking-widest font-bold">
-            Quota ce mois
+            {t('dev.quotaThisMonth')}
           </span>
           <span className={cn(
             'text-body-s font-bold',
             atLimit ? 'text-airmess-red' : nearLimit ? 'text-warning' : 'text-ink',
           )}>
-            {unlimited ? 'Illimité' : `${app.quota_used} / ${app.quota_limit}`}
+            {unlimited ? t('dev.unlimited') : `${app.quota_used} / ${app.quota_limit}`}
           </span>
         </div>
         {!unlimited && (
@@ -338,10 +340,10 @@ function AppCard({
 
       <div className="flex items-center gap-2 pt-3 border-t border-warm-100">
         <Button variant="secondary" size="sm" onClick={onOpenKeys}>
-          Clés
+          {t('dev.keys')}
         </Button>
         <Button variant="secondary" size="sm" onClick={onOpenWebhook}>
-          Webhook{app.has_webhook ? ' ●' : ''}
+          {t('dev.webhook')}{app.has_webhook ? t('dev.webhookIndicator') : ''}
         </Button>
         {showRenew && (
           <Button
@@ -350,11 +352,11 @@ function AppCard({
             onClick={onRenew}
             loading={isRenewing}
           >
-            {app.is_expired ? 'Renouveler' : 'Prolonger 30 j'}
+            {app.is_expired ? t('dev.renew') : t('dev.extend')}
           </Button>
         )}
         <Button variant="ghost" size="sm" onClick={onDelete} className="text-airmess-red! ml-auto">
-          Supprimer
+          {t('common.delete')}
         </Button>
       </div>
     </Card>
@@ -374,6 +376,7 @@ function NewAppModal({
   onClose: () => void
   onCreated: (app: ApiApp) => void
 }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -393,7 +396,7 @@ function NewAppModal({
       setPlanId(null)
       onCreated(app)
     },
-    onError: (err) => window.alert(extractMessage(err, 'Création impossible.')),
+    onError: (err) => window.alert(extractMessage(err, t('dev.createError'))),
   })
 
   if (!visible) return null
@@ -403,35 +406,35 @@ function NewAppModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-off-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 my-6">
-        <h3 className="text-h2 text-ink font-bold mb-1">Créer une app dev</h3>
+        <h3 className="text-h2 text-ink font-bold mb-1">{t('dev.createApp')}</h3>
         <p className="text-body-s text-warm-500 mb-5">
-          Un nom pour t'y retrouver, une description optionnelle, et le plan API à consommer.
+          {t('dev.createAppSub')}
         </p>
 
         <label className="block text-caption uppercase text-warm-500 tracking-widest font-bold mb-1.5">
-          Nom
+          {t('dev.appName')}
         </label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Ex : Mon shop Shopify"
+          placeholder={t('dev.appNamePlaceholder')}
           className="w-full px-4 py-2.5 border-2 border-warm-200 rounded-md text-body focus:outline-none focus:border-airmess-yellow mb-4"
         />
 
         <label className="block text-caption uppercase text-warm-500 tracking-widest font-bold mb-1.5">
-          Description <span className="normal-case text-warm-400 tracking-normal">(optionnel)</span>
+          {t('dev.appDescription')} <span className="normal-case text-warm-400 tracking-normal">{t('dev.appDescOptional')}</span>
         </label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="À quoi servira cette app ?"
+          placeholder={t('dev.appDescPlaceholder')}
           rows={2}
           className="w-full px-4 py-2.5 border-2 border-warm-200 rounded-md text-body focus:outline-none focus:border-airmess-yellow mb-5"
         />
 
         <label className="block text-caption uppercase text-warm-500 tracking-widest font-bold mb-2">
-          Plan API
+          {t('dev.planApi')}
         </label>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           {plans.map((p) => (
@@ -446,7 +449,7 @@ function NewAppModal({
 
         <div className="flex justify-end gap-2">
           <Button variant="secondary" size="md" onClick={onClose} disabled={mutation.isPending}>
-            Annuler
+            {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -455,7 +458,7 @@ function NewAppModal({
             disabled={!canSubmit}
             loading={mutation.isPending}
           >
-            Créer l'app
+            {t('dev.createAppCta')}
           </Button>
         </div>
       </div>
@@ -472,6 +475,7 @@ function PlanCard({
   selected: boolean
   onSelect: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <button
       type="button"
@@ -491,9 +495,9 @@ function PlanCard({
       </div>
       <p className="text-h3 font-bold text-ink mb-1">
         {plan.api_requests_monthly === 0 ? '∞' : plan.api_requests_monthly}
-        <span className="text-body-s font-medium text-warm-500"> req/mois</span>
+        <span className="text-body-s font-medium text-warm-500"> {t('dev.reqPerMonth')}</span>
       </p>
-      <p className="text-caption text-warm-600 font-semibold">{formatFcfa(plan.monthly_price_fcfa)}</p>
+      <p className="text-caption text-warm-600 font-semibold">{formatFcfa(plan.monthly_price_fcfa, t('dev.priceFree'))}</p>
     </button>
   )
 }
@@ -509,6 +513,7 @@ function KeysModal({
   onClose: () => void
   onKeyCreated: (key: string) => void
 }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   const keysQ = useQuery({
@@ -523,13 +528,13 @@ function KeysModal({
       queryClient.invalidateQueries({ queryKey: ['api-app-keys', app!.id] })
       onKeyCreated(res.key)
     },
-    onError: (err) => window.alert(extractMessage(err, 'Génération impossible.')),
+    onError: (err) => window.alert(extractMessage(err, t('dev.keyGenerateError'))),
   })
 
   const revokeMut = useMutation({
     mutationFn: (keyId: number) => revokeApiAppKey(app!.id, keyId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-app-keys', app!.id] }),
-    onError: (err) => window.alert(extractMessage(err, 'Révocation impossible.')),
+    onError: (err) => window.alert(extractMessage(err, t('dev.keyRevokeError'))),
   })
 
   if (!app) return null
@@ -538,24 +543,24 @@ function KeysModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-off-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 my-6">
         <div className="flex items-start justify-between mb-1">
-          <h3 className="text-h2 text-ink font-bold">Clés de « {app.name} »</h3>
+          <h3 className="text-h2 text-ink font-bold">{t('dev.keysOf', { name: app.name })}</h3>
           <button
             onClick={onClose}
             className="text-warm-500 hover:text-ink text-2xl leading-none"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             ×
           </button>
         </div>
         <p className="text-body-s text-warm-500 mb-5">
-          Chaque clé a la même ability. La valeur en clair n'apparaît qu'à la création.
+          {t('dev.keysSubtitle')}
         </p>
 
-        {keysQ.isLoading && <p className="text-warm-500 text-center py-6">Chargement…</p>}
+        {keysQ.isLoading && <p className="text-warm-500 text-center py-6">{t('common.loading')}</p>}
 
         {!keysQ.isLoading && keysQ.data?.length === 0 && (
           <Card padding="sm" className="text-center mb-4">
-            <p className="text-body text-warm-500">Aucune clé pour l'instant.</p>
+            <p className="text-body text-warm-500">{t('dev.noKeys')}</p>
           </Card>
         )}
 
@@ -569,7 +574,7 @@ function KeysModal({
 
         <div className="flex justify-between gap-2 pt-4 border-t border-warm-100">
           <Button variant="secondary" size="md" onClick={onClose}>
-            Fermer
+            {t('common.close')}
           </Button>
           <Button
             variant="primary"
@@ -577,7 +582,7 @@ function KeysModal({
             onClick={() => createMut.mutate()}
             loading={createMut.isPending}
           >
-            Générer une nouvelle clé
+            {t('dev.generateKey')}
           </Button>
         </div>
       </div>
@@ -592,17 +597,18 @@ function KeyRow({
   keyItem: ApiKey
   onRevoke: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3 border border-warm-200 rounded-md bg-off-white">
       <div className="min-w-0">
-        <p className="text-body font-semibold text-ink">Clé #{keyItem.id}</p>
+        <p className="text-body font-semibold text-ink">{t('dev.keyN', { id: keyItem.id })}</p>
         <p className="text-caption text-warm-500">
-          Créée le {formatDate(keyItem.created_at)}
-          {keyItem.last_used_at && ` · Dernière utilisation ${formatDate(keyItem.last_used_at)}`}
+          {t('dev.createdOn')} {formatDate(keyItem.created_at)}
+          {keyItem.last_used_at && ` · ${t('dev.lastUsed')} ${formatDate(keyItem.last_used_at)}`}
         </p>
       </div>
       <Button variant="ghost" size="sm" onClick={onRevoke} className="text-airmess-red!">
-        Révoquer
+        {t('dev.revoke')}
       </Button>
     </div>
   )
@@ -617,6 +623,7 @@ function FreshKeyModal({
   payload: { appName: string; key: string; label: string } | null
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   if (!payload) return null
@@ -624,20 +631,19 @@ function FreshKeyModal({
   function copy() {
     navigator.clipboard.writeText(payload!.key).then(
       () => setCopied(true),
-      () => window.alert('Impossible de copier. Sélectionne le texte manuellement.'),
+      () => window.alert(t('dev.copyManualFallback')),
     )
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-off-white rounded-2xl shadow-2xl max-w-lg w-full p-6">
-        <Badge variant="warning" size="sm" className="mb-3">Une seule fois</Badge>
+        <Badge variant="warning" size="sm" className="mb-3">{t('dev.onceLabel')}</Badge>
         <h3 className="text-h2 text-ink font-bold mb-2">
-          {payload.label} pour « {payload.appName} »
+          {t('dev.keyForApp', { label: payload.label, name: payload.appName })}
         </h3>
         <p className="text-body-s text-warm-600 mb-4">
-          Copie {payload.label.toLowerCase()} immédiatement. Elle ne sera <strong>plus jamais</strong>{' '}
-          affichée. Si tu la perds, régénère-la et remplace côté client.
+          {t('dev.keyCopyBody', { label: payload.label.toLowerCase() })}
         </p>
 
         <div className="bg-ink text-cream rounded-md p-4 font-mono text-body-s break-all mb-3">
@@ -646,14 +652,14 @@ function FreshKeyModal({
 
         <div className="flex justify-end gap-2">
           <Button variant="secondary" size="md" onClick={onClose}>
-            Fermer
+            {t('common.close')}
           </Button>
           <Button
             variant={copied ? 'secondary' : 'primary'}
             size="md"
             onClick={copy}
           >
-            {copied ? '✓ Copié' : 'Copier'}
+            {copied ? t('dev.copyOnce') : t('common.copy')}
           </Button>
         </div>
       </div>
@@ -672,6 +678,7 @@ function WebhookModal({
   onClose: () => void
   onSecretCreated: (secret: string) => void
 }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [url, setUrl] = useState(app?.webhook_url ?? '')
   const [syncedFor, setSyncedFor] = useState<string | null>(
@@ -699,7 +706,7 @@ function WebhookModal({
       queryClient.invalidateQueries({ queryKey: ['api-app-deliveries', app!.id] })
       onSecretCreated(res.secret)
     },
-    onError: (err) => window.alert(extractMessage(err, 'Config impossible.')),
+    onError: (err) => window.alert(extractMessage(err, t('dev.webhookConfigError'))),
   })
 
   const disableMut = useMutation({
@@ -707,13 +714,13 @@ function WebhookModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-apps'] })
     },
-    onError: (err) => window.alert(extractMessage(err, 'Désactivation impossible.')),
+    onError: (err) => window.alert(extractMessage(err, t('dev.webhookDisableError'))),
   })
 
   const retryMut = useMutation({
     mutationFn: (deliveryId: number) => retryDelivery(app!.id, deliveryId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-app-deliveries', app!.id] }),
-    onError: (err) => window.alert(extractMessage(err, 'Retry impossible.')),
+    onError: (err) => window.alert(extractMessage(err, t('dev.retryError'))),
   })
 
   if (!app) return null
@@ -724,31 +731,31 @@ function WebhookModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-off-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 my-6">
         <div className="flex items-start justify-between mb-1">
-          <h3 className="text-h2 text-ink font-bold">Webhook · « {app.name} »</h3>
+          <h3 className="text-h2 text-ink font-bold">{t('dev.webhookTitle', { name: app.name })}</h3>
           <button
             onClick={onClose}
             className="text-warm-500 hover:text-ink text-2xl leading-none"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             ×
           </button>
         </div>
         <p className="text-body-s text-warm-500 mb-5">
-          On te notifie sur ton endpoint HTTPS à chaque étape (créé, assigné, retiré, livré, annulé, échoué).
-          Vérifie la signature avec <code className="bg-warm-100 px-1 rounded">HMAC-SHA256(secret, body)</code>
-          reçue dans <code className="bg-warm-100 px-1 rounded">X-AirMess-Signature</code>.
+          {t('dev.webhookEventStages')}{' '}
+          {t('dev.webhookHmacHint')} <code className="bg-warm-100 px-1 rounded">HMAC-SHA256(secret, body)</code>{' '}
+          {t('dev.webhookHmacReceivedIn')} <code className="bg-warm-100 px-1 rounded">X-AirMess-Signature</code>.
         </p>
 
         {/* Config */}
         <Card padding="md" className="mb-5">
           <label className="block text-caption uppercase text-warm-500 tracking-widest font-bold mb-1.5">
-            URL du webhook
+            {t('dev.webhookUrl')}
           </label>
           <input
             type="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://mon-shop.com/webhooks/airmess"
+            placeholder={t('dev.webhookUrlPlaceholder')}
             className="w-full px-4 py-2.5 border-2 border-warm-200 rounded-md text-body-s focus:outline-none focus:border-airmess-yellow mb-3 font-mono"
           />
           <div className="flex items-center gap-2">
@@ -759,7 +766,7 @@ function WebhookModal({
               disabled={!canConfigure}
               loading={configureMut.isPending}
             >
-              {app.has_webhook ? 'Mettre à jour + régénérer secret' : 'Enregistrer + générer secret'}
+              {app.has_webhook ? t('dev.webhookUpdate') : t('dev.webhookSave')}
             </Button>
             {app.has_webhook && (
               <Button
@@ -769,22 +776,22 @@ function WebhookModal({
                 disabled={disableMut.isPending}
                 className="text-airmess-red!"
               >
-                Désactiver
+                {t('dev.webhookDisable')}
               </Button>
             )}
           </div>
         </Card>
 
         {/* Historique */}
-        <h4 className="text-h3 font-bold text-ink mb-2">Historique récent</h4>
+        <h4 className="text-h3 font-bold text-ink mb-2">{t('dev.recentHistory')}</h4>
 
         {deliveriesQ.isLoading && (
-          <p className="text-warm-500 text-body-s text-center py-6">Chargement…</p>
+          <p className="text-warm-500 text-body-s text-center py-6">{t('common.loading')}</p>
         )}
 
         {!deliveriesQ.isLoading && deliveriesQ.data?.data.length === 0 && (
           <Card padding="sm" className="text-center">
-            <p className="text-body-s text-warm-500">Aucun envoi pour l'instant.</p>
+            <p className="text-body-s text-warm-500">{t('dev.noDeliveries')}</p>
           </Card>
         )}
 
@@ -803,7 +810,7 @@ function WebhookModal({
 
         <div className="flex justify-end mt-5 pt-4 border-t border-warm-100">
           <Button variant="secondary" size="md" onClick={onClose}>
-            Fermer
+            {t('common.close')}
           </Button>
         </div>
       </div>
@@ -820,10 +827,11 @@ function DeliveryRow({
   onRetry: () => void
   isRetrying: boolean
 }) {
+  const { t } = useTranslation()
   const badge =
-    delivery.status === 'delivered' ? { v: 'success' as const, label: 'Livré' } :
-    delivery.status === 'failed'    ? { v: 'danger' as const,  label: 'Échoué' } :
-    { v: 'neutral' as const, label: 'En attente' }
+    delivery.status === 'delivered' ? { v: 'success' as const, label: t('dev.delivered') } :
+    delivery.status === 'failed'    ? { v: 'danger' as const,  label: t('dev.failed') } :
+    { v: 'neutral' as const, label: t('dev.pending') }
 
   return (
     <div className="flex items-start justify-between gap-3 px-3 py-2.5 border border-warm-200 rounded-md bg-off-white">
@@ -836,13 +844,13 @@ function DeliveryRow({
           )}
         </div>
         <p className="text-caption text-warm-500 truncate">
-          {formatDate(delivery.created_at)} · {delivery.attempts} tentative{delivery.attempts > 1 ? 's' : ''}
+          {formatDate(delivery.created_at)} · {delivery.attempts} {delivery.attempts > 1 ? t('dev.attemptsSuffix') : t('dev.attemptSuffix')}
           {delivery.last_error && ` · ${delivery.last_error.slice(0, 60)}${delivery.last_error.length > 60 ? '…' : ''}`}
         </p>
       </div>
       {delivery.status !== 'delivered' && (
         <Button variant="ghost" size="sm" onClick={onRetry} disabled={isRetrying}>
-          Rejouer
+          {t('dev.replay')}
         </Button>
       )}
     </div>

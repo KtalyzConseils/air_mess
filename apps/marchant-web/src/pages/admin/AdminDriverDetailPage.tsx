@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import { AdminButton } from '../../components/admin/AdminToolbar'
@@ -30,44 +31,40 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-const AVAILABILITY: Record<string, { label: string; classes: string }> = {
-  available: { label: 'Disponible', classes: 'bg-success-bg text-success border border-success/20' },
-  busy: { label: 'Occupé', classes: 'bg-warning-bg text-warning border border-warning/20' },
-  on_break: { label: 'En pause', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
-  offline: { label: 'Hors-ligne', classes: 'bg-warm-100 text-warm-500 border border-warm-200' },
+const AVAILABILITY_CLASSES: Record<string, string> = {
+  available: 'bg-success-bg text-success border border-success/20',
+  busy: 'bg-warning-bg text-warning border border-warning/20',
+  on_break: 'bg-warm-100 text-warm-600 border border-warm-200',
+  offline: 'bg-warm-100 text-warm-500 border border-warm-200',
 }
-const ACTIVATION: Record<string, { label: string; classes: string }> = {
-  pending: { label: 'En attente', classes: 'bg-warning-bg text-warning border border-warning/20' },
-  validated: { label: 'Validé', classes: 'bg-cream text-ink border border-warm-300' },
-  active: { label: 'Actif', classes: 'bg-success-bg text-success border border-success/20' },
-  suspended: { label: 'Suspendu', classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
+const ACTIVATION_CLASSES: Record<string, string> = {
+  pending: 'bg-warning-bg text-warning border border-warning/20',
+  validated: 'bg-cream text-ink border border-warm-300',
+  active: 'bg-success-bg text-success border border-success/20',
+  suspended: 'bg-danger-bg text-airmess-red border border-airmess-red/30',
 }
 
-const DECLINE_REASON_LABEL: Record<string, string> = {
-  too_far: 'Trop loin',
-  wrong_quartier: 'Quartier mal connu',
-  no_helmet: 'Pas de casque',
-  vehicle_unfit: 'Véhicule pas adapté',
-  personal: 'Raison personnelle',
-  other: 'Autre',
+const DECLINE_REASON_KEY: Record<string, string> = {
+  too_far: 'admin.drivers.declineReasonTooFar',
+  wrong_quartier: 'admin.drivers.declineReasonWrongQuartier',
+  no_helmet: 'admin.drivers.declineReasonNoHelmet',
+  vehicle_unfit: 'admin.drivers.declineReasonVehicleUnfit',
+  personal: 'admin.drivers.declineReasonPersonal',
+  other: 'admin.drivers.declineReasonOther',
 }
 
 function Badge({
-  map,
-  value,
+  label,
+  classes,
 }: {
-  map: Record<string, { label: string; classes: string }>
-  value: string
+  label: string
+  classes: string
 }) {
-  const meta = map[value] ?? {
-    label: value,
-    classes: 'bg-warm-100 text-warm-600 border border-warm-200',
-  }
   return (
     <span
-      className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${meta.classes}`}
+      className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${classes}`}
     >
-      {meta.label}
+      {label}
     </span>
   )
 }
@@ -97,6 +94,7 @@ function KpiBox({ label, value, tone = 'default' }: KpiBoxProps) {
 }
 
 export default function AdminDriverDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const [docError, setDocError] = useState<string | null>(null)
@@ -127,8 +125,8 @@ export default function AdminDriverDetailPage() {
       setDocError(
         err instanceof AxiosError
           ? (err.response?.data as { message?: string })?.message ??
-            "Impossible d'ouvrir ce document."
-          : 'Erreur inattendue.',
+            t('admin.drivers.docOpenError')
+          : t('common.unexpectedError'),
       )
     }
   }
@@ -136,13 +134,26 @@ export default function AdminDriverDetailPage() {
   const validateError =
     validateMutation.error instanceof AxiosError
       ? (validateMutation.error.response?.data as { message?: string })?.message ??
-        'Erreur lors de la validation.'
+        t('admin.drivers.validationError')
       : null
+
+  function availabilityLabel(value: string): string {
+    return t(`admin.drivers.availability.${value}`, { defaultValue: value })
+  }
+
+  function activationLabel(value: string): string {
+    return t(`admin.drivers.activation.${value}`, { defaultValue: value })
+  }
+
+  function declineReasonLabel(reason: string): string {
+    const key = DECLINE_REASON_KEY[reason]
+    return key ? t(key) : reason
+  }
 
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title={data ? `${data.driver.first_name} ${data.driver.last_name}` : 'Livreur'}
+        title={data ? `${data.driver.first_name} ${data.driver.last_name}` : t('admin.drivers.driverFallback')}
         subtitle={
           data
             ? `${data.driver.vehicle_type}${data.driver.vehicle_plate ? ` · ${data.driver.vehicle_plate}` : ''}`
@@ -151,8 +162,20 @@ export default function AdminDriverDetailPage() {
         actions={
           data && (
             <div className="flex items-center gap-2">
-              <Badge map={AVAILABILITY} value={data.driver.availability_status} />
-              <Badge map={ACTIVATION} value={data.driver.activation_status} />
+              <Badge
+                label={availabilityLabel(data.driver.availability_status)}
+                classes={
+                  AVAILABILITY_CLASSES[data.driver.availability_status] ??
+                  'bg-warm-100 text-warm-600 border border-warm-200'
+                }
+              />
+              <Badge
+                label={activationLabel(data.driver.activation_status)}
+                classes={
+                  ACTIVATION_CLASSES[data.driver.activation_status] ??
+                  'bg-warm-100 text-warm-600 border border-warm-200'
+                }
+              />
             </div>
           )
         }
@@ -164,21 +187,22 @@ export default function AdminDriverDetailPage() {
           className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink"
         >
           <ArrowLeftIcon size={14} />
-          Retour aux livreurs
+          {t('admin.drivers.backToList')}
         </Link>
 
-        {isLoading && <p className="text-body-s text-warm-500">Chargement…</p>}
-        {isError && <p className="text-body-s text-airmess-red">Livreur introuvable.</p>}
+        {isLoading && <p className="text-body-s text-warm-500">{t('common.loading')}</p>}
+        {isError && <p className="text-body-s text-airmess-red">{t('admin.drivers.notFound')}</p>}
 
         {data && (
           <>
             {/* Bandeau validation pending */}
             {canManageDriver && data.driver.activation_status === 'pending' && (
               <section className="bg-warning-bg border border-warning/30 rounded-lg px-5 py-4">
-                <h2 className="text-body font-bold text-warning mb-1">Validation en attente</h2>
+                <h2 className="text-body font-bold text-warning mb-1">
+                  {t('admin.drivers.validationPendingTitle')}
+                </h2>
                 <p className="text-body-s text-warning/90 mb-3">
-                  Ce livreur attend la vérification de ses documents (CNI + permis). Vérifie-les
-                  ci-dessous avant d'activer son compte.
+                  {t('admin.drivers.validationPendingBody')}
                 </p>
                 <AdminButton
                   variant="primary"
@@ -186,7 +210,9 @@ export default function AdminDriverDetailPage() {
                   disabled={validateMutation.isPending}
                   leftIcon={<CheckIcon size={14} />}
                 >
-                  {validateMutation.isPending ? 'Validation…' : 'Valider ce livreur'}
+                  {validateMutation.isPending
+                    ? t('admin.drivers.validating')
+                    : t('admin.drivers.validateDriver')}
                 </AdminButton>
                 {validateError && (
                   <p className="text-body-s text-airmess-red mt-2 flex items-center gap-1.5">
@@ -198,34 +224,34 @@ export default function AdminDriverDetailPage() {
 
             {/* Grille identité / véhicule / urgence / performance */}
             <div className="grid gap-4 md:grid-cols-2">
-              <Section title="Identité & contact">
-                <Row label="Genre">{data.driver.gender ?? '—'}</Row>
-                <Row label="Naissance">{formatDate(data.driver.birth_date)}</Row>
-                <Row label="Téléphone">{data.driver.user.phone ?? '—'}</Row>
-                <Row label="Email">{data.driver.user.email}</Row>
+              <Section title={t('admin.drivers.sectionIdentity')}>
+                <Row label={t('admin.drivers.fieldGender')}>{data.driver.gender ?? '—'}</Row>
+                <Row label={t('admin.drivers.fieldBirthDate')}>{formatDate(data.driver.birth_date)}</Row>
+                <Row label={t('admin.drivers.fieldPhone')}>{data.driver.user.phone ?? '—'}</Row>
+                <Row label={t('admin.drivers.fieldEmail')}>{data.driver.user.email}</Row>
               </Section>
 
-              <Section title="Véhicule">
-                <Row label="Type">{data.driver.vehicle_type}</Row>
-                <Row label="Plaque">{data.driver.vehicle_plate ?? '—'}</Row>
-                <Row label="Couleur">{data.driver.vehicle_color ?? '—'}</Row>
+              <Section title={t('admin.drivers.sectionVehicle')}>
+                <Row label={t('admin.drivers.fieldType')}>{data.driver.vehicle_type}</Row>
+                <Row label={t('admin.drivers.fieldPlate')}>{data.driver.vehicle_plate ?? '—'}</Row>
+                <Row label={t('admin.drivers.fieldColor')}>{data.driver.vehicle_color ?? '—'}</Row>
               </Section>
 
-              <Section title="Contact d'urgence">
-                <Row label="Nom">{data.driver.emergency_contact_name ?? '—'}</Row>
-                <Row label="Téléphone">{data.driver.emergency_contact_phone ?? '—'}</Row>
-                <Row label="Dernière position">{formatDate(data.driver.last_position_at)}</Row>
+              <Section title={t('admin.drivers.sectionEmergency')}>
+                <Row label={t('admin.drivers.fieldEmergencyName')}>{data.driver.emergency_contact_name ?? '—'}</Row>
+                <Row label={t('admin.drivers.fieldEmergencyPhone')}>{data.driver.emergency_contact_phone ?? '—'}</Row>
+                <Row label={t('admin.drivers.fieldLastPosition')}>{formatDate(data.driver.last_position_at)}</Row>
               </Section>
 
-              <Section title="Performance">
-                <Row label="Taux d'acceptation">{data.driver.acceptance_rate}%</Row>
-                <Row label="Incidents">{data.driver.incidents_count}</Row>
+              <Section title={t('admin.drivers.sectionPerformance')}>
+                <Row label={t('admin.drivers.fieldAcceptanceRate')}>{data.driver.acceptance_rate}%</Row>
+                <Row label={t('admin.drivers.fieldIncidents')}>{data.driver.incidents_count}</Row>
               </Section>
             </div>
 
             {/* Wallet caution */}
             <Section
-              title="Wallet caution"
+              title={t('admin.drivers.sectionWalletDeposit')}
               action={
                 isSuperAdmin && data.driver.wallet ? (
                   <AdminButton
@@ -234,7 +260,7 @@ export default function AdminDriverDetailPage() {
                     onClick={() => setWalletAdjustOpen(true)}
                     leftIcon={<SettingsIcon size={14} />}
                   >
-                    Ajuster
+                    {t('admin.drivers.walletAdjust')}
                   </AdminButton>
                 ) : null
               }
@@ -242,21 +268,21 @@ export default function AdminDriverDetailPage() {
               {data.driver.wallet ? (
                 <div className="grid grid-cols-3 gap-2">
                   <KpiBox
-                    label="Balance"
+                    label={t('admin.drivers.walletBalance')}
                     value={data.driver.wallet.balance.toLocaleString('fr-FR')}
                     tone="brand"
                   />
                   <KpiBox
-                    label="Total déposé"
+                    label={t('admin.drivers.walletTotalDeposited')}
                     value={data.driver.wallet.total_deposited.toLocaleString('fr-FR')}
                   />
                   <KpiBox
-                    label="Total retiré"
+                    label={t('admin.drivers.walletTotalWithdrawn')}
                     value={data.driver.wallet.total_withdrawn.toLocaleString('fr-FR')}
                   />
                 </div>
               ) : (
-                <p className="text-body-s text-warm-500 italic">Aucun wallet associé.</p>
+                <p className="text-body-s text-warm-500 italic">{t('admin.drivers.walletNone')}</p>
               )}
             </Section>
 
@@ -275,15 +301,15 @@ export default function AdminDriverDetailPage() {
 
             {/* Refus de courses (rolling 30j) */}
             <Section
-              title="Refus de courses (30 derniers jours)"
+              title={t('admin.drivers.sectionDeclines')}
               action={
                 <span className="text-caption font-bold text-warm-600 bg-warm-100 px-2 py-0.5 rounded">
-                  Total : {data.declines.total_30d}
+                  {t('admin.drivers.declinesTotal', { count: data.declines.total_30d })}
                 </span>
               }
             >
               {data.declines.total_30d === 0 ? (
-                <p className="text-body-s text-warm-500 italic">Aucun refus sur la période.</p>
+                <p className="text-body-s text-warm-500 italic">{t('admin.drivers.declinesNone')}</p>
               ) : (
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 mb-4">
@@ -293,7 +319,7 @@ export default function AdminDriverDetailPage() {
                         className="bg-cream border border-warm-200 rounded-md px-3 py-1.5 flex justify-between items-center"
                       >
                         <span className="text-body-s text-warm-600">
-                          {DECLINE_REASON_LABEL[reason] ?? reason}
+                          {declineReasonLabel(reason)}
                         </span>
                         <span className="text-body-s font-bold text-ink tabular-nums">{n}</span>
                       </div>
@@ -307,7 +333,7 @@ export default function AdminDriverDetailPage() {
                       >
                         <div className="min-w-0">
                           <p className="text-body-s font-medium text-ink">
-                            {DECLINE_REASON_LABEL[d.reason] ?? d.reason}
+                            {declineReasonLabel(d.reason)}
                             {d.custom_reason && (
                               <span className="text-warm-500 font-normal">
                                 {' '}— « {d.custom_reason} »
@@ -316,7 +342,8 @@ export default function AdminDriverDetailPage() {
                           </p>
                           {d.course && (
                             <p className="text-caption text-warm-500 mt-0.5">
-                              Course <span className="font-mono">{d.course.reference}</span> ·{' '}
+                              {t('admin.drivers.declineCourseLabel')}{' '}
+                              <span className="font-mono">{d.course.reference}</span> ·{' '}
                               {d.course.origin_quartier} → {d.course.destination_quartier}
                             </p>
                           )}
@@ -332,28 +359,30 @@ export default function AdminDriverDetailPage() {
             </Section>
 
             {/* Documents */}
-            <Section title="Documents">
+            <Section title={t('admin.drivers.sectionDocuments')}>
               <div className="flex flex-wrap gap-2">
                 <AdminButton
                   variant="primary"
                   onClick={() => handleOpenDocument('cni')}
                   disabled={!data.driver.cni_url}
                 >
-                  Voir CNI
+                  {t('admin.drivers.docViewCni')}
                 </AdminButton>
                 <AdminButton
                   variant="primary"
                   onClick={() => handleOpenDocument('driving_license')}
                   disabled={!data.driver.driving_license_url}
                 >
-                  Voir Permis
+                  {t('admin.drivers.docViewLicense')}
                 </AdminButton>
                 <AdminButton
                   variant="secondary"
                   onClick={() => handleOpenDocument('photo')}
                   disabled={!data.driver.photo_url}
                 >
-                  {data.driver.photo_url ? 'Voir photo' : 'Pas de photo'}
+                  {data.driver.photo_url
+                    ? t('admin.drivers.docViewPhoto')
+                    : t('admin.drivers.docNoPhoto')}
                 </AdminButton>
               </div>
               {docError && (
@@ -362,25 +391,25 @@ export default function AdminDriverDetailPage() {
                 </p>
               )}
               <p className="text-caption text-warm-500 mt-3">
-                Les documents s'ouvrent dans un nouvel onglet (autorise les popups pour ce site).
+                {t('admin.drivers.docOpenInNewTab')}
               </p>
             </Section>
 
             {/* Stats courses */}
-            <Section title="Activité — courses">
+            <Section title={t('admin.drivers.sectionActivity')}>
               <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
-                <KpiBox label="Total" value={data.stats.courses_total} />
-                <KpiBox label="Livrées" value={data.stats.courses_delivered} tone="success" />
-                <KpiBox label="En cours" value={data.stats.courses_in_progress} />
-                <KpiBox label="Échecs" value={data.stats.courses_failed} tone="danger" />
+                <KpiBox label={t('admin.drivers.statTotal')} value={data.stats.courses_total} />
+                <KpiBox label={t('admin.drivers.statDelivered')} value={data.stats.courses_delivered} tone="success" />
+                <KpiBox label={t('admin.drivers.statInProgress')} value={data.stats.courses_in_progress} />
+                <KpiBox label={t('admin.drivers.statFailed')} value={data.stats.courses_failed} tone="danger" />
               </div>
               <p className="text-body-s text-warm-600 mt-3">
-                Gains cumulés :{' '}
+                {t('admin.drivers.statEarnings')}{' '}
                 <strong className="text-ink tabular-nums">
                   {data.stats.total_earnings.toLocaleString('fr-FR')} FCFA
                 </strong>
                 {' · '}
-                Dernière livraison : {formatDate(data.stats.last_delivery_at)}
+                {t('admin.drivers.statLastDelivery')} {formatDate(data.stats.last_delivery_at)}
               </p>
             </Section>
 
@@ -388,7 +417,7 @@ export default function AdminDriverDetailPage() {
             <SupportNotesPanel
               notableType="user"
               notableId={data.driver.user.id}
-              title="Notes internes (livreur)"
+              title={t('admin.drivers.sectionNotesTitle')}
             />
           </>
         )}

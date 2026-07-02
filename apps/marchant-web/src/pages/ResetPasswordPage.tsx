@@ -2,14 +2,17 @@ import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import { resetPassword } from '../api/password'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
 import { EyeIcon, EyeOffIcon, ArrowRightIcon } from '../components/ui/icons'
+import LanguageToggle from '../components/ui/LanguageToggle'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 
 export default function ResetPasswordPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const token = params.get('token') ?? ''
@@ -40,41 +43,41 @@ export default function ResetPasswordPage() {
 
   const apiError =
     mutation.error instanceof AxiosError
-      ? mutation.error.response?.data?.message ?? 'Erreur lors de la réinitialisation.'
+      ? mutation.error.response?.data?.message ?? t('auth.reset.resetError')
       : null
 
   return (
     <div className="min-h-screen bg-cream flex flex-col">
-      <div className="p-6 md:p-8">
+      <div className="p-6 md:p-8 flex items-center justify-between gap-4">
         <Link to="/" className="inline-block">
           <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
         </Link>
+        <LanguageToggle variant="light" />
       </div>
 
       <div className="flex-1 flex items-center justify-center px-4 pb-12">
         <Card variant="signature" padding="lg" className="max-w-md w-full">
-          <h1 className="text-h1 text-ink">Nouveau mot de passe</h1>
+          <h1 className="text-h1 text-ink">{t('auth.reset.title')}</h1>
 
           {tokenMissing ? (
             <div className="mt-6 bg-danger-bg border border-airmess-red/30 text-airmess-red rounded-md p-4">
-              <p className="font-bold text-body">Lien invalide</p>
+              <p className="font-bold text-body">{t('auth.reset.invalidTitle')}</p>
               <p className="text-body-s mt-2">
-                Ce lien de réinitialisation est incomplet ou corrompu.{' '}
+                {t('auth.reset.invalidBody')}{' '}
                 <Link to="/forgot-password" className="underline font-medium">
-                  Demandez-en un nouveau
+                  {t('auth.reset.askNewLink')}
                 </Link>.
               </p>
             </div>
           ) : done ? (
             <div className="mt-6 bg-success-bg border border-success/20 text-success rounded-md p-4">
-              <p className="font-bold text-body">✅ Mot de passe modifié</p>
-              <p className="text-body-s mt-2">Vous allez être redirigé vers la connexion…</p>
+              <p className="font-bold text-body">{t('auth.reset.successTitle')}</p>
+              <p className="text-body-s mt-2">{t('auth.reset.successBody')}</p>
             </div>
           ) : (
             <>
               <p className="text-body-s text-warm-500 mt-2 mb-6">
-                Pour <strong className="text-ink">{email}</strong>. Choisissez un nouveau mot de passe
-                sécurisé (8 caractères minimum).
+                {t('auth.reset.subtitlePrefix')} <strong className="text-ink">{email}</strong>{t('auth.reset.subtitleSuffix')}
               </p>
 
               <form
@@ -86,8 +89,8 @@ export default function ResetPasswordPage() {
               >
                 <Input
                   type={showPassword ? 'text' : 'password'}
-                  label="Nouveau mot de passe"
-                  helper="8 caractères minimum"
+                  label={t('auth.reset.newPassword')}
+                  helper={t('auth.reset.passwordHelper')}
                   required
                   minLength={8}
                   value={password}
@@ -100,7 +103,7 @@ export default function ResetPasswordPage() {
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
                       className="p-2 text-warm-500 hover:text-ink transition-colors"
-                      aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                      aria-label={showPassword ? t('common.hidePassword') : t('common.showPassword')}
                     >
                       {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
                     </button>
@@ -109,20 +112,20 @@ export default function ResetPasswordPage() {
 
                 <Input
                   type={showConfirmation ? 'text' : 'password'}
-                  label="Confirmation"
+                  label={t('auth.reset.confirmation')}
                   required
                   minLength={8}
                   value={confirmation}
                   onChange={(e) => setConfirmation(e.target.value)}
                   disabled={mutation.isPending}
                   autoComplete="new-password"
-                  error={mismatch ? 'Les mots de passe ne correspondent pas.' : undefined}
+                  error={mismatch ? t('common.passwordMismatch') : undefined}
                   rightSlot={
                     <button
                       type="button"
                       onClick={() => setShowConfirmation((v) => !v)}
                       className="p-2 text-warm-500 hover:text-ink transition-colors"
-                      aria-label={showConfirmation ? 'Masquer la confirmation' : 'Afficher la confirmation'}
+                      aria-label={showConfirmation ? t('common.hideConfirmation') : t('common.showConfirmation')}
                     >
                       {showConfirmation ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
                     </button>
@@ -148,7 +151,7 @@ export default function ResetPasswordPage() {
                   disabled={!password || mismatch}
                   rightIcon={!mutation.isPending && <ArrowRightIcon size={18} />}
                 >
-                  Réinitialiser
+                  {t('auth.reset.submit')}
                 </Button>
               </form>
             </>

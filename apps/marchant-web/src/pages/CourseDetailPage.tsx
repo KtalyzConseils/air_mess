@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import AdminPageShell from '../components/admin/AdminPageShell'
 import StatusBadge from '../components/StatusBadge'
@@ -13,6 +14,7 @@ import { fetchCourse, fetchCourseHistory, cancelCourse } from '../api/courses'
 import { useAuthStore } from '../stores/authStore'
 
 export default function CourseDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -28,7 +30,7 @@ export default function CourseDetailPage() {
       setCopiedKey(key)
       setTimeout(() => setCopiedKey(null), 2000)
     } catch {
-      alert('Impossible de copier — copie manuelle requise.')
+      alert(t('common.copyImpossible'))
     }
   }
 
@@ -70,7 +72,7 @@ export default function CourseDetailPage() {
   if (courseQuery.isLoading) {
     return (
       <Wrapper>
-        <main className="max-w-5xl mx-auto px-4 md:px-6 py-12 text-warm-500">Chargement…</main>
+        <main className="max-w-5xl mx-auto px-4 md:px-6 py-12 text-warm-500">{t('common.loading')}</main>
       </Wrapper>
     )
   }
@@ -80,8 +82,8 @@ export default function CourseDetailPage() {
       <Wrapper>
         <main className="max-w-5xl mx-auto px-4 md:px-6 py-12">
           <Card padding="lg" className="text-center bg-danger-bg! border-airmess-red/20! text-airmess-red">
-            Erreur de chargement.{' '}
-            <button onClick={() => navigate(-1)} className="underline font-semibold">Retour</button>
+            {t('common.loadingError')}{' '}
+            <button onClick={() => navigate(-1)} className="underline font-semibold">{t('common.back')}</button>
           </Card>
         </main>
       </Wrapper>
@@ -101,7 +103,7 @@ export default function CourseDetailPage() {
 
   const apiError =
     cancelMutation.error instanceof AxiosError
-      ? cancelMutation.error.response?.data?.message ?? 'Erreur.'
+      ? cancelMutation.error.response?.data?.message ?? t('common.unexpectedError')
       : null
 
   return (
@@ -115,11 +117,11 @@ export default function CourseDetailPage() {
             to={isAdmin ? '/admin/courses' : '/courses'}
             className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink"
           >
-            ← {isAdmin ? 'Retour aux courses' : 'Retour à mes courses'}
+            {t('courses.detail.backToList')}
           </Link>
         </div>
 
-        <PageEyebrow label="Détail de la course" className="mb-3" />
+        <PageEyebrow label={t('courses.detail.title')} className="mb-3" />
 
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
           <div className="min-w-0">
@@ -140,11 +142,11 @@ export default function CourseDetailPage() {
               size="sm"
               onClick={() => copy(trackingUrl, 'link')}
             >
-              {copiedKey === 'link' ? '✓ Copié' : '🔗 Lien de suivi'}
+              {copiedKey === 'link' ? `✓ ${t('common.copied')}` : `🔗 ${t('courses.detail.trackingLink')}`}
             </Button>
             {canCancel && (
               <Button variant="ghost" size="sm" onClick={() => setConfirmCancel(true)}>
-                <span className="text-airmess-red">Annuler</span>
+                <span className="text-airmess-red">{t('common.cancel')}</span>
               </Button>
             )}
           </div>
@@ -234,9 +236,9 @@ export default function CourseDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-4">
             {/* Origine */}
-            <Section title="Origine">
-              <KV label="Expéditeur" value={course.origin_name} />
-              <KV label="Quartier" value={`${course.origin_quartier}, ${course.origin_city}`} />
+            <Section title={t('courses.detail.pickup')}>
+              <KV label={t('courses.detail.recipient')} value={course.origin_name} />
+              <KV label={t('courses.new.originQuartier')} value={`${course.origin_quartier}, ${course.origin_city}`} />
             </Section>
 
             {/* Codes de validation — affiché quand un livreur est assigné */}
@@ -293,28 +295,28 @@ export default function CourseDetailPage() {
             )}
 
             {/* Destination */}
-            <Section title="Destination">
-              <KV label="Destinataire" value={course.destination_name} />
-              <KV label="Téléphone" value={course.destination_phone} />
-              <KV label="Quartier" value={`${course.destination_quartier}, ${course.destination_city}`} />
+            <Section title={t('courses.detail.delivery')}>
+              <KV label={t('courses.detail.recipient')} value={course.destination_name} />
+              <KV label={t('common.phone')} value={course.destination_phone} />
+              <KV label={t('courses.new.destinationQuartier')} value={`${course.destination_quartier}, ${course.destination_city}`} />
             </Section>
 
             {/* Colis */}
-            <Section title="Colis">
-              <KV label="Description" value={course.package_description} />
-              <KV label="Taille" value={course.package_size} />
-              <KV label="Catégorie" value={course.package_category?.name ?? '—'} />
-              <KV label="Urgence" value={course.urgency === 'express' ? '⚡ Express' : 'Standard'} />
+            <Section title={t('courses.detail.package')}>
+              <KV label={t('common.description')} value={course.package_description} />
+              <KV label={t('courses.detail.packageWeight')} value={course.package_size} />
+              <KV label={t('courses.new.packageCategory')} value={course.package_category?.name ?? '—'} />
+              <KV label={t('courses.new.urgencyLabel')} value={course.urgency === 'express' ? t('courses.express') : t('courses.detail.urgencyStandard')} />
             </Section>
 
             {/* Tarification */}
-            <Section title="Tarification & encaissement">
-              <KV label="Frais de livraison" value={`${course.delivery_fee.toLocaleString('fr-FR')} FCFA`} />
-              <KV label="Gain livreur" value={`${course.driver_earnings.toLocaleString('fr-FR')} FCFA`} />
+            <Section title={t('courses.detail.pricing')}>
+              <KV label={t('courses.detail.deliveryFee')} value={`${course.delivery_fee.toLocaleString('fr-FR')} FCFA`} />
+              <KV label={t('admin.reconciliation.driverEarnings')} value={`${course.driver_earnings.toLocaleString('fr-FR')} FCFA`} />
               {course.has_collection && (
                 <>
-                  <KV label="À encaisser" value={`${course.collection_amount?.toLocaleString('fr-FR')} FCFA`} />
-                  <KV label="Méthode" value={course.collection_method ?? '—'} />
+                  <KV label={t('courses.detail.collectionAmount')} value={`${course.collection_amount?.toLocaleString('fr-FR')} FCFA`} />
+                  <KV label={t('common.type')} value={course.collection_method ?? '—'} />
                 </>
               )}
             </Section>
@@ -322,20 +324,20 @@ export default function CourseDetailPage() {
 
           {/* Colonne droite : livreur + timeline */}
           <div className="space-y-4">
-            <Section title="Livreur">
+            <Section title={t('courses.detail.driver')}>
               {course.driver ? (
                 <>
-                  <KV label="Nom" value={course.driver.user.name} />
-                  <KV label="Téléphone" value={course.driver.user.phone} />
+                  <KV label={t('common.name')} value={course.driver.user.name} />
+                  <KV label={t('common.phone')} value={course.driver.user.phone} />
                 </>
               ) : (
-                <p className="text-body-s text-warm-500 italic">Aucun livreur assigné</p>
+                <p className="text-body-s text-warm-500 italic">{t('courses.detail.waitingDriver')}</p>
               )}
             </Section>
 
-            <Section title="Historique">
+            <Section title={t('courses.detail.history')}>
               {historyQuery.isLoading ? (
-                <p className="text-body-s text-warm-500">Chargement…</p>
+                <p className="text-body-s text-warm-500">{t('common.loading')}</p>
               ) : (
                 <Timeline items={historyQuery.data ?? []} />
               )}
@@ -349,15 +351,15 @@ export default function CourseDetailPage() {
         {confirmCancel && (
           <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 ams-anim-fade-in">
             <Card variant="signature" padding="lg" className="max-w-md w-full ams-anim-scale-in">
-              <h3 className="text-h2 text-ink font-bold">Annuler cette course ?</h3>
+              <h3 className="text-h2 text-ink font-bold">{t('courses.detail.confirmCancel')}</h3>
               <p className="text-body-s text-warm-500 mt-2">
-                Cette action est définitive. Donnez un motif pour l'historique.
+                {t('courses.detail.cancelReason')}
               </p>
               <textarea
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 rows={3}
-                placeholder="ex: Client a changé d'avis"
+                placeholder={t('courses.detail.cancelPlaceholder')}
                 className="w-full mt-4 bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
               />
               {apiError && (
@@ -365,7 +367,7 @@ export default function CourseDetailPage() {
               )}
               <div className="flex justify-end gap-3 mt-5">
                 <Button variant="secondary" size="md" onClick={() => setConfirmCancel(false)}>
-                  Retour
+                  {t('common.back')}
                 </Button>
                 <Button
                   variant="danger"
@@ -374,7 +376,7 @@ export default function CourseDetailPage() {
                   onClick={() => cancelMutation.mutate()}
                   loading={cancelMutation.isPending}
                 >
-                  Confirmer l'annulation
+                  {t('common.confirm')}
                 </Button>
               </div>
             </Card>

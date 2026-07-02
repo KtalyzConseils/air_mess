@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AxiosError } from 'axios'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
@@ -14,6 +15,7 @@ import type { Course } from '../../api/courses'
 const REASSIGNABLE_BLOCKED = ['delivered', 'cancelled', 'failed', 'picked_up', 'at_dropoff']
 
 export default function AdminCoursesPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -50,8 +52,8 @@ export default function AdminCoursesPage() {
     onError: (err) => {
       const message =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Réaffectation impossible.'
-          : 'Réaffectation impossible.'
+          ? err.response?.data?.message ?? t('admin.courses.reassignImpossible')
+          : t('admin.courses.reassignImpossible')
       window.alert(message)
     },
   })
@@ -68,8 +70,8 @@ export default function AdminCoursesPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Courses"
-        subtitle={`${total} course${total > 1 ? 's' : ''} · rafraîchi toutes les 20 s`}
+        title={t('admin.courses.pageTitle')}
+        subtitle={t('admin.courses.pageSubtitle', { count: total })}
         toolbar={
           <div className="flex flex-wrap gap-2 items-center">
             <AdminSearchInput
@@ -78,7 +80,7 @@ export default function AdminCoursesPage() {
                 setSearch(e.target.value)
                 setPage(1)
               }}
-              placeholder="Référence, marchand, destinataire…"
+              placeholder={t('admin.courses.searchPlaceholder')}
             />
             <AdminSelect
               value={statusFilter}
@@ -87,14 +89,14 @@ export default function AdminCoursesPage() {
                 setPage(1)
               }}
             >
-              <option value="">Tous statuts</option>
-              <option value="awaiting_assignment">En attribution</option>
-              <option value="assigned">Acceptée</option>
-              <option value="picked_up">En cours</option>
-              <option value="delivered">Livrée</option>
-              <option value="cancelled">Annulée</option>
-              <option value="failed">Échec</option>
-              <option value="disputed">Litige</option>
+              <option value="">{t('admin.courses.allStatuses')}</option>
+              <option value="awaiting_assignment">{t('admin.courses.statusAwaiting')}</option>
+              <option value="assigned">{t('admin.courses.statusAssigned')}</option>
+              <option value="picked_up">{t('admin.courses.statusPickedUp')}</option>
+              <option value="delivered">{t('admin.courses.statusDelivered')}</option>
+              <option value="cancelled">{t('admin.courses.statusCancelled')}</option>
+              <option value="failed">{t('admin.courses.statusFailed')}</option>
+              <option value="disputed">{t('admin.courses.statusDisputed')}</option>
             </AdminSelect>
             {(search || statusFilter) && (
               <AdminButton
@@ -106,7 +108,7 @@ export default function AdminCoursesPage() {
                   setPage(1)
                 }}
               >
-                Réinitialiser
+                {t('admin.common.reset')}
               </AdminButton>
             )}
           </div>
@@ -116,22 +118,22 @@ export default function AdminCoursesPage() {
       <div className="px-4 md:px-6 lg:px-8 py-5">
         <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
           {coursesQuery.isLoading ? (
-            <div className="p-10 text-center text-warm-500 text-body-s">Chargement…</div>
+            <div className="p-10 text-center text-warm-500 text-body-s">{t('admin.common.loading')}</div>
           ) : courses.length === 0 ? (
             <div className="p-10 text-center text-warm-500 text-body-s italic">
-              Aucune course trouvée.
+              {t('admin.courses.emptyResults')}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-body-s min-w-[800px]">
                 <thead className="bg-cream/60 text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
                   <tr>
-                    <th className="px-4 py-2.5 text-left">Référence</th>
-                    <th className="px-4 py-2.5 text-left">Marchand</th>
-                    <th className="px-4 py-2.5 text-left">Destination</th>
-                    <th className="px-4 py-2.5 text-left">Statut</th>
-                    <th className="px-4 py-2.5 text-left">Livreur</th>
-                    <th className="px-4 py-2.5 text-right">Action</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.courses.colReference')}</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.courses.colMarchant')}</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.courses.colDestination')}</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.courses.colStatus')}</th>
+                    <th className="px-4 py-2.5 text-left">{t('admin.courses.colDriver')}</th>
+                    <th className="px-4 py-2.5 text-right">{t('admin.courses.colAction')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-warm-200">
@@ -159,7 +161,7 @@ export default function AdminCoursesPage() {
                       </td>
                       <td className="px-4 py-2.5 text-warm-600 truncate max-w-[160px]">
                         {c.driver?.user?.name ?? (
-                          <span className="italic text-warm-400">non assigné</span>
+                          <span className="italic text-warm-400">{t('admin.common.notAssigned')}</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
@@ -170,7 +172,7 @@ export default function AdminCoursesPage() {
                             onClick={() => setReassignFor(c)}
                             className="text-airmess-red! hover:text-airmess-red! hover:bg-danger-bg!"
                           >
-                            Réaffecter
+                            {t('admin.courses.reassignAction')}
                           </AdminButton>
                         )}
                       </td>
@@ -187,7 +189,7 @@ export default function AdminCoursesPage() {
             currentPage={coursesQuery.data.current_page}
             lastPage={coursesQuery.data.last_page}
             total={coursesQuery.data.total}
-            itemLabel="course"
+            itemLabel={t('admin.courses.itemLabel')}
             onChange={setPage}
             isFetching={coursesQuery.isFetching}
           />
@@ -198,19 +200,19 @@ export default function AdminCoursesPage() {
       <AdminModal
         open={!!reassignFor}
         onClose={closeReassign}
-        title={reassignFor ? `Réaffecter ${reassignFor.reference}` : ''}
-        subtitle="Sélectionne le nouveau livreur et précise le motif."
+        title={reassignFor ? t('admin.courses.reassignTitle', { reference: reassignFor.reference }) : ''}
+        subtitle={t('admin.courses.reassignSubtitle')}
         footer={
           <>
             <AdminButton variant="secondary" onClick={closeReassign}>
-              Annuler
+              {t('admin.common.cancel')}
             </AdminButton>
             <AdminButton
               variant="primary"
               onClick={() => reassignMutation.mutate()}
               disabled={!newDriverId || reassignMutation.isPending}
             >
-              {reassignMutation.isPending ? 'Réaffectation…' : 'Confirmer'}
+              {reassignMutation.isPending ? t('admin.courses.reassignInProgress') : t('admin.common.confirm')}
             </AdminButton>
           </>
         }
@@ -218,14 +220,14 @@ export default function AdminCoursesPage() {
         <div className="space-y-4">
           <div>
             <label className="block mb-1.5 text-caption font-medium text-warm-600">
-              Nouveau livreur
+              {t('admin.courses.newDriverLabel')}
             </label>
             <AdminSelect
               value={newDriverId}
               onChange={(e) => setNewDriverId(Number(e.target.value))}
               className="w-full"
             >
-              <option value="">— Choisir —</option>
+              <option value="">{t('admin.common.chooseDash')}</option>
               {(driversQuery.data ?? [])
                 .filter((d) => d.availability_status === 'available')
                 .map((d) => (
@@ -238,13 +240,13 @@ export default function AdminCoursesPage() {
 
           <div>
             <label className="block mb-1.5 text-caption font-medium text-warm-600">
-              Motif
+              {t('admin.courses.reasonLabel')}
             </label>
             <textarea
               value={reassignReason}
               onChange={(e) => setReassignReason(e.target.value)}
               rows={3}
-              placeholder="ex : livreur en panne, ne répond plus"
+              placeholder={t('admin.courses.reasonPlaceholder')}
               className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
             />
           </div>

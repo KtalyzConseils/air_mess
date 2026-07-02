@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import AdminTabs from '../../components/admin/AdminTabs'
@@ -14,31 +15,29 @@ import {
 
 type FilterKey = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'all'
 
-const FILTERS: readonly { key: FilterKey; label: string; params: WithdrawRequestListParams }[] = [
-  { key: 'pending', label: 'À traiter', params: { status: 'pending' } },
-  { key: 'approved', label: 'Approuvées', params: { status: 'approved' } },
-  { key: 'rejected', label: 'Rejetées', params: { status: 'rejected' } },
-  { key: 'cancelled', label: 'Annulées', params: { status: 'cancelled' } },
-  { key: 'all', label: 'Tous', params: {} },
-] as const
-
-const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
-  pending: { label: 'En attente', classes: 'bg-warning-bg text-warning border border-warning/20' },
-  approved: { label: 'Approuvée', classes: 'bg-success-bg text-success border border-success/20' },
-  rejected: { label: 'Rejetée', classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
-  cancelled: { label: 'Annulée', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
+const STATUS_BADGE_CLASSES: Record<string, string> = {
+  pending: 'bg-warning-bg text-warning border border-warning/20',
+  approved: 'bg-success-bg text-success border border-success/20',
+  rejected: 'bg-danger-bg text-airmess-red border border-airmess-red/30',
+  cancelled: 'bg-warm-100 text-warm-600 border border-warm-200',
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const meta = STATUS_BADGE[status] ?? {
-    label: status,
-    classes: 'bg-warm-100 text-warm-600 border border-warm-200',
+  const { t } = useTranslation()
+  const classes =
+    STATUS_BADGE_CLASSES[status] ?? 'bg-warm-100 text-warm-600 border border-warm-200'
+  const labels: Record<string, string> = {
+    pending: t('admin.withdraws.statusPending'),
+    approved: t('admin.withdraws.statusApproved'),
+    rejected: t('admin.withdraws.statusRejected'),
+    cancelled: t('admin.withdraws.statusCancelled'),
   }
+  const label = labels[status] ?? status
   return (
     <span
-      className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${meta.classes}`}
+      className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${classes}`}
     >
-      {meta.label}
+      {label}
     </span>
   )
 }
@@ -60,8 +59,21 @@ function formatDateTime(value: string | null): string {
 
 export default function AdminWithdrawRequestsPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [filterKey, setFilterKey] = useState<FilterKey>('pending')
   const [page, setPage] = useState(1)
+
+  const FILTERS: readonly {
+    key: FilterKey
+    label: string
+    params: WithdrawRequestListParams
+  }[] = [
+    { key: 'pending', label: t('admin.withdraws.tabToProcess'), params: { status: 'pending' } },
+    { key: 'approved', label: t('admin.withdraws.tabApproved'), params: { status: 'approved' } },
+    { key: 'rejected', label: t('admin.withdraws.tabRejected2'), params: { status: 'rejected' } },
+    { key: 'cancelled', label: t('admin.withdraws.tabCancelled'), params: { status: 'cancelled' } },
+    { key: 'all', label: t('admin.withdraws.tabAll'), params: {} },
+  ]
 
   const activeFilter = FILTERS.find((f) => f.key === filterKey)!
 
@@ -81,29 +93,41 @@ export default function AdminWithdrawRequestsPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Retraits caution livreurs"
-        subtitle="Cliquer sur une ligne pour ouvrir la fiche de revue."
+        title={t('admin.withdraws.titleList')}
+        subtitle={t('admin.withdraws.subtitleList')}
         toolbar={<AdminTabs tabs={FILTERS} value={filterKey} onChange={changeFilter} />}
       />
 
       <div className="px-4 md:px-6 lg:px-8 py-5">
         <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="p-10 text-center text-warm-500 text-body-s">Chargement…</div>
+            <div className="p-10 text-center text-warm-500 text-body-s">
+              {t('admin.common.loading')}
+            </div>
           ) : requests.length === 0 ? (
             <div className="p-10 text-center text-warm-500 text-body-s italic">
-              Aucune demande dans ce filtre.
+              {t('admin.withdraws.emptyForFilter')}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-body-s min-w-[700px]">
                 <thead className="bg-cream/60 text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
                   <tr>
-                    <th className="px-4 py-2.5 text-left">Livreur</th>
-                    <th className="px-4 py-2.5 text-right">Montant</th>
-                    <th className="px-4 py-2.5 text-left">Méthode</th>
-                    <th className="px-4 py-2.5 text-left">Statut</th>
-                    <th className="px-4 py-2.5 text-left">Demandée</th>
+                    <th className="px-4 py-2.5 text-left">
+                      {t('admin.withdraws.colDriver')}
+                    </th>
+                    <th className="px-4 py-2.5 text-right">
+                      {t('admin.withdraws.colAmount')}
+                    </th>
+                    <th className="px-4 py-2.5 text-left">
+                      {t('admin.withdraws.colMethod')}
+                    </th>
+                    <th className="px-4 py-2.5 text-left">
+                      {t('admin.withdraws.colStatus')}
+                    </th>
+                    <th className="px-4 py-2.5 text-left">
+                      {t('admin.withdraws.colRequestedAt')}
+                    </th>
                     <th className="px-4 py-2.5"></th>
                   </tr>
                 </thead>
@@ -127,7 +151,9 @@ export default function AdminWithdrawRequestsPage() {
                       </td>
                       <td className="px-4 py-2.5">
                         <p className="font-medium text-ink">
-                          {r.target_method === 'momo' ? 'Mobile Money' : 'Banque'}
+                          {r.target_method === 'momo'
+                            ? t('admin.withdraws.methodMomo')
+                            : t('admin.withdraws.methodBank')}
                         </p>
                         <p className="text-caption text-warm-500 font-mono">{r.target_account}</p>
                       </td>
@@ -153,7 +179,7 @@ export default function AdminWithdrawRequestsPage() {
             currentPage={data.current_page}
             lastPage={data.last_page}
             total={data.total}
-            itemLabel="demande"
+            itemLabel={t('admin.withdraws.requestItemLabel')}
             onChange={setPage}
             isFetching={isFetching}
           />

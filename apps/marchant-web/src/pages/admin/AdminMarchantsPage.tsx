@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import AdminTabs from '../../components/admin/AdminTabs'
@@ -11,18 +12,19 @@ import { fetchMarchants, validateMarchant, type MarchantListParams } from '../..
 
 type FilterKey = 'pending' | 'all' | 'active' | 'suspended'
 
-const FILTERS: readonly { key: FilterKey; label: string; params: MarchantListParams }[] = [
-  { key: 'pending', label: 'À valider', params: { validation: 'pending' } },
-  { key: 'all', label: 'Tous', params: {} },
-  { key: 'active', label: 'Actifs', params: { subscription_status: 'active' } },
-  { key: 'suspended', label: 'Suspendus', params: { subscription_status: 'suspended' } },
-] as const
-
 export default function AdminMarchantsPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [filterKey, setFilterKey] = useState<FilterKey>('pending')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
+
+  const FILTERS: readonly { key: FilterKey; label: string; params: MarchantListParams }[] = [
+    { key: 'pending', label: t('admin.marchants.tabToValidate'), params: { validation: 'pending' } },
+    { key: 'all', label: t('admin.marchants.tabAll'), params: {} },
+    { key: 'active', label: t('admin.marchants.tabActive'), params: { subscription_status: 'active' } },
+    { key: 'suspended', label: t('admin.marchants.tabSuspended'), params: { subscription_status: 'suspended' } },
+  ] as const
 
   const activeFilter = FILTERS.find((f) => f.key === filterKey)!
   const search = q.trim()
@@ -56,8 +58,8 @@ export default function AdminMarchantsPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Marchands"
-        subtitle="Validation et suivi des comptes pro"
+        title={t('admin.marchants.title')}
+        subtitle={t('admin.marchants.pageSubtitle')}
         toolbar={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full">
             <AdminTabs tabs={FILTERS} value={filterKey} onChange={changeFilter} />
@@ -67,7 +69,7 @@ export default function AdminMarchantsPage() {
                 setQ(e.target.value)
                 setPage(1)
               }}
-              placeholder="Raison sociale, IFU, email, téléphone…"
+              placeholder={t('admin.marchants.searchPlaceholder')}
               minWidthClass="min-w-[280px]"
             />
           </div>
@@ -77,33 +79,34 @@ export default function AdminMarchantsPage() {
       <div className="px-4 md:px-6 lg:px-8 py-5">
         {search && (
           <p className="text-caption text-warm-500 mb-3">
-            Recherche globale — le filtre <strong className="text-ink">{activeFilter.label}</strong> est ignoré.{' '}
+            {t('admin.common.globalSearchIgnoredPrefix')}{' '}
+            <strong className="text-ink">{activeFilter.label}</strong> {t('admin.common.globalSearchIgnoredSuffix')}{' '}
             <button
               onClick={() => setQ('')}
               className="text-airmess-red font-semibold hover:underline"
             >
-              Effacer
+              {t('admin.common.clearFilter')}
             </button>
           </p>
         )}
 
         <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="p-10 text-center text-warm-500 text-body-s">Chargement…</div>
+            <div className="p-10 text-center text-warm-500 text-body-s">{t('admin.common.loading')}</div>
           ) : marchants.length === 0 ? (
             <div className="p-10 text-center text-warm-500 text-body-s italic">
-              Aucun marchand trouvé.
+              {t('admin.marchants.emptyResults')}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-body-s min-w-[700px]">
                 <thead className="bg-cream/60 text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
                   <tr>
-                    <th className="px-5 py-2.5 text-left">Raison sociale</th>
-                    <th className="px-5 py-2.5 text-left">Secteur</th>
-                    <th className="px-5 py-2.5 text-left">Contact</th>
-                    <th className="px-5 py-2.5 text-left">Statut</th>
-                    <th className="px-5 py-2.5 text-right">Actions</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.marchants.colRaisonSociale')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.marchants.colSector')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.marchants.colContact')}</th>
+                    <th className="px-5 py-2.5 text-left">{t('admin.marchants.colStatus')}</th>
+                    <th className="px-5 py-2.5 text-right">{t('admin.marchants.colActions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-warm-200">
@@ -118,7 +121,7 @@ export default function AdminMarchantsPage() {
                         </Link>
                         {!m.validated_at && (
                           <span className="ml-2 text-caption font-bold text-warning uppercase tracking-wide">
-                            à valider
+                            {t('admin.marchants.toValidateBadge')}
                           </span>
                         )}
                       </td>
@@ -143,12 +146,12 @@ export default function AdminMarchantsPage() {
                               onClick={() => mutation.mutate(m.id)}
                               disabled={mutation.isPending}
                             >
-                              Valider
+                              {t('admin.marchants.validateAction')}
                             </AdminButton>
                           )}
                           <Link to={`/admin/marchants/${m.id}`}>
                             <AdminButton variant="ghost" size="sm">
-                              Voir
+                              {t('admin.common.view')}
                             </AdminButton>
                           </Link>
                         </div>
@@ -166,7 +169,7 @@ export default function AdminMarchantsPage() {
             currentPage={data.current_page}
             lastPage={data.last_page}
             total={data.total}
-            itemLabel="marchand"
+            itemLabel={t('admin.marchants.itemLabel')}
             onChange={setPage}
             isFetching={isFetching}
           />

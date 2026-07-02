@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { AxiosError } from 'axios'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
@@ -21,15 +22,6 @@ import {
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 
-const SECTEUR_LABEL: Record<string, string> = {
-  supermarche: 'Supermarché',
-  restaurant: 'Restaurant',
-  boutique: 'Boutique',
-  pharmacie: 'Pharmacie',
-  ecommerce: 'E-commerce',
-  autre: 'Autre',
-}
-
 type ConfirmAction = 'validate' | 'reactivate' | 'suspend' | 'reject' | 'delete'
 
 type ConfirmConfig = {
@@ -39,48 +31,6 @@ type ConfirmConfig = {
   confirmVariant: 'primary' | 'success' | 'danger'
   reasonRequired: boolean
   reasonPlaceholder?: string
-}
-
-const CONFIRM_CONFIG: Record<ConfirmAction, ConfirmConfig> = {
-  validate: {
-    title: 'Valider ce marchand ?',
-    description: 'Le marchand pourra immédiatement créer des courses.',
-    confirmLabel: "Valider l'inscription",
-    confirmVariant: 'primary',
-    reasonRequired: false,
-  },
-  reactivate: {
-    title: 'Réactiver ce marchand ?',
-    description: 'Il pourra de nouveau se connecter et créer des courses.',
-    confirmLabel: 'Réactiver',
-    confirmVariant: 'success',
-    reasonRequired: false,
-  },
-  suspend: {
-    title: 'Suspendre ce marchand ?',
-    description:
-      'Le compte sera désactivé. Le marchand sera déconnecté immédiatement et ne pourra plus créer de courses.',
-    confirmLabel: 'Suspendre',
-    confirmVariant: 'danger',
-    reasonRequired: true,
-    reasonPlaceholder: 'ex : documents manquants, suspicion de fraude…',
-  },
-  reject: {
-    title: "Refuser l'inscription ?",
-    description: "L'inscription sera marquée comme refusée. Le marchand sera déconnecté.",
-    confirmLabel: "Refuser l'inscription",
-    confirmVariant: 'danger',
-    reasonRequired: true,
-    reasonPlaceholder: 'ex : documents non conformes, doublon…',
-  },
-  delete: {
-    title: 'Supprimer définitivement ?',
-    description:
-      'Cette action est irréversible. Le compte et toutes ses données seront supprimés.',
-    confirmLabel: 'Supprimer',
-    confirmVariant: 'danger',
-    reasonRequired: false,
-  },
 }
 
 function formatDate(value: string | null): string {
@@ -128,6 +78,7 @@ function KpiBox({ label, value, tone = 'default' }: KpiBoxProps) {
 }
 
 export default function MarchantDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -136,6 +87,55 @@ export default function MarchantDetailPage() {
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
   const canManageMarchant = hasAdminRole(currentUser, 'commercial')
+
+  const SECTEUR_LABEL: Record<string, string> = {
+    supermarche: t('admin.marchants.detail.sectorSupermarche'),
+    restaurant: t('admin.marchants.detail.sectorRestaurant'),
+    boutique: t('admin.marchants.detail.sectorBoutique'),
+    pharmacie: t('admin.marchants.detail.sectorPharmacie'),
+    ecommerce: t('admin.marchants.detail.sectorEcommerce'),
+    autre: t('admin.marchants.detail.sectorAutre'),
+  }
+
+  const CONFIRM_CONFIG: Record<ConfirmAction, ConfirmConfig> = {
+    validate: {
+      title: t('admin.marchants.detail.confirmValidateTitle'),
+      description: t('admin.marchants.detail.confirmValidateBody'),
+      confirmLabel: t('admin.marchants.detail.confirmValidateCta'),
+      confirmVariant: 'primary',
+      reasonRequired: false,
+    },
+    reactivate: {
+      title: t('admin.marchants.detail.confirmReactivateTitle'),
+      description: t('admin.marchants.detail.confirmReactivateBody'),
+      confirmLabel: t('admin.marchants.detail.confirmReactivateCta'),
+      confirmVariant: 'success',
+      reasonRequired: false,
+    },
+    suspend: {
+      title: t('admin.marchants.detail.confirmSuspendTitle'),
+      description: t('admin.marchants.detail.confirmSuspendBody'),
+      confirmLabel: t('admin.marchants.detail.confirmSuspendCta'),
+      confirmVariant: 'danger',
+      reasonRequired: true,
+      reasonPlaceholder: t('admin.marchants.detail.confirmSuspendReason'),
+    },
+    reject: {
+      title: t('admin.marchants.detail.confirmRejectTitle'),
+      description: t('admin.marchants.detail.confirmRejectBody'),
+      confirmLabel: t('admin.marchants.detail.confirmRejectCta'),
+      confirmVariant: 'danger',
+      reasonRequired: true,
+      reasonPlaceholder: t('admin.marchants.detail.confirmRejectReason'),
+    },
+    delete: {
+      title: t('admin.marchants.detail.confirmDeleteTitle'),
+      description: t('admin.marchants.detail.confirmDeleteBodyLong'),
+      confirmLabel: t('admin.marchants.detail.confirmDeleteCta'),
+      confirmVariant: 'danger',
+      reasonRequired: false,
+    },
+  }
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'marchant', id],
@@ -158,22 +158,22 @@ export default function MarchantDetailPage() {
   const validateMut = useMutation({
     mutationFn: () => validateMarchant(Number(id)),
     onSuccess: () => { invalidate(); setConfirmAction(null) },
-    onError: (err) => showApiError(err, 'Validation impossible.'),
+    onError: (err) => showApiError(err, t('admin.marchants.detail.validationError')),
   })
   const reactivateMut = useMutation({
     mutationFn: () => reactivateMarchant(Number(id)),
     onSuccess: () => { invalidate(); setConfirmAction(null) },
-    onError: (err) => showApiError(err, 'Réactivation impossible.'),
+    onError: (err) => showApiError(err, t('admin.marchants.detail.reactivationError')),
   })
   const suspendMut = useMutation({
     mutationFn: (reason: string) => suspendMarchant(Number(id), reason),
     onSuccess: () => { invalidate(); setConfirmAction(null) },
-    onError: (err) => showApiError(err, 'Suspension impossible.'),
+    onError: (err) => showApiError(err, t('admin.marchants.detail.suspensionError')),
   })
   const rejectMut = useMutation({
     mutationFn: (reason: string) => rejectMarchant(Number(id), reason),
     onSuccess: () => { invalidate(); setConfirmAction(null) },
-    onError: (err) => showApiError(err, 'Refus impossible.'),
+    onError: (err) => showApiError(err, t('admin.marchants.detail.rejectionError')),
   })
   const deleteMut = useMutation({
     mutationFn: () => deleteMarchant(Number(id)),
@@ -182,7 +182,7 @@ export default function MarchantDetailPage() {
       setConfirmAction(null)
       navigate('/admin/marchants')
     },
-    onError: (err) => showApiError(err, 'Suppression impossible.'),
+    onError: (err) => showApiError(err, t('admin.marchants.detail.deletionError')),
   })
 
   function handleConfirm(reason: string) {
@@ -214,22 +214,22 @@ export default function MarchantDetailPage() {
       <>
         {m.subscription_status === 'suspended' && (
           <AdminButton variant="primary" onClick={() => setConfirmAction('reactivate')}>
-            Réactiver
+            {t('admin.marchants.detail.reactivate')}
           </AdminButton>
         )}
         {!m.validated_at && m.subscription_status !== 'churned' && (
           <>
             <AdminButton variant="primary" onClick={() => setConfirmAction('validate')}>
-              Valider
+              {t('admin.marchants.validateAction')}
             </AdminButton>
             <AdminButton variant="secondary" onClick={() => setConfirmAction('reject')}>
-              Refuser
+              {t('admin.marchants.detail.reject')}
             </AdminButton>
           </>
         )}
         {m.validated_at && m.subscription_status === 'active' && (
           <AdminButton variant="danger" onClick={() => setConfirmAction('suspend')}>
-            Suspendre
+            {t('admin.marchants.detail.suspend')}
           </AdminButton>
         )}
       </>
@@ -239,7 +239,7 @@ export default function MarchantDetailPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title={data?.marchant.raison_sociale ?? 'Marchand'}
+        title={data?.marchant.raison_sociale ?? t('admin.marchants.detail.fallbackTitle')}
         subtitle={
           data
             ? `${SECTEUR_LABEL[data.marchant.secteur_activite] ?? data.marchant.secteur_activite}${data.marchant.ifu_rccm ? ` · ${data.marchant.ifu_rccm}` : ''}`
@@ -252,7 +252,7 @@ export default function MarchantDetailPage() {
                 <MarchantStatusBadge status={data.marchant.subscription_status} />
                 {!data.marchant.validated_at && (
                   <span className="text-caption font-bold text-warning uppercase tracking-wide">
-                    À valider
+                    {t('admin.marchants.detail.toValidate')}
                   </span>
                 )}
               </div>
@@ -268,11 +268,11 @@ export default function MarchantDetailPage() {
           className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink"
         >
           <ArrowLeftIcon size={14} />
-          Retour aux marchands
+          {t('admin.marchants.detail.backToMarchants')}
         </Link>
 
-        {isLoading && <p className="text-body-s text-warm-500">Chargement…</p>}
-        {isError && <p className="text-body-s text-airmess-red">Marchand introuvable.</p>}
+        {isLoading && <p className="text-body-s text-warm-500">{t('admin.common.loading')}</p>}
+        {isError && <p className="text-body-s text-airmess-red">{t('admin.marchants.detail.notFoundMarchant')}</p>}
 
         {data && (
           <>
@@ -280,21 +280,21 @@ export default function MarchantDetailPage() {
               {/* Identité & contact */}
               <section className="bg-off-white border border-warm-200 rounded-lg">
                 <div className="px-5 py-2.5 border-b border-warm-200">
-                  <h2 className="text-body-s font-bold text-ink">Identité & contact</h2>
+                  <h2 className="text-body-s font-bold text-ink">{t('admin.marchants.detail.identityContact')}</h2>
                 </div>
                 <div className="px-5 py-3">
-                  <Row label="Secteur">{SECTEUR_LABEL[data.marchant.secteur_activite] ?? data.marchant.secteur_activite}</Row>
-                  <Row label="IFU / RCCM">{data.marchant.ifu_rccm ?? '—'}</Row>
-                  <Row label="Responsable">{data.marchant.user.name}</Row>
-                  <Row label="Email">{data.marchant.user.email}</Row>
-                  <Row label="Téléphone">{data.marchant.user.phone ?? '—'}</Row>
+                  <Row label={t('admin.marchants.detail.sector')}>{SECTEUR_LABEL[data.marchant.secteur_activite] ?? data.marchant.secteur_activite}</Row>
+                  <Row label={t('admin.marchants.detail.ifuRccm')}>{data.marchant.ifu_rccm ?? '—'}</Row>
+                  <Row label={t('admin.marchants.detail.responsible')}>{data.marchant.user.name}</Row>
+                  <Row label={t('admin.marchants.detail.email')}>{data.marchant.user.email}</Row>
+                  <Row label={t('admin.marchants.detail.phone')}>{data.marchant.user.phone ?? '—'}</Row>
                 </div>
               </section>
 
               {/* Wallet */}
               <section className="bg-off-white border border-warm-200 rounded-lg">
                 <div className="px-5 py-2.5 border-b border-warm-200 flex items-center justify-between">
-                  <h2 className="text-body-s font-bold text-ink">Wallet</h2>
+                  <h2 className="text-body-s font-bold text-ink">{t('admin.marchants.detail.wallet')}</h2>
                   {isSuperAdmin && data.marchant.user.wallet && (
                     <AdminButton
                       variant="ghost"
@@ -302,29 +302,29 @@ export default function MarchantDetailPage() {
                       onClick={() => setWalletAdjustOpen(true)}
                       leftIcon={<SettingsIcon size={14} />}
                     >
-                      Ajuster
+                      {t('admin.marchants.detail.walletAdjust')}
                     </AdminButton>
                   )}
                 </div>
                 <div className="px-5 py-3">
                   {data.marchant.user.wallet ? (
                     <>
-                      <Row label="Balance">
+                      <Row label={t('admin.marchants.detail.walletBalance')}>
                         <strong>{data.marchant.user.wallet.balance.toLocaleString('fr-FR')} FCFA</strong>
                       </Row>
-                      <Row label="Réservé (en cours)">
+                      <Row label={t('admin.marchants.detail.walletReserved')}>
                         {data.marchant.user.wallet.pending_reserved.toLocaleString('fr-FR')} FCFA
                       </Row>
-                      <Row label="Total rechargé">
+                      <Row label={t('admin.marchants.detail.walletTotalDeposited')}>
                         {data.marchant.user.wallet.total_deposited.toLocaleString('fr-FR')} FCFA
                       </Row>
-                      <Row label="Total dépensé">
+                      <Row label={t('admin.marchants.detail.walletTotalSpent')}>
                         {data.marchant.user.wallet.total_spent.toLocaleString('fr-FR')} FCFA
                       </Row>
-                      <Row label="Validé le">{formatDate(data.marchant.validated_at)}</Row>
+                      <Row label={t('admin.marchants.detail.walletValidatedAt')}>{formatDate(data.marchant.validated_at)}</Row>
                     </>
                   ) : (
-                    <p className="text-body-s text-warm-500 italic">Aucun wallet associé.</p>
+                    <p className="text-body-s text-warm-500 italic">{t('admin.marchants.detail.noWallet')}</p>
                   )}
                 </div>
               </section>
@@ -346,17 +346,17 @@ export default function MarchantDetailPage() {
             {/* Stats courses */}
             <section className="bg-off-white border border-warm-200 rounded-lg">
               <div className="px-5 py-2.5 border-b border-warm-200">
-                <h2 className="text-body-s font-bold text-ink">Activité — courses</h2>
+                <h2 className="text-body-s font-bold text-ink">{t('admin.marchants.detail.activityCourses')}</h2>
               </div>
               <div className="px-5 py-3">
                 <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
-                  <KpiBox label="Total" value={data.stats.courses_total} />
-                  <KpiBox label="Livrées" value={data.stats.courses_delivered} tone="success" />
-                  <KpiBox label="En cours" value={data.stats.courses_in_progress} />
-                  <KpiBox label="Annulées" value={data.stats.courses_cancelled} tone="danger" />
+                  <KpiBox label={t('admin.marchants.detail.kpiTotal')} value={data.stats.courses_total} />
+                  <KpiBox label={t('admin.marchants.detail.kpiDelivered')} value={data.stats.courses_delivered} tone="success" />
+                  <KpiBox label={t('admin.marchants.detail.kpiInProgress')} value={data.stats.courses_in_progress} />
+                  <KpiBox label={t('admin.marchants.detail.kpiCancelled')} value={data.stats.courses_cancelled} tone="danger" />
                 </div>
                 <p className="text-caption text-warm-500 mt-3">
-                  Dernière course : {formatDate(data.stats.last_course_at)}
+                  {t('admin.marchants.detail.lastCourse')} : {formatDate(data.stats.last_course_at)}
                 </p>
               </div>
             </section>
@@ -365,19 +365,18 @@ export default function MarchantDetailPage() {
             <SupportNotesPanel
               notableType="user"
               notableId={data.marchant.user.id}
-              title="Notes internes (marchand)"
+              title={t('admin.marchants.detail.internalNotesMarchant')}
             />
 
             {/* Zone de danger */}
             {canManageMarchant && (
               <section className="bg-danger-bg border border-airmess-red/30 rounded-lg px-5 py-4">
-                <h2 className="text-body font-bold text-airmess-red mb-1">Zone de danger</h2>
+                <h2 className="text-body font-bold text-airmess-red mb-1">{t('admin.marchants.detail.dangerZone')}</h2>
                 <p className="text-body-s text-airmess-red/80 mb-3">
-                  La suppression est définitive. Elle est impossible si le marchand a déjà des
-                  courses — préfère la suspension.
+                  {t('admin.marchants.detail.dangerZoneBody')}
                 </p>
                 <AdminButton variant="danger" onClick={() => setConfirmAction('delete')}>
-                  Supprimer définitivement
+                  {t('admin.marchants.detail.delete')}
                 </AdminButton>
               </section>
             )}

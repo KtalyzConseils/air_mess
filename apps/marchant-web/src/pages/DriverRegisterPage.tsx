@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate, Link } from 'react-router-dom'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore, type RegisterDriverPayload } from '../stores/authStore'
 import FormSection from '../components/FormSection'
 import Field from '../components/Field'
@@ -27,6 +28,7 @@ const MAX_BIRTH_DATE = (() => {
 type FormValues = Omit<RegisterDriverPayload, 'photo' | 'cni' | 'driving_license'>
 
 export default function DriverRegisterPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const registerDriver = useAuthStore((s) => s.registerDriver)
 
@@ -49,7 +51,7 @@ export default function DriverRegisterPage() {
     setServerFieldErrors({})
 
     if (!cni || !drivingLicense) {
-      setFileError('La CNI et le permis sont obligatoires.')
+      setFileError(t('driverRegister.cniLicenseRequired'))
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
       return
     }
@@ -65,10 +67,10 @@ export default function DriverRegisterPage() {
     } catch (err) {
       if (err instanceof AxiosError) {
         const data = err.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
-        setServerError(data?.message ?? "Erreur lors de l'inscription.")
+        setServerError(data?.message ?? t('driverRegister.registerError'))
         setServerFieldErrors(data?.errors ?? {})
       } else {
-        setServerError('Erreur inattendue.')
+        setServerError(t('common.unexpectedError'))
       }
     }
   }
@@ -96,32 +98,32 @@ export default function DriverRegisterPage() {
           </Link>
 
           <h2 className="text-display-2 leading-tight mb-3">
-            Sillonnez la ville.
+            {t('driverRegister.sideTaglineLine1')}
             <br />
-            Soyez payé pour <Highlight>ça</Highlight>.
+            {t('driverRegister.sideTaglineLine2Prefix')}{' '}
+            <Highlight>{t('driverRegister.sideTaglineLine2Highlight')}</Highlight>.
           </h2>
           <p className="text-body-l text-warm-300 mb-10">
-            Rejoignez le réseau de livreurs Air Mess et commencez à accepter
-            des courses dès l'activation de votre compte.
+            {t('driverRegister.sideSubtext')}
           </p>
 
           {/* 3 bénéfices numérotés — légitime ici, séquence d'arguments */}
           <div className="space-y-5">
-            <Benefit number={1} title="Choisissez vos horaires">
-              Vous travaillez quand vous voulez. Vous vous mettez en pause ou hors-ligne en un tap.
+            <Benefit number={1} title={t('driverRegister.benefit1Title')}>
+              {t('driverRegister.benefit1Body')}
             </Benefit>
-            <Benefit number={2} title="Rémunération transparente">
-              Vous voyez le gain de chaque course avant d'accepter. Aucune surprise au paiement.
+            <Benefit number={2} title={t('driverRegister.benefit2Title')}>
+              {t('driverRegister.benefit2Body')}
             </Benefit>
-            <Benefit number={3} title="Paiements hebdomadaires">
-              Vos gains sont versés sur votre Mobile Money chaque semaine. Retrait à la demande.
+            <Benefit number={3} title={t('driverRegister.benefit3Title')}>
+              {t('driverRegister.benefit3Body')}
             </Benefit>
           </div>
 
           {/* Petit mark décoratif en bas */}
           <div className="mt-12 pt-8 border-t border-warm-600/30 flex items-center gap-3 opacity-50">
             <img src={mark} alt="" aria-hidden className="h-6 w-auto" />
-            <span className="text-caption text-warm-400">Livraison express à Cotonou</span>
+            <span className="text-caption text-warm-400">{t('driverRegister.sideFooter')}</span>
           </div>
         </div>
       </aside>
@@ -132,112 +134,112 @@ export default function DriverRegisterPage() {
           ============================================================ */}
       <div className="flex-1 px-4 md:px-8 lg:px-12 py-8 md:py-12 lg:h-screen lg:overflow-y-auto">
         <div className="max-w-2xl mx-auto">
-          <h1 className="text-h1 text-ink mb-2">Devenir livreur Air Mess.</h1>
+          <h1 className="text-h1 text-ink mb-2">{t('driverRegister.formTitle')}</h1>
           <p className="text-body-l text-warm-500 mb-8">
-            Remplissez ce formulaire — nos équipes vérifient vos documents sous 48h.
+            {t('driverRegister.formSubtitle')}
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {/* ====================== IDENTITÉ ====================== */}
-            <FormSection title="🪪 Votre identité" description="Tel que sur votre pièce d'identité.">
+            <FormSection title={t('driverRegister.sectionIdentityTitle')} description={t('driverRegister.sectionIdentityDesc')}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
-                  label="Prénom"
-                  {...register('first_name', { required: 'Prénom requis' })}
+                  label={t('driverRegister.firstName')}
+                  {...register('first_name', { required: t('driverRegister.firstNameRequired') })}
                   error={errors.first_name?.message ?? serverErr('first_name')}
                 />
                 <Input
-                  label="Nom"
-                  {...register('last_name', { required: 'Nom requis' })}
+                  label={t('driverRegister.lastName')}
+                  {...register('last_name', { required: t('driverRegister.lastNameRequired') })}
                   error={errors.last_name?.message ?? serverErr('last_name')}
                 />
-                <Field label="Genre *" error={errors.gender?.message ?? serverErr('gender')}>
+                <Field label={`${t('driverRegister.gender')} *`} error={errors.gender?.message ?? serverErr('gender')}>
                   <select
-                    {...register('gender', { required: 'Genre requis' })}
+                    {...register('gender', { required: t('driverRegister.genderRequired') })}
                     className={selectClass}
                     defaultValue=""
                   >
-                    <option value="" disabled>— Sélectionner —</option>
-                    <option value="M">Homme</option>
-                    <option value="F">Femme</option>
-                    <option value="autre">Autre</option>
+                    <option value="" disabled>{t('driverRegister.selectPlaceholder')}</option>
+                    <option value="M">{t('driverRegister.genderMale')}</option>
+                    <option value="F">{t('driverRegister.genderFemale')}</option>
+                    <option value="autre">{t('driverRegister.genderOther')}</option>
                   </select>
                 </Field>
                 <Input
                   type="date"
-                  label="Date de naissance"
-                  helper="16 ans minimum"
+                  label={t('driverRegister.birthDate')}
+                  helper={t('driverRegister.birthDateHelper')}
                   max={MAX_BIRTH_DATE}
-                  {...register('birth_date', { required: 'Date requise' })}
+                  {...register('birth_date', { required: t('driverRegister.birthDateRequired') })}
                   error={errors.birth_date?.message ?? serverErr('birth_date')}
                 />
               </div>
             </FormSection>
 
             {/* ====================== COMPTE ====================== */}
-            <FormSection title="🔐 Votre compte" description="Vos identifiants de connexion à l'app livreur.">
+            <FormSection title={t('driverRegister.sectionAccountTitle')} description={t('driverRegister.sectionAccountDesc')}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   type="email"
-                  label="Email"
+                  label={t('common.email')}
                   autoComplete="email"
-                  {...register('email', { required: 'Email requis' })}
+                  {...register('email', { required: t('driverRegister.emailRequired') })}
                   error={errors.email?.message ?? serverErr('email')}
                 />
                 <Input
                   type="tel"
-                  label="Téléphone"
+                  label={t('driverRegister.phone')}
                   placeholder="+229 90 12 34 56"
                   autoComplete="tel"
-                  {...register('phone', { required: 'Téléphone requis' })}
+                  {...register('phone', { required: t('driverRegister.phoneRequired') })}
                   error={errors.phone?.message ?? serverErr('phone')}
                 />
                 <Input
                   type="password"
-                  label="Mot de passe"
-                  helper="8 caractères minimum"
+                  label={t('driverRegister.password')}
+                  helper={t('driverRegister.passwordHelper')}
                   autoComplete="new-password"
                   {...register('password', {
-                    required: 'Mot de passe requis',
-                    minLength: { value: 8, message: '8 caractères minimum' },
+                    required: t('driverRegister.passwordRequired'),
+                    minLength: { value: 8, message: t('driverRegister.passwordMinLength') },
                   })}
                   error={errors.password?.message ?? serverErr('password')}
                 />
                 <Input
                   type="password"
-                  label="Confirmer le mot de passe"
+                  label={t('driverRegister.passwordConfirm')}
                   autoComplete="new-password"
-                  {...register('password_confirmation', { required: 'Confirmation requise' })}
+                  {...register('password_confirmation', { required: t('driverRegister.confirmRequired') })}
                   error={errors.password_confirmation?.message}
                 />
               </div>
             </FormSection>
 
             {/* ====================== VÉHICULE ====================== */}
-            <FormSection title="🛵 Votre véhicule">
+            <FormSection title={t('driverRegister.sectionVehicleTitle')}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Field label="Type *" error={errors.vehicle_type?.message ?? serverErr('vehicle_type')}>
+                <Field label={`${t('driverRegister.vehicleType')} *`} error={errors.vehicle_type?.message ?? serverErr('vehicle_type')}>
                   <select
-                    {...register('vehicle_type', { required: 'Type requis' })}
+                    {...register('vehicle_type', { required: t('driverRegister.typeRequired') })}
                     className={selectClass}
                     defaultValue=""
                   >
-                    <option value="" disabled>— Sélectionner —</option>
-                    <option value="moto">🛵 Moto</option>
-                    <option value="scooter">🛴 Scooter</option>
-                    <option value="voiture">🚗 Voiture</option>
-                    <option value="velo">🚲 Vélo</option>
+                    <option value="" disabled>{t('driverRegister.selectPlaceholder')}</option>
+                    <option value="moto">{t('driverRegister.vehicleTypeMotoLong')}</option>
+                    <option value="scooter">{t('driverRegister.vehicleTypeScooterLong')}</option>
+                    <option value="voiture">{t('driverRegister.vehicleTypeCarLong')}</option>
+                    <option value="velo">{t('driverRegister.vehicleTypeBikeLong')}</option>
                   </select>
                 </Field>
                 <Input
-                  label="Plaque"
-                  {...register('vehicle_plate', { required: 'Plaque requise' })}
+                  label={t('driverRegister.plate')}
+                  {...register('vehicle_plate', { required: t('driverRegister.plateRequired') })}
                   error={errors.vehicle_plate?.message ?? serverErr('vehicle_plate')}
                 />
                 <Input
-                  label="Couleur"
-                  helper="Optionnel"
-                  placeholder="ex: Rouge"
+                  label={t('driverRegister.vehicleColor')}
+                  helper={t('driverRegister.colorOptional')}
+                  placeholder={t('driverRegister.colorPlaceholder')}
                   {...register('vehicle_color')}
                 />
               </div>
@@ -245,32 +247,32 @@ export default function DriverRegisterPage() {
 
             {/* ====================== ÉQUIPEMENT ====================== */}
             <FormSection
-              title="🎒 Votre équipement"
-              description="Permet de matcher avec des courses spécifiques (restauration, livraisons fraîches…)."
+              title={t('driverRegister.sectionEquipmentTitle')}
+              description={t('driverRegister.sectionEquipmentDesc')}
             >
               <div className="space-y-2">
-                <CheckboxRow {...register('equipment_isothermal_bag')} icon="🍱" label="Sac isotherme" />
-                <CheckboxRow {...register('equipment_top_case')} icon="📦" label="Top case" />
-                <CheckboxRow {...register('equipment_refrigerated_bag')} icon="❄️" label="Sac réfrigéré" />
+                <CheckboxRow {...register('equipment_isothermal_bag')} icon="🍱" label={t('driverRegister.eqIsothermal')} />
+                <CheckboxRow {...register('equipment_top_case')} icon="📦" label={t('driverRegister.eqTopCase')} />
+                <CheckboxRow {...register('equipment_refrigerated_bag')} icon="❄️" label={t('driverRegister.eqRefrigerated')} />
               </div>
             </FormSection>
 
             {/* ====================== CONTACT D'URGENCE ====================== */}
             <FormSection
-              title="🆘 Contact d'urgence"
-              description="Personne à prévenir en cas d'accident ou d'incident pendant une course."
+              title={t('driverRegister.sectionEmergencyTitle')}
+              description={t('driverRegister.sectionEmergencyDesc')}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
-                  label="Nom"
-                  {...register('emergency_contact_name', { required: 'Nom du contact requis' })}
+                  label={t('driverRegister.emergencyName')}
+                  {...register('emergency_contact_name', { required: t('driverRegister.emergencyNameRequired') })}
                   error={errors.emergency_contact_name?.message ?? serverErr('emergency_contact_name')}
                 />
                 <Input
                   type="tel"
-                  label="Téléphone"
+                  label={t('driverRegister.emergencyPhone')}
                   placeholder="+229 90 12 34 56"
-                  {...register('emergency_contact_phone', { required: 'Téléphone du contact requis' })}
+                  {...register('emergency_contact_phone', { required: t('driverRegister.emergencyPhoneRequired') })}
                   error={errors.emergency_contact_phone?.message ?? serverErr('emergency_contact_phone')}
                 />
               </div>
@@ -278,35 +280,44 @@ export default function DriverRegisterPage() {
 
             {/* ====================== DOCUMENTS ====================== */}
             <FormSection
-              title="📄 Vos documents"
-              description="CNI et permis sont obligatoires. Photo de profil optionnelle."
+              title={t('driverRegister.sectionDocumentsTitle')}
+              description={t('driverRegister.sectionDocumentsDesc')}
             >
               <div className="space-y-3">
                 <FileDropZone
-                  label="Photo de profil"
-                  helper="Optionnel · JPG/PNG · max 2 Mo · min 200×200"
+                  label={t('driverRegister.photoProfileLabel')}
+                  helper={t('driverRegister.photoProfileHelper')}
                   accept="image/jpeg,image/png"
                   file={photo}
                   onChange={setPhoto}
                   error={serverErr('photo')}
+                  clickReplaceLabel={t('driverRegister.fileClickReplace')}
+                  clickSelectLabel={t('driverRegister.fileClickSelect')}
+                  removeAriaLabel={t('driverRegister.fileRemoveAria')}
                 />
                 <FileDropZone
-                  label="CNI"
+                  label={t('driverRegister.cniShort')}
                   required
-                  helper="JPG/PNG/PDF · max 5 Mo"
+                  helper={t('driverRegister.cniHelper')}
                   accept="image/jpeg,image/png,application/pdf"
                   file={cni}
                   onChange={setCni}
                   error={serverErr('cni')}
+                  clickReplaceLabel={t('driverRegister.fileClickReplace')}
+                  clickSelectLabel={t('driverRegister.fileClickSelect')}
+                  removeAriaLabel={t('driverRegister.fileRemoveAria')}
                 />
                 <FileDropZone
-                  label="Permis de conduire"
+                  label={t('driverRegister.licenseLabel')}
                   required
-                  helper="JPG/PNG/PDF · max 5 Mo"
+                  helper={t('driverRegister.licenseHelper')}
                   accept="image/jpeg,image/png,application/pdf"
                   file={drivingLicense}
                   onChange={setDrivingLicense}
                   error={serverErr('driving_license')}
+                  clickReplaceLabel={t('driverRegister.fileClickReplace')}
+                  clickSelectLabel={t('driverRegister.fileClickSelect')}
+                  removeAriaLabel={t('driverRegister.fileRemoveAria')}
                 />
               </div>
               {fileError && (
@@ -337,12 +348,12 @@ export default function DriverRegisterPage() {
                 loading={isSubmitting}
                 rightIcon={!isSubmitting && <span aria-hidden>→</span>}
               >
-                Soumettre ma candidature
+                {t('driverRegister.submitCta')}
               </Button>
               <p className="text-center text-body-s text-warm-500 mt-4">
-                Déjà inscrit ?{' '}
+                {t('driverRegister.alreadyRegistered')}{' '}
                 <Link to="/login" className="text-ink font-semibold hover:text-airmess-red">
-                  Se connecter
+                  {t('driverRegister.loginLink')}
                 </Link>
               </p>
             </Card>
@@ -412,9 +423,23 @@ interface FileDropZoneProps {
   file: File | null
   onChange: (f: File | null) => void
   error?: string
+  clickReplaceLabel: string
+  clickSelectLabel: string
+  removeAriaLabel: string
 }
 
-function FileDropZone({ label, helper, required, accept, file, onChange, error }: FileDropZoneProps) {
+function FileDropZone({
+  label,
+  helper,
+  required,
+  accept,
+  file,
+  onChange,
+  error,
+  clickReplaceLabel,
+  clickSelectLabel,
+  removeAriaLabel,
+}: FileDropZoneProps) {
   const inputId = `file-${label.replace(/\s+/g, '-').toLowerCase()}`
   const isImage = file && file.type.startsWith('image/')
 
@@ -442,12 +467,12 @@ function FileDropZone({ label, helper, required, accept, file, onChange, error }
             <>
               <p className="text-body-s font-medium text-success truncate">{file.name}</p>
               <p className="text-caption text-warm-500">
-                {(file.size / 1024).toFixed(0)} Ko · cliquez pour remplacer
+                {(file.size / 1024).toFixed(0)} Ko · {clickReplaceLabel}
               </p>
             </>
           ) : (
             <>
-              <p className="text-body-s font-medium text-ink">Cliquez pour sélectionner un fichier</p>
+              <p className="text-body-s font-medium text-ink">{clickSelectLabel}</p>
               {helper && <p className="text-caption text-warm-500">{helper}</p>}
             </>
           )}
@@ -460,7 +485,7 @@ function FileDropZone({ label, helper, required, accept, file, onChange, error }
               onChange(null)
             }}
             className="shrink-0 text-warm-500 hover:text-airmess-red text-body-s"
-            aria-label="Retirer le fichier"
+            aria-label={removeAriaLabel}
           >
             ✕
           </button>

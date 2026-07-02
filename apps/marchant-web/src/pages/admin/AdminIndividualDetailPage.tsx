@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { AxiosError } from 'axios'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
@@ -84,15 +85,8 @@ function KpiBox({ label, value, tone = 'default' }: KpiBoxProps) {
   )
 }
 
-const PAYMENT_STATUS_BADGE: Record<string, { label: string; classes: string }> = {
-  paid: { label: 'Payé', classes: 'bg-success-bg text-success border border-success/20' },
-  pending: { label: 'En attente', classes: 'bg-warning-bg text-warning border border-warning/20' },
-  processing: { label: 'En cours', classes: 'bg-cream text-ink border border-warm-300' },
-  failed: { label: 'Échoué', classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
-  refunded: { label: 'Remboursé', classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
-}
-
 export default function AdminIndividualDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const [showSuspendModal, setShowSuspendModal] = useState(false)
@@ -101,6 +95,14 @@ export default function AdminIndividualDetailPage() {
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
   const canManageIndividual = hasAdminRole(currentUser, 'commercial')
+
+  const PAYMENT_STATUS_BADGE: Record<string, { label: string; classes: string }> = {
+    paid: { label: t('admin.marchants.detail.paymentPaid'), classes: 'bg-success-bg text-success border border-success/20' },
+    pending: { label: t('admin.marchants.detail.paymentPending'), classes: 'bg-warning-bg text-warning border border-warning/20' },
+    processing: { label: t('admin.marchants.detail.paymentProcessing'), classes: 'bg-cream text-ink border border-warm-300' },
+    failed: { label: t('admin.marchants.detail.paymentFailed'), classes: 'bg-danger-bg text-airmess-red border border-airmess-red/30' },
+    refunded: { label: t('admin.marchants.detail.paymentRefunded'), classes: 'bg-warm-100 text-warm-600 border border-warm-200' },
+  }
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'individual', id],
@@ -130,7 +132,7 @@ export default function AdminIndividualDetailPage() {
   const actionError: string | null =
     lastError instanceof AxiosError
       ? (lastError.response?.data as { message?: string } | undefined)?.message ??
-        "Erreur lors de l'action."
+        t('admin.marchants.detail.actionError')
       : null
 
   const isSuspended =
@@ -142,18 +144,18 @@ export default function AdminIndividualDetailPage() {
     if (isSuspended)
       return (
         <span className="inline-block px-2 py-0.5 rounded text-caption font-semibold bg-danger-bg text-airmess-red border border-airmess-red/30">
-          Suspendu
+          {t('admin.marchants.detail.badgeSuspended')}
         </span>
       )
     if (data.individual.subscription_status === 'active')
       return (
         <span className="inline-block px-2 py-0.5 rounded text-caption font-semibold bg-success-bg text-success border border-success/20">
-          Abonné · {data.individual.subscription_plan}
+          {t('admin.marchants.detail.badgeSubscribed')} · {data.individual.subscription_plan}
         </span>
       )
     return (
       <span className="inline-block px-2 py-0.5 rounded text-caption font-semibold bg-cream text-ink border border-warm-300">
-        Quota gratuit
+        {t('admin.marchants.detail.badgeQuotaFree')}
       </span>
     )
   }
@@ -162,7 +164,7 @@ export default function AdminIndividualDetailPage() {
     <AdminPageShell>
       <AdminPageHeader
         title={
-          data ? `${data.individual.first_name} ${data.individual.last_name}` : 'Particulier'
+          data ? `${data.individual.first_name} ${data.individual.last_name}` : t('admin.marchants.detail.fallbackIndividualTitle')
         }
         subtitle={data ? data.individual.user.email : undefined}
         actions={
@@ -176,11 +178,11 @@ export default function AdminIndividualDetailPage() {
                     onClick={() => reactivateMutation.mutate()}
                     disabled={reactivateMutation.isPending}
                   >
-                    {reactivateMutation.isPending ? 'Réactivation…' : 'Réactiver'}
+                    {reactivateMutation.isPending ? t('admin.marchants.detail.reactivating') : t('admin.marchants.detail.reactivate')}
                   </AdminButton>
                 ) : (
                   <AdminButton variant="danger" onClick={() => setShowSuspendModal(true)}>
-                    Suspendre
+                    {t('admin.marchants.detail.suspend')}
                   </AdminButton>
                 )}
               </>
@@ -195,11 +197,11 @@ export default function AdminIndividualDetailPage() {
           className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink"
         >
           <ArrowLeftIcon size={14} />
-          Retour aux particuliers
+          {t('admin.marchants.detail.backToIndividuals')}
         </Link>
 
-        {isLoading && <p className="text-body-s text-warm-500">Chargement…</p>}
-        {isError && <p className="text-body-s text-airmess-red">Particulier introuvable.</p>}
+        {isLoading && <p className="text-body-s text-warm-500">{t('admin.common.loading')}</p>}
+        {isError && <p className="text-body-s text-airmess-red">{t('admin.marchants.detail.notFoundIndividual')}</p>}
 
         {actionError && (
           <p className="text-body-s text-airmess-red flex items-center gap-1.5">
@@ -210,14 +212,14 @@ export default function AdminIndividualDetailPage() {
         {data && (
           <>
             <div className="grid gap-4 md:grid-cols-2">
-              <Section title="Identité & contact">
-                <Row label="Email">{data.individual.user.email}</Row>
-                <Row label="Téléphone">{data.individual.user.phone ?? '—'}</Row>
-                <Row label="Compte actif">{data.individual.user.is_active ? 'Oui' : 'Non'}</Row>
+              <Section title={t('admin.marchants.detail.identityContact')}>
+                <Row label={t('admin.marchants.detail.email')}>{data.individual.user.email}</Row>
+                <Row label={t('admin.marchants.detail.phone')}>{data.individual.user.phone ?? '—'}</Row>
+                <Row label={t('admin.marchants.detail.accountActive')}>{data.individual.user.is_active ? t('admin.common.yes') : t('admin.common.no')}</Row>
               </Section>
 
               <Section
-                title="Wallet"
+                title={t('admin.marchants.detail.wallet')}
                 action={
                   isSuperAdmin && data.individual.user.wallet ? (
                     <AdminButton
@@ -226,81 +228,79 @@ export default function AdminIndividualDetailPage() {
                       onClick={() => setWalletAdjustOpen(true)}
                       leftIcon={<SettingsIcon size={14} />}
                     >
-                      Ajuster
+                      {t('admin.marchants.detail.walletAdjust')}
                     </AdminButton>
                   ) : null
                 }
               >
                 {data.individual.user.wallet ? (
                   <>
-                    <Row label="Balance">
+                    <Row label={t('admin.marchants.detail.walletBalance')}>
                       <strong>
                         {data.individual.user.wallet.balance.toLocaleString('fr-FR')} FCFA
                       </strong>
                     </Row>
-                    <Row label="Réservé (en cours)">
+                    <Row label={t('admin.marchants.detail.walletReserved')}>
                       {data.individual.user.wallet.pending_reserved.toLocaleString('fr-FR')} FCFA
                     </Row>
-                    <Row label="Total rechargé">
+                    <Row label={t('admin.marchants.detail.walletTotalDeposited')}>
                       {data.individual.user.wallet.total_deposited.toLocaleString('fr-FR')} FCFA
                     </Row>
-                    <Row label="Total dépensé">
+                    <Row label={t('admin.marchants.detail.walletTotalSpent')}>
                       {data.individual.user.wallet.total_spent.toLocaleString('fr-FR')} FCFA
                     </Row>
                   </>
                 ) : (
-                  <p className="text-body-s text-warm-500 italic">Aucun wallet associé.</p>
+                  <p className="text-body-s text-warm-500 italic">{t('admin.marchants.detail.noWallet')}</p>
                 )}
               </Section>
             </div>
 
-            <Section title="Quota mensuel">
-              <Row label="Utilisé">
+            <Section title={t('admin.marchants.detail.quotaMonthly')}>
+              <Row label={t('admin.marchants.detail.quotaUsed')}>
                 {data.individual.monthly_courses_used}/{data.individual.monthly_courses_limit}
               </Row>
             </Section>
 
-            <Section title="Activité — courses">
+            <Section title={t('admin.marchants.detail.activityCourses')}>
               <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
-                <KpiBox label="Total" value={data.stats.courses_total} />
-                <KpiBox label="Livrées" value={data.stats.courses_delivered} tone="success" />
-                <KpiBox label="En cours" value={data.stats.courses_in_progress} />
+                <KpiBox label={t('admin.marchants.detail.kpiTotal')} value={data.stats.courses_total} />
+                <KpiBox label={t('admin.marchants.detail.kpiDelivered')} value={data.stats.courses_delivered} tone="success" />
+                <KpiBox label={t('admin.marchants.detail.kpiInProgress')} value={data.stats.courses_in_progress} />
                 <KpiBox
-                  label="Annulées/Échec"
+                  label={t('admin.marchants.detail.kpiCancelledOrFailed')}
                   value={data.stats.courses_cancelled}
                   tone="danger"
                 />
               </div>
               <p className="text-body-s text-warm-600 mt-3">
-                Dernière course : {formatDate(data.stats.last_course_at)}
+                {t('admin.marchants.detail.lastCourse')} : {formatDate(data.stats.last_course_at)}
               </p>
             </Section>
 
             <Section
-              title="Paiements à la course (one-shot)"
+              title={t('admin.marchants.detail.oneShotTitle')}
               action={
                 <div className="text-right">
                   <p className="text-body-s font-bold text-ink tabular-nums">
                     {data.one_shot_summary.total_paid_fcfa.toLocaleString('fr-FR')} FCFA
                   </p>
                   <p className="text-caption text-warm-500">
-                    {data.one_shot_summary.count_paid} paiement
-                    {data.one_shot_summary.count_paid > 1 ? 's' : ''} réussi
-                    {data.one_shot_summary.count_paid > 1 ? 's' : ''}
+                    {t('admin.marchants.detail.oneShotPaymentsSuccessful', { count: data.one_shot_summary.count_paid })}
                   </p>
                 </div>
               }
             >
               {data.one_shot_payments.length === 0 ? (
-                <p className="text-body-s text-warm-500 italic">Aucun paiement à la course.</p>
+                <p className="text-body-s text-warm-500 italic">{t('admin.marchants.detail.oneShotEmpty')}</p>
               ) : (
                 <table className="w-full text-body-s">
                   <thead className="text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
                     <tr>
-                      <th className="text-left py-2">Date</th>
-                      <th className="text-left py-2">Montant</th>
-                      <th className="text-left py-2">Statut</th>
-                      <th className="text-left py-2">Provider</th>
+                      <th className="text-left py-2">{t('admin.marchants.detail.colDate')}</th>
+                      <th className="text-left py-2">{t('admin.marchants.detail.colAmount')}</th>
+                      <th className="text-left py-2">{t('admin.marchants.colStatus')}</th>
+                      <th className="text-left py-2">{t('admin.marchants.detail.colProvider')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-warm-200">
@@ -350,7 +350,7 @@ export default function AdminIndividualDetailPage() {
             <SupportNotesPanel
               notableType="user"
               notableId={data.individual.user.id}
-              title="Notes internes (particulier)"
+              title={t('admin.marchants.detail.internalNotesIndividual')}
             />
           </>
         )}
@@ -363,8 +363,8 @@ export default function AdminIndividualDetailPage() {
           setShowSuspendModal(false)
           setSuspendReason('')
         }}
-        title="Suspendre ce particulier"
-        subtitle="L'accès au compte sera coupé immédiatement (tokens révoqués)."
+        title={t('admin.marchants.detail.suspendIndividualTitle')}
+        subtitle={t('admin.marchants.detail.suspendIndividualBody')}
         footer={
           <>
             <AdminButton
@@ -374,25 +374,25 @@ export default function AdminIndividualDetailPage() {
                 setSuspendReason('')
               }}
             >
-              Annuler
+              {t('admin.common.cancel')}
             </AdminButton>
             <AdminButton
               variant="danger"
               onClick={() => suspendMutation.mutate()}
               disabled={suspendReason.trim().length < 5 || suspendMutation.isPending}
             >
-              {suspendMutation.isPending ? 'Suspension…' : 'Confirmer'}
+              {suspendMutation.isPending ? t('admin.marchants.detail.suspending') : t('admin.common.confirm')}
             </AdminButton>
           </>
         }
       >
         <label className="block mb-1.5 text-caption font-medium text-warm-600">
-          Motif (obligatoire — 5 caractères min.)
+          {t('admin.marchants.detail.suspendReasonLabel')}
         </label>
         <textarea
           value={suspendReason}
           onChange={(e) => setSuspendReason(e.target.value)}
-          placeholder="ex : comportement abusif, plaintes répétées…"
+          placeholder={t('admin.marchants.detail.suspendReasonPlaceholder')}
           rows={3}
           className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
         />

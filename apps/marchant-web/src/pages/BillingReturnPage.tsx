@@ -1,12 +1,14 @@
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import { useAuthStore } from '../stores/authStore'
 
 export default function BillingReturnPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const { fetchMe } = useAuthStore()
@@ -32,10 +34,9 @@ export default function BillingReturnPage() {
           {isSuccess && (
             <>
               <div className="text-display-1 mb-4">🎉</div>
-              <h2 className="text-h1 text-ink">Paiement reçu</h2>
+              <h2 className="text-h1 text-ink">{t('billing.successReceivedTitle')}</h2>
               <p className="text-body text-warm-500 mt-3 max-w-md mx-auto">
-                Votre paiement a bien été confirmé. Si c'était un rechargement, votre wallet est crédité
-                dans quelques secondes ; si c'était une course, elle a été créée automatiquement.
+                {t('billing.successReceivedBody')}
               </p>
             </>
           )}
@@ -43,10 +44,9 @@ export default function BillingReturnPage() {
           {isCanceled && (
             <>
               <div className="text-display-1 mb-4">↩️</div>
-              <h2 className="text-h1 text-ink">Paiement annulé</h2>
+              <h2 className="text-h1 text-ink">{t('billing.canceledTitle')}</h2>
               <p className="text-body text-warm-500 mt-3 max-w-md mx-auto">
-                Vous avez annulé le paiement. Aucun montant n'a été prélevé. Vous pouvez réessayer
-                quand vous voulez.
+                {t('billing.canceledBody')}
               </p>
             </>
           )}
@@ -54,20 +54,19 @@ export default function BillingReturnPage() {
           {!isSuccess && !isCanceled && (
             <>
               <div className="text-display-1 mb-4">⏳</div>
-              <h2 className="text-h1 text-ink">En cours de traitement</h2>
+              <h2 className="text-h1 text-ink">{t('billing.processingTitle')}</h2>
               <p className="text-body text-warm-500 mt-3 max-w-md mx-auto">
-                Nous attendons la confirmation de Fedapay. Vous recevrez une notification dès que votre
-                paiement sera validé.
+                {t('billing.processingBody')}
               </p>
             </>
           )}
 
           <div className="flex justify-center gap-3 mt-8 flex-wrap">
             <Button variant="secondary" size="md" onClick={() => navigate('/wallet')}>
-              💰 Mon wallet
+              {t('billing.myWalletCta')}
             </Button>
             <Button variant="dark" size="md" pill onClick={() => navigate('/dashboard')}>
-              Tableau de bord →
+              {t('billing.dashboardCta')}
             </Button>
           </div>
         </Card>

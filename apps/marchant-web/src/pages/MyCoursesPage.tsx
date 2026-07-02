@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import Highlight from '../components/Highlight'
 import PageEyebrow from '../components/ui/PageEyebrow'
@@ -11,14 +12,6 @@ import { fetchCourses, type Course } from '../api/courses'
 import { cn } from '../lib/cn'
 
 type StatusGroup = 'all' | 'pending' | 'in_progress' | 'delivered' | 'cancelled'
-
-const GROUP_LABELS: Record<StatusGroup, string> = {
-  all: 'Toutes',
-  pending: 'En attente',
-  in_progress: 'En cours',
-  delivered: 'Livrées',
-  cancelled: 'Annulées/Échec',
-}
 
 const GROUP_STATUSES: Record<StatusGroup, string[]> = {
   all: [],
@@ -31,11 +24,20 @@ const GROUP_STATUSES: Record<StatusGroup, string[]> = {
 const PER_PAGE = 20
 
 export default function MyCoursesPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [group, setGroup] = useState<StatusGroup>('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [copiedId, setCopiedId] = useState<number | null>(null)
+
+  const groupLabels: Record<StatusGroup, string> = {
+    all: t('courses.groups.all'),
+    pending: t('courses.groups.pending'),
+    in_progress: t('courses.groups.in_progress'),
+    delivered: t('courses.groups.delivered'),
+    cancelled: t('courses.groups.cancelled'),
+  }
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['courses', { per_page: 100 }],
@@ -95,7 +97,7 @@ export default function MyCoursesPage() {
       setCopiedId(course.id)
       setTimeout(() => setCopiedId(null), 2000)
     } catch {
-      alert('Impossible de copier.')
+      alert(t('common.copyImpossible'))
     }
   }
 
@@ -107,19 +109,19 @@ export default function MyCoursesPage() {
         {/* ============================================================
             HERO
             ============================================================ */}
-        <PageEyebrow label="Mes courses" className="mb-4" />
+        <PageEyebrow label={t('courses.eyebrow')} className="mb-4" />
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-10">
           <div>
             <h1 className="text-h1 md:text-display-2 text-ink leading-tight">
-              Toutes vos <Highlight>courses</Highlight>.
+              {t('courses.titleStart')} <Highlight>{t('courses.titleHighlight')}</Highlight>{t('courses.titleEnd')}
             </h1>
             <p className="text-body-l text-warm-500 mt-3">
-              Historique complet et filtrable. Cliquez sur une course pour voir le détail.
+              {t('courses.subtitle')}
             </p>
           </div>
           <Link to="/courses/new" className="shrink-0">
             <Button variant="primary" size="lg" pill rightIcon={<span aria-hidden>→</span>}>
-              + Nouvelle course
+              {t('courses.newCourse')}
             </Button>
           </Link>
         </div>
@@ -130,7 +132,7 @@ export default function MyCoursesPage() {
         <div className="flex flex-col gap-3 mb-6">
           {/* Pills statut */}
           <div className="flex flex-wrap gap-2">
-            {(Object.keys(GROUP_LABELS) as StatusGroup[]).map((g) => {
+            {(Object.keys(groupLabels) as StatusGroup[]).map((g) => {
               const isActive = group === g
               return (
                 <button
@@ -143,7 +145,7 @@ export default function MyCoursesPage() {
                       : 'bg-off-white text-warm-600 border border-warm-200 hover:border-warm-400',
                   )}
                 >
-                  {GROUP_LABELS[g]}
+                  {groupLabels[g]}
                   <span
                     className={cn(
                       'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold tabular-nums',
@@ -169,7 +171,7 @@ export default function MyCoursesPage() {
                 setSearch(e.target.value)
                 setPage(1)
               }}
-              placeholder="Référence, destinataire, quartier, téléphone…"
+              placeholder={t('courses.searchPlaceholder')}
               className="w-full pl-10 pr-3 py-2.5 bg-off-white border border-warm-300 rounded-md text-body text-ink placeholder:text-warm-400 transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
             />
           </div>
@@ -180,25 +182,25 @@ export default function MyCoursesPage() {
             ============================================================ */}
         {isLoading && (
           <Card padding="lg" className="text-center text-warm-500">
-            Chargement…
+            {t('common.loading')}
           </Card>
         )}
 
         {error && (
           <Card padding="lg" className="text-center bg-danger-bg! border-airmess-red/20! text-airmess-red">
-            Erreur de chargement. Vérifie que l'API tourne.
+            {t('common.loadingError')}
           </Card>
         )}
 
         {!isLoading && !error && filtered.length === 0 && (
           <Card padding="lg" className="text-center">
-            <p className="text-h3 text-ink mb-2">Aucune course trouvée.</p>
+            <p className="text-h3 text-ink mb-2">{t('courses.noneFound')}</p>
             <p className="text-body-s text-warm-500 mb-4">
-              {search ? 'Modifiez votre recherche ou changez de filtre.' : 'Votre historique est vide pour ce filtre.'}
+              {search ? t('courses.adjustSearch') : t('courses.emptyForFilter')}
             </p>
             {!search && group === 'all' && (
               <Link to="/courses/new">
-                <Button variant="primary" size="md" pill>Créer ma première course</Button>
+                <Button variant="primary" size="md" pill>{t('courses.createFirst')}</Button>
               </Link>
             )}
           </Card>
@@ -224,7 +226,7 @@ export default function MyCoursesPage() {
                     </span>
                     {c.urgency === 'express' && (
                       <span className="text-[10px] uppercase font-bold tracking-wider text-airmess-red">
-                        ⚡ Express
+                        {t('courses.express')}
                       </span>
                     )}
                   </div>
@@ -243,14 +245,14 @@ export default function MyCoursesPage() {
                   </span>
                   {c.has_collection && c.collection_amount && (
                     <span className="text-caption text-warm-500 tabular-nums">
-                      Encaisse {c.collection_amount.toLocaleString('fr-FR')}
+                      {t('courses.collect')} {c.collection_amount.toLocaleString('fr-FR')}
                     </span>
                   )}
                 </div>
                 <div className="shrink-0 flex items-center gap-1">
                   <button
                     onClick={(e) => copyTrackingLink(c, e)}
-                    title="Copier le lien de suivi"
+                    title={t('courses.copyTracking')}
                     className="p-2 rounded-md text-warm-500 hover:text-ink hover:bg-warm-100"
                   >
                     {copiedId === c.id ? '✓' : '🔗'}
@@ -268,7 +270,7 @@ export default function MyCoursesPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between gap-3 mt-8 pt-6 border-t border-warm-200">
             <p className="text-body-s text-warm-500">
-              {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} sur {filtered.length}
+              {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} {t('common.of')} {filtered.length}
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -277,7 +279,7 @@ export default function MyCoursesPage() {
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
               >
-                ← Précédent
+                ← {t('common.previous')}
               </Button>
               <span className="text-body-s text-warm-600 tabular-nums px-2">
                 {page} / {totalPages}
@@ -288,7 +290,7 @@ export default function MyCoursesPage() {
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
               >
-                Suivant →
+                {t('common.next')} →
               </Button>
             </div>
           </div>
