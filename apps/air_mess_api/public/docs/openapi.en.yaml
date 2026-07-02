@@ -1,30 +1,37 @@
 openapi: 3.1.0
 info:
   title: Air Mess — Integration API
-  version: "1.0.0"
+  version: "2.0.0"
   description: |
     Create Air Mess deliveries ("courses") automatically from your own
-    application (e-commerce site, ERP, backend…).
+    application (e-commerce site, ERP, backend…), and receive status updates via
+    **webhook**.
 
     **Use case**: an order is placed on your store → you call Air Mess
     server-to-server → a delivery is created and offered to drivers around your
-    pickup point.
+    pickup point → you receive events (assigned, picked up, delivered…) on your
+    webhook URL.
 
-    ## Authentication
-    Every request uses an **integration key** (Bearer token) carrying the
-    `integration:create-course` ability. The key is generated from your merchant
-    account (plan including `api_access`). It is **secret**: never expose it in
-    the browser.
+    ## Two ways to authenticate for creating a delivery
+    The `POST /integration/courses` endpoint accepts **two key types**:
+    1. **Dev app key (recommended)** — ability `api:create-course`. Generated
+       from an **API App** (see *Developer mode*), subject to a **monthly request
+       quota** based on the plan, and webhook-compatible. Open to any user
+       (merchant or individual).
+    2. **Merchant key (legacy)** — ability `integration:create-course`. Generated
+       via `POST /integration/keys` (reserved to merchants with `api_access`), no
+       quota. Kept for backward compatibility.
+
+    In both cases the key is **secret**: never expose it in the browser.
 
     ## Billing (wallet)
-    Each delivery created via the API is billed to the merchant through their
-    Air Mess **wallet** (the `delivery_fee` is reserved on creation, then charged
-    on delivery). If the balance is insufficient, the call returns `402` and the
-    delivery is not created: top up the wallet from your dashboard.
+    Each delivery created via the API is billed through the owner's **wallet**
+    (the `delivery_fee` is reserved on creation, then charged on delivery). If the
+    balance is insufficient, the call returns `402` and the delivery is not created.
 
     ## Idempotency
-    Send the same `external_reference` (your order number) to avoid duplicates:
-    a second call returns the existing delivery with a `200` status.
+    Send the same `external_reference` (your order number) to avoid duplicates: a
+    second call returns the existing delivery with a `200` status.
   contact:
     name: Air Mess Support
     email: support@airmess-logistics.com
@@ -37,12 +44,18 @@ servers:
 
 tags:
   - name: Deliveries
-    description: Create deliveries from an external system.
-  - name: Keys
-    description: Manage integration keys (from the merchant account).
-
-security:
-  - integrationKey: []
+    description: Create deliveries from an external system (with a dev app key or a merchant key).
+  - name: Dev mode — API Apps
+    description: |
+      Create an "API App", pick a plan (request quota), manage its keys and its
+      webhook. These endpoints authenticate with the user's **session token**
+      (from `POST /auth/login`), not with the API key.
+  - name: Dev mode — Keys
+    description: Access keys scoped to an API App (ability `api:create-course`).
+  - name: Dev mode — Webhooks
+    description: Webhook configuration for an API App + delivery history.
+  - name: Merchant keys (legacy)
+    description: Legacy key flow reserved to merchants (ability `integration:create-course`).
 
 paths:
   /integration/courses:
@@ -52,11 +65,16 @@ paths:
       description: |
         Creates a delivery. **Idempotent** on `external_reference`.
 
+        Auth: **API App** key (`api:create-course`, quota-limited) **or**
+        **merchant** key (`integration:create-course`, no quota).
+
         Driver matching happens around the **pickup** point (`origin`). If
         `origin.lat`/`origin.lng` are provided, the delivery moves to
         `awaiting_assignment` (offered immediately). Otherwise it stays in
         `awaiting_geo` until the pickup point is geolocated.
       operationId: createCourse
+      security:
+        - integrationKey: []
       requestBody:
         required: true
         content:
@@ -106,13 +124,9 @@ paths:
         '401':
           description: Missing or invalid key.
         '403':
-          description: |
-            Key without the ability, merchant account not validated, or a plan
-            without `api_access` (reserved to Starter, Pro and Business).
+          description: Key without the required ability, ineligible account, or suspended App.
         '402':
-          description: |
-            Insufficient wallet balance to bill the delivery. The merchant must
-            top up their wallet (the delivery is not created).
+          description: Insufficient wallet balance (the delivery is not created).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InsufficientFundsError' }
@@ -122,50 +136,278 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
         '429':
-          description: Too many requests (limit 60/min per key).
+          description: |
+            Too many requests: rate-limit (60/min) **or** monthly plan quota
+            exhausted (see `X-RateLimit-*` headers / quota message).
 
-  /integration/keys:
+  /api-plans:
     get:
-      tags: [Keys]
-      summary: List your integration keys
-      description: Authenticated with the **merchant session** (not the key). Does not return the key values.
-      operationId: listKeys
+      tags: [Dev mode — API Apps]
+      summary: List API plans
+      description: The API plans grid (monthly request quota) to enable dev mode. Auth = session token.
+      operationId: listApiPlans
+      security:
+        - sessionToken: []
       responses:
-        '200': { description: List of keys. }
+        '200':
+          description: List of API plans.
+          content:
+            application/json:
+              example:
+                data:
+                  - { id: 5, code: "api_starter", name: "API Starter", monthly_price_fcfa: 0, api_requests_monthly: 15, features: ["email_support"] }
+                  - { id: 6, code: "api_pro", name: "API Pro", monthly_price_fcfa: 15000, api_requests_monthly: 100, features: ["priority_support"] }
+                  - { id: 7, code: "api_premium", name: "API Premium", monthly_price_fcfa: 45000, api_requests_monthly: 500, features: ["sla","account_manager"] }
+
+  /me/api-apps:
+    get:
+      tags: [Dev mode — API Apps]
+      summary: List my apps
+      operationId: listApiApps
+      security: [ { sessionToken: [] } ]
+      responses:
+        '200': { description: The user's apps (with used quota). }
     post:
-      tags: [Keys]
-      summary: Generate an integration key
-      description: Authenticated with the **merchant session**. The plaintext value is returned here only once.
-      operationId: createKey
+      tags: [Dev mode — API Apps]
+      summary: Create an app
+      description: Creates an API App tied to an API plan (`subscription_plan_id` must reference an `is_api_plan` plan).
+      operationId: createApiApp
+      security: [ { sessionToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, subscription_plan_id]
+              properties:
+                name: { type: string, maxLength: 100, example: "Boutique Gbandjo" }
+                description: { type: string, nullable: true, maxLength: 500 }
+                subscription_plan_id: { type: integer, description: "An API plan ID (see /api-plans).", example: 5 }
+      responses:
+        '201':
+          description: App created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiApplication' }
+        '422': { description: Invalid or non-API plan. }
+
+  /me/api-apps/{app}:
+    parameters:
+      - { name: app, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Dev mode — API Apps]
+      summary: App detail (with quota)
+      operationId: showApiApp
+      security: [ { sessionToken: [] } ]
+      responses:
+        '200': { description: Detail. }
+    patch:
+      tags: [Dev mode — API Apps]
+      summary: Rename / change plan
+      operationId: updateApiApp
+      security: [ { sessionToken: [] } ]
+      responses:
+        '200': { description: App updated. }
+    delete:
+      tags: [Dev mode — API Apps]
+      summary: Delete the app (revokes its keys)
+      operationId: deleteApiApp
+      security: [ { sessionToken: [] } ]
+      responses:
+        '200': { description: Deleted. }
+
+  /me/api-apps/{app}/subscribe:
+    post:
+      tags: [Dev mode — API Apps]
+      summary: Subscribe / renew a paid plan
+      description: Free plan → immediate activation. Paid plan → returns a Fedapay `checkout_url` (activation on the payment webhook).
+      operationId: subscribeApiApp
+      security: [ { sessionToken: [] } ]
+      parameters:
+        - { name: app, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_code, callback_url]
+              properties:
+                plan_code: { type: string, example: "api_pro" }
+                callback_url: { type: string, format: uri, description: "Return URL after payment." }
+      responses:
+        '200': { description: Free plan activated, or checkout_url returned. }
+
+  /me/api-apps/{app}/keys:
+    parameters:
+      - { name: app, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Dev mode — Keys]
+      summary: List the app keys
+      operationId: listAppKeys
+      security: [ { sessionToken: [] } ]
+      responses:
+        '200': { description: Keys (without the value). }
+    post:
+      tags: [Dev mode — Keys]
+      summary: Generate an app key
+      description: Returns the plaintext value **only once**. This key (ability `api:create-course`) is used for `POST /integration/courses`.
+      operationId: createAppKey
+      security: [ { sessionToken: [] } ]
       responses:
         '201':
           description: Key created.
           content:
             application/json:
               example:
-                message: "Integration key generated. Copy it now: it will not be shown again."
-                id: 146
-                key: "146|k71gsCLTNMkLGWPZQMbTTb9tqygexUAcupMN9yzxff902cc3"
-  /integration/keys/{id}:
+                message: "Key generated. Copy it now, it will not be shown again."
+                id: 148
+                key: "148|XKG8CgxIpW43aMeS0FGNgN22csuTnhnDmZdtojje64eab7e6"
+        '403': { description: Suspended app. }
+
+  /me/api-apps/{app}/keys/{keyId}:
     delete:
-      tags: [Keys]
+      tags: [Dev mode — Keys]
       summary: Revoke a key
-      operationId: revokeKey
+      operationId: revokeAppKey
+      security: [ { sessionToken: [] } ]
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
+        - { name: app, in: path, required: true, schema: { type: integer } }
+        - { name: keyId, in: path, required: true, schema: { type: integer } }
       responses:
         '200': { description: Key revoked. }
         '404': { description: Key not found. }
+
+  /me/api-apps/{app}/webhook:
+    parameters:
+      - { name: app, in: path, required: true, schema: { type: integer } }
+    put:
+      tags: [Dev mode — Webhooks]
+      summary: Configure the webhook (URL + secret)
+      description: Sets the receiving URL. **Regenerates the HMAC secret** on each call — the plaintext value is returned only here.
+      operationId: configureWebhook
+      security: [ { sessionToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [webhook_url]
+              properties:
+                webhook_url: { type: string, format: uri, maxLength: 500, example: "https://gbandjo.com/webhooks/airmess" }
+      responses:
+        '200':
+          description: Webhook configured (secret returned once).
+          content:
+            application/json:
+              example:
+                message: "Webhook configured. Copy the secret now, it will not be shown again."
+                webhook_url: "https://gbandjo.com/webhooks/airmess"
+                secret: "whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    delete:
+      tags: [Dev mode — Webhooks]
+      summary: Disable the webhook
+      operationId: disableWebhook
+      security: [ { sessionToken: [] } ]
+      responses:
+        '200': { description: Webhooks disabled. }
+
+  /me/api-apps/{app}/deliveries:
+    get:
+      tags: [Dev mode — Webhooks]
+      summary: Webhook delivery history
+      description: Paginated list. Optional filter `?status=pending|delivered|failed`.
+      operationId: listWebhookDeliveries
+      security: [ { sessionToken: [] } ]
+      parameters:
+        - { name: app, in: path, required: true, schema: { type: integer } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [pending, delivered, failed] } }
+      responses:
+        '200': { description: Deliveries (paginated). }
+
+  /me/api-apps/{app}/deliveries/{delivery}/retry:
+    post:
+      tags: [Dev mode — Webhooks]
+      summary: Replay a delivery
+      operationId: retryWebhookDelivery
+      security: [ { sessionToken: [] } ]
+      parameters:
+        - { name: app, in: path, required: true, schema: { type: integer } }
+        - { name: delivery, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Retry scheduled. }
+        '422': { description: Webhook not configured. }
+
+  /integration/keys:
+    get:
+      tags: [Merchant keys (legacy)]
+      summary: List your merchant keys
+      operationId: listMerchantKeys
+      security: [ { sessionToken: [] } ]
+      responses:
+        '200': { description: List of keys. }
+    post:
+      tags: [Merchant keys (legacy)]
+      summary: Generate a merchant key
+      description: Reserved to merchants with `api_access`. Plaintext value returned only once.
+      operationId: createMerchantKey
+      security: [ { sessionToken: [] } ]
+      responses:
+        '201': { description: Key created. }
+        '403': { description: Reserved to merchants with api_access. }
+  /integration/keys/{id}:
+    delete:
+      tags: [Merchant keys (legacy)]
+      summary: Revoke a merchant key
+      operationId: revokeMerchantKey
+      security: [ { sessionToken: [] } ]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Key revoked. }
+        '404': { description: Key not found. }
+
+webhooks:
+  courseEvent:
+    post:
+      tags: [Dev mode — Webhooks]
+      summary: Course event (course.*)
+      description: |
+        Air Mess **sends** this request to your app's `webhook_url` on every
+        status change of a delivery created by the app.
+
+        **Received headers:**
+        - `X-AirMess-Event`: event type (`course.delivered`…)
+        - `X-AirMess-Event-Id`: unique id (UUID) — for deduplication
+        - `X-AirMess-Signature`: `HMAC-SHA256(body, secret)` — recompute it to verify authenticity
+        - `X-AirMess-Delivery`: delivery id
+
+        **Reliability:** 3 automatic attempts + exponential backoff (15 s timeout
+        per attempt). Respond with a **2xx** code to acknowledge; otherwise the
+        delivery is marked `failed` and can be replayed.
+
+        **Events:** `course.created`, `course.assigned`, `course.picked_up`,
+        `course.delivered`, `course.cancelled`, `course.failed`.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WebhookCourseEvent' }
+      responses:
+        '200':
+          description: Acknowledgement (any 2xx code works).
 
 components:
   securitySchemes:
     integrationKey:
       type: http
       scheme: bearer
-      description: Integration key (Bearer token, ability `integration:create-course`).
+      description: API key (dev app `api:create-course` or merchant `integration:create-course`) to create deliveries.
+    sessionToken:
+      type: http
+      scheme: bearer
+      description: The user's session token (from `POST /auth/login`) — to manage apps, keys and webhooks.
 
   schemas:
     Origin:
@@ -231,6 +473,52 @@ components:
           example: "awaiting_assignment"
         tracking_url: { type: string, format: uri }
         delivery_fee: { type: integer, example: 1500 }
+
+    ApiApplication:
+      type: object
+      properties:
+        id: { type: integer, example: 12 }
+        name: { type: string, example: "Boutique Gbandjo" }
+        status: { type: string, enum: [active, suspended], example: "active" }
+        quota_used: { type: integer, example: 3 }
+        quota_limit: { type: integer, description: "0 = unlimited.", example: 100 }
+        quota_remaining: { type: integer, example: 97 }
+        webhook_url: { type: string, nullable: true }
+        has_webhook: { type: boolean }
+        plan:
+          type: object
+          properties:
+            code: { type: string, example: "api_pro" }
+            name: { type: string, example: "API Pro" }
+            monthly_price_fcfa: { type: integer, example: 15000 }
+            api_requests_monthly: { type: integer, example: 100 }
+
+    WebhookCourseEvent:
+      type: object
+      properties:
+        event_id: { type: string, format: uuid }
+        event_type:
+          type: string
+          enum: [course.created, course.assigned, course.picked_up, course.delivered, course.cancelled, course.failed]
+        created_at: { type: string, format: date-time }
+        data:
+          type: object
+          properties:
+            course:
+              type: object
+              properties:
+                id: { type: integer }
+                reference: { type: string, example: "AM-2026-00042" }
+                status: { type: string, example: "delivered" }
+                external_reference: { type: string, nullable: true, example: "GB-ORD-10293" }
+                tracking_url: { type: string, format: uri }
+                urgency: { type: string, example: "standard" }
+                delivery_fee: { type: integer, example: 1500 }
+                driver_earnings: { type: integer, example: 1125 }
+                origin: { type: object }
+                destination: { type: object }
+                collection: { type: object, nullable: true }
+                created_at: { type: string, format: date-time }
 
     InsufficientFundsError:
       type: object
