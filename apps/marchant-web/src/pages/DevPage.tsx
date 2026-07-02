@@ -116,12 +116,12 @@ export default function DevPage() {
         <p className="text-body-s text-warm-500 mb-8">
           Doc API :{' '}
           <a
-            href="https://github.com/ktalyzconseils/air-mess/blob/main/docs/API_INTEGRATION.md"
+            href="https://api.airmess-logistics.com/docs"
             target="_blank"
             rel="noopener noreferrer"
             className="text-ink font-semibold underline hover:text-airmess-red"
           >
-            docs/API_INTEGRATION.md
+            docs/API_INTEGRATION
           </a>
         </p>
 
@@ -673,12 +673,18 @@ function WebhookModal({
   onSecretCreated: (secret: string) => void
 }) {
   const queryClient = useQueryClient()
-  const [url, setUrl] = useState('')
+  const [url, setUrl] = useState(app?.webhook_url ?? '')
+  const [syncedFor, setSyncedFor] = useState<string | null>(
+    app ? `${app.id}:${app.webhook_url ?? ''}` : null,
+  )
 
   // Synchro de l'input avec l'URL courante quand l'app change
-  useMemo(() => {
-    if (app) setUrl(app.webhook_url ?? '')
-  }, [app?.id, app?.webhook_url]) // eslint-disable-line react-hooks/exhaustive-deps
+  // (pattern React officiel : mise à jour d'état pendant le rendu, pas useEffect)
+  const currentKey = app ? `${app.id}:${app.webhook_url ?? ''}` : null
+  if (currentKey !== syncedFor) {
+    setSyncedFor(currentKey)
+    setUrl(app?.webhook_url ?? '')
+  }
 
   const deliveriesQ = useQuery({
     queryKey: ['api-app-deliveries', app?.id],

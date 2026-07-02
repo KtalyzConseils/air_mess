@@ -74,6 +74,7 @@ export default function AppHeader() {
         <NavLink to="/courses" end className={linkClass}>Courses</NavLink>
         <NavLink to="/addresses" className={linkClass}>Carnet</NavLink>
         <NavLink to="/wallet" className={linkClass}>Wallet</NavLink>
+        <NavLink to="/dev" className={linkClass}>Mode dev</NavLink>
       </nav>
 
       {/* ============ DROITE ============ */}
@@ -136,6 +137,9 @@ export default function AppHeader() {
               </NavLink>
               <NavLink to="/wallet" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
                 💰 Mon wallet
+              </NavLink>
+              <NavLink to="/dev" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
+                Mode dev
               </NavLink>
               <NavLink to="/profile" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
                 👤 Mon profil
