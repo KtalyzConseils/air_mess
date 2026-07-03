@@ -21,7 +21,7 @@ class MarchantValidatedMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '✅ Votre compte marchand RMess est activé',
+            subject: '✅ Votre compte marchand Air Mess est activé',
         );
     }
 

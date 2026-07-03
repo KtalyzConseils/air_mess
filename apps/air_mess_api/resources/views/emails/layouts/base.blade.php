@@ -11,43 +11,18 @@
       $slot     : contenu si appel composant
       @section('content') : contenu si appel extends
 
-    Logos : on lit les SVG depuis public/images/ et on les inline en base64
-    dans la balise <img src="data:...">. Avantage : plus aucune dépendance à
-    APP_URL ou à un serveur accessible publiquement. Les images apparaissent
-    aussi bien dans le preview file:// que dans un vrai mail reçu.
+    Logos : servis par URL absolue via asset(). Cela nécessite que APP_URL soit
+    configuré sur le domaine public de prod (ex: https://api.airmess-logistics.com).
+    On garde une double-image :
+      - un logo signature "mark" (36×36)
+      - un wordmark blanc (h:24, largeur auto)
+    Un fallback texte est prévu pour Outlook desktop (qui ne rend pas les SVG) —
+    on peut plus tard générer des variantes .png si un support Outlook parfait
+    devient nécessaire.
 --}}
 @php
-    /**
-     * Lit un SVG et retourne son contenu INLINE (pas en data URI).
-     * Pourquoi inline et pas <img src="data:...;base64,..."> ?
-     *  → Gmail, Outlook web, Yahoo bloquent les data URIs dans les <img>
-     *    (règle anti-tracking / anti-XSS). Résultat : icônes cassées en prod.
-     *  → Le SVG inline dans le HTML est autorisé par Gmail (web + iOS) et
-     *    Apple Mail. Sur Outlook desktop c'est partiel — les emails resteront
-     *    lisibles grâce au texte du header, mais le logo peut ne pas rendre.
-     *
-     * On retire :
-     *   - la déclaration <?xml ...?> (invalide dans un contexte HTML inline)
-     *   - les attributs width/height du <svg> racine (on les fixe côté CSS
-     *     via le wrapper pour un rendu propre)
-     */
-    $inlineSvg = function (string $path): string {
-        $abs = public_path($path);
-        if (! is_file($abs)) {
-            return '';
-        }
-        $content = file_get_contents($abs);
-        // Retire la déclaration XML (illégale en HTML inline)
-        $content = preg_replace('/<\?xml[^>]*\?>\s*/', '', $content);
-        // Force width/height à 100% pour que le SVG remplisse son wrapper
-        // (les dimensions finales viennent du parent <div style="width:...">).
-        $content = preg_replace('/(<svg[^>]*?)\s+width="[^"]*"/', '$1', $content, 1);
-        $content = preg_replace('/(<svg[^>]*?)\s+height="[^"]*"/', '$1', $content, 1);
-        $content = preg_replace('/<svg\b/', '<svg width="100%" height="100%" style="display:block"', $content, 1);
-        return $content;
-    };
-    $markSvg = $inlineSvg('images/airmess-mark.svg');
-    $wordmarkSvg = $inlineSvg('images/airmess-wordmark-white.svg');
+    $markUrl = asset('images/airmess-mark.svg');
+    $wordmarkUrl = asset('images/airmess-wordmark-white.svg');
 @endphp
 <!DOCTYPE html>
 <html lang="fr">
@@ -77,9 +52,17 @@
 
                     {{-- ===========================================================
                          Header — airmess-dark + logos SVG (mark + wordmark blanc)
-                         Pour que les images s'affichent EN LIGNE (vrai envoi) il faut
-                         que APP_URL pointe vers le domaine public (ex: https://api.airmess.bj)
-                         et non vers localhost. asset() construit l'URL à partir d'APP_URL.
+                         Les images sont servies via URL absolue (asset() → APP_URL).
+                         APP_URL doit pointer vers le domaine public de l'API en prod
+                         (ex: https://api.airmess-logistics.com). Si APP_URL vaut
+                         localhost, les images n'apparaîtront pas dans un vrai envoi.
+
+                         Pourquoi <img src=".svg"> plutôt que <svg> inline ?
+                         → Gmail (web + mobile) STRIPPE toute balise <svg> inline
+                           pour raison de sécurité — le SVG inline reste vide.
+                         → SVG via <img src> est supporté par Gmail, Yahoo, Apple
+                           Mail. Outlook desktop ne rend pas le SVG mais garde
+                           l'alt text et le layout — dégrade proprement.
                          =========================================================== --}}
                     <tr>
                         <td style="background-color:#1A1614; padding:28px 32px;">
@@ -88,17 +71,13 @@
                                     <td style="vertical-align:middle;">
                                         <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                                             <tr>
-                                                {{-- Mark : SVG inline, dimensions forcées par le wrapper --}}
-                                                <td style="vertical-align:middle; padding-right:12px; width:36px; line-height:0;">
-                                                    <div style="width:36px; height:36px;" role="img" aria-label="Air Mess">
-                                                        {!! $markSvg !!}
-                                                    </div>
+                                                {{-- Mark : <img> avec URL absolue --}}
+                                                <td style="vertical-align:middle; padding-right:12px; line-height:0;">
+                                                    <img src="{{ $markUrl }}" alt="Air Mess" width="36" height="36" style="display:block; width:36px; height:36px; border:0; outline:none;">
                                                 </td>
-                                                {{-- Wordmark : SVG inline, hauteur 24, largeur auto --}}
+                                                {{-- Wordmark : <img> avec URL absolue, hauteur 24, largeur auto --}}
                                                 <td style="vertical-align:middle; line-height:0;">
-                                                    <div style="height:24px; width:auto; display:inline-block;">
-                                                        {!! $wordmarkSvg !!}
-                                                    </div>
+                                                    <img src="{{ $wordmarkUrl }}" alt="Air Mess" height="24" style="display:block; height:24px; width:auto; border:0; outline:none;">
                                                 </td>
                                             </tr>
                                         </table>

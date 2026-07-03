@@ -27,8 +27,8 @@ class QuotaAlertMail extends Mailable implements ShouldQueue
     {
         return new Envelope(
             subject: $this->level === 'reached'
-                ? '🚫 Votre quota mensuel est atteint — RMess'
-                : '⚠️ Vous avez utilisé 80% de votre quota — RMess',
+                ? '🚫 Votre quota mensuel est atteint — Air Mess'
+                : '⚠️ Vous avez utilisé 80% de votre quota — Air Mess',
         );
     }
 

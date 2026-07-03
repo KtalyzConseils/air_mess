@@ -24,7 +24,7 @@ class DriverValidatedMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '✅ Votre compte livreur RMess est activé',
+            subject: '✅ Votre compte livreur Air Mess est activé',
         );
     }
 
