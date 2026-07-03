@@ -12,9 +12,9 @@ const APP_URL = (RAW || FALLBACK).replace(/\/$/, '')
 export const links = {
   app: APP_URL,
   login: `${APP_URL}/login`,
-  // CTA boutons redirigés vers la page de connexion (au lieu de l'inscription).
+  // CTA marchand → page de connexion ; CTA livreur → inscription livreur.
   registerSender: `${APP_URL}/login`,
-  registerDriver: `${APP_URL}/login`,
+  registerDriver: `${APP_URL}/register/driver`,
   // Direct download of the courier (driver) Android app build (Expo).
   driverApp:
     'https://expo.dev/accounts/ktalyzconseils/projects/driver-app/builds/dbb5f333-0f0e-4d53-a0e1-27c733396470',
