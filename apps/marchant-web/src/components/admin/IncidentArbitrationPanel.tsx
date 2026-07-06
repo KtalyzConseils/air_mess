@@ -7,6 +7,7 @@ import Badge from '../ui/Badge'
 import {
   ADJUSTMENT_REASON_CODES,
   arbitrateIncident,
+  noShowPartial,
   type AdjustmentReasonCode,
 } from '../../api/adminIncidents'
 import type { Course, CourseIncident } from '../../api/courses'
@@ -67,6 +68,38 @@ export default function IncidentArbitrationPanel({
       setError(msg)
     },
   })
+
+  // Cas 3 — no-show partiel confirmé (preset 1 clic)
+  const noShowMutation = useMutation({
+    mutationFn: () => noShowPartial(incident.id, resolutionNote.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['course', course.id] })
+      queryClient.invalidateQueries({ queryKey: ['course', String(course.id)] })
+    },
+    onError: (err) => {
+      const msg =
+        err instanceof AxiosError
+          ? err.response?.data?.message ?? "Erreur lors du preset no-show."
+          : 'Erreur inattendue.'
+      setError(msg)
+    },
+  })
+
+  function submitNoShow() {
+    setError(null)
+    if (resolutionNote.trim().length < 5) {
+      setError('La note de résolution est requise (5 caractères minimum).')
+      return
+    }
+    if (
+      !window.confirm(
+        "Confirmer un no-show partiel ? Applique les % configurés dans les paramètres — "
+        + 'capture partielle du hold marchand + crédit partiel de la caution livreur, '
+        + 'course passée en failed, incident résolu.',
+      )
+    ) return
+    noShowMutation.mutate()
+  }
 
   function submit() {
     setError(null)
@@ -151,6 +184,31 @@ export default function IncidentArbitrationPanel({
         >
           📸 Voir la photo jointe
         </a>
+      )}
+
+      {/* ============ Preset 1-clic : No-show partiel confirmé (Cas 3) ============ */}
+      {incident.type === 'recipient_unreachable' && (
+        <div className="mb-4 bg-airmess-yellow/10 border border-airmess-yellow rounded-md p-4">
+          <p className="font-bold text-ink mb-1">⚡ Préréglage — No-show partiel confirmé</p>
+          <p className="text-body-s text-warm-600 mb-3">
+            Applique automatiquement les % configurés dans <em>Paramètres → Arbitrage des incidents</em> :
+            capture d'une part des frais côté marchand + crédit partiel de la caution livreur pour le trajet effectué.
+            La course passe en <strong>failed</strong> et l'incident est résolu — pas besoin de saisir les motifs et montants ci-dessous.
+          </p>
+          <p className="text-caption text-warm-500 mb-3">
+            💡 Nécessite quand même la note de résolution ci-dessous (envoyée au marchand et au livreur).
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            pill
+            onClick={submitNoShow}
+            loading={noShowMutation.isPending}
+            disabled={mutation.isPending}
+          >
+            Appliquer no-show partiel (1 clic)
+          </Button>
+        </div>
       )}
 
       {/* ============ Bloc marchand ============ */}

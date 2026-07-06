@@ -53,6 +53,7 @@ class Course extends Model
             'picked_up_at' => 'datetime',
             'delivered_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'last_contact_attempt_at' => 'datetime',
         ];
     }
 

@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Services\NotificationService;
+use App\Services\DriverWalletService;
 use App\Models\CourseIncident;
 
 
@@ -892,6 +893,174 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 'driver'   => $driverAdj,
             ],
             'caution_short' => $cautionShort,
+        ]);
+    }
+
+    /**
+     * Cas 3 — No-show partiel confirmé (1 clic).
+     *
+     * L'ops a validé que le driver a bien essayé mais que le client est
+     * injoignable. Applique atomiquement :
+     *   1. Capture partielle sur le wallet marchand
+     *      = delivery_fee × (100 − conflicts_no_show_marchand_refund_percent)%
+     *      → le reste est rendu au marchand (release du hold).
+     *      Ne s'applique que si la course était paid_from_wallet ; sinon on
+     *      passe directement à l'étape 2 (pas de hold à ajuster côté user).
+     *   2. Crédit partiel de la caution driver
+     *      = driver_earnings × conflicts_no_show_driver_earnings_percent%
+     *   3. Course → failed + incident → resolved.
+     *
+     * L'ops peut toujours utiliser l'arbitrage manuel pour des cas plus
+     * nuancés (pourcentages différents pour cette course spécifique).
+     */
+    public function noShowPartial(
+        Request $request,
+        CourseIncident $incident,
+        \App\Services\UserWalletService $userWallet,
+        DriverWalletService $driverWallet,
+        NotificationService $notifier,
+    ): JsonResponse {
+        if ($incident->status !== 'open') {
+            return response()->json(['message' => 'Cet incident est déjà clôturé.'], 422);
+        }
+        if ($incident->type !== 'recipient_unreachable') {
+            return response()->json([
+                'message' => 'Le préréglage "no-show partiel" ne s\'applique qu\'aux incidents "client injoignable".',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'resolution_note' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $course = $incident->course()->with('driver', 'sender')->first();
+        if (! $course) {
+            return response()->json(['message' => 'Course introuvable pour cet incident.'], 422);
+        }
+        if ($course->isTerminal()) {
+            return response()->json(['message' => 'Course déjà clôturée.'], 422);
+        }
+        if (! $course->driver) {
+            return response()->json(['message' => 'Aucun livreur assigné à cette course.'], 422);
+        }
+
+        // Lecture des % courants (paramétrés, avec fallback sécurisé)
+        $marchandRefundPct = (int) \App\Models\AppSetting::get('conflicts_no_show_marchand_refund_percent', 50);
+        $driverEarnPct     = (int) \App\Models\AppSetting::get('conflicts_no_show_driver_earnings_percent', 50);
+        $marchandRefundPct = max(0, min(100, $marchandRefundPct));
+        $driverEarnPct     = max(0, min(100, $driverEarnPct));
+
+        $deliveryFee     = (int) $course->delivery_fee;
+        $driverEarnings  = (int) $course->driver_earnings;
+        $capturedAmount  = (int) round($deliveryFee * (100 - $marchandRefundPct) / 100);
+        $partialEarnings = (int) round($driverEarnings * $driverEarnPct / 100);
+
+        $admin = $request->user()->admin;
+
+        try {
+            [$chargeTx, $earnTx] = DB::transaction(function () use (
+                $incident, $course, $capturedAmount, $partialEarnings,
+                $userWallet, $driverWallet, $data, $admin, $marchandRefundPct, $driverEarnPct
+            ) {
+                $chargeTx = null;
+                $earnTx   = null;
+
+                // 1. Capture partielle marchand (uniquement si hold posé)
+                if ($course->paid_from_wallet && $course->sender && $capturedAmount > 0) {
+                    $chargeTx = $userWallet->chargePartial($course->sender, $course, $capturedAmount);
+                }
+                // Si pas paid_from_wallet, la course n'a pas été payée d'avance (paiement
+                // externe Fedapay one-shot) : ce cas ne charge pas le wallet marchand.
+                // L'ops peut faire un refund manuel via l'arbitrage classique si besoin.
+
+                // 2. Crédit partiel driver
+                if ($partialEarnings > 0) {
+                    $earnTx = $driverWallet->earnPartial(
+                        $course->driver,
+                        $course,
+                        $partialEarnings,
+                        'no_show',
+                    );
+                }
+
+                // 3. Course → failed + trace historique
+                $previousStatus = $course->status;
+                $course->status = Course::STATUS_FAILED;
+                $course->save();
+
+                CourseStatusHistory::create([
+                    'course_id'       => $course->id,
+                    'from_status'     => $previousStatus,
+                    'to_status'       => Course::STATUS_FAILED,
+                    'reason'          => 'no_show_partial',
+                    'changed_by_id'   => $admin->user_id ?? null,
+                    'changed_by_type' => 'admin',
+                    'metadata'        => [
+                        'incident_id'          => $incident->id,
+                        'marchand_refund_pct'  => $marchandRefundPct,
+                        'driver_earnings_pct'  => $driverEarnPct,
+                        'captured_amount'      => $capturedAmount,
+                        'partial_earnings'     => $partialEarnings,
+                    ],
+                ]);
+
+                // 4. Résolution incident
+                $incident->update([
+                    'status'          => 'resolved',
+                    'resolution_note' => $data['resolution_note'],
+                    'resolved_by'     => $admin->user_id ?? null,
+                    'resolved_at'     => now(),
+                ]);
+
+                return [$chargeTx, $earnTx];
+            });
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        // Notifs
+        if ($course->sender_id) {
+            $refundAmount = $deliveryFee - $capturedAmount;
+            $notifier->sendToUser(
+                $course->sender_id,
+                'incident.arbitrated',
+                '⚖️ No-show confirmé',
+                "Course {$course->reference} : le client était injoignable. "
+                . number_format($refundAmount, 0, ',', ' ') . " FCFA vous ont été rendus, "
+                . number_format($capturedAmount, 0, ',', ' ') . " FCFA facturés pour le trajet effectué.",
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
+
+        if ($course->driver && $course->driver->user_id) {
+            $notifier->sendToUser(
+                $course->driver->user_id,
+                'incident.arbitrated',
+                '⚖️ No-show confirmé',
+                "Course {$course->reference} : "
+                . number_format($partialEarnings, 0, ',', ' ') . " FCFA crédités sur votre caution pour le trajet effectué.",
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
+
+        return response()->json([
+            'message'  => 'No-show partiel appliqué.',
+            'incident' => $incident->fresh(),
+            'preset'   => [
+                'marchand_refund_pct' => $marchandRefundPct,
+                'driver_earnings_pct' => $driverEarnPct,
+                'delivery_fee'        => $deliveryFee,
+                'captured_amount'     => $capturedAmount,
+                'refunded_amount'     => $deliveryFee - $capturedAmount,
+                'driver_earnings'     => $driverEarnings,
+                'partial_earnings'    => $partialEarnings,
+            ],
+            'transactions' => [
+                'marchand_charge' => $chargeTx,
+                'driver_earning'  => $earnTx,
+            ],
         ]);
     }
 

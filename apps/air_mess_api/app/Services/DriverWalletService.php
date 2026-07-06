@@ -198,6 +198,58 @@ class DriverWalletService
     }
 
     /**
+     * Rémunération partielle — Cas 3 (client injoignable), 4 (client refuse), 6 (marchand annule).
+     *
+     * Le driver a fait le trajet (ou une partie), la course finit en `failed`
+     * sans passer par `delivered`. L'ops décide de créditer une part des
+     * gains initialement prévus (paramétré par
+     * conflicts_no_show_driver_earnings_percent ou similaire).
+     *
+     * On utilise `TYPE_EARNING` (comptablement c'est un gain de course), avec
+     * metadata.partial = true pour distinguer d'un earning normal.
+     * Le UNIQUE (course_id, type=earning) garantit qu'on ne peut pas cumuler
+     * avec un earning complet ultérieur.
+     *
+     * @throws \InvalidArgumentException si $amount <= 0
+     */
+    public function earnPartial(Driver $driver, Course $course, int $amount, string $reason): WalletTransaction
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException("Partial earning amount must be > 0, got {$amount}.");
+        }
+
+        $existing = WalletTransaction::where('course_id', $course->id)
+            ->where('type', WalletTransaction::TYPE_EARNING)
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        return DB::transaction(function () use ($driver, $course, $amount, $reason) {
+            $wallet = DriverWallet::where('driver_id', $driver->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $wallet->balance += $amount;
+            $wallet->save();
+
+            return WalletTransaction::create([
+                'driver_id'     => $driver->id,
+                'type'          => WalletTransaction::TYPE_EARNING,
+                'amount_fcfa'   => $amount,
+                'balance_after' => $wallet->balance,
+                'course_id'     => $course->id,
+                'metadata'      => [
+                    'partial'          => true,
+                    'reason'           => $reason,
+                    'full_earnings'    => (int) $course->driver_earnings,
+                    'partial_earnings' => $amount,
+                ],
+            ]);
+        });
+    }
+
+    /**
      * Ajustement admin : crédit manuel hors flow Fedapay.
      * Cas d'usage : top-up MoMo direct, geste commercial, correctif de bug, test/dev.
      *

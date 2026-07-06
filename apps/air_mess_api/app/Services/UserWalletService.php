@@ -147,6 +147,82 @@ class UserWalletService
     }
 
     /**
+     * Capture partielle — Cas 3 (client injoignable), 4 (client refuse), 6 (marchand annule).
+     *
+     * La course est en `at_dropoff` ou similaire : le hold couvre encore
+     * le delivery_fee entier. L'ops décide de facturer $capturedAmount et
+     * de rembourser le reste. Ici on :
+     *   - débite $capturedAmount du wallet (charge réel comptable)
+     *   - relâche le hold entier (course.delivery_fee) donc les
+     *     (delivery_fee − capturedAmount) redeviennent disponibles côté marchand
+     *   - détague la course (paid_from_wallet = false) pour bloquer tout
+     *     re-charge ultérieur si la course transitionne vers un état terminal
+     *   - trace 1 seul course_charge avec metadata.partial = true
+     *
+     * Idempotent via UNIQUE partielle (course_id, type=course_charge).
+     *
+     * @throws \DomainException si course non tagged wallet, ou solde insuffisant
+     */
+    public function chargePartial(User $user, Course $course, int $capturedAmount): UserWalletTransaction
+    {
+        if ($capturedAmount <= 0) {
+            throw new \InvalidArgumentException("Captured amount must be > 0, got {$capturedAmount}.");
+        }
+        if (! $course->paid_from_wallet) {
+            throw new \DomainException("Course #{$course->id} n'est pas marquée paid_from_wallet.");
+        }
+
+        $existing = UserWalletTransaction::where('course_id', $course->id)
+            ->where('type', UserWalletTransaction::TYPE_COURSE_CHARGE)
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $holdAmount = (int) $course->delivery_fee;
+        if ($capturedAmount > $holdAmount) {
+            throw new \DomainException(
+                "Capture partielle > hold : demandé={$capturedAmount}, hold={$holdAmount}."
+            );
+        }
+
+        return DB::transaction(function () use ($user, $course, $capturedAmount, $holdAmount) {
+            $wallet = UserWallet::where('user_id', $user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($capturedAmount > $wallet->balance) {
+                throw new \DomainException(
+                    "Solde insuffisant à la capture partielle : balance={$wallet->balance}, capture={$capturedAmount}."
+                );
+            }
+
+            $wallet->balance         -= $capturedAmount;
+            $wallet->total_spent     += $capturedAmount;
+            // On relâche le hold entier — les (hold − captured) redeviennent dispo.
+            $wallet->pending_reserved = max(0, $wallet->pending_reserved - $holdAmount);
+            $wallet->save();
+
+            $course->paid_from_wallet = false;
+            $course->save();
+
+            return UserWalletTransaction::create([
+                'user_id'       => $user->id,
+                'type'          => UserWalletTransaction::TYPE_COURSE_CHARGE,
+                'amount_fcfa'   => -$capturedAmount,
+                'balance_after' => $wallet->balance,
+                'course_id'     => $course->id,
+                'metadata'      => [
+                    'partial'         => true,
+                    'hold_amount'     => $holdAmount,
+                    'captured_amount' => $capturedAmount,
+                    'released_amount' => $holdAmount - $capturedAmount,
+                ],
+            ]);
+        });
+    }
+
+    /**
      * Course annulée/échouée AVANT livraison : libère la réservation sans débit.
      * Idempotent : si la course n'est pas paid_from_wallet, no-op.
      */

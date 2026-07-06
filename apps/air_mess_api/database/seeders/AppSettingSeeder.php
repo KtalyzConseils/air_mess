@@ -135,6 +135,58 @@ class AppSettingSeeder extends Seeder
                 'description' => 'Montant total cumulé maximum qu\'un marchand/particulier peut retirer sur les 7 derniers jours (pending + approved).',
                 'group'       => 'wallet',
             ],
+
+            // ===== Pourcentages d'arbitrage des incidents de course =====
+            // Lus par l'endpoint /admin/incidents/{id}/no-show-partial (Cas 3, 4, 6)
+            // et proposés en pré-remplissage dans le panneau d'arbitrage.
+            [
+                'key'         => 'conflicts_no_show_marchand_refund_percent',
+                'value'       => '50',
+                'type'        => 'number',
+                'label'       => 'No-show — % remboursé au marchand',
+                'description' => 'Cas 3 : quand le client est injoignable, on capture (100 − X)% des frais de livraison et on rembourse X% au marchand.',
+                'group'       => 'conflicts',
+            ],
+            [
+                'key'         => 'conflicts_no_show_driver_earnings_percent',
+                'value'       => '50',
+                'type'        => 'number',
+                'label'       => 'No-show — % de gains versés au livreur',
+                'description' => 'Cas 3 : part des gains prévus versée au livreur qui a fait le trajet pour rien (client injoignable confirmé par l\'ops).',
+                'group'       => 'conflicts',
+            ],
+            [
+                'key'         => 'conflicts_package_lost_driver_responsibility_percent',
+                'value'       => '100',
+                'type'        => 'number',
+                'label'       => 'Colis perdu — % responsabilité livreur',
+                'description' => 'Cas 2 : part de la valeur déclarée débitée sur la caution du livreur en cas de perte confirmée.',
+                'group'       => 'conflicts',
+            ],
+            [
+                'key'         => 'conflicts_package_damaged_driver_responsibility_percent',
+                'value'       => '50',
+                'type'        => 'number',
+                'label'       => 'Colis endommagé — % responsabilité livreur',
+                'description' => 'Cas 1 : part des frais (ou valeur déclarée) débitée sur la caution du livreur en cas de dommage confirmé.',
+                'group'       => 'conflicts',
+            ],
+            [
+                'key'         => 'conflicts_return_marchand_shipping_fee_percent',
+                'value'       => '100',
+                'type'        => 'number',
+                'label'       => 'Retour marchand — % frais retour',
+                'description' => 'Cas 4/6 : part des frais de livraison retenue quand le colis doit être ramené au marchand.',
+                'group'       => 'conflicts',
+            ],
+            [
+                'key'         => 'conflicts_return_driver_return_earnings_percent',
+                'value'       => '50',
+                'type'        => 'number',
+                'label'       => 'Retour marchand — % gains livreur',
+                'description' => 'Cas 4/6 : part des gains versée au livreur qui doit refaire le trajet retour vers le marchand.',
+                'group'       => 'conflicts',
+            ],
         ];
 
         foreach ($settings as $s) {

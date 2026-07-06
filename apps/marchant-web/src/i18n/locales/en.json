@@ -1455,6 +1455,8 @@
       "groupQuotasDesc": "Usage caps and trigger thresholds.",
       "groupGeneralLabel": "General",
       "groupGeneralDesc": "Miscellaneous system settings.",
+      "groupConflictsLabel": "Incident arbitration",
+      "groupConflictsDesc": "Percentages applied by ops when resolving problematic courses (no-show, lost/damaged package, return to merchant).",
       "plansSectionLabel": "Merchant subscription plans",
       "plansSectionDesc": "Monthly price and quota included in each plan.",
       "loadingPlans": "Loading plans…",

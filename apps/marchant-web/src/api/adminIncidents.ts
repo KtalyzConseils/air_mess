@@ -69,3 +69,45 @@ export async function arbitrateIncident(
   const { data } = await api.post(`/admin/incidents/${incidentId}/arbitrate`, payload)
   return data
 }
+
+/**
+ * Cas 3 — No-show partiel confirmé (1 clic).
+ * Applique automatiquement les % configurés dans app_settings
+ * (conflicts_no_show_marchand_refund_percent + conflicts_no_show_driver_earnings_percent) :
+ *   - capture partielle du hold marchand
+ *   - crédit partiel de la caution driver
+ *   - course → failed, incident → resolved
+ * Seul le motif "resolution_note" est demandé.
+ */
+export interface NoShowPartialResponse {
+  message: string
+  incident: {
+    id: number
+    status: 'resolved'
+    resolution_note: string
+    resolved_at: string
+  }
+  preset: {
+    marchand_refund_pct: number
+    driver_earnings_pct: number
+    delivery_fee: number
+    captured_amount: number
+    refunded_amount: number
+    driver_earnings: number
+    partial_earnings: number
+  }
+  transactions: {
+    marchand_charge: unknown | null
+    driver_earning:  unknown | null
+  }
+}
+
+export async function noShowPartial(
+  incidentId: number,
+  resolutionNote: string,
+): Promise<NoShowPartialResponse> {
+  const { data } = await api.post(`/admin/incidents/${incidentId}/no-show-partial`, {
+    resolution_note: resolutionNote,
+  })
+  return data
+}

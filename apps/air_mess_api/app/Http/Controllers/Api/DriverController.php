@@ -21,6 +21,13 @@ class DriverController extends Controller
 {
     private const MATCHING_RADIUS_KM = 8.0; // rayon max d'une ville comme Cotonou
 
+    /**
+     * Cas 3 — Client injoignable.
+     * Nombre minimum de tentatives d'appel avant qu'un livreur puisse
+     * signaler `recipient_unreachable`. Garde-fou anti-fraude.
+     */
+    private const MIN_CONTACT_ATTEMPTS_FOR_UNREACHABLE = 2;
+
     // ===== 1. AVAILABILITY =====
     public function updateAvailability(Request $request): JsonResponse
     {
@@ -719,6 +726,20 @@ class DriverController extends Controller
             'lng'         => ['nullable', 'numeric', 'between:-180,180'],
         ]);
 
+        // Garde-fou anti-fraude sur les "client injoignable" : on exige
+        // au moins N tentatives d'appel enregistrées. Le driver peut les
+        // corriger manuellement s'il a appelé depuis son tel perso, avec
+        // note justificative — cf. patchContactAttempts().
+        if ($data['type'] === 'recipient_unreachable'
+            && (int) $course->contact_attempts < self::MIN_CONTACT_ATTEMPTS_FOR_UNREACHABLE) {
+            return response()->json([
+                'message' => "Signalez au moins " . self::MIN_CONTACT_ATTEMPTS_FOR_UNREACHABLE
+                    . " tentatives d'appel avant de déclarer le client injoignable.",
+                'contact_attempts' => (int) $course->contact_attempts,
+                'required'         => self::MIN_CONTACT_ATTEMPTS_FOR_UNREACHABLE,
+            ], 422);
+        }
+
         $incident = CourseIncident::create([
             'course_id'     => $course->id,
             'reported_by'   => $driver->user_id,
@@ -763,6 +784,112 @@ class DriverController extends Controller
             'message'  => 'Incident signalé.',
             'incident' => $incident,
         ], 201);
+    }
+
+    // ===== 8. TENTATIVES D'APPEL DU DESTINATAIRE (Cas 3) =====
+
+    /**
+     * Incrément silencieux : appelé automatiquement par l'app driver au tap
+     * "Appeler le destinataire" (avant l'ouverture du composeur tel://).
+     * Idempotent au sens strict non (chaque tap compte) mais rate-limité
+     * côté serveur : max 1 incrément toutes les 30 secondes pour éviter
+     * qu'un tap répété gonfle artificiellement le compteur.
+     */
+    public function registerCallAttempt(Request $request, Course $course): JsonResponse
+    {
+        $driver = $this->currentDriver($request, requireActive: true);
+
+        if ($course->driver_id !== $driver->id) {
+            return response()->json(['message' => 'Course non assignée à vous.'], 403);
+        }
+
+        if ($course->isTerminal()) {
+            return response()->json(['message' => 'Course déjà clôturée.'], 422);
+        }
+
+        // Rate-limit : 30s entre deux increments auto pour éviter
+        // qu'un tap accidentel × 5 fasse sauter le compteur à +5.
+        if ($course->last_contact_attempt_at
+            && $course->last_contact_attempt_at->diffInSeconds(now()) < 30) {
+            return response()->json([
+                'message'          => 'Attendez avant de réessayer.',
+                'contact_attempts' => (int) $course->contact_attempts,
+            ]);
+        }
+
+        $course->increment('contact_attempts');
+        $course->last_contact_attempt_at = now();
+        $course->save();
+
+        return response()->json([
+            'contact_attempts'        => (int) $course->contact_attempts,
+            'last_contact_attempt_at' => $course->last_contact_attempt_at?->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Correction manuelle du compteur (le livreur peut avoir appelé depuis
+     * son téléphone perso plutôt que via l'app).
+     * Une note justificative est exigée si le nouveau nombre EST SUPÉRIEUR
+     * au compteur auto — pour tracer les cas de "j'ai vraiment appelé, promis"
+     * et permettre à l'ops de recouper si un pattern d'abus apparaît.
+     */
+    public function patchContactAttempts(Request $request, Course $course): JsonResponse
+    {
+        $driver = $this->currentDriver($request, requireActive: true);
+
+        if ($course->driver_id !== $driver->id) {
+            return response()->json(['message' => 'Course non assignée à vous.'], 403);
+        }
+
+        if ($course->isTerminal()) {
+            return response()->json(['message' => 'Course déjà clôturée.'], 422);
+        }
+
+        $data = $request->validate([
+            'contact_attempts' => ['required', 'integer', 'min:0', 'max:20'],
+            'note'             => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $previous = (int) $course->contact_attempts;
+        $new      = (int) $data['contact_attempts'];
+
+        // On exige une note si le driver augmente le compteur (potentiel abus).
+        // Baisser le compteur n'a aucun intérêt de fraude côté driver, donc pas
+        // de contrainte.
+        if ($new > $previous && empty($data['note'])) {
+            throw ValidationException::withMessages([
+                'note' => ['Précisez pourquoi vous augmentez le compteur (ex : "appels depuis mon tel perso").'],
+            ]);
+        }
+
+        DB::transaction(function () use ($course, $new, $previous, $data, $driver) {
+            $course->contact_attempts = $new;
+            $course->last_contact_attempt_at = now();
+            $course->save();
+
+            // Trace dans l'historique de la course pour que l'ops voie
+            // la correction lors d'un arbitrage.
+            CourseStatusHistory::create([
+                'course_id'       => $course->id,
+                'from_status'     => $course->status,
+                'to_status'       => $course->status,
+                'reason'          => 'contact_attempts_manual_edit',
+                'changed_by_id'   => $driver->user_id,
+                'changed_by_type' => 'driver',
+                'metadata'        => [
+                    'previous' => $previous,
+                    'new'      => $new,
+                    'note'     => $data['note'] ?? null,
+                ],
+            ]);
+        });
+
+        return response()->json([
+            'message'                 => 'Compteur mis à jour.',
+            'contact_attempts'        => (int) $course->contact_attempts,
+            'last_contact_attempt_at' => $course->last_contact_attempt_at?->toIso8601String(),
+        ]);
     }
 
 }

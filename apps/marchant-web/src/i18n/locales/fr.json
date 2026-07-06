@@ -1455,6 +1455,8 @@
       "groupQuotasDesc": "Plafonds d'usage et seuils déclencheurs.",
       "groupGeneralLabel": "Général",
       "groupGeneralDesc": "Paramètres divers du système.",
+      "groupConflictsLabel": "Arbitrage des incidents",
+      "groupConflictsDesc": "Pourcentages appliqués par l'ops lors de la résolution des cas de course problématiques (no-show, colis perdu/endommagé, retour marchand).",
       "plansSectionLabel": "Plans d'abonnement marchands",
       "plansSectionDesc": "Prix mensuel et quota inclus dans chaque plan.",
       "loadingPlans": "Chargement des plans…",

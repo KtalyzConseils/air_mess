@@ -1,8 +1,14 @@
 import { useState } from 'react'
-import { View, Text, Pressable, TextInput, Linking } from 'react-native'
+import { View, Text, Pressable, TextInput, Linking, Modal, Alert } from 'react-native'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
-import { transition, type DriverCourseSummary, type TransitionAction } from '../api/driver'
+import {
+  transition,
+  registerCallAttempt,
+  patchContactAttempts,
+  type DriverCourseSummary,
+  type TransitionAction,
+} from '../api/driver'
 import { openGoogleMaps } from '../utils/navigation'
 import IncidentModal from './IncidentModal'
 import FailCourseModal from './FailCourseModal'
@@ -44,6 +50,9 @@ export default function ActiveCourseCard({ course }: Props) {
   const [code, setCode] = useState('')
   const [incidentOpen, setIncidentOpen] = useState(false)
   const [failOpen, setFailOpen] = useState(false)
+  const [correctOpen, setCorrectOpen] = useState(false)
+  const [correctValue, setCorrectValue] = useState('')
+  const [correctNote, setCorrectNote] = useState('')
   const next = NEXT_ACTION[course.status]
 
   // Phase = quelle destination on vise en ce moment
@@ -71,8 +80,35 @@ export default function ActiveCourseCard({ course }: Props) {
     },
   })
 
+  // Cas 3 — comptage silencieux des tentatives d'appel du client.
+  // On n'incrémente que pour la phase dropoff (l'appel du marchand ne compte pas).
+  // Le back rate-limite à 1/30s, donc un tap rapide × 3 = 1 seul incrément.
+  const callAttemptMutation = useMutation({
+    mutationFn: () => registerCallAttempt(course.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-active'] }),
+  })
+
+  const patchAttemptsMutation = useMutation({
+    mutationFn: () => patchContactAttempts(course.id, parseInt(correctValue, 10) || 0, correctNote || undefined),
+    onSuccess: () => {
+      setCorrectOpen(false)
+      setCorrectValue('')
+      setCorrectNote('')
+      queryClient.invalidateQueries({ queryKey: ['my-active'] })
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message ?? 'Correction impossible.'
+      Alert.alert('Erreur', msg)
+    },
+  })
+
   function callPhone(phone?: string) {
-    if (phone) Linking.openURL(`tel:${phone}`)
+    if (!phone) return
+    if (phase === 'dropoff') {
+      // Fire-and-forget — pas besoin d'attendre le compteur pour ouvrir le composeur
+      callAttemptMutation.mutate()
+    }
+    Linking.openURL(`tel:${phone}`)
   }
 
   const currentStepIndex = TIMELINE_STEPS.findIndex((s) => s.key === course.status)
@@ -162,9 +198,30 @@ export default function ActiveCourseCard({ course }: Props) {
           </Pressable>
         </View>
         {targetPhone && (
-          <Text className="text-[10px] text-warm-500 text-center mb-3">
+          <Text className="text-[10px] text-warm-500 text-center mb-1">
             Appeler {targetPhoneRole}
           </Text>
+        )}
+
+        {/* Cas 3 — Compteur de tentatives d'appel du client (phase dropoff uniquement).
+            Le compteur sert de garde-fou anti-fraude : le driver doit avoir tenté au moins
+            2 fois avant de pouvoir signaler "client injoignable". */}
+        {phase === 'dropoff' && targetPhone && (
+          <View className="flex-row items-center justify-center gap-2 mb-3">
+            <Text className="text-[10px] text-warm-500">
+              Tentatives d'appel : <Text className="font-bold text-ink">{course.contact_attempts ?? 0}</Text>
+            </Text>
+            <Pressable
+              onPress={() => {
+                setCorrectValue(String(course.contact_attempts ?? 0))
+                setCorrectNote('')
+                setCorrectOpen(true)
+              }}
+              hitSlop={8}
+            >
+              <Text className="text-[10px] text-info underline">Corriger</Text>
+            </Pressable>
+          </View>
         )}
 
         {/* Encaissement */}
@@ -265,6 +322,67 @@ export default function ActiveCourseCard({ course }: Props) {
         visible={failOpen}
         onClose={() => setFailOpen(false)}
       />
+
+      {/* Cas 3 — Modal de correction du compteur (appels depuis tel perso) */}
+      <Modal
+        visible={correctOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCorrectOpen(false)}
+      >
+        <View className="flex-1 bg-black/60 items-center justify-center px-6">
+          <View className="w-full bg-off-white rounded-2xl p-5">
+            <Text className="text-lg font-extrabold text-ink mb-1">
+              Corriger le compteur d'appels
+            </Text>
+            <Text className="text-xs text-warm-500 mb-4">
+              Si tu as appelé le client depuis ton téléphone perso, mets le vrai nombre.
+              Une note est requise si tu augmentes le compteur.
+            </Text>
+
+            <Text className="text-[10px] uppercase font-bold tracking-widest text-warm-500 mb-1">
+              Tentatives réelles
+            </Text>
+            <TextInput
+              value={correctValue}
+              onChangeText={setCorrectValue}
+              keyboardType="number-pad"
+              placeholder="0"
+              className="border-2 border-warm-200 rounded-xl px-3 py-2 mb-3 bg-white text-ink"
+            />
+
+            <Text className="text-[10px] uppercase font-bold tracking-widest text-warm-500 mb-1">
+              Note (ex : "appels depuis mon tel perso")
+            </Text>
+            <TextInput
+              value={correctNote}
+              onChangeText={setCorrectNote}
+              placeholder="Justification"
+              multiline
+              className="border-2 border-warm-200 rounded-xl px-3 py-2 mb-4 bg-white text-ink min-h-[60px]"
+            />
+
+            <View className="flex-row gap-2">
+              <Pressable
+                onPress={() => setCorrectOpen(false)}
+                className="flex-1 h-11 rounded-xl border-2 border-warm-300 items-center justify-center"
+              >
+                <Text className="text-warm-600 font-bold">Annuler</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => patchAttemptsMutation.mutate()}
+                disabled={patchAttemptsMutation.isPending || !correctValue}
+                className="flex-1 h-11 rounded-xl bg-airmess-yellow items-center justify-center"
+                style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+              >
+                <Text className="text-ink font-extrabold">
+                  {patchAttemptsMutation.isPending ? '…' : 'Enregistrer'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }

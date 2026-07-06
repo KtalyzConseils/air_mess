@@ -69,6 +69,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/courses/{course}/decline',   [DriverController::class, 'declineCourse']);
         Route::post('/courses/{course}/transition', [DriverController::class, 'transition']);
         Route::post('/courses/{course}/incident', [DriverController::class, 'reportIncident']);
+
+        // Cas 3 — Client injoignable : compteur de tentatives d'appel.
+        // POST = incrément silencieux (au tap "Appeler" côté app driver).
+        // PATCH = correction manuelle (appel depuis tel perso, avec note justificative).
+        Route::post('/courses/{course}/call-attempt', [DriverController::class, 'registerCallAttempt']);
+        Route::patch('/courses/{course}/contact-attempts', [DriverController::class, 'patchContactAttempts']);
     });
 
     Route::get('/package-categories', function () {
@@ -222,6 +228,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
         Route::post('/incidents/{incident}/resolve',   [AdminController::class, 'resolveIncident']);
         Route::post('/incidents/{incident}/arbitrate', [AdminController::class, 'arbitrateIncident']);
+        // Cas 3 — preset 1-clic pour no-show confirmé (utilise les % de app_settings)
+        Route::post('/incidents/{incident}/no-show-partial', [AdminController::class, 'noShowPartial']);
 
         // Demandes de retrait de caution — argent, donc strictement ops/super.
         Route::get('/withdraw-requests',                          [AdminController::class, 'withdrawRequests']);

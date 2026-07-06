@@ -30,6 +30,8 @@ export interface DriverCourseSummary {
   destination_street: string | null
   destination_landmark: string | null
   destination_instructions: string | null
+  contact_attempts?: number
+  last_contact_attempt_at?: string | null
   created_at: string
 }
 
@@ -157,4 +159,33 @@ export async function reportIncident(
 ) {
   const { data } = await api.post(`/driver/courses/${courseId}/incident`, payload)
   return data.incident
+}
+
+/**
+ * Cas 3 — Client injoignable.
+ * Incrément silencieux du compteur de tentatives d'appel (server rate-limité à 1/30s).
+ * À appeler juste avant d'ouvrir le composeur tel:// côté client.
+ */
+export async function registerCallAttempt(courseId: number): Promise<{
+  contact_attempts: number
+  last_contact_attempt_at: string | null
+}> {
+  const { data } = await api.post(`/driver/courses/${courseId}/call-attempt`)
+  return data
+}
+
+/**
+ * Correction manuelle du compteur (le driver a appelé depuis son tel perso).
+ * Une note justificative est exigée par le back si `new > current`.
+ */
+export async function patchContactAttempts(
+  courseId: number,
+  contactAttempts: number,
+  note?: string,
+): Promise<{ contact_attempts: number; last_contact_attempt_at: string | null }> {
+  const { data } = await api.patch(`/driver/courses/${courseId}/contact-attempts`, {
+    contact_attempts: contactAttempts,
+    note,
+  })
+  return data
 }

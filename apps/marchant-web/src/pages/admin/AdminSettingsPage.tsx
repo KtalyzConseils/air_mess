@@ -47,6 +47,11 @@ const GROUP_META_CONFIG: Record<string, GroupMetaConfig> = {
     descKey: 'admin.settings.groupGeneralDesc',
     Icon: SettingsIcon,
   },
+  conflicts: {
+    labelKey: 'admin.settings.groupConflictsLabel',
+    descKey: 'admin.settings.groupConflictsDesc',
+    Icon: AlertTriangleIcon,
+  },
 }
 
 export default function AdminSettingsPage() {
