@@ -37,10 +37,12 @@ export default function LoginPage() {
         navigate('/dashboard')
       }
     } catch (err) {
+      // Les erreurs d'auth restent en FR pour rester cohérentes avec les messages
+      // renvoyés par l'API Laravel (jamais traduits côté backend).
       const message =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? t('auth.login.loginError')
-          : t('common.unexpectedError')
+          ? err.response?.data?.message ?? 'Erreur de connexion.'
+          : 'Erreur inattendue.'
       setError(message)
     } finally {
       setLoading(false)
@@ -75,19 +77,27 @@ export default function LoginPage() {
               label={t('common.email')}
               placeholder="contact@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                if (error) setError(null)
+              }}
               required
               autoComplete="email"
               autoFocus
+              error={error ? '' : undefined}
             />
 
             <Input
               type={showPassword ? 'text' : 'password'}
               label={t('common.password')}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (error) setError(null)
+              }}
               required
               autoComplete="current-password"
+              error={error ? '' : undefined}
               rightSlot={
                 <button
                   type="button"

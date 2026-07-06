@@ -9,7 +9,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Services\NotificationService;
+use App\Models\Admin;
+use App\Models\CourseIncident;
 use App\Models\Driver;
+use Illuminate\Validation\Rule;
 
 class CourseController extends Controller
 {
@@ -149,12 +152,16 @@ class CourseController extends Controller
     {
         $this->authorizeAccessToCourse($request->user(), $course);
 
-        return response()->json([
-            'course' => $course->load([
-                'sender', 'driver.user', 'packageCategory',
-                'originAddress', 'destinationAddress',
-            ]),
+        // Incidents (les ouverts en priorité) — utiles au marchand pour visibilité
+        // et surtout à l'admin (déclencheur du panneau d'arbitrage).
+        $course->load([
+            'sender', 'driver.user', 'packageCategory',
+            'originAddress', 'destinationAddress',
+            'incidents' => fn ($q) => $q->orderByDesc('created_at'),
+            'incidents.reportedBy:id,name,type',
         ]);
+
+        return response()->json(['course' => $course]);
     }
 
     /**
@@ -167,6 +174,88 @@ class CourseController extends Controller
         return response()->json([
             'history' => $course->statusHistory()->with('changedBy')->get(),
         ]);
+    }
+
+    /**
+     * Signalement d'un incident par le marchand ou le particulier sur SA course.
+     *
+     * Diffère du signalement driver (DriverController::reportIncident) :
+     *  - types restreints à ceux qu'un expéditeur peut légitimement voir (colis
+     *    endommagé, perdu, adresse erronée, souci d'encaissement, autre)
+     *  - reporter_type = 'marchant' (le back ne distingue pas marchand/particulier
+     *    dans ce champ pour rester compatible avec l'enum existant)
+     *  - la position n'est pas capturée (pas de sens côté web)
+     *
+     * Notifie l'ops + le livreur si assigné.
+     */
+    public function reportIncident(
+        \Illuminate\Http\Request $request,
+        Course $course,
+        NotificationService $notifier,
+    ): JsonResponse {
+        $user = $request->user();
+        $this->authorizeAccessToCourse($user, $course);
+
+        // Seul l'expéditeur (marchand/particulier) peut signaler ici. L'admin
+        // qui voudrait ouvrir un incident passe par un autre canal (support).
+        if ($course->sender_id !== $user->id) {
+            return response()->json(['message' => 'Seul l\'expéditeur peut signaler un incident sur cette course.'], 403);
+        }
+
+        $allowedTypes = [
+            CourseIncident::TYPE_PACKAGE_DAMAGED,
+            CourseIncident::TYPE_PACKAGE_LOST,
+            CourseIncident::TYPE_WRONG_ADDRESS,
+            CourseIncident::TYPE_PAYMENT_ISSUE,
+            CourseIncident::TYPE_OTHER,
+        ];
+
+        $data = $request->validate([
+            'type'        => ['required', Rule::in($allowedTypes)],
+            'description' => ['required', 'string', 'min:10', 'max:1000'],
+        ]);
+
+        $incident = CourseIncident::create([
+            'course_id'     => $course->id,
+            'reported_by'   => $user->id,
+            'reporter_type' => 'marchant',   // enum existant — vaut aussi pour un individual
+            'type'          => $data['type'],
+            'description'   => $data['description'],
+            'status'        => 'open',
+        ]);
+
+        // Notif ops + super-admin — voient un badge critique
+        $opsUserIds = Admin::whereIn('sub_role', [Admin::ROLE_OPS, Admin::ROLE_SUPER])
+            ->pluck('user_id')
+            ->toArray();
+        $notifier->sendToUsers(
+            $opsUserIds,
+            'incident.reported',
+            '🚨 Nouvel incident marchand',
+            "Incident ({$data['type']}) signalé par l'expéditeur sur la course {$course->reference}.",
+            ['reference' => $course->reference, 'incident_type' => $data['type']],
+            $course->id,
+        );
+
+        // Notif livreur assigné le cas échéant — visibilité de son côté
+        if ($course->driver_id) {
+            $course->loadMissing('driver.user');
+            if ($course->driver && $course->driver->user_id) {
+                $notifier->sendToUser(
+                    $course->driver->user_id,
+                    'course.incident',
+                    '⚠️ Incident signalé sur ta course',
+                    "L'expéditeur a signalé un incident sur la course {$course->reference}.",
+                    ['reference' => $course->reference, 'incident_type' => $data['type']],
+                    $course->id,
+                );
+            }
+        }
+
+        return response()->json([
+            'message'  => 'Incident signalé. L\'équipe ops traitera votre demande.',
+            'incident' => $incident,
+        ], 201);
     }
 
     /**

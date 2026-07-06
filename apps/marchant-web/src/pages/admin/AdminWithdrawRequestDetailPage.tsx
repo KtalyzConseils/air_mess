@@ -186,8 +186,222 @@ export default function AdminWithdrawRequestDetailPage() {
   }
 
   const { request, active_course, recent_transactions, past_requests } = data
-  const { driver } = request
+  const { driver, user: userOwner } = request
+
+  // La demande peut être portée par un user marchand/particulier au lieu d'un driver.
+  // La vue driver ci-dessous n'a pas de sens dans ce cas ; on route vers une vue
+  // simplifiée qui affiche les infos user + les actions (les endpoints admin
+  // approve/reject/mark-paid sont polymorphes côté back).
+  if (!driver && userOwner) {
+    return renderUserWithdrawView()
+  }
+
+  if (!driver) {
+    return (
+      <AdminPageShell>
+        <div className="p-8 text-warm-500 text-center">Demande sans propriétaire — état incohérent.</div>
+      </AdminPageShell>
+    )
+  }
+
   const wallet = driver.wallet
+
+  /**
+   * Vue simplifiée pour un retrait porté par un user marchand/particulier.
+   * Les actions (approve/reject/mark-paid) réutilisent les mêmes mutations
+   * — les endpoints admin sont polymorphes côté back.
+   */
+  function renderUserWithdrawView() {
+    if (!userOwner) return null
+    const wallet = data?.user_wallet
+    const displayName =
+      userOwner.marchant?.raison_sociale ??
+      (userOwner.individual
+        ? `${userOwner.individual.first_name} ${userOwner.individual.last_name}`.trim()
+        : null) ??
+      userOwner.name
+    const canApprove = request.status === 'pending' && wallet && wallet.available >= request.amount_fcfa
+    const canReject = request.status === 'pending'
+    const canMarkPaid = request.status === 'approved' && !request.paid_at
+    return (
+      <AdminPageShell>
+        <AdminPageHeader
+          title={`Retrait #${request.id}`}
+          subtitle="Retrait wallet marchand/particulier"
+        />
+        <div className="px-4 md:px-6 lg:px-8 py-5 space-y-4 max-w-4xl">
+          <AdminButton
+            variant="ghost"
+            onClick={() => navigate('/admin/withdraw-requests')}
+            leftIcon={<ArrowLeftIcon size={14} />}
+          >
+            {t('admin.withdraws.backToList')}
+          </AdminButton>
+
+          {/* Demande + owner */}
+          <div className="bg-off-white border border-warm-200 rounded-lg p-5">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <p className="text-eyebrow uppercase text-info font-bold">🏢 Marchand / particulier</p>
+                <p className="text-h2 text-ink font-bold mt-1">{displayName}</p>
+                <p className="text-body-s text-warm-500">
+                  {userOwner.phone ?? '—'} · {userOwner.email}
+                </p>
+              </div>
+              <span
+                className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${
+                  STATUS_BADGE_CLASSES[request.status] ?? 'bg-warm-100 text-warm-600 border border-warm-200'
+                }`}
+              >
+                {statusLabels[request.status] ?? request.status}
+              </span>
+            </div>
+            <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-body-s">
+              <div>
+                <dt className="text-caption text-warm-500">Montant demandé</dt>
+                <dd className="text-h3 text-ink font-bold tabular-nums">{formatFcfa(request.amount_fcfa)}</dd>
+              </div>
+              <div>
+                <dt className="text-caption text-warm-500">Méthode</dt>
+                <dd className="text-body font-medium text-ink">{request.target_method.toUpperCase()}</dd>
+                <dd className="text-caption text-warm-500 font-mono">{request.target_account}</dd>
+              </div>
+              <div>
+                <dt className="text-caption text-warm-500">Créée</dt>
+                <dd className="text-body-s text-ink">{formatDateTime(request.created_at)}</dd>
+              </div>
+              {wallet && (
+                <div>
+                  <dt className="text-caption text-warm-500">Solde disponible</dt>
+                  <dd className="text-body font-bold text-ink tabular-nums">{formatFcfa(wallet.available)}</dd>
+                  <dd className="text-caption text-warm-500 tabular-nums">
+                    balance {formatFcfa(wallet.balance)}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </div>
+
+          {/* Actions */}
+          {(canApprove || canReject || canMarkPaid) && (
+            <div className="bg-off-white border border-warm-200 rounded-lg p-5 space-y-3">
+              <p className="text-eyebrow uppercase text-warm-600 font-bold">Actions</p>
+              <div className="flex flex-wrap gap-2">
+                {canApprove && (
+                  <AdminButton
+                    variant="primary"
+                    onClick={() => approveMutation.mutate()}
+                    disabled={approveMutation.isPending}
+                  >
+                    Approuver et lancer le payout
+                  </AdminButton>
+                )}
+                {canReject && (
+                  <AdminButton variant="secondary" onClick={() => setShowRejectPanel(true)}>
+                    Refuser
+                  </AdminButton>
+                )}
+                {canMarkPaid && (
+                  <AdminButton variant="secondary" onClick={() => setShowMarkPaidPanel(true)}>
+                    Marquer comme viré manuellement
+                  </AdminButton>
+                )}
+              </div>
+              {canApprove === false && request.status === 'pending' && wallet && (
+                <p className="text-caption text-airmess-red">
+                  ⚠️ Solde disponible insuffisant ({formatFcfa(wallet.available)}) pour approuver{' '}
+                  {formatFcfa(request.amount_fcfa)}.
+                </p>
+              )}
+              {request.status === 'rejected' && request.rejection_reason && (
+                <p className="text-body-s text-warm-600">
+                  Motif du refus : {request.rejection_reason}
+                </p>
+              )}
+              {request.status === 'approved' && request.paid_at && (
+                <p className="text-body-s text-success">
+                  ✅ Viré le {formatDateTime(request.paid_at)}
+                  {request.external_payout_reference && ` — réf: ${request.external_payout_reference}`}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Panels reject + mark-paid (réutilisation des états déjà présents) */}
+          {showRejectPanel && (
+            <div className="bg-off-white border border-warm-200 rounded-lg p-5">
+              <p className="text-body font-semibold text-ink mb-2">Motif du refus</p>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={3}
+                className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s"
+                placeholder="Ex : compte inactif, doute sur les coordonnées MoMo…"
+              />
+              <div className="flex justify-end gap-2 mt-3">
+                <AdminButton variant="ghost" onClick={() => setShowRejectPanel(false)}>Annuler</AdminButton>
+                <AdminButton
+                  variant="danger"
+                  onClick={() => rejectMutation.mutate(rejectReason)}
+                  disabled={rejectMutation.isPending || rejectReason.trim().length < 3}
+                >
+                  Confirmer le refus
+                </AdminButton>
+              </div>
+            </div>
+          )}
+          {showMarkPaidPanel && (
+            <div className="bg-off-white border border-warm-200 rounded-lg p-5">
+              <p className="text-body font-semibold text-ink mb-2">
+                Référence externe du virement
+              </p>
+              <input
+                value={payoutReference}
+                onChange={(e) => setPayoutReference(e.target.value)}
+                className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s font-mono"
+                placeholder="Ex : TX-2026-070312345"
+              />
+              <div className="flex justify-end gap-2 mt-3">
+                <AdminButton variant="ghost" onClick={() => setShowMarkPaidPanel(false)}>Annuler</AdminButton>
+                <AdminButton
+                  variant="primary"
+                  onClick={() => markPaidMutation.mutate(payoutReference)}
+                  disabled={markPaidMutation.isPending || payoutReference.trim().length < 3}
+                >
+                  Marquer comme viré
+                </AdminButton>
+              </div>
+            </div>
+          )}
+
+          {/* Historique des transactions récentes du user */}
+          {recent_transactions.length > 0 && (
+            <div className="bg-off-white border border-warm-200 rounded-lg p-5">
+              <p className="text-eyebrow uppercase text-warm-600 font-bold mb-2">
+                10 dernières transactions wallet
+              </p>
+              <ul className="divide-y divide-warm-200">
+                {recent_transactions.map((tx) => (
+                  <li key={tx.id} className="py-2 flex items-center justify-between text-body-s">
+                    <span className="text-warm-600 font-mono uppercase text-caption">{tx.type}</span>
+                    <span className={`tabular-nums font-bold ${tx.amount_fcfa < 0 ? 'text-airmess-red' : 'text-success'}`}>
+                      {tx.amount_fcfa > 0 ? '+' : ''}{tx.amount_fcfa.toLocaleString('fr-FR')}
+                    </span>
+                    <span className="text-caption text-warm-500">{formatDateTime(tx.created_at)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-caption text-warm-500">
+                Retraits passés : {past_requests.approved_count} approuvés
+                ({formatFcfa(past_requests.approved_total)}), {past_requests.rejected_count} refusés,{' '}
+                {past_requests.cancelled_count} annulés.
+              </p>
+            </div>
+          )}
+        </div>
+      </AdminPageShell>
+    )
+  }
   const statusClasses =
     STATUS_BADGE_CLASSES[request.status] ?? 'bg-warm-100 text-warm-600 border border-warm-200'
   const statusLabels: Record<string, string> = {

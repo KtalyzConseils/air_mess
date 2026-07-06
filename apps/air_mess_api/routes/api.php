@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{course}', [CourseController::class, 'show']);
         Route::get('/{course}/history', [CourseController::class, 'history']);
         Route::post('/{course}/cancel', [CourseController::class, 'cancel']);
+        Route::post('/{course}/incident', [CourseController::class, 'reportIncident']);
     });
 
     // Driver
@@ -120,6 +121,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('me/wallet')->group(function () {
         Route::get('/',        [UserWalletController::class, 'show']);
         Route::post('/top-up', [UserWalletController::class, 'topUp']);
+
+        // Payout marchand/particulier : demande + annulation avant décision admin
+        Route::post('/withdraw-request',                        [UserWalletController::class, 'requestWithdraw']);
+        Route::post('/withdraw-requests/{withdraw}/cancel',     [UserWalletController::class, 'cancelWithdraw']);
     });
 
     // ─── Mode développeur — apps API du user connecté ────────────────
@@ -216,6 +221,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/drivers/{driver}/validate',      [AdminController::class, 'validateDriver']);
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
         Route::post('/incidents/{incident}/resolve',   [AdminController::class, 'resolveIncident']);
+        Route::post('/incidents/{incident}/arbitrate', [AdminController::class, 'arbitrateIncident']);
 
         // Demandes de retrait de caution — argent, donc strictement ops/super.
         Route::get('/withdraw-requests',                          [AdminController::class, 'withdrawRequests']);

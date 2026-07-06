@@ -372,9 +372,15 @@ export async function reactivateIndividual(id: number): Promise<void> {
 
 // ============== WALLET WITHDRAW REQUESTS (ADMIN) ==============
 
-export interface WithdrawRequestWithDriver {
+/**
+ * Une demande de retrait est portée SOIT par un driver (retrait de caution)
+ * SOIT par un user marchand/particulier (retrait wallet payeur). Exactement UN
+ * des deux champs est renseigné — l'UI branche sur celui qui n'est pas null.
+ */
+export interface WithdrawRequestOwner {
   id: number
-  driver_id: number
+  driver_id: number | null
+  user_id: number | null
   amount_fcfa: number
   target_method: 'momo' | 'bank'
   target_account: string
@@ -390,18 +396,31 @@ export interface WithdrawRequestWithDriver {
     first_name: string
     last_name: string
     user: { id: number; phone: string | null; email: string }
-  }
+  } | null
+  user: {
+    id: number
+    name: string
+    phone: string | null
+    email: string
+    type: 'marchant' | 'individual'
+    marchant?: { id: number; user_id: number; raison_sociale: string } | null
+    individual?: { id: number; user_id: number; first_name: string; last_name: string } | null
+  } | null
 }
+
+/** @deprecated — alias historique, utiliser WithdrawRequestOwner qui est polymorphe. */
+export type WithdrawRequestWithDriver = WithdrawRequestOwner
 
 export interface WithdrawRequestListParams {
   status?: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  owner_type?: 'driver' | 'user'
   page?: number
   per_page?: number
 }
 
 export async function fetchWithdrawRequests(
   params: WithdrawRequestListParams,
-): Promise<Paginated<WithdrawRequestWithDriver>> {
+): Promise<Paginated<WithdrawRequestOwner>> {
   const { data } = await api.get('/admin/withdraw-requests', { params })
   return data
 }
@@ -424,9 +443,20 @@ export interface WithdrawRequestDetailDriver {
   } | null
 }
 
+export interface WithdrawRequestDetailUser {
+  id: number
+  name: string
+  phone: string | null
+  email: string
+  type: 'marchant' | 'individual'
+  marchant?: { id: number; user_id: number; raison_sociale: string } | null
+  individual?: { id: number; user_id: number; first_name: string; last_name: string } | null
+}
+
 export interface WithdrawRequestDetailRequest {
   id: number
-  driver_id: number
+  driver_id: number | null
+  user_id: number | null
   amount_fcfa: number
   target_method: 'momo' | 'bank'
   target_account: string
@@ -443,7 +473,8 @@ export interface WithdrawRequestDetailRequest {
   payout_failure_reason: string | null
   created_at: string
   updated_at: string
-  driver: WithdrawRequestDetailDriver
+  driver: WithdrawRequestDetailDriver | null
+  user: WithdrawRequestDetailUser | null
   decided_by_admin: { id: number; first_name: string; last_name: string } | null
   paid_by_admin: { id: number; first_name: string; last_name: string } | null
 }
@@ -475,7 +506,15 @@ export interface WithdrawRequestPastAggregates {
 
 export interface WithdrawRequestDetailResponse {
   request: WithdrawRequestDetailRequest
-  active_course: WithdrawRequestActiveCourse | null
+  owner_type: 'driver' | 'user'
+  active_course?: WithdrawRequestActiveCourse | null
+  user_wallet?: {
+    balance: number
+    pending_reserved: number
+    available: number
+    total_deposited: number
+    total_spent: number
+  } | null
   recent_transactions: WithdrawRequestRecentTx[]
   past_requests: WithdrawRequestPastAggregates
 }

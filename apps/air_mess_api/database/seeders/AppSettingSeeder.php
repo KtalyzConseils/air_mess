@@ -91,6 +91,50 @@ class AppSettingSeeder extends Seeder
                 'description' => 'Montant total cumulé maximum qu\'un driver peut retirer sur les 7 derniers jours (statuts pending + approved).',
                 'group'       => 'wallet',
             ],
+
+            // ===== Payout marchand/particulier (retrait du wallet payeur) =====
+            // Volumes typiquement supérieurs aux drivers (collections encaissées
+            // accumulées) → plafonds plus larges. Le count anti-spam reste identique.
+            [
+                'key'         => 'user_min_withdraw_fcfa',
+                'value'       => '1000',
+                'type'        => 'number',
+                'label'       => 'Retrait minimum marchand/particulier (FCFA)',
+                'description' => 'Seuil en dessous duquel un marchand ou particulier ne peut pas demander un retrait de son wallet.',
+                'group'       => 'wallet',
+            ],
+            [
+                'key'         => 'user_withdraw_max_per_day_count',
+                'value'       => '2',
+                'type'        => 'number',
+                'label'       => 'Max demandes de retrait marchand / 24h',
+                'description' => 'Nombre maximum de demandes de retrait qu\'un marchand/particulier peut soumettre sur les 24 dernières heures (tous statuts).',
+                'group'       => 'wallet',
+            ],
+            [
+                'key'         => 'user_withdraw_max_per_week_count',
+                'value'       => '5',
+                'type'        => 'number',
+                'label'       => 'Max demandes de retrait marchand / 7j',
+                'description' => 'Nombre maximum de demandes de retrait qu\'un marchand/particulier peut soumettre sur les 7 derniers jours (tous statuts).',
+                'group'       => 'wallet',
+            ],
+            [
+                'key'         => 'user_withdraw_max_per_day_fcfa',
+                'value'       => '100000',
+                'type'        => 'number',
+                'label'       => 'Max retraits marchand / 24h (FCFA)',
+                'description' => 'Montant total cumulé maximum qu\'un marchand/particulier peut retirer sur les 24 dernières heures (pending + approved).',
+                'group'       => 'wallet',
+            ],
+            [
+                'key'         => 'user_withdraw_max_per_week_fcfa',
+                'value'       => '300000',
+                'type'        => 'number',
+                'label'       => 'Max retraits marchand / 7j (FCFA)',
+                'description' => 'Montant total cumulé maximum qu\'un marchand/particulier peut retirer sur les 7 derniers jours (pending + approved).',
+                'group'       => 'wallet',
+            ],
         ];
 
         foreach ($settings as $s) {

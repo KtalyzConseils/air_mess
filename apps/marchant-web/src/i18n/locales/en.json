@@ -450,6 +450,7 @@
     "txRefund": "Refund",
     "txAdjustmentCredit": "Admin credit",
     "txAdjustmentDebit": "Admin debit",
+    "txWithdraw": "Withdrawal",
     "lowBalanceAlert": "Low balance — consider topping up.",
     "topUpError": "Top-up failed.",
     "paymentCreateError": "Failed to create payment.",

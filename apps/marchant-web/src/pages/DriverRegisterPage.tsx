@@ -65,12 +65,13 @@ export default function DriverRegisterPage() {
       })
       navigate('/register/driver/success')
     } catch (err) {
+      // Messages toujours en FR : cohérence avec les messages Laravel côté API.
       if (err instanceof AxiosError) {
         const data = err.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
-        setServerError(data?.message ?? t('driverRegister.registerError'))
+        setServerError(data?.message ?? "Erreur lors de l'inscription.")
         setServerFieldErrors(data?.errors ?? {})
       } else {
-        setServerError(t('common.unexpectedError'))
+        setServerError('Erreur inattendue.')
       }
     }
   }

@@ -678,6 +678,255 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ]);
     }
 
+    // ===== 8ter. ARBITRER UN INCIDENT AVEC AJUSTEMENTS WALLET =====
+    /**
+     * Panneau ops complet : résout l'incident ET applique les ajustements wallet
+     * (refund marchand + débit driver) dans une seule transaction atomique.
+     *
+     * Payload attendu (chaque bloc optionnel — l'ops peut refund seul, débit seul, ou les 2) :
+     *   - reason_code_marchand : REASON_INCIDENT_REFUND | REASON_NO_SHOW_REFUND | REASON_RETURN_SHIPPING_FEE | REASON_MANUAL_CREDIT | REASON_MANUAL_DEBIT
+     *   - amount_marchand      : montant signé (positif = crédit marchand, négatif = débit)
+     *   - reason_code_driver   : REASON_INCIDENT_DEBIT | REASON_CAUTION_SEIZURE | REASON_MANUAL_CREDIT | REASON_MANUAL_DEBIT
+     *   - amount_driver        : montant signé (positif = crédit driver rare, négatif = débit)
+     *   - resolution_note      : texte libre, obligatoire (raison humaine pour l'audit + notif)
+     *
+     * En sortie : incident résolu + 0..2 wallet_adjustments créés + notifs.
+     * Si un des adjustments échoue, TOUT est rollback (aucun ajustement partiel).
+     */
+    public function arbitrateIncident(
+        Request $request,
+        CourseIncident $incident,
+        \App\Services\WalletAdjustmentService $adjustments,
+        NotificationService $notifier,
+    ): JsonResponse {
+        if ($incident->status !== 'open') {
+            return response()->json(['message' => 'Cet incident est déjà clôturé.'], 422);
+        }
+
+        $data = $request->validate([
+            'resolution_note'        => ['required', 'string', 'max:1000'],
+            'reason_code_marchand'   => ['nullable', 'string', 'max:40'],
+            'amount_marchand'        => ['nullable', 'integer'],
+            'reason_code_driver'     => ['nullable', 'string', 'max:40'],
+            'amount_driver'          => ['nullable', 'integer'],
+        ]);
+
+        // Cohérence : si un reason_code est fourni, l'amount correspondant doit
+        // l'être aussi (et non nul). Empêche les payloads incomplets.
+        if (($data['reason_code_marchand'] ?? null) !== null && ($data['amount_marchand'] ?? 0) === 0) {
+            return response()->json(['message' => 'amount_marchand est requis et non nul quand reason_code_marchand est fourni.'], 422);
+        }
+        if (($data['reason_code_driver'] ?? null) !== null && ($data['amount_driver'] ?? 0) === 0) {
+            return response()->json(['message' => 'amount_driver est requis et non nul quand reason_code_driver est fourni.'], 422);
+        }
+
+        $course = $incident->course()->with('driver', 'sender')->first();
+        if (! $course) {
+            return response()->json(['message' => 'Course introuvable pour cet incident.'], 422);
+        }
+
+        $admin = $request->user()->admin;
+
+        // Reasons pour lesquelles on autorise le débit auto-capé + auto-suspension
+        // si la caution driver ne couvre pas le montant "juste" (Cas 2 & 7).
+        $cappableReasons = [
+            \App\Models\WalletAdjustment::REASON_INCIDENT_DEBIT,
+            \App\Models\WalletAdjustment::REASON_CAUTION_SEIZURE,
+        ];
+
+        try {
+            [$marchandAdj, $driverAdj, $cautionShort] = DB::transaction(function () use (
+                $data, $incident, $course, $admin, $adjustments, $cappableReasons
+            ) {
+                $marchandAdj  = null;
+                $driverAdj    = null;
+                $cautionShort = false;
+
+                // Ajustement marchand (côté user_wallet) — le sender de la course.
+                if (($data['reason_code_marchand'] ?? null) !== null && $course->sender) {
+                    $marchandAdj = $adjustments->applyToUser(
+                        user:       $course->sender,
+                        amount:     (int) $data['amount_marchand'],
+                        reasonCode: $data['reason_code_marchand'],
+                        course:     $course,
+                        incident:   $incident,
+                        adminId:    $admin->id,
+                        notes:      $data['resolution_note'],
+                    );
+                }
+
+                // Ajustement driver (côté wallet caution) — le driver assigné.
+                if (($data['reason_code_driver'] ?? null) !== null && $course->driver) {
+                    $requestedAmount = (int) $data['amount_driver'];
+                    $isDebit         = $requestedAmount < 0;
+                    $isCappable      = in_array($data['reason_code_driver'], $cappableReasons, true);
+
+                    // Cas 2 & 7 : si la caution ne couvre pas le débit "juste", on cape
+                    // au disponible ET on suspend le driver. Le reste des reasons garde
+                    // la contrainte stricte (throw si insuffisant).
+                    if ($isDebit && $isCappable) {
+                        $wallet = \App\Models\DriverWallet::where('driver_id', $course->driver->id)
+                            ->lockForUpdate()
+                            ->firstOrFail();
+
+                        $needed = abs($requestedAmount);
+                        if ($needed > (int) $wallet->balance) {
+                            $capped = -1 * (int) $wallet->balance;
+                            if ($capped === 0) {
+                                // Rien à débiter mais on veut quand même tracer l'insuffisance.
+                                // On saute la création de l'adjustment (amount=0 refusé par CHECK)
+                                // et on suspend directement.
+                                $course->driver->update(['activation_status' => 'suspended']);
+                                $cautionShort = true;
+                                return [$marchandAdj, null, $cautionShort];
+                            }
+
+                            $driverAdj = $adjustments->applyToDriver(
+                                driver:     $course->driver,
+                                amount:     $capped,
+                                reasonCode: $data['reason_code_driver'],
+                                course:     $course,
+                                incident:   $incident,
+                                adminId:    $admin->id,
+                                notes:      "[Caution insuffisante — montant capé sur solde disponible] " . $data['resolution_note'],
+                            );
+                            $course->driver->update(['activation_status' => 'suspended']);
+                            $cautionShort = true;
+                        } else {
+                            $driverAdj = $adjustments->applyToDriver(
+                                driver:     $course->driver,
+                                amount:     $requestedAmount,
+                                reasonCode: $data['reason_code_driver'],
+                                course:     $course,
+                                incident:   $incident,
+                                adminId:    $admin->id,
+                                notes:      $data['resolution_note'],
+                            );
+                        }
+                    } else {
+                        // Chemin classique : contrainte stricte, throw si insuffisant.
+                        $driverAdj = $adjustments->applyToDriver(
+                            driver:     $course->driver,
+                            amount:     $requestedAmount,
+                            reasonCode: $data['reason_code_driver'],
+                            course:     $course,
+                            incident:   $incident,
+                            adminId:    $admin->id,
+                            notes:      $data['resolution_note'],
+                        );
+                    }
+                }
+
+                // Résolution de l'incident (dans la même transaction — soit tout passe, soit rien).
+                $incident->update([
+                    'status'          => 'resolved',
+                    'resolution_note' => $data['resolution_note'],
+                    'resolved_by'     => $admin->user_id ?? null,
+                    'resolved_at'     => now(),
+                ]);
+
+                return [$marchandAdj, $driverAdj, $cautionShort];
+            });
+        } catch (\DomainException $e) {
+            // Solde insuffisant côté user (débit qui mangerait les holds courses)
+            // ou côté driver sur un motif non-cappable (manual_debit).
+            // L'incident reste OPEN — l'ops peut ajuster son arbitrage.
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        // Notifs : marchand + livreur + reporter (déduplique si reporter == marchand).
+        $notifiedUserIds = [];
+
+        if ($course->sender_id) {
+            $notifier->sendToUser(
+                $course->sender_id,
+                'incident.arbitrated',
+                '⚖️ Incident arbitré',
+                $this->buildMarchandNotification($course, $marchandAdj, $data['resolution_note']),
+                ['reference' => $course->reference],
+                $course->id,
+            );
+            $notifiedUserIds[] = $course->sender_id;
+        }
+
+        if ($course->driver && $course->driver->user_id && ! in_array($course->driver->user_id, $notifiedUserIds, true)) {
+            $driverMessage = $this->buildDriverNotification($course, $driverAdj, $data['resolution_note']);
+            if ($cautionShort) {
+                $driverMessage .= ' Votre caution est insuffisante pour couvrir le débit — votre compte est temporairement suspendu jusqu\'à rechargement.';
+            }
+            $notifier->sendToUser(
+                $course->driver->user_id,
+                'incident.arbitrated',
+                $cautionShort ? '⚠️ Compte suspendu — caution insuffisante' : '⚖️ Incident arbitré',
+                $driverMessage,
+                ['reference' => $course->reference, 'caution_short' => $cautionShort],
+                $course->id,
+            );
+            $notifiedUserIds[] = $course->driver->user_id;
+        }
+
+        if ($incident->reported_by && ! in_array($incident->reported_by, $notifiedUserIds, true)) {
+            $notifier->sendToUser(
+                $incident->reported_by,
+                'incident.arbitrated',
+                '✅ Ton signalement a été traité',
+                "Course {$course->reference} : {$data['resolution_note']}",
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
+
+        return response()->json([
+            'message'      => $cautionShort
+                ? 'Incident arbitré. Débit driver capé sur la caution disponible + auto-suspension.'
+                : 'Incident arbitré. Les ajustements ont été appliqués.',
+            'incident'     => $incident->fresh()->load([
+                'course:id,reference',
+                'reportedBy:id,name',
+                'resolvedBy:id,name',
+            ]),
+            'adjustments'  => [
+                'marchand' => $marchandAdj,
+                'driver'   => $driverAdj,
+            ],
+            'caution_short' => $cautionShort,
+        ]);
+    }
+
+    private function buildMarchandNotification(
+        \App\Models\Course $course,
+        ?\App\Models\WalletAdjustment $adj,
+        string $note,
+    ): string {
+        if (! $adj) {
+            return "Course {$course->reference} : {$note}";
+        }
+        if ($adj->isCredit()) {
+            return "Course {$course->reference} : votre wallet a été crédité de "
+                . number_format($adj->amount_fcfa, 0, ',', ' ') . " FCFA. {$note}";
+        }
+        return "Course {$course->reference} : votre wallet a été débité de "
+            . number_format(abs($adj->amount_fcfa), 0, ',', ' ') . " FCFA. {$note}";
+    }
+
+    private function buildDriverNotification(
+        \App\Models\Course $course,
+        ?\App\Models\WalletAdjustment $adj,
+        string $note,
+    ): string {
+        if (! $adj) {
+            return "Course {$course->reference} : {$note}";
+        }
+        if ($adj->isCredit()) {
+            return "Course {$course->reference} : votre caution a été créditée de "
+                . number_format($adj->amount_fcfa, 0, ',', ' ') . " FCFA. {$note}";
+        }
+        return "Course {$course->reference} : votre caution a été débitée de "
+            . number_format(abs($adj->amount_fcfa), 0, ',', ' ') . " FCFA. {$note}";
+    }
+
     // ===== PAYOUTS LIVREURS =====
 
     /**
@@ -937,11 +1186,25 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     {
         $perPage = min((int) $request->query('per_page', 20), 100);
         $query = \App\Models\WalletWithdrawRequest::query()
-            ->with(['driver:id,user_id,first_name,last_name', 'driver.user:id,phone,email'])
+            ->with([
+                'driver:id,user_id,first_name,last_name',
+                'driver.user:id,phone,email',
+                'user:id,name,phone,email,type',
+                'user.marchant:id,user_id,raison_sociale',
+                'user.individual:id,user_id,first_name,last_name',
+            ])
             ->latest();
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
+        }
+
+        // Filtre par type de demandeur (driver | user | tous si omis).
+        $ownerType = $request->query('owner_type');
+        if ($ownerType === 'driver') {
+            $query->whereNotNull('driver_id');
+        } elseif ($ownerType === 'user') {
+            $query->whereNotNull('user_id');
         }
 
         return response()->json($query->paginate($perPage));
@@ -962,10 +1225,25 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             'driver:id,user_id,first_name,last_name,availability_status,activation_status',
             'driver.user:id,phone,email',
             'driver.wallet',
+            'user:id,name,phone,email,type',
+            'user.marchant:id,user_id,raison_sociale',
+            'user.individual:id,user_id,first_name,last_name',
             'decidedByAdmin:id,first_name,last_name',
             'paidByAdmin:id,first_name,last_name',
         ]);
 
+        if ($withdraw->isForDriver()) {
+            return $this->showDriverWithdrawRequest($withdraw);
+        }
+
+        return $this->showUserWithdrawRequest($withdraw);
+    }
+
+    /**
+     * Détail d'une demande driver — inclut la caution + course active (blocage si busy).
+     */
+    private function showDriverWithdrawRequest(\App\Models\WalletWithdrawRequest $withdraw): JsonResponse
+    {
         $driver = $withdraw->driver;
 
         // Course active = non terminale (couvre tous les statuts "en cours")
@@ -992,7 +1270,53 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         return response()->json([
             'request'             => $withdraw,
+            'owner_type'          => 'driver',
             'active_course'       => $activeCourse,
+            'recent_transactions' => $recentTransactions,
+            'past_requests'       => [
+                'approved_count'  => (int) ($pastRequests['approved']->count ?? 0),
+                'approved_total'  => (int) ($pastRequests['approved']->total ?? 0),
+                'rejected_count'  => (int) ($pastRequests['rejected']->count ?? 0),
+                'cancelled_count' => (int) ($pastRequests['cancelled']->count ?? 0),
+            ],
+        ]);
+    }
+
+    /**
+     * Détail d'une demande user marchand/particulier — balance user_wallet + 10 dernières
+     * transactions + agrégats des retraits passés.
+     */
+    private function showUserWithdrawRequest(\App\Models\WalletWithdrawRequest $withdraw): JsonResponse
+    {
+        $user = $withdraw->user;
+
+        $wallet = \App\Models\UserWallet::firstOrCreate(['user_id' => $user->id]);
+
+        $recentTransactions = \App\Models\UserWalletTransaction::query()
+            ->where('user_id', $user->id)
+            ->with('course:id,reference')
+            ->latest('created_at')
+            ->limit(10)
+            ->get(['id', 'type', 'amount_fcfa', 'balance_after', 'course_id', 'created_at']);
+
+        $pastRequests = \App\Models\WalletWithdrawRequest::query()
+            ->where('user_id', $user->id)
+            ->where('id', '!=', $withdraw->id)
+            ->selectRaw('status, COUNT(*) as count, COALESCE(SUM(amount_fcfa), 0) as total')
+            ->groupBy('status')
+            ->get()
+            ->keyBy('status');
+
+        return response()->json([
+            'request'             => $withdraw,
+            'owner_type'          => 'user',
+            'user_wallet'         => [
+                'balance'          => (int) $wallet->balance,
+                'pending_reserved' => (int) $wallet->pending_reserved,
+                'available'        => $wallet->available(),
+                'total_deposited'  => (int) $wallet->total_deposited,
+                'total_spent'      => (int) $wallet->total_spent,
+            ],
             'recent_transactions' => $recentTransactions,
             'past_requests'       => [
                 'approved_count'  => (int) ($pastRequests['approved']->count ?? 0),
@@ -1013,7 +1337,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     public function approveWithdrawRequest(
         Request $request,
         \App\Models\WalletWithdrawRequest $withdraw,
-        \App\Services\DriverWalletService $walletService,
+        \App\Services\DriverWalletService $driverWallet,
+        \App\Services\UserWalletService $userWallet,
         \App\Services\FedapayService $fedapay,
         NotificationService $notifier,
     ): JsonResponse {
@@ -1027,13 +1352,22 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         // 1. Débit du wallet + transition à approved (transaction atomique)
         try {
-            DB::transaction(function () use ($withdraw, $admin, $walletService, $notifier) {
-                $walletService->withdraw(
-                    driver:  $withdraw->driver,
-                    amount:  $withdraw->amount_fcfa,
-                    adminId: $admin->id,
-                    reason:  "Approval of withdraw request #{$withdraw->id}",
-                );
+            DB::transaction(function () use ($withdraw, $admin, $driverWallet, $userWallet, $notifier) {
+                if ($withdraw->isForDriver()) {
+                    $driverWallet->withdraw(
+                        driver:  $withdraw->driver,
+                        amount:  $withdraw->amount_fcfa,
+                        adminId: $admin->id,
+                        reason:  "Approval of withdraw request #{$withdraw->id}",
+                    );
+                } else {
+                    $userWallet->withdraw(
+                        user:    $withdraw->user,
+                        amount:  $withdraw->amount_fcfa,
+                        adminId: $admin->id,
+                        reason:  "Approval of withdraw request #{$withdraw->id}",
+                    );
+                }
 
                 $withdraw->update([
                     'status'              => \App\Models\WalletWithdrawRequest::STATUS_APPROVED,
@@ -1042,7 +1376,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 ]);
 
                 $notifier->sendToUser(
-                    $withdraw->driver->user_id,
+                    $this->withdrawNotifyUserId($withdraw),
                     'wallet.withdraw_approved',
                     '✅ Retrait approuvé',
                     "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA a été validé. Versement en cours sur votre {$withdraw->target_method}.",
@@ -1063,8 +1397,19 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         return response()->json([
             'message'  => 'Demande approuvée. Tentative de virement automatique lancée.',
-            'request'  => $withdraw->fresh()->load('driver.user'),
+            'request'  => $withdraw->fresh()->load(['driver.user', 'user']),
         ]);
+    }
+
+    /**
+     * Renvoie l'ID user à notifier pour une demande de retrait, qu'elle soit
+     * portée par un driver (→ driver.user_id) ou par un user (→ user_id).
+     */
+    private function withdrawNotifyUserId(\App\Models\WalletWithdrawRequest $withdraw): int
+    {
+        return $withdraw->isForDriver()
+            ? (int) $withdraw->driver->user_id
+            : (int) $withdraw->user_id;
     }
 
     /**
@@ -1085,17 +1430,30 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             return;
         }
 
+        // Coordonnées Fedapay adaptées au propriétaire (driver ou user marchand/particulier).
+        if ($withdraw->isForDriver()) {
+            $customer = [
+                'email'     => $withdraw->driver->user->email ?? null,
+                'firstname' => $withdraw->driver->first_name,
+                'lastname'  => $withdraw->driver->last_name,
+            ];
+            $description = "Air Mess — Retrait caution #{$withdraw->id}";
+        } else {
+            $u = $withdraw->user;
+            $customer = [
+                'email'     => $u->email ?? null,
+                'firstname' => $u->name,
+            ];
+            $description = "Air Mess — Retrait wallet #{$withdraw->id}";
+        }
+
         try {
             $payout = $fedapay->createPayout(
                 amountFcfa:    $withdraw->amount_fcfa,
                 mode:          'mtn', // sandbox accepte 'mtn' pour tester
                 accountNumber: $withdraw->target_account,
-                customer: [
-                    'email'     => $withdraw->driver->user->email ?? null,
-                    'firstname' => $withdraw->driver->first_name,
-                    'lastname'  => $withdraw->driver->last_name,
-                ],
-                description: "RMess — Retrait caution #{$withdraw->id}",
+                customer: $customer,
+                description: $description,
             );
 
             $withdraw->update([
@@ -1168,7 +1526,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ]);
 
         $notifier->sendToUser(
-            $withdraw->driver->user_id,
+            $this->withdrawNotifyUserId($withdraw),
             'wallet.withdraw_rejected',
             '🚫 Retrait refusé',
             "Votre demande de retrait a été refusée. Raison : {$data['reason']}",
@@ -1177,8 +1535,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         );
 
         return response()->json([
-            'message' => 'Demande refusée. Le driver a été notifié.',
-            'request' => $withdraw->fresh()->load('driver.user'),
+            'message' => 'Demande refusée. Le demandeur a été notifié.',
+            'request' => $withdraw->fresh()->load(['driver.user', 'user']),
         ]);
     }
 
@@ -1522,7 +1880,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ]);
 
         $notifier->sendToUser(
-            $withdraw->driver->user_id,
+            $this->withdrawNotifyUserId($withdraw),
             'wallet.withdraw_paid',
             '✅ Virement effectué',
             "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA a été viré (réf: {$data['external_payout_reference']}).",
@@ -1531,8 +1889,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         );
 
         return response()->json([
-            'message' => 'Demande marquée comme virée. Le driver a été notifié.',
-            'request' => $withdraw->fresh()->load(['driver.user', 'paidByAdmin']),
+            'message' => 'Demande marquée comme virée. Le demandeur a été notifié.',
+            'request' => $withdraw->fresh()->load(['driver.user', 'user', 'paidByAdmin']),
         ]);
     }
 

@@ -26,7 +26,10 @@ const Input = forwardRef<HTMLInputElement, Props>(function Input(
 ) {
   const generatedId = useId()
   const inputId = id ?? generatedId
-  const hasError = !!error
+  // `error` définit à '' déclenche le bord rouge sans afficher de message
+  // (utile pour login/reset : erreur générique dans la bannière, champs en rouge).
+  const hasError = error !== undefined && error !== null
+  const hasErrorMessage = hasError && error.trim().length > 0
 
   return (
     <div className="w-full">
@@ -73,15 +76,15 @@ const Input = forwardRef<HTMLInputElement, Props>(function Input(
         )}
       </div>
 
-      {(error || helper) && (
+      {(hasErrorMessage || helper) && (
         <p
           id={`${inputId}-desc`}
           className={cn(
             'mt-1.5 text-caption',
-            hasError ? 'text-airmess-red' : 'text-warm-500',
+            hasErrorMessage ? 'text-airmess-red' : 'text-warm-500',
           )}
         >
-          {error || helper}
+          {hasErrorMessage ? error : helper}
         </p>
       )}
     </div>

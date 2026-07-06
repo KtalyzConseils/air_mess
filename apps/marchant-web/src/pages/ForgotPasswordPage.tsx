@@ -21,9 +21,10 @@ export default function ForgotPasswordPage() {
     onSuccess: () => setSubmitted(true),
   })
 
+  // Message toujours en FR : cohérent avec les messages Laravel côté API.
   const apiError =
     mutation.error instanceof AxiosError
-      ? mutation.error.response?.data?.message ?? t('auth.forgot.requestError')
+      ? mutation.error.response?.data?.message ?? 'Erreur lors de la demande.'
       : null
 
   return (
@@ -76,11 +77,15 @@ export default function ForgotPasswordPage() {
                   label={t('common.email')}
                   placeholder={t('auth.forgot.emailPlaceholder')}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    if (mutation.error) mutation.reset()
+                  }}
                   required
                   autoFocus
                   autoComplete="email"
                   disabled={mutation.isPending}
+                  error={apiError ? '' : undefined}
                 />
 
                 {apiError && (

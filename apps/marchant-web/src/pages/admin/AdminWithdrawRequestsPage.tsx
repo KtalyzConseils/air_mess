@@ -9,9 +9,35 @@ import AdminPagination from '../../components/admin/AdminPagination'
 import { ArrowRightIcon } from '../../components/ui/icons'
 import {
   fetchWithdrawRequests,
-  type WithdrawRequestWithDriver,
+  type WithdrawRequestOwner,
   type WithdrawRequestListParams,
 } from '../../api/admin'
+
+/**
+ * Une demande peut être portée par un driver OU par un user marchand/particulier.
+ * On unifie l'affichage via ce helper — un seul des deux est renseigné.
+ */
+function ownerDisplay(r: WithdrawRequestOwner): { name: string; contact: string; kind: 'driver' | 'user' } {
+  if (r.driver) {
+    return {
+      name: `${r.driver.first_name} ${r.driver.last_name}`,
+      contact: r.driver.user.phone ?? r.driver.user.email,
+      kind: 'driver',
+    }
+  }
+  if (r.user) {
+    const name =
+      r.user.marchant?.raison_sociale ??
+      (r.user.individual ? `${r.user.individual.first_name} ${r.user.individual.last_name}`.trim() : null) ??
+      r.user.name
+    return {
+      name,
+      contact: r.user.phone ?? r.user.email,
+      kind: 'user',
+    }
+  }
+  return { name: '—', contact: '—', kind: 'user' }
+}
 
 type FilterKey = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'all'
 
@@ -132,19 +158,31 @@ export default function AdminWithdrawRequestsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-warm-200">
-                  {requests.map((r: WithdrawRequestWithDriver) => (
+                  {requests.map((r: WithdrawRequestOwner) => {
+                    const o = ownerDisplay(r)
+                    return (
                     <tr
                       key={r.id}
                       onClick={() => navigate(`/admin/withdraw-requests/${r.id}`)}
                       className="hover:bg-cream/60 cursor-pointer align-top transition-colors"
                     >
                       <td className="px-4 py-2.5">
-                        <p className="font-semibold text-ink">
-                          {r.driver.first_name} {r.driver.last_name}
-                        </p>
-                        <p className="text-caption text-warm-500">
-                          {r.driver.user.phone ?? r.driver.user.email}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                              o.kind === 'driver'
+                                ? 'bg-airmess-yellow/20 text-warm-700'
+                                : 'bg-info-bg text-info'
+                            }`}
+                            title={o.kind === 'driver' ? 'Livreur' : 'Marchand / particulier'}
+                          >
+                            {o.kind === 'driver' ? '🛵' : '🏢'}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-ink truncate">{o.name}</p>
+                            <p className="text-caption text-warm-500">{o.contact}</p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-2.5 text-right font-bold text-ink tabular-nums">
                         {formatFcfa(r.amount_fcfa)}
@@ -167,7 +205,8 @@ export default function AdminWithdrawRequestsPage() {
                         <ArrowRightIcon size={16} />
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

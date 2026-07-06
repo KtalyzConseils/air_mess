@@ -5,6 +5,8 @@ import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
 import AdminPageShell from '../components/admin/AdminPageShell'
+import IncidentArbitrationPanel from '../components/admin/IncidentArbitrationPanel'
+import ReportIncidentModal from '../components/ReportIncidentModal'
 import StatusBadge from '../components/StatusBadge'
 import Timeline from '../components/Timeline'
 import Card from '../components/ui/Card'
@@ -23,6 +25,7 @@ export default function CourseDetailPage() {
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [reportIncidentOpen, setReportIncidentOpen] = useState(false)
 
   async function copy(text: string, key: string) {
     try {
@@ -93,6 +96,10 @@ export default function CourseDetailPage() {
   const course = courseQuery.data!
   const isTerminal = ['delivered', 'cancelled', 'failed'].includes(course.status)
   const canCancel = !isTerminal && !['picked_up', 'at_dropoff'].includes(course.status)
+  // Signalement marchand : autorisé sur les courses non annulées, y compris après livraison
+  // (colis endommagé constaté à réception). Interdit uniquement sur cancelled/failed.
+  const canReportIncident = !isAdmin && !['cancelled', 'failed'].includes(course.status)
+  const openIncidents = (course.incidents ?? []).filter((i) => i.status === 'open')
 
   const trackingUrl = `${window.location.origin}/t/${course.tracking_token}`
   const waMessage =
@@ -144,6 +151,11 @@ export default function CourseDetailPage() {
             >
               {copiedKey === 'link' ? `✓ ${t('common.copied')}` : `🔗 ${t('courses.detail.trackingLink')}`}
             </Button>
+            {canReportIncident && (
+              <Button variant="ghost" size="sm" onClick={() => setReportIncidentOpen(true)}>
+                <span className="text-warning">⚠️ Signaler un incident</span>
+              </Button>
+            )}
             {canCancel && (
               <Button variant="ghost" size="sm" onClick={() => setConfirmCancel(true)}>
                 <span className="text-airmess-red">{t('common.cancel')}</span>
@@ -151,6 +163,31 @@ export default function CourseDetailPage() {
             )}
           </div>
         </div>
+
+        {/* ============================================================
+            PANNEAU D'ARBITRAGE — admin + incident ouvert
+            ============================================================ */}
+        {isAdmin && openIncidents.map((incident) => (
+          <IncidentArbitrationPanel
+            key={incident.id}
+            course={course}
+            incident={incident}
+          />
+        ))}
+
+        {/* Bandeau discret côté marchand : « votre signalement est ouvert » */}
+        {!isAdmin && openIncidents.length > 0 && (
+          <Card variant="default" padding="md" className="mb-6 bg-warning-bg! border-warning/30!">
+            <p className="text-eyebrow uppercase text-warning font-bold mb-1">
+              ⚖️ Incident en cours de traitement
+            </p>
+            <p className="text-body-s text-warm-600">
+              {openIncidents.length === 1
+                ? `Vous avez signalé un incident sur cette course. L'équipe ops l'arbitrera sous 24h ouvrées.`
+                : `${openIncidents.length} incidents en cours d'arbitrage sur cette course.`}
+            </p>
+          </Card>
+        )}
 
         {/* ============================================================
             PANNEAU OPS — admin uniquement
@@ -344,6 +381,17 @@ export default function CourseDetailPage() {
             </Section>
           </div>
         </div>
+
+        {/* ============================================================
+            MODAL SIGNALEMENT INCIDENT (marchand/particulier)
+            ============================================================ */}
+        {reportIncidentOpen && (
+          <ReportIncidentModal
+            courseId={course.id}
+            courseReference={course.reference}
+            onClose={() => setReportIncidentOpen(false)}
+          />
+        )}
 
         {/* ============================================================
             MODAL ANNULATION

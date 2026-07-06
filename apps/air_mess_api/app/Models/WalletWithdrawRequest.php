@@ -24,6 +24,7 @@ class WalletWithdrawRequest extends Model
 
     protected $fillable = [
         'driver_id',
+        'user_id',
         'amount_fcfa',
         'target_method',
         'target_account',
@@ -66,6 +67,11 @@ class WalletWithdrawRequest extends Model
         return $this->belongsTo(Driver::class);
     }
 
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function decidedByAdmin()
     {
         return $this->belongsTo(Admin::class, 'decided_by_admin_id');
@@ -74,6 +80,22 @@ class WalletWithdrawRequest extends Model
     public function isPending(): bool
     {
         return $this->status === self::STATUS_PENDING;
+    }
+
+    public function isForDriver(): bool
+    {
+        return $this->driver_id !== null;
+    }
+
+    public function isForUser(): bool
+    {
+        return $this->user_id !== null;
+    }
+
+    /** Type d'identification pour le front (driver | user). */
+    public function ownerType(): string
+    {
+        return $this->isForDriver() ? 'driver' : 'user';
     }
 
     /**
@@ -91,11 +113,25 @@ class WalletWithdrawRequest extends Model
      */
     public static function usageForDriver(int $driverId): array
     {
+        return self::usageForColumn('driver_id', $driverId);
+    }
+
+    /**
+     * Idem pour un user marchand/particulier. Réutilise la même logique de fenêtres.
+     * Les plafonds sont paramétrés séparément (user_withdraw_max_*).
+     */
+    public static function usageForUser(int $userId): array
+    {
+        return self::usageForColumn('user_id', $userId);
+    }
+
+    private static function usageForColumn(string $column, int $id): array
+    {
         $day  = now()->subDay();
         $week = now()->subDays(7);
 
         $rows = static::query()
-            ->where('driver_id', $driverId)
+            ->where($column, $id)
             ->where('created_at', '>=', $week)
             ->selectRaw(<<<SQL
                 COUNT(*) FILTER (WHERE created_at >= ?)                                                              AS count_24h,

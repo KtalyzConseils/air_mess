@@ -41,9 +41,10 @@ export default function ResetPasswordPage() {
     },
   })
 
+  // Message toujours en FR : cohérent avec les messages Laravel côté API.
   const apiError =
     mutation.error instanceof AxiosError
-      ? mutation.error.response?.data?.message ?? t('auth.reset.resetError')
+      ? mutation.error.response?.data?.message ?? 'Erreur lors de la réinitialisation.'
       : null
 
   return (
@@ -94,10 +95,14 @@ export default function ResetPasswordPage() {
                   required
                   minLength={8}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    if (mutation.error) mutation.reset()
+                  }}
                   disabled={mutation.isPending}
                   autoComplete="new-password"
                   autoFocus
+                  error={apiError ? '' : undefined}
                   rightSlot={
                     <button
                       type="button"

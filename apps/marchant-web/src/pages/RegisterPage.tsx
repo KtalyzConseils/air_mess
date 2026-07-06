@@ -41,6 +41,9 @@ export default function RegisterPage() {
 
   const [type, setType] = useState<AccountType>('individual')
   const [error, setError] = useState<string | null>(null)
+  // Erreurs 422 par champ renvoyées par Laravel. Chaque champ récupère son
+  // premier message via `serverErr(field)` en fallback des validations client.
+  const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string[]>>({})
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const {
@@ -51,6 +54,7 @@ export default function RegisterPage() {
 
   async function onSubmit(values: RegisterFormValues) {
     setError(null)
+    setServerFieldErrors({})
     try {
       if (type === 'individual') {
         await registerIndividual({
@@ -76,12 +80,19 @@ export default function RegisterPage() {
       }
       navigate('/dashboard')
     } catch (err) {
-      const message =
-        err instanceof AxiosError
-          ? err.response?.data?.message ?? t('auth.register.registerError')
-          : t('common.unexpectedError')
-      setError(message)
+      // Messages toujours en FR : cohérence avec les messages Laravel côté API.
+      if (err instanceof AxiosError) {
+        const data = err.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
+        setError(data?.message ?? "Erreur lors de l'inscription.")
+        setServerFieldErrors(data?.errors ?? {})
+      } else {
+        setError('Erreur inattendue.')
+      }
     }
+  }
+
+  function serverErr(field: string): string | undefined {
+    return serverFieldErrors[field]?.[0]
   }
 
   return (
@@ -130,13 +141,13 @@ export default function RegisterPage() {
                   label={t('auth.register.firstName')}
                   placeholder={t('auth.register.firstNamePlaceholder')}
                   {...register('first_name', { required: t('auth.register.firstNameRequired') })}
-                  error={errors.first_name?.message}
+                  error={errors.first_name?.message ?? serverErr('first_name')}
                 />
                 <Input
                   label={t('auth.register.lastName')}
                   placeholder={t('auth.register.lastNamePlaceholder')}
                   {...register('last_name', { required: t('auth.register.lastNameRequired') })}
-                  error={errors.last_name?.message}
+                  error={errors.last_name?.message ?? serverErr('last_name')}
                 />
               </div>
             )}
@@ -148,13 +159,13 @@ export default function RegisterPage() {
                   label={t('auth.register.responsibleName')}
                   placeholder={t('auth.register.responsibleNamePlaceholder')}
                   {...register('name', { required: t('auth.register.responsibleNameRequired') })}
-                  error={errors.name?.message}
+                  error={errors.name?.message ?? serverErr('name')}
                 />
                 <Input
                   label={t('auth.register.raisonSociale')}
                   placeholder={t('auth.register.raisonSocialePlaceholder')}
                   {...register('raison_sociale', { required: t('auth.register.raisonSocialeRequired') })}
-                  error={errors.raison_sociale?.message}
+                  error={errors.raison_sociale?.message ?? serverErr('raison_sociale')}
                 />
                 <div>
                   <label className="block mb-1.5 text-caption text-warm-600 font-medium">
@@ -173,9 +184,9 @@ export default function RegisterPage() {
                     <option value="ecommerce">{t('auth.register.sectorEcommerce')}</option>
                     <option value="autre">{t('auth.register.sectorAutre')}</option>
                   </select>
-                  {errors.secteur_activite && (
+                  {(errors.secteur_activite?.message || serverErr('secteur_activite')) && (
                     <p className="mt-1.5 text-caption text-airmess-red">
-                      {errors.secteur_activite.message}
+                      {errors.secteur_activite?.message ?? serverErr('secteur_activite')}
                     </p>
                   )}
                 </div>
@@ -184,6 +195,7 @@ export default function RegisterPage() {
                   helper={t('auth.register.ifuRccmHelper')}
                   placeholder={t('auth.register.ifuRccmPlaceholder')}
                   {...register('ifu_rccm')}
+                  error={serverErr('ifu_rccm')}
                 />
               </>
             )}
@@ -194,7 +206,7 @@ export default function RegisterPage() {
               label={t('common.email')}
               placeholder={t('auth.register.emailPlaceholder')}
               {...register('email', { required: t('auth.register.emailRequired') })}
-              error={errors.email?.message}
+              error={errors.email?.message ?? serverErr('email')}
               autoComplete="email"
             />
             <Input
@@ -202,7 +214,7 @@ export default function RegisterPage() {
               label={t('common.phone')}
               placeholder={t('auth.register.phonePlaceholder')}
               {...register('phone', { required: t('auth.register.phoneRequired') })}
-              error={errors.phone?.message}
+              error={errors.phone?.message ?? serverErr('phone')}
               autoComplete="tel"
             />
             <Input
@@ -213,7 +225,7 @@ export default function RegisterPage() {
                 required: t('auth.register.passwordRequired'),
                 minLength: { value: 8, message: t('auth.register.passwordMinLength') },
               })}
-              error={errors.password?.message}
+              error={errors.password?.message ?? serverErr('password')}
               autoComplete="new-password"
               rightSlot={
                 <button
@@ -230,7 +242,7 @@ export default function RegisterPage() {
               type={showConfirmation ? 'text' : 'password'}
               label={t('common.passwordConfirm')}
               {...register('password_confirmation', { required: t('auth.register.confirmRequired') })}
-              error={errors.password_confirmation?.message}
+              error={errors.password_confirmation?.message ?? serverErr('password_confirmation')}
               autoComplete="new-password"
               rightSlot={
                 <button

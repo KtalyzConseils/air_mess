@@ -450,6 +450,7 @@
     "txRefund": "Remboursement",
     "txAdjustmentCredit": "Crédit admin",
     "txAdjustmentDebit": "Débit admin",
+    "txWithdraw": "Retrait",
     "lowBalanceAlert": "Solde bas — pensez à recharger.",
     "topUpError": "Erreur lors du rechargement.",
     "paymentCreateError": "Erreur lors de la création du paiement.",

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
@@ -12,8 +12,11 @@ import { cn } from '../lib/cn'
 import {
   fetchWallet,
   requestTopUp,
+  requestWithdraw,
+  cancelWithdraw,
   type WalletTransaction,
   type WalletTransactionType,
+  type WithdrawMethod,
 } from '../api/wallet'
 
 const TX_META: Record<WalletTransactionType, { labelKey: string; icon: string; positive: boolean }> = {
@@ -22,6 +25,7 @@ const TX_META: Record<WalletTransactionType, { labelKey: string; icon: string; p
   refund:            { labelKey: 'wallet.txRefund',           icon: '↩️', positive: true  },
   adjustment_credit: { labelKey: 'wallet.txAdjustmentCredit', icon: '✨', positive: true  },
   adjustment_debit:  { labelKey: 'wallet.txAdjustmentDebit',  icon: '⚠️', positive: false },
+  withdraw:          { labelKey: 'wallet.txWithdraw',         icon: '🏦', positive: false },
 }
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000]
@@ -38,8 +42,13 @@ function formatDateTime(value: string): string {
 
 export default function MyWalletPage() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [showTopUp, setShowTopUp] = useState(false)
   const [topUpAmount, setTopUpAmount] = useState<string>('5000')
+  const [showWithdraw, setShowWithdraw] = useState(false)
+  const [withdrawAmount, setWithdrawAmount] = useState<string>('')
+  const [withdrawMethod, setWithdrawMethod] = useState<WithdrawMethod>('momo')
+  const [withdrawAccount, setWithdrawAccount] = useState<string>('')
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['wallet'],
@@ -61,6 +70,40 @@ export default function MyWalletPage() {
     },
   })
 
+  const withdrawMutation = useMutation({
+    mutationFn: () =>
+      requestWithdraw({
+        amount: parseInt(withdrawAmount, 10),
+        target_method: withdrawMethod,
+        target_account: withdrawAccount.trim(),
+      }),
+    onSuccess: () => {
+      setShowWithdraw(false)
+      setWithdrawAmount('')
+      setWithdrawAccount('')
+      queryClient.invalidateQueries({ queryKey: ['wallet'] })
+    },
+    onError: (err) => {
+      const msg =
+        err instanceof AxiosError
+          ? err.response?.data?.message ?? 'Erreur lors de la demande de retrait.'
+          : 'Erreur inattendue.'
+      window.alert(`⚠️ ${msg}`)
+    },
+  })
+
+  const cancelWithdrawMutation = useMutation({
+    mutationFn: (id: number) => cancelWithdraw(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['wallet'] }),
+    onError: (err) => {
+      const msg =
+        err instanceof AxiosError
+          ? err.response?.data?.message ?? "Erreur lors de l'annulation."
+          : 'Erreur inattendue.'
+      window.alert(`⚠️ ${msg}`)
+    },
+  })
+
   function submitTopUp() {
     const n = parseInt(topUpAmount, 10)
     if (!n || n < 500) {
@@ -68,6 +111,24 @@ export default function MyWalletPage() {
       return
     }
     topUpMutation.mutate(n)
+  }
+
+  function submitWithdraw() {
+    const n = parseInt(withdrawAmount, 10)
+    if (!data) return
+    if (!n || n < data.min_withdraw_fcfa) {
+      window.alert(`Le montant minimum est ${formatFcfa(data.min_withdraw_fcfa)}.`)
+      return
+    }
+    if (n > data.available) {
+      window.alert(`Solde disponible insuffisant (${formatFcfa(data.available)}).`)
+      return
+    }
+    if (!withdrawAccount.trim()) {
+      window.alert('Le numéro de compte est requis.')
+      return
+    }
+    withdrawMutation.mutate()
   }
 
   if (isLoading || !data) {
@@ -135,19 +196,66 @@ export default function MyWalletPage() {
               </div>
             </div>
 
-            <Button
-              variant="primary"
-              size="lg"
-              pill
-              fullWidth
-              className="mt-6"
-              onClick={() => setShowTopUp(true)}
-              rightIcon={<span aria-hidden>→</span>}
-            >
-              {t('wallet.topUp')}
-            </Button>
+            <div className="flex gap-3 mt-6">
+              <Button
+                variant="primary"
+                size="lg"
+                pill
+                fullWidth
+                onClick={() => setShowTopUp(true)}
+                rightIcon={<span aria-hidden>→</span>}
+              >
+                {t('wallet.topUp')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                pill
+                fullWidth
+                onClick={() => setShowWithdraw(true)}
+                disabled={data.available < data.min_withdraw_fcfa || !!data.pending_withdraw_request}
+                rightIcon={<span aria-hidden>↗</span>}
+              >
+                Retirer
+              </Button>
+            </div>
           </div>
         </Card>
+
+        {/* ============================================================
+            DEMANDE DE RETRAIT EN COURS (si présente)
+            ============================================================ */}
+        {data.pending_withdraw_request && (
+          <Card variant="default" padding="md" className="mb-6 bg-info-bg! border-info/30!">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-eyebrow uppercase text-info font-bold mb-1">⏳ Retrait en attente</p>
+                <p className="text-body font-bold text-ink">
+                  {formatFcfa(data.pending_withdraw_request.amount_fcfa)}
+                </p>
+                <p className="text-body-s text-warm-600 mt-0.5">
+                  vers {data.pending_withdraw_request.target_method.toUpperCase()} · {data.pending_withdraw_request.target_account}
+                </p>
+                <p className="text-caption text-warm-500 mt-1">
+                  Demande créée le {formatDateTime(data.pending_withdraw_request.created_at)}. Un admin la traitera sous 24h ouvrées.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (data.pending_withdraw_request && window.confirm('Annuler cette demande de retrait ?')) {
+                    cancelWithdrawMutation.mutate(data.pending_withdraw_request.id)
+                  }
+                }}
+                loading={cancelWithdrawMutation.isPending}
+                className="text-airmess-red! shrink-0"
+              >
+                Annuler
+              </Button>
+            </div>
+          </Card>
+        )}
 
         {/* ============================================================
             HISTORIQUE
@@ -202,6 +310,96 @@ export default function MyWalletPage() {
           )}
         </Card>
       </main>
+
+      {/* ============================================================
+          MODAL RETRAIT
+          ============================================================ */}
+      {showWithdraw && (
+        <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-4 ams-anim-fade-in">
+          <Card variant="signature" padding="lg" className="w-full max-w-md ams-anim-scale-in">
+            <h3 className="text-h2 text-ink font-bold">Retirer du wallet</h3>
+            <p className="text-body-s text-warm-500 mt-1 mb-5">
+              Recevez votre solde sur votre mobile money ou compte bancaire. La demande sera traitée par un admin sous 24h ouvrées.
+            </p>
+
+            {/* Montant */}
+            <label className="block text-caption text-warm-600 font-medium mb-1.5">
+              Montant (min {formatFcfa(data.min_withdraw_fcfa)})
+            </label>
+            <div className="relative mb-4">
+              <input
+                type="number"
+                min={data.min_withdraw_fcfa}
+                step={500}
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+                placeholder={String(data.min_withdraw_fcfa)}
+                className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 pr-16 text-body text-ink transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-body-s text-warm-500">
+                FCFA
+              </span>
+            </div>
+
+            {/* Méthode */}
+            <label className="block text-caption text-warm-600 font-medium mb-1.5">Méthode</label>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              {(['momo', 'bank'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setWithdrawMethod(m)}
+                  className={cn(
+                    'px-3 py-2 rounded-md text-body-s font-semibold border transition-all duration-200',
+                    withdrawMethod === m
+                      ? 'bg-airmess-yellow border-airmess-yellow text-ink'
+                      : 'bg-off-white border-warm-300 text-warm-600 hover:border-warm-400',
+                  )}
+                >
+                  {m === 'momo' ? '📱 Mobile Money' : '🏦 Banque'}
+                </button>
+              ))}
+            </div>
+
+            {/* Numéro / IBAN */}
+            <label className="block text-caption text-warm-600 font-medium mb-1.5">
+              {withdrawMethod === 'momo' ? 'Numéro mobile (MoMo, Wave…)' : 'IBAN / RIB'}
+            </label>
+            <input
+              type="text"
+              value={withdrawAccount}
+              onChange={(e) => setWithdrawAccount(e.target.value)}
+              placeholder={withdrawMethod === 'momo' ? '+229 90 12 34 56' : 'BJXXXX...'}
+              className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow font-mono"
+            />
+            <p className="text-caption text-warm-500 mt-1.5">
+              Solde disponible : {formatFcfa(data.available)}
+            </p>
+
+            <div className="flex gap-3 mt-6">
+              <Button
+                variant="secondary"
+                size="md"
+                fullWidth
+                onClick={() => setShowWithdraw(false)}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="dark"
+                size="md"
+                pill
+                fullWidth
+                onClick={submitWithdraw}
+                loading={withdrawMutation.isPending}
+                rightIcon={!withdrawMutation.isPending && <span aria-hidden>→</span>}
+              >
+                Envoyer
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* ============================================================
           MODAL TOP-UP

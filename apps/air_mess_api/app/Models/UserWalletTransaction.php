@@ -21,6 +21,7 @@ class UserWalletTransaction extends Model
     public const TYPE_REFUND             = 'refund';
     public const TYPE_ADJUSTMENT_CREDIT  = 'adjustment_credit';
     public const TYPE_ADJUSTMENT_DEBIT   = 'adjustment_debit';
+    public const TYPE_WITHDRAW           = 'withdraw';
 
     public $timestamps = false;
     protected $dates   = ['created_at'];

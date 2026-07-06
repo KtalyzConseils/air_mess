@@ -257,6 +257,53 @@ class UserWalletService
     }
 
     /**
+     * Retrait approuvé par un admin : débite le wallet et journalise.
+     *
+     * On considère le retrait comme un *paiement sortant* — il ampute la balance
+     * réelle et **compte le total_spent** (comme un course_charge) : c'est de
+     * l'argent qui quitte définitivement notre garde.
+     *
+     * Comme le driver equivalent (DriverWalletService::withdraw), cette méthode
+     * est appelée UNIQUEMENT depuis l'action admin "approuver" — pas au moment
+     * de la demande. Une demande pending ne bloque pas de solde (mais le
+     * contrôleur vérifie `existingPending` pour empêcher les demandes concurrentes).
+     *
+     * @throws \DomainException si le disponible ne couvre pas le retrait
+     */
+    public function withdraw(User $user, int $amount, int $adminId, string $reason): UserWalletTransaction
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException("Withdraw amount must be > 0, got {$amount}.");
+        }
+
+        return DB::transaction(function () use ($user, $amount, $adminId, $reason) {
+            $wallet = UserWallet::where('user_id', $user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Disponible = balance − holds courses. On refuse si ça dépasse.
+            $available = (int) $wallet->balance - (int) $wallet->pending_reserved;
+            if ($amount > $available) {
+                throw new \DomainException(
+                    "Retrait impossible : disponible={$available} FCFA, demandé={$amount} FCFA."
+                );
+            }
+
+            $wallet->balance -= $amount;
+            $wallet->total_spent = ((int) $wallet->total_spent) + $amount;
+            $wallet->save();
+
+            return UserWalletTransaction::create([
+                'user_id'       => $user->id,
+                'type'          => UserWalletTransaction::TYPE_WITHDRAW,
+                'amount_fcfa'   => -$amount,
+                'balance_after' => $wallet->balance,
+                'metadata'      => ['admin_id' => $adminId, 'reason' => $reason],
+            ]);
+        });
+    }
+
+    /**
      * Ajustement admin : débit hors course (correction d'erreur).
      *
      * @throws \DomainException si solde disponible insuffisant

@@ -1,5 +1,23 @@
 import api from './client'
 
+export type CourseIncidentStatus = 'open' | 'resolved' | 'cancelled'
+
+export interface CourseIncident {
+  id: number
+  course_id: number
+  reported_by: number | null
+  reporter_type: 'driver' | 'marchant' | 'admin' | 'system'
+  type: string
+  description: string | null
+  photo_url: string | null
+  status: CourseIncidentStatus
+  resolution_note: string | null
+  resolved_at: string | null
+  created_at: string
+  updated_at: string
+  reported_by_user?: { id: number; name: string; type: string } | null
+}
+
 export interface Course {
   id: number
   reference: string
@@ -16,6 +34,7 @@ export interface Course {
   urgency: 'standard' | 'express'
   delivery_fee: number
   driver_earnings: number
+  package_declared_value?: number | null
   has_collection: boolean
   collection_amount: number | null
   collection_method: 'cash' | 'mobile_money' | 'prepaid' | null
@@ -27,9 +46,10 @@ export interface Course {
   sender?: { id: number; name: string; phone: string | null; type: string } | null
   driver?: { id: number; user: { name: string; phone: string } } | null
   package_category?: { id: number; name: string }
-  pickup_code: string        
-  delivery_code: string       
-  tracking_token: string     
+  pickup_code: string
+  delivery_code: string
+  tracking_token: string
+  incidents?: CourseIncident[]
 }
 
 export interface Paginated<T> {
@@ -139,5 +159,32 @@ export async function fetchCourseHistory(id: number | string): Promise<CourseSta
 export async function cancelCourse(id: number | string, reason?: string): Promise<Course> {
   const { data } = await api.post(`/courses/${id}/cancel`, { reason })
   return data.course
+}
+
+/**
+ * Types d'incidents qu'un marchand/particulier peut signaler sur SA course.
+ * (Le back restreint la liste ; ceci en est le mirror pour les selects.)
+ */
+export const MARCHAND_INCIDENT_TYPES = [
+  { value: 'package_damaged',  label: '📦 Colis endommagé à la livraison' },
+  { value: 'package_lost',     label: '🚫 Colis perdu / jamais livré' },
+  { value: 'wrong_address',    label: '📍 Livraison à une mauvaise adresse' },
+  { value: 'payment_issue',    label: '💰 Problème d\'encaissement' },
+  { value: 'other',            label: '❓ Autre' },
+] as const
+
+export type MarchandIncidentType = (typeof MARCHAND_INCIDENT_TYPES)[number]['value']
+
+export interface ReportIncidentPayload {
+  type: MarchandIncidentType
+  description: string
+}
+
+export async function reportCourseIncident(
+  courseId: number | string,
+  payload: ReportIncidentPayload,
+): Promise<CourseIncident> {
+  const { data } = await api.post(`/courses/${courseId}/incident`, payload)
+  return data.incident
 }
 

@@ -1,0 +1,25 @@
+# Réduit l'archive EAS au strict minimum pour builder apps/driver-app.
+# EAS réinstalle les deps et régénère android/ (prebuild) côté serveur.
+# Patterns relatifs à la racine git (le monorepo entier est archivé sinon).
+
+# Dépendances / artefacts lourds (régénérés par EAS)
+**/node_modules/
+**/vendor/
+**/.cxx/
+**/build/
+**/.gradle/
+**/dist/
+
+# Natif local (prebuild côté EAS)
+apps/driver-app/android/
+apps/driver-app/ios/
+apps/driver-app/.expo/
+
+# Autres apps du monorepo (inutiles au build driver-app)
+apps/air_mess_api/
+apps/marchant-web/
+apps/landing/
+docs/
+
+# Divers
+*.log
