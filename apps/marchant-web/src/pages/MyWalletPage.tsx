@@ -173,15 +173,19 @@ export default function MyWalletPage() {
         <Card variant="dark" padding="lg" className="mb-6 relative overflow-hidden">
           <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-airmess-yellow/10 blur-3xl pointer-events-none" aria-hidden />
           <div className="relative">
-            <p className="text-eyebrow uppercase text-warm-300 mb-2">{t('wallet.availableBalance')}</p>
+            <p className="text-eyebrow uppercase text-warm-300 mb-2">{t('wallet.balanceLabel')}</p>
             <p className="text-display-1 text-airmess-yellow tabular-nums leading-none">
-              {data.available.toLocaleString('fr-FR')}
+              {data.balance.toLocaleString('fr-FR')}
               <span className="text-h2 text-warm-300 ml-2 font-normal">FCFA</span>
             </p>
 
             {data.pending_reserved > 0 && (
               <p className="text-caption text-warm-300 mt-3">
                 {t('wallet.reservedForOngoing', { amount: formatFcfa(data.pending_reserved) })}
+                {' · '}
+                <span className="font-semibold text-cream">
+                  {t('wallet.availableBalance')} : {formatFcfa(data.available)}
+                </span>
               </p>
             )}
 

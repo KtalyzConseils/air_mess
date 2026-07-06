@@ -111,6 +111,19 @@ export default function DashboardPage() {
                 {wallet ? wallet.balance.toLocaleString('fr-FR') : '—'}
                 <span className="text-body text-warm-500 ml-1.5 font-normal">FCFA</span>
               </p>
+              {wallet && wallet.pending_reserved > 0 && (
+                <div className="mt-1.5 space-y-0.5">
+                  <p className="text-caption text-warm-600">
+                    {t('wallet.reservedForOngoing', {
+                      amount: `${wallet.pending_reserved.toLocaleString('fr-FR')} FCFA`,
+                    })}
+                  </p>
+                  <p className="text-caption font-semibold text-ink">
+                    {t('wallet.availableBalance')} :{' '}
+                    {wallet.available.toLocaleString('fr-FR')} FCFA
+                  </p>
+                </div>
+              )}
               <Link to="/wallet">
                 <Button variant="secondary" size="sm" fullWidth className="mt-3">
                   {t('dashboard.walletTopUp')}

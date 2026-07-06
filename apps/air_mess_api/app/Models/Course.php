@@ -179,7 +179,9 @@ class Course extends Model
 
     public function getTrackingUrlAttribute(): string
     {
-        return url('/t/' . $this->tracking_token);
+        // La page de suivi vit sur le FRONTEND (app), pas sur l'API. On construit
+        // donc l'URL depuis FRONTEND_URL et non APP_URL (qui est le domaine API).
+        return rtrim(config('app.frontend_url'), '/') . '/t/' . $this->tracking_token;
     }
 
     public static function generateCode(): string
