@@ -6,6 +6,12 @@
 
 # Railway provides $PORT ; fallback to 80 locally.
 :{$PORT:80} {
+	# 301 redirect the old `home.` subdomain to the canonical root domain
+	# (consolidates SEO + avoids duplicate content). Requires that
+	# home.airmess-logistics.com is still routed to this app in Coolify.
+	@home host home.airmess-logistics.com
+	redir @home https://airmess-logistics.com{uri} permanent
+
 	root * /srv
 	encode gzip
 
