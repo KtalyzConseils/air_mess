@@ -8,6 +8,7 @@ import {
   ADJUSTMENT_REASON_CODES,
   arbitrateIncident,
   noShowPartial,
+  returnTripConfirmed,
   type AdjustmentReasonCode,
 } from '../../api/adminIncidents'
 import type { Course, CourseIncident } from '../../api/courses'
@@ -101,6 +102,37 @@ export default function IncidentArbitrationPanel({
     noShowMutation.mutate()
   }
 
+  // Cas 4 — course retour confirmée (preset 1 clic)
+  const returnMutation = useMutation({
+    mutationFn: () => returnTripConfirmed(incident.id, resolutionNote.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['course', course.id] })
+      queryClient.invalidateQueries({ queryKey: ['course', String(course.id)] })
+    },
+    onError: (err) => {
+      const msg =
+        err instanceof AxiosError
+          ? err.response?.data?.message ?? "Erreur lors du preset retour."
+          : 'Erreur inattendue.'
+      setError(msg)
+    },
+  })
+
+  function submitReturn() {
+    setError(null)
+    if (resolutionNote.trim().length < 5) {
+      setError('La note de résolution est requise (5 caractères minimum).')
+      return
+    }
+    if (
+      !window.confirm(
+        "Confirmer le retour du colis ? Applique les % configurés dans les paramètres — "
+        + 'capture du fee marchand + crédit driver (earnings + bonus retour), incident résolu.',
+      )
+    ) return
+    returnMutation.mutate()
+  }
+
   function submit() {
     setError(null)
     if (resolutionNote.trim().length < 5) {
@@ -184,6 +216,34 @@ export default function IncidentArbitrationPanel({
         >
           📸 Voir la photo jointe
         </a>
+      )}
+
+      {/* ============ Preset 1-clic : Course retour confirmée (Cas 4) ============ */}
+      {incident.type === 'recipient_refused' && course.status === 'failed' && course.is_return_trip && (
+        <div className="mb-4 bg-airmess-yellow/10 border border-airmess-yellow rounded-md p-4">
+          <p className="font-bold text-ink mb-1">⚡ Préréglage — Course retour confirmée</p>
+          <p className="text-body-s text-warm-600 mb-3">
+            Le driver a rendu le colis au marchand. Applique les % configurés dans
+            <em> Paramètres → Arbitrage des incidents</em> : capture du fee marchand +
+            crédit driver (earnings + bonus retour). Incident résolu.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            pill
+            onClick={submitReturn}
+            loading={returnMutation.isPending}
+            disabled={mutation.isPending || noShowMutation.isPending}
+          >
+            Appliquer course retour (1 clic)
+          </Button>
+        </div>
+      )}
+      {incident.type === 'recipient_refused' && course.status !== 'failed' && (
+        <div className="mb-4 bg-warning-bg border border-warning/30 rounded-md p-3 text-body-s text-warning">
+          🔄 <strong>Retour en cours</strong> — le driver doit encore rendre le colis au marchand
+          (saisie du code de retour). Le preset s'affichera une fois le retour confirmé côté driver.
+        </div>
       )}
 
       {/* ============ Preset 1-clic : No-show partiel confirmé (Cas 3) ============ */}

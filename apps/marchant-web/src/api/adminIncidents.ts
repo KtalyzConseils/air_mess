@@ -111,3 +111,44 @@ export async function noShowPartial(
   })
   return data
 }
+
+/**
+ * Cas 4 — Course retour confirmée (1 clic).
+ * Applique les % configurés :
+ *   - conflicts_return_marchand_shipping_fee_percent (capture marchand)
+ *   - conflicts_return_driver_return_earnings_percent (bonus retour driver)
+ * Prérequis côté back : course en `failed` via `return_confirmed` +
+ * incident `recipient_refused` encore ouvert.
+ */
+export interface ReturnTripConfirmedResponse {
+  message: string
+  incident: {
+    id: number
+    status: 'resolved'
+    resolution_note: string
+    resolved_at: string
+  }
+  preset: {
+    marchand_shipping_pct: number
+    driver_return_pct: number
+    delivery_fee: number
+    captured_amount: number
+    refunded_amount: number
+    driver_earnings_base: number
+    total_driver_amount: number
+  }
+  transactions: {
+    marchand_charge: unknown | null
+    driver_earning:  unknown | null
+  }
+}
+
+export async function returnTripConfirmed(
+  incidentId: number,
+  resolutionNote: string,
+): Promise<ReturnTripConfirmedResponse> {
+  const { data } = await api.post(`/admin/incidents/${incidentId}/return-trip-confirmed`, {
+    resolution_note: resolutionNote,
+  })
+  return data
+}

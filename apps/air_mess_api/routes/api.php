@@ -230,6 +230,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/incidents/{incident}/arbitrate', [AdminController::class, 'arbitrateIncident']);
         // Cas 3 — preset 1-clic pour no-show confirmé (utilise les % de app_settings)
         Route::post('/incidents/{incident}/no-show-partial', [AdminController::class, 'noShowPartial']);
+        // Cas 4 — preset 1-clic pour course retour confirmée après refus client
+        Route::post('/incidents/{incident}/return-trip-confirmed', [AdminController::class, 'returnTripConfirmed']);
 
         // Demandes de retrait de caution — argent, donc strictement ops/super.
         Route::get('/withdraw-requests',                          [AdminController::class, 'withdrawRequests']);

@@ -32,6 +32,9 @@ export interface DriverCourseSummary {
   destination_instructions: string | null
   contact_attempts?: number
   last_contact_attempt_at?: string | null
+  is_return_trip?: boolean
+  return_code?: string | null
+  return_confirmed_at?: string | null
   created_at: string
 }
 
@@ -43,6 +46,7 @@ export type TransitionAction =
   | 'pickup_confirmed'
   | 'arrived_dropoff'
   | 'delivered'
+  | 'return_confirmed'
   | 'failed'
 
 export async function updateAvailability(status: Availability) {
@@ -86,7 +90,7 @@ export async function declineCourse(
 export async function transition(
   courseId: number,
   action: TransitionAction,
-  extra: { pickup_code?: string; delivery_code?: string; reason?: string } = {},
+  extra: { pickup_code?: string; delivery_code?: string; return_code?: string; reason?: string } = {},
 ) {
   const { data } = await api.post(`/driver/courses/${courseId}/transition`, { action, ...extra })
   return data.course

@@ -36,13 +36,16 @@ const TIMELINE_STEPS: { key: string; short: string }[] = [
 
 const NEXT_ACTION: Record<
   string,
-  { action: TransitionAction; label: string; needsCode?: 'pickup' | 'delivery' }
+  { action: TransitionAction; label: string; needsCode?: 'pickup' | 'delivery' | 'return' }
 > = {
-  assigned:         { action: 'start_to_pickup',   label: 'Je pars chercher le colis' },
-  driver_to_pickup: { action: 'arrived_pickup',    label: 'Je suis sur place' },
-  at_pickup:        { action: 'pickup_confirmed',  label: 'Colis récupéré', needsCode: 'pickup' },
-  picked_up:        { action: 'arrived_dropoff',   label: "J'arrive chez le client" },
-  at_dropoff:       { action: 'delivered',         label: 'Livraison confirmée', needsCode: 'delivery' },
+  assigned:            { action: 'start_to_pickup',   label: 'Je pars chercher le colis' },
+  driver_to_pickup:    { action: 'arrived_pickup',    label: 'Je suis sur place' },
+  at_pickup:           { action: 'pickup_confirmed',  label: 'Colis récupéré', needsCode: 'pickup' },
+  picked_up:           { action: 'arrived_dropoff',   label: "J'arrive chez le client" },
+  at_dropoff:          { action: 'delivered',         label: 'Livraison confirmée', needsCode: 'delivery' },
+  // Cas 4 — le client a refusé, le driver ramène le colis. Le marchand a reçu
+  // un return_code (push + SMS) qu'il doit dicter au driver à la remise.
+  returning_to_sender: { action: 'return_confirmed',  label: 'Colis rendu au marchand', needsCode: 'return' },
 }
 
 export default function ActiveCourseCard({ course }: Props) {
@@ -55,21 +58,28 @@ export default function ActiveCourseCard({ course }: Props) {
   const [correctNote, setCorrectNote] = useState('')
   const next = NEXT_ACTION[course.status]
 
-  // Phase = quelle destination on vise en ce moment
-  const phase: 'pickup' | 'dropoff' =
-    ['assigned', 'driver_to_pickup', 'at_pickup'].includes(course.status) ? 'pickup' : 'dropoff'
+  // Phase = quelle destination on vise en ce moment.
+  // `return` = client a refusé, on ramène le colis au marchand (Cas 4).
+  const phase: 'pickup' | 'dropoff' | 'return' =
+    course.status === 'returning_to_sender'
+      ? 'return'
+      : ['assigned', 'driver_to_pickup', 'at_pickup'].includes(course.status)
+        ? 'pickup'
+        : 'dropoff'
 
-  const targetLat = phase === 'pickup' ? course.origin_lat : course.destination_lat
-  const targetLng = phase === 'pickup' ? course.origin_lng : course.destination_lng
-  const targetLabel = phase === 'pickup' ? course.origin_name : course.destination_name
-  const targetPhone = phase === 'pickup' ? course.origin_phone : course.destination_phone
-  const targetPhoneRole = phase === 'pickup' ? 'le marchand' : 'le client'
+  // En phase retour, la cible redevient l'origine (le marchand)
+  const targetLat = phase === 'dropoff' ? course.destination_lat : course.origin_lat
+  const targetLng = phase === 'dropoff' ? course.destination_lng : course.origin_lng
+  const targetLabel = phase === 'dropoff' ? course.destination_name : course.origin_name
+  const targetPhone = phase === 'dropoff' ? course.destination_phone : course.origin_phone
+  const targetPhoneRole = phase === 'dropoff' ? 'le client' : 'le marchand'
 
   const mutation = useMutation({
     mutationFn: () =>
       transition(course.id, next.action, {
         pickup_code:   next.needsCode === 'pickup'   ? code : undefined,
         delivery_code: next.needsCode === 'delivery' ? code : undefined,
+        return_code:   next.needsCode === 'return'   ? code : undefined,
       }),
     onSuccess: () => {
       setCode('')
@@ -111,7 +121,11 @@ export default function ActiveCourseCard({ course }: Props) {
     Linking.openURL(`tel:${phone}`)
   }
 
-  const currentStepIndex = TIMELINE_STEPS.findIndex((s) => s.key === course.status)
+  // En phase retour, la timeline aller est intégralement franchie (le driver
+  // avait bien atteint le client). On force donc l'index au-delà du dernier.
+  const currentStepIndex = phase === 'return'
+    ? TIMELINE_STEPS.length
+    : TIMELINE_STEPS.findIndex((s) => s.key === course.status)
 
   return (
     <View>
@@ -119,15 +133,33 @@ export default function ActiveCourseCard({ course }: Props) {
       <Card variant="dark" padding="md" className="rounded-b-none">
         <View className="flex-row items-center justify-between mb-3">
           <Text className="text-warm-400 text-[10px] font-mono">{course.reference}</Text>
-          <View className="bg-white/10 px-2 py-0.5 rounded-md">
-            <Text className="text-airmess-yellow text-[10px] font-extrabold uppercase tracking-widest">
-              {phase === 'pickup' ? 'Phase 1 · Pickup' : 'Phase 2 · Livraison'}
+          <View
+            className={[
+              'px-2 py-0.5 rounded-md',
+              phase === 'return' ? 'bg-airmess-red/25' : 'bg-white/10',
+            ].join(' ')}
+          >
+            <Text
+              className={[
+                'text-[10px] font-extrabold uppercase tracking-widest',
+                phase === 'return' ? 'text-white' : 'text-airmess-yellow',
+              ].join(' ')}
+            >
+              {phase === 'pickup'
+                ? 'Phase 1 · Pickup'
+                : phase === 'dropoff'
+                  ? 'Phase 2 · Livraison'
+                  : '🔄 Retour marchand'}
             </Text>
           </View>
         </View>
 
         <Text className="text-warm-400 text-xs uppercase tracking-widest font-semibold">
-          {phase === 'pickup' ? 'Direction' : 'Destination client'}
+          {phase === 'pickup'
+            ? 'Direction'
+            : phase === 'dropoff'
+              ? 'Destination client'
+              : 'Retour vers marchand'}
         </Text>
         <Text className="text-white text-2xl font-extrabold mt-1" numberOfLines={2}>
           {targetLabel}
@@ -261,7 +293,11 @@ export default function ActiveCourseCard({ course }: Props) {
         {next?.needsCode && (
           <View className="mb-4">
             <Text className="text-xs font-bold text-warm-600 uppercase tracking-widest mb-2">
-              {next.needsCode === 'pickup' ? 'Code marchand' : 'Code livraison'}
+              {next.needsCode === 'pickup'
+                ? 'Code marchand'
+                : next.needsCode === 'delivery'
+                  ? 'Code livraison'
+                  : 'Code de retour marchand'}
             </Text>
             <TextInput
               value={code}

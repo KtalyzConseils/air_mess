@@ -278,6 +278,30 @@ export default function CourseDetailPage() {
               <KV label={t('courses.new.originQuartier')} value={`${course.origin_quartier}, ${course.origin_city}`} />
             </Section>
 
+            {/* Cas 4 — Code de retour (le driver le tape à la remise du colis) */}
+            {course.status === 'returning_to_sender' && course.return_code && (
+              <Card variant="signature" padding="lg" className="border-l-4 border-l-airmess-red! mb-4">
+                <p className="text-eyebrow uppercase text-airmess-red font-semibold mb-2">
+                  🔄 Colis en retour vers vous
+                </p>
+                <p className="text-body-s text-warm-600 mb-4">
+                  Le client a refusé le colis. Le livreur vous le rapporte. À son arrivée, donnez-lui ce
+                  <strong className="text-ink"> code de retour</strong> pour clôturer la course.
+                </p>
+                <div className="bg-airmess-red/10 rounded-lg p-4 flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <p className="text-caption text-warm-600 uppercase font-semibold">Code de retour</p>
+                    <p className="text-h1 font-bold font-mono text-ink tracking-[0.4em] mt-1">
+                      {course.return_code}
+                    </p>
+                  </div>
+                  <Button variant="dark" size="sm" pill onClick={() => copy(course.return_code!, 'return')}>
+                    {copiedKey === 'return' ? '✓ Copié' : '📋 Copier'}
+                  </Button>
+                </div>
+              </Card>
+            )}
+
             {/* Codes de validation — affiché quand un livreur est assigné */}
             {course.driver && !isTerminal && (
               <Card variant="signature" padding="lg" className="border-l-4 border-l-airmess-yellow!">

@@ -49,6 +49,9 @@ export interface Course {
   pickup_code: string
   delivery_code: string
   tracking_token: string
+  is_return_trip?: boolean
+  return_code?: string | null
+  return_confirmed_at?: string | null
   incidents?: CourseIncident[]
 }
 

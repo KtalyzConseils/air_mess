@@ -256,10 +256,11 @@ class DriverController extends Controller
         $data = $request->validate([
             'action' => ['required', Rule::in([
                 'start_to_pickup', 'arrived_pickup', 'pickup_confirmed',
-                'arrived_dropoff', 'delivered', 'failed',
+                'arrived_dropoff', 'delivered', 'return_confirmed', 'failed',
             ])],
             'pickup_code'    => ['required_if:action,pickup_confirmed', 'nullable', 'string', 'max:10'],
             'delivery_code'  => ['required_if:action,delivered', 'nullable', 'string', 'max:10'],
+            'return_code'    => ['required_if:action,return_confirmed', 'nullable', 'string', 'max:10'],
             'reason'         => ['required_if:action,failed', 'nullable', 'string', 'max:500'],
         ]);
 
@@ -269,6 +270,9 @@ class DriverController extends Controller
             'pickup_confirmed'  => [Course::STATUS_AT_PICKUP, Course::STATUS_PICKED_UP, 'picked_up_at'],
             'arrived_dropoff'   => [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF, null],
             'delivered'         => [Course::STATUS_AT_DROPOFF, Course::STATUS_DELIVERED, 'delivered_at'],
+            // Cas 4 — driver a rendu le colis au marchand après refus client.
+            // La course termine en FAILED (pas delivered — le client n'a rien reçu).
+            'return_confirmed'  => [Course::STATUS_RETURNING_TO_SENDER, Course::STATUS_FAILED, 'return_confirmed_at'],
             'failed'            => [null, Course::STATUS_FAILED, null], // depuis n'importe quel statut actif
         ];
 
@@ -289,6 +293,13 @@ class DriverController extends Controller
         if ($data['action'] === 'delivered' && $data['delivery_code'] !== $course->delivery_code) {
             throw ValidationException::withMessages([
                 'delivery_code' => 'Code de livraison incorrect.',
+            ]);
+        }
+        // Cas 4 — le driver a rendu le colis au marchand : on exige le return_code
+        // que le marchand a reçu au moment du signalement de refus.
+        if ($data['action'] === 'return_confirmed' && $data['return_code'] !== $course->return_code) {
+            throw ValidationException::withMessages([
+                'return_code' => 'Code de retour incorrect.',
             ]);
         }
 
@@ -315,9 +326,10 @@ class DriverController extends Controller
                 }
 
                 // Hook wallet DRIVER : failed APRÈS pickup → remboursement caution
+                // Inclut aussi returning_to_sender (Cas 4 — retour au marchand)
                 $wasPickedUp = in_array(
                     $previousStatus,
-                    [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF],
+                    [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF, Course::STATUS_RETURNING_TO_SENDER],
                     true,
                 );
                 if ($nextStatus === Course::STATUS_FAILED && $wasPickedUp && $course->has_collection) {
@@ -333,7 +345,10 @@ class DriverController extends Controller
                 // ===== Hook wallet USER (marchand/particulier payeur) =====
                 // Si la course était payable depuis le wallet (paid_from_wallet=true) :
                 //  - delivered → capture du hold : on débite réellement le wallet
-                //  - failed    → release du hold : le marchand ne paie pas une course foirée
+                //  - failed    → release du hold, SAUF si on vient de returning_to_sender
+                //                (Cas 4) : dans ce cas l'ops doit arbitrer et
+                //                capturer une part via le preset 1-clic.
+                $comingFromReturn = $previousStatus === Course::STATUS_RETURNING_TO_SENDER;
                 if ($course->paid_from_wallet && $course->sender) {
                     if ($nextStatus === Course::STATUS_DELIVERED) {
                         $userWalletService->chargeForCourse(
@@ -341,13 +356,16 @@ class DriverController extends Controller
                             $course,
                             (int) $course->delivery_fee,
                         );
-                    } elseif ($nextStatus === Course::STATUS_FAILED) {
+                    } elseif ($nextStatus === Course::STATUS_FAILED && ! $comingFromReturn) {
                         $userWalletService->releaseReservation(
                             $course->sender,
                             $course,
                             (int) $course->delivery_fee,
                         );
                     }
+                    // Si $comingFromReturn : on laisse le hold ; l'arbitrage ops
+                    // via /admin/incidents/{id}/return-trip-confirmed appelera
+                    // chargePartial() qui capture X et release le reste.
                 }
 
                 CourseStatusHistory::create([
@@ -370,13 +388,16 @@ class DriverController extends Controller
         }
 
         //PUSH au marchand sur les transitions visibles côté client
+        $isReturnConfirmation = $data['action'] === 'return_confirmed';
         $messages = [
             Course::STATUS_TO_PICKUP   => ['🚀 Le livreur est en route',  'Il se dirige vers le point de retrait.'],
             Course::STATUS_AT_PICKUP   => ['📍 Le livreur est arrivé',    'Il prépare le retrait du colis.'],
             Course::STATUS_PICKED_UP   => ['📦 Colis récupéré',           'Le livreur a votre colis et part vers la destination.'],
             Course::STATUS_AT_DROPOFF  => ['🚦 Le livreur arrive',         'Il est sur place pour la livraison au destinataire.'],
             Course::STATUS_DELIVERED   => ['🎉 Colis livré',              'La course est terminée. Merci !'],
-            Course::STATUS_FAILED      => ['⚠️ Livraison échouée',        'Le livreur signale un problème. Voir détails.'],
+            Course::STATUS_FAILED      => $isReturnConfirmation
+                ? ['📬 Colis rendu',           'Le livreur vous a rendu le colis refusé. L\'ops finalisera la facturation.']
+                : ['⚠️ Livraison échouée',    'Le livreur signale un problème. Voir détails.'],
         ];
 
         if (isset($messages[$nextStatus])) {
@@ -755,15 +776,53 @@ class DriverController extends Controller
         // Compteur d'incidents du livreur (le champ existait, il sert enfin)
         $driver->increment('incidents_count');
 
-        // Prévenir le marchand expéditeur
-        $notifier->sendToUser(
-            $course->sender_id,
-            'course.incident',
-            '⚠️ Incident signalé',
-            "Un incident a été signalé sur votre course {$course->reference}.",
-            ['reference' => $course->reference, 'incident_type' => $data['type']],
-            $course->id,
-        );
+        // Cas 4 — Client refuse : bascule automatique en course retour.
+        // On génère un return_code (l'équivalent du delivery_code pour la remise
+        // au marchand) et on notifie le marchand pour qu'il l'ait avant l'arrivée
+        // du driver. Idempotent : si la course est déjà en returning_to_sender,
+        // on ne re-génère pas.
+        if ($data['type'] === 'recipient_refused'
+            && $course->status === Course::STATUS_AT_DROPOFF) {
+            DB::transaction(function () use ($course, $driver) {
+                $previousStatus       = $course->status;
+                $course->status       = Course::STATUS_RETURNING_TO_SENDER;
+                $course->is_return_trip = true;
+                $course->return_code  = Course::generateCode();
+                $course->save();
+
+                CourseStatusHistory::create([
+                    'course_id'       => $course->id,
+                    'from_status'     => $previousStatus,
+                    'to_status'       => Course::STATUS_RETURNING_TO_SENDER,
+                    'reason'          => 'recipient_refused_return',
+                    'changed_by_id'   => $driver->user_id,
+                    'changed_by_type' => 'driver',
+                    'metadata'        => [
+                        'return_code' => $course->return_code,
+                    ],
+                ]);
+            });
+
+            // Notif marchand avec le return_code (à donner au driver à réception).
+            $notifier->sendToUser(
+                $course->sender_id,
+                'course.return_initiated',
+                '🔄 Colis refusé — retour en cours',
+                "Le client a refusé le colis. Le livreur revient. Code à lui donner : {$course->return_code}",
+                ['reference' => $course->reference, 'return_code' => $course->return_code],
+                $course->id,
+            );
+        } else {
+            // Prévenir le marchand expéditeur (flow générique, hors cas 4)
+            $notifier->sendToUser(
+                $course->sender_id,
+                'course.incident',
+                '⚠️ Incident signalé',
+                "Un incident a été signalé sur votre course {$course->reference}.",
+                ['reference' => $course->reference, 'incident_type' => $data['type']],
+                $course->id,
+            );
+        }
 
         // Alerter les admins ops/super pour qu'ils traitent vite
         $opsUserIds = Admin::whereIn('sub_role', [Admin::ROLE_OPS, Admin::ROLE_SUPER])

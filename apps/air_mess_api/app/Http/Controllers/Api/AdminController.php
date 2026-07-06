@@ -1064,6 +1064,155 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ]);
     }
 
+    /**
+     * Cas 4 — Course retour confirmée (1 clic).
+     *
+     * Le driver a rendu le colis au marchand (course en `failed`, incident
+     * `recipient_refused` toujours ouvert). L'ops confirme le retour et
+     * applique atomiquement :
+     *   1. Capture partielle sur le wallet marchand
+     *      = delivery_fee × conflicts_return_marchand_shipping_fee_percent%
+     *      (défaut 100 : marchand paie le fee complet, la plateforme éponge le retour)
+     *   2. Crédit driver = earnings normaux + earnings × conflicts_return_driver_return_earnings_percent%
+     *      (défaut 50 : bonus retour au driver pour le 2e trajet)
+     *   3. Incident → resolved.
+     *
+     * Prérequis : course.status = failed, course.is_return_trip = true,
+     * incident.type = recipient_refused, incident.status = open.
+     */
+    public function returnTripConfirmed(
+        Request $request,
+        CourseIncident $incident,
+        \App\Services\UserWalletService $userWallet,
+        DriverWalletService $driverWallet,
+        NotificationService $notifier,
+    ): JsonResponse {
+        if ($incident->status !== 'open') {
+            return response()->json(['message' => 'Cet incident est déjà clôturé.'], 422);
+        }
+        if ($incident->type !== 'recipient_refused') {
+            return response()->json([
+                'message' => 'Ce préréglage ne s\'applique qu\'aux incidents "colis refusé".',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'resolution_note' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $course = $incident->course()->with('driver', 'sender')->first();
+        if (! $course) {
+            return response()->json(['message' => 'Course introuvable pour cet incident.'], 422);
+        }
+        if (! $course->is_return_trip || $course->status !== Course::STATUS_FAILED) {
+            return response()->json([
+                'message' => 'Ce préréglage nécessite que le driver ait confirmé le retour du colis au marchand (course en failed via return_confirmed).',
+            ], 422);
+        }
+        if (! $course->driver) {
+            return response()->json(['message' => 'Aucun livreur assigné à cette course.'], 422);
+        }
+
+        $marchandShippingPct = (int) \App\Models\AppSetting::get('conflicts_return_marchand_shipping_fee_percent', 100);
+        $driverReturnPct     = (int) \App\Models\AppSetting::get('conflicts_return_driver_return_earnings_percent', 50);
+        $marchandShippingPct = max(0, min(200, $marchandShippingPct));
+        $driverReturnPct     = max(0, min(200, $driverReturnPct));
+
+        $deliveryFee    = (int) $course->delivery_fee;
+        $driverEarnings = (int) $course->driver_earnings;
+        $capturedAmount = (int) round($deliveryFee * $marchandShippingPct / 100);
+        // Total au driver = earnings normaux + bonus retour
+        $totalDriverAmount = $driverEarnings + (int) round($driverEarnings * $driverReturnPct / 100);
+
+        $admin = $request->user()->admin;
+
+        try {
+            [$chargeTx, $earnTx] = DB::transaction(function () use (
+                $incident, $course, $capturedAmount, $totalDriverAmount,
+                $userWallet, $driverWallet, $data, $admin, $marchandShippingPct, $driverReturnPct
+            ) {
+                $chargeTx = null;
+                $earnTx   = null;
+
+                // 1. Capture marchand (uniquement si hold posé)
+                if ($course->paid_from_wallet && $course->sender && $capturedAmount > 0) {
+                    // Si capturedAmount > delivery_fee (cas 150%), on cape sur delivery_fee
+                    // — le hold ne couvre pas plus. Le reste (bonus 50%) est éponge plateforme.
+                    $captureUnderHold = min($capturedAmount, (int) $course->delivery_fee);
+                    $chargeTx = $userWallet->chargePartial($course->sender, $course, $captureUnderHold);
+                }
+
+                // 2. Crédit driver (earnings + bonus retour) via earnPartial
+                if ($totalDriverAmount > 0) {
+                    $earnTx = $driverWallet->earnPartial(
+                        $course->driver,
+                        $course,
+                        $totalDriverAmount,
+                        'return_trip',
+                    );
+                }
+
+                // 3. Résolution incident (course déjà en failed via return_confirmed)
+                $incident->update([
+                    'status'          => 'resolved',
+                    'resolution_note' => $data['resolution_note'],
+                    'resolved_by'     => $admin->user_id ?? null,
+                    'resolved_at'     => now(),
+                ]);
+
+                return [$chargeTx, $earnTx];
+            });
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        // Notifs
+        if ($course->sender_id) {
+            $notifier->sendToUser(
+                $course->sender_id,
+                'incident.arbitrated',
+                '⚖️ Retour confirmé',
+                "Course {$course->reference} : "
+                . number_format($capturedAmount, 0, ',', ' ') . " FCFA facturés pour le trajet aller-retour. "
+                . ($capturedAmount < $deliveryFee
+                    ? number_format($deliveryFee - $capturedAmount, 0, ',', ' ') . ' FCFA rendus.'
+                    : ''),
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
+
+        if ($course->driver && $course->driver->user_id) {
+            $notifier->sendToUser(
+                $course->driver->user_id,
+                'incident.arbitrated',
+                '⚖️ Retour confirmé',
+                "Course {$course->reference} : "
+                . number_format($totalDriverAmount, 0, ',', ' ') . " FCFA crédités sur votre caution (trajet + bonus retour).",
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
+
+        return response()->json([
+            'message'  => 'Course retour confirmée.',
+            'incident' => $incident->fresh(),
+            'preset'   => [
+                'marchand_shipping_pct'   => $marchandShippingPct,
+                'driver_return_pct'       => $driverReturnPct,
+                'delivery_fee'            => $deliveryFee,
+                'captured_amount'         => $capturedAmount,
+                'refunded_amount'         => max(0, $deliveryFee - $capturedAmount),
+                'driver_earnings_base'    => $driverEarnings,
+                'total_driver_amount'     => $totalDriverAmount,
+            ],
+            'transactions' => [
+                'marchand_charge' => $chargeTx,
+                'driver_earning'  => $earnTx,
+            ],
+        ]);
+    }
+
     private function buildMarchandNotification(
         \App\Models\Course $course,
         ?\App\Models\WalletAdjustment $adj,

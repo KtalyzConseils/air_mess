@@ -21,6 +21,7 @@ class Course extends Model
     public const STATUS_AT_PICKUP      = 'at_pickup';
     public const STATUS_PICKED_UP      = 'picked_up';
     public const STATUS_AT_DROPOFF     = 'at_dropoff';
+    public const STATUS_RETURNING_TO_SENDER = 'returning_to_sender';
     public const STATUS_DELIVERED      = 'delivered';
     public const STATUS_CANCELLED      = 'cancelled';
     public const STATUS_FAILED         = 'failed';
@@ -54,6 +55,8 @@ class Course extends Model
             'delivered_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'last_contact_attempt_at' => 'datetime',
+            'is_return_trip' => 'boolean',
+            'return_confirmed_at' => 'datetime',
         ];
     }
 
