@@ -44,7 +44,7 @@ const fr: Translation = {
   },
   how: {
     eyebrow: 'Le trajet',
-    title: 'Trois étapes, de porte à porte.',
+    title: 'Trois étapes, de votre boutique à la porte du client.',
     steps: [
       {
         title: 'Créez une course',

@@ -42,7 +42,7 @@ const en = {
   },
   how: {
     eyebrow: 'The route',
-    title: 'Three stops, door to door.',
+    title: 'Three stops, from your shop to the customer’s door.',
     steps: [
       {
         title: 'Create a course',
