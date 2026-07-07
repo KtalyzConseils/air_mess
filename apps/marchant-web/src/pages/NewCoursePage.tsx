@@ -167,9 +167,9 @@ export default function NewCoursePage() {
       destination_lng: Number(values.destination_lng),
       collection_amount: values.has_collection ? Number(values.collection_amount) : undefined,
       collection_method: values.has_collection ? values.collection_method : undefined,
-      ...(user?.type === 'individual'
-        ? { callback_url: `${window.location.origin}/billing/return` }
-        : {}),
+      // callback_url pour le pay-as-you-go Fedapay : nécessaire dès que le user
+      // peut être payeur — marchand (toujours) comme particulier (hors quota).
+      callback_url: `${window.location.origin}/billing/return`,
     }
     mutation.mutate(payload)
   }
