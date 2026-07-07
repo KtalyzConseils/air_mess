@@ -10,6 +10,7 @@ import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
 import Highlight from '../components/Highlight'
+import { BagIcon, PackageIcon, SnowflakeIcon, IdCardIcon, LockIcon, BikeIcon, AlertTriangleIcon } from '../components/ui/icons'
 import { cn } from '../lib/cn'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
@@ -142,7 +143,7 @@ export default function DriverRegisterPage() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {/* ====================== IDENTITÉ ====================== */}
-            <FormSection title={t('driverRegister.sectionIdentityTitle')} description={t('driverRegister.sectionIdentityDesc')}>
+            <FormSection icon={<IdCardIcon size={20} />} title={t('driverRegister.sectionIdentityTitle')} description={t('driverRegister.sectionIdentityDesc')}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label={t('driverRegister.firstName')}
@@ -178,7 +179,7 @@ export default function DriverRegisterPage() {
             </FormSection>
 
             {/* ====================== COMPTE ====================== */}
-            <FormSection title={t('driverRegister.sectionAccountTitle')} description={t('driverRegister.sectionAccountDesc')}>
+            <FormSection icon={<LockIcon size={20} />} title={t('driverRegister.sectionAccountTitle')} description={t('driverRegister.sectionAccountDesc')}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   type="email"
@@ -217,7 +218,7 @@ export default function DriverRegisterPage() {
             </FormSection>
 
             {/* ====================== VÉHICULE ====================== */}
-            <FormSection title={t('driverRegister.sectionVehicleTitle')}>
+            <FormSection icon={<BikeIcon size={20} />} title={t('driverRegister.sectionVehicleTitle')}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Field label={`${t('driverRegister.vehicleType')} *`} error={errors.vehicle_type?.message ?? serverErr('vehicle_type')}>
                   <select
@@ -248,18 +249,20 @@ export default function DriverRegisterPage() {
 
             {/* ====================== ÉQUIPEMENT ====================== */}
             <FormSection
+              icon={<BagIcon size={20} />}
               title={t('driverRegister.sectionEquipmentTitle')}
               description={t('driverRegister.sectionEquipmentDesc')}
             >
               <div className="space-y-2">
-                <CheckboxRow {...register('equipment_isothermal_bag')} icon="🍱" label={t('driverRegister.eqIsothermal')} />
-                <CheckboxRow {...register('equipment_top_case')} icon="📦" label={t('driverRegister.eqTopCase')} />
-                <CheckboxRow {...register('equipment_refrigerated_bag')} icon="❄️" label={t('driverRegister.eqRefrigerated')} />
+                <CheckboxRow {...register('equipment_isothermal_bag')} icon={<BagIcon size={20} />} label={t('driverRegister.eqIsothermal')} />
+                <CheckboxRow {...register('equipment_top_case')} icon={<PackageIcon size={20} />} label={t('driverRegister.eqTopCase')} />
+                <CheckboxRow {...register('equipment_refrigerated_bag')} icon={<SnowflakeIcon size={20} />} label={t('driverRegister.eqRefrigerated')} />
               </div>
             </FormSection>
 
             {/* ====================== CONTACT D'URGENCE ====================== */}
             <FormSection
+              icon={<AlertTriangleIcon size={20} />}
               title={t('driverRegister.sectionEmergencyTitle')}
               description={t('driverRegister.sectionEmergencyDesc')}
             >
@@ -393,7 +396,7 @@ function Benefit({ number, title, children }: BenefitProps) {
    ============================================================ */
 interface CheckboxRowProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string
-  icon: string
+  icon: React.ReactNode
 }
 
 const CheckboxRow = (() => {
@@ -405,7 +408,7 @@ const CheckboxRow = (() => {
           {...inputProps}
           className="h-4 w-4 accent-airmess-yellow"
         />
-        <span className="text-h3 leading-none" aria-hidden>{icon}</span>
+        <span className="text-warm-600 shrink-0 flex" aria-hidden>{icon}</span>
         <span className="text-body text-ink">{label}</span>
       </label>
     )

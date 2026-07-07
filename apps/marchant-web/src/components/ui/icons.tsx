@@ -304,3 +304,41 @@ export function GlobeIcon(props: IconProps) {
     </svg>
   )
 }
+
+// Sac (livraison) — sac isotherme
+export function BagIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+      <path d="M3 6h18" />
+      <path d="M16 10a4 4 0 0 1-8 0" />
+    </svg>
+  )
+}
+
+// Carte d'identité — section identité
+export function IdCardIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="11" r="2" />
+      <path d="M5.5 16c.4-1.3 1.5-2 3-2s2.6.7 3 2" />
+      <line x1="14" y1="10" x2="18" y2="10" />
+      <line x1="14" y1="14" x2="18" y2="14" />
+    </svg>
+  )
+}
+
+// Flocon — chaîne du froid / sac réfrigéré
+export function SnowflakeIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <line x1="12" y1="2" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+      <line x1="19.07" y1="4.93" x2="4.93" y2="19.07" />
+      <path d="M12 2 9.5 4.5M12 2l2.5 2.5M12 22l-2.5-2.5M12 22l2.5-2.5" />
+      <path d="M2 12l2.5-2.5M2 12l2.5 2.5M22 12l-2.5-2.5M22 12l-2.5 2.5" />
+    </svg>
+  )
+}
