@@ -15,9 +15,8 @@ export const links = {
   // CTA marchand → page de connexion ; CTA livreur → inscription livreur.
   registerSender: `${APP_URL}/login`,
   registerDriver: `${APP_URL}/register/driver`,
-  // Direct download of the courier (driver) Android app build (Expo).
-  driverApp:
-    'https://expo.dev/accounts/ktalyzconseils/projects/driver-app/builds/dbb5f333-0f0e-4d53-a0e1-27c733396470',
+  // Direct download of the courier (driver) Android app (APK build, Expo).
+  driverApp: 'https://expo.dev/artifacts/eas/IMZCtBGTAO20GcXw3sjG2CoHXOAM_48b8ulhMB4lUY8.apk',
 } as const
 
 export const contact = {
