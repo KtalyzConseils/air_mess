@@ -38,11 +38,10 @@ class CourseController extends Controller
         $driverEarnings = (int) round($deliveryFee * $driverPercent / 100);
 
         // ===== Modèle de paiement (cf. project_wallet_user) =====
-        // - Marchand : toujours payeur (abonnements masqués → wallet ou pay-as-you-go).
-        // - Particulier dans son quota mensuel : course gratuite (inchangé).
-        // - Particulier hors quota : payeur (wallet ou pay-as-you-go).
-        $isPayer = $user->isMarchant()
-            || ($user->isIndividual() && $user->individual->hasReachedMonthlyLimit());
+        // Tout expéditeur est payeur : marchand ET particulier. Plus de quota
+        // gratuit pour les particuliers → une course coûte le delivery_fee,
+        // réglé par le wallet (ou pay-as-you-go Fedapay si solde insuffisant).
+        $isPayer = $user->isMarchant() || $user->isIndividual();
 
         // Si payeur, on tente d'abord le wallet. Si dispo insuffisant → fallback Fedapay.
         // Pre-check sans hold (le hold sera posé sous lock dans la transaction).
@@ -82,11 +81,6 @@ class CourseController extends Controller
                     }
                 }
 
-                // Particulier dans son quota : course gratuite, on incrémente le compteur.
-                // Marchand : plus de quota (abonnements masqués).
-                if ($user->isIndividual() && ! $isPayer) {
-                    $user->individual->increment('monthly_courses_used');
-                }
 
                 return $course;
             });
