@@ -91,21 +91,33 @@ class AdminController extends Controller
     public function reassignCourse(Request $request, Course $course, NotificationService $notifier): JsonResponse
     {
         $data = $request->validate([
-            'new_driver_id' => ['required', 'exists:drivers,id'],
-            'reason'        => ['nullable', 'string', 'max:500'],
+            'new_driver_id'                => ['required', 'exists:drivers,id'],
+            'reason'                       => ['nullable', 'string', 'max:500'],
+            // Cas 5 — Le colis est déjà entre les mains du driver initial
+            // (panne/accident post-pickup). Le nouveau driver ira le récupérer
+            // auprès du driver précédent, pas au marchand.
+            'pickup_from_previous_driver'  => ['nullable', 'boolean'],
+            'transfer_lat'                 => ['nullable', 'numeric', 'between:-90,90'],
+            'transfer_lng'                 => ['nullable', 'numeric', 'between:-180,180'],
         ]);
 
         if ($course->isTerminal()) {
             return response()->json(['message' => 'Course déjà clôturée.'], 422);
         }
 
-        if (in_array($course->status, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF], true)) {
+        $isPostPickup = in_array($course->status, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF], true);
+        $wantsTransfer = (bool) ($data['pickup_from_previous_driver'] ?? false);
+
+        // Chemin classique : réassignation avant pickup → statut ASSIGNED
+        // Chemin transfert : réassignation après pickup → statut PICKED_UP conservé
+        //                    + flag transfer + coords figées du driver initial
+        if ($isPostPickup && ! $wantsTransfer) {
             return response()->json([
                 'message' => 'Impossible de réaffecter : le colis est déjà entre les mains du livreur. '
-                           . 'Marquez la course en litige, ou demandez le retour du colis au marchand.',
+                           . 'Cochez "colis chez le driver précédent" pour transférer physiquement, '
+                           . 'ou marquez la course en litige.',
             ], 422);
         }
-
 
         $newDriver = Driver::findOrFail($data['new_driver_id']);
 
@@ -116,15 +128,45 @@ class AdminController extends Controller
         }
         $oldDriver = $course->driver_id ? Driver::find($course->driver_id) : null;
 
-        DB::transaction(function () use ($course, $newDriver, $data, $oldDriver, $request) {
-            $course->update([
+        // Coords de transfert : celles fournies (position au signalement) ou
+        // fallback sur la current position du driver initial. Sans coord fiable
+        // en chemin transfert, on refuse — pas de rendez-vous à l'aveugle.
+        $transferLat = $data['transfer_lat'] ?? $oldDriver?->current_lat;
+        $transferLng = $data['transfer_lng'] ?? $oldDriver?->current_lng;
+        if ($wantsTransfer && (! $transferLat || ! $transferLng)) {
+            return response()->json([
+                'message' => 'Coordonnées de transfert manquantes : le driver initial n\'a pas de position récente. '
+                           . 'Fournissez transfer_lat / transfer_lng manuellement.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($course, $newDriver, $data, $oldDriver, $request, $wantsTransfer, $transferLat, $transferLng) {
+            $updates = [
                 'driver_id'   => $newDriver->id,
-                'status'      => Course::STATUS_ASSIGNED,
                 'assigned_at' => now(),
-            ]);
+            ];
+
+            if ($wantsTransfer) {
+                // Le colis reste "picked_up" au sens système : pas de re-pickup
+                // au marchand. Le nouveau driver le récupère auprès du précédent,
+                // et son écran l'oriente vers transfer_lat/lng.
+                $updates['previous_driver_id']          = $oldDriver?->id;
+                $updates['pickup_from_previous_driver'] = true;
+                $updates['transfer_lat']                = $transferLat;
+                $updates['transfer_lng']                = $transferLng;
+                // On ne touche PAS au statut : la course reste picked_up (ou at_dropoff).
+            } else {
+                // Réassignation classique pré-pickup : la course repart à zéro côté driver.
+                $updates['status'] = Course::STATUS_ASSIGNED;
+            }
+
+            $course->update($updates);
 
             $newDriver->update(['availability_status' => 'busy']);
 
+            // En transfert, le driver initial garde le colis quelques minutes de plus
+            // (le temps du rendez-vous), mais côté système on le libère : il pourra
+            // accepter d'autres courses une fois le transfert fait.
             if ($oldDriver) {
                 $oldDriver->update(['availability_status' => 'available']);
             }
@@ -132,13 +174,17 @@ class AdminController extends Controller
             CourseStatusHistory::create([
                 'course_id'       => $course->id,
                 'from_status'     => $course->getOriginal('status'),
-                'to_status'       => Course::STATUS_ASSIGNED,
+                'to_status'       => $wantsTransfer ? $course->status : Course::STATUS_ASSIGNED,
                 'changed_by_id'   => $request->user()->id,
                 'changed_by_type' => 'user',
-                'reason'          => 'Réaffectation admin : ' . ($data['reason'] ?? 'sans motif'),
+                'reason'          => ($wantsTransfer ? 'Transfert physique post-pickup : ' : 'Réaffectation admin : ')
+                                     . ($data['reason'] ?? 'sans motif'),
                 'metadata'        => [
-                    'old_driver_id' => $oldDriver?->id,
-                    'new_driver_id' => $newDriver->id,
+                    'old_driver_id'                => $oldDriver?->id,
+                    'new_driver_id'                => $newDriver->id,
+                    'pickup_from_previous_driver'  => $wantsTransfer,
+                    'transfer_lat'                 => $wantsTransfer ? $transferLat : null,
+                    'transfer_lng'                 => $wantsTransfer ? $transferLng : null,
                 ],
             ]);
         });
@@ -146,43 +192,86 @@ class AdminController extends Controller
         // ===== Notifications (hors transaction : on ne notifie que si l'écriture a réussi) =====
 
         // 1. Nouveau livreur : il hérite de la course
-        $notifier->sendToUser(
-            $newDriver->user_id,
-            'course.assigned_to_you',
-            '📦 Course attribuée',
-            "{$course->origin_quartier} → {$course->destination_quartier} · {$course->driver_earnings} FCFA",
-            ['reference' => $course->reference],
-            $course->id,
-        );
-
-        // 2. Ancien livreur : on l'informe du retrait (sauf si c'est le même)
-        if ($oldDriver && $oldDriver->id !== $newDriver->id) {
+        if ($wantsTransfer) {
             $notifier->sendToUser(
-                $oldDriver->user_id,
-                'course.removed',
-                '↩️ Course retirée',
-                "La course {$course->reference} vous a été retirée par l'administration.",
+                $newDriver->user_id,
+                'course.assigned_transfer',
+                'Course à récupérer (transfert)',
+                "Le colis est chez un autre livreur. Rendez-vous à sa position pour le récupérer. Course {$course->reference}.",
+                [
+                    'reference'                   => $course->reference,
+                    'pickup_from_previous_driver' => true,
+                    'transfer_lat'                => $transferLat,
+                    'transfer_lng'                => $transferLng,
+                ],
+                $course->id,
+            );
+        } else {
+            $notifier->sendToUser(
+                $newDriver->user_id,
+                'course.assigned_to_you',
+                'Course attribuée',
+                "{$course->origin_quartier} → {$course->destination_quartier} · {$course->driver_earnings} FCFA",
                 ['reference' => $course->reference],
                 $course->id,
             );
         }
 
-        // 3. Marchand : changement de livreur + rappel du code de retrait
-        $notifier->sendToUser(
-            $course->sender_id,
-            'course.driver_changed',
-            '🔄 Changement de livreur',
-            "{$newDriver->first_name} prend en charge votre course. 🔑 Code de retrait : {$course->pickup_code}",
-            [
-                'reference'         => $course->reference,
-                'driver_first_name' => $newDriver->first_name,
-                'pickup_code'       => $course->pickup_code,
-            ],
-            $course->id,
-        );
+        // 2. Ancien livreur : on l'informe du retrait (ou du transfert imminent)
+        if ($oldDriver && $oldDriver->id !== $newDriver->id) {
+            if ($wantsTransfer) {
+                $notifier->sendToUser(
+                    $oldDriver->user_id,
+                    'course.transfer_incoming',
+                    'Transfert du colis',
+                    "Restez sur place, {$newDriver->first_name} vient chercher le colis de la course {$course->reference}.",
+                    [
+                        'reference'  => $course->reference,
+                        'new_driver' => $newDriver->first_name,
+                    ],
+                    $course->id,
+                );
+            } else {
+                $notifier->sendToUser(
+                    $oldDriver->user_id,
+                    'course.removed',
+                    'Course retirée',
+                    "La course {$course->reference} vous a été retirée par l'administration.",
+                    ['reference' => $course->reference],
+                    $course->id,
+                );
+            }
+        }
+
+        // 3. Marchand : changement de livreur + rappel du code de retrait uniquement
+        //    en chemin classique (en transfert, le colis a déjà quitté ses mains).
+        if (! $wantsTransfer) {
+            $notifier->sendToUser(
+                $course->sender_id,
+                'course.driver_changed',
+                'Changement de livreur',
+                "{$newDriver->first_name} prend en charge votre course. Code de retrait : {$course->pickup_code}",
+                [
+                    'reference'         => $course->reference,
+                    'driver_first_name' => $newDriver->first_name,
+                    'pickup_code'       => $course->pickup_code,
+                ],
+                $course->id,
+            );
+        } else {
+            $notifier->sendToUser(
+                $course->sender_id,
+                'course.driver_changed',
+                'Changement de livreur en cours',
+                "Le livreur initial de la course {$course->reference} a rencontré un problème. "
+                . "{$newDriver->first_name} prend le relais.",
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
 
         return response()->json([
-            'message' => 'Course réaffectée.',
+            'message' => $wantsTransfer ? 'Course transférée physiquement.' : 'Course réaffectée.',
             'course'  => $course->fresh()->load('driver.user'),
         ]);
     }
@@ -1196,6 +1285,145 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         return response()->json([
             'message'  => 'Course retour confirmée.',
+            'incident' => $incident->fresh(),
+            'preset'   => [
+                'marchand_shipping_pct'   => $marchandShippingPct,
+                'driver_return_pct'       => $driverReturnPct,
+                'delivery_fee'            => $deliveryFee,
+                'captured_amount'         => $capturedAmount,
+                'refunded_amount'         => max(0, $deliveryFee - $capturedAmount),
+                'driver_earnings_base'    => $driverEarnings,
+                'total_driver_amount'     => $totalDriverAmount,
+            ],
+            'transactions' => [
+                'marchand_charge' => $chargeTx,
+                'driver_earning'  => $earnTx,
+            ],
+        ]);
+    }
+
+    /**
+     * Cas 6 — Annulation marchand confirmée (1 clic).
+     *
+     * Structure identique au preset Cas 4 (retour post-refus client), avec un
+     * garde différent : l'incident doit être type `marchand_cancelled`. On
+     * partage volontairement les settings `conflicts_return_*` : au démarrage,
+     * marchand-annule et client-refuse sont facturés pareil (défaut 100% du
+     * fee marchand + 50% bonus driver). L'ops peut punir plus en ajoutant un
+     * `manual_debit` via l'arbitrage classique si un marchand récidive.
+     *
+     * Prérequis : course.status = failed, course.is_return_trip = true,
+     * incident.type = marchand_cancelled, incident.status = open.
+     */
+    public function marchandCancelConfirmed(
+        Request $request,
+        CourseIncident $incident,
+        \App\Services\UserWalletService $userWallet,
+        DriverWalletService $driverWallet,
+        NotificationService $notifier,
+    ): JsonResponse {
+        if ($incident->status !== 'open') {
+            return response()->json(['message' => 'Cet incident est déjà clôturé.'], 422);
+        }
+        if ($incident->type !== 'marchand_cancelled') {
+            return response()->json([
+                'message' => 'Ce préréglage ne s\'applique qu\'aux annulations marchand post-pickup.',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'resolution_note' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $course = $incident->course()->with('driver', 'sender')->first();
+        if (! $course) {
+            return response()->json(['message' => 'Course introuvable pour cet incident.'], 422);
+        }
+        if (! $course->is_return_trip || $course->status !== Course::STATUS_FAILED) {
+            return response()->json([
+                'message' => 'Ce préréglage nécessite que le driver ait confirmé le retour du colis (course en failed via return_confirmed).',
+            ], 422);
+        }
+        if (! $course->driver) {
+            return response()->json(['message' => 'Aucun livreur assigné à cette course.'], 422);
+        }
+
+        $marchandShippingPct = (int) \App\Models\AppSetting::get('conflicts_return_marchand_shipping_fee_percent', 100);
+        $driverReturnPct     = (int) \App\Models\AppSetting::get('conflicts_return_driver_return_earnings_percent', 50);
+        $marchandShippingPct = max(0, min(200, $marchandShippingPct));
+        $driverReturnPct     = max(0, min(200, $driverReturnPct));
+
+        $deliveryFee    = (int) $course->delivery_fee;
+        $driverEarnings = (int) $course->driver_earnings;
+        $capturedAmount = (int) round($deliveryFee * $marchandShippingPct / 100);
+        $totalDriverAmount = $driverEarnings + (int) round($driverEarnings * $driverReturnPct / 100);
+
+        $admin = $request->user()->admin;
+
+        try {
+            [$chargeTx, $earnTx] = DB::transaction(function () use (
+                $incident, $course, $capturedAmount, $totalDriverAmount,
+                $userWallet, $driverWallet, $data, $admin
+            ) {
+                $chargeTx = null;
+                $earnTx   = null;
+
+                if ($course->paid_from_wallet && $course->sender && $capturedAmount > 0) {
+                    $captureUnderHold = min($capturedAmount, (int) $course->delivery_fee);
+                    $chargeTx = $userWallet->chargePartial($course->sender, $course, $captureUnderHold);
+                }
+
+                if ($totalDriverAmount > 0) {
+                    $earnTx = $driverWallet->earnPartial(
+                        $course->driver,
+                        $course,
+                        $totalDriverAmount,
+                        'marchand_cancel',
+                    );
+                }
+
+                $incident->update([
+                    'status'          => 'resolved',
+                    'resolution_note' => $data['resolution_note'],
+                    'resolved_by'     => $admin->user_id ?? null,
+                    'resolved_at'     => now(),
+                ]);
+
+                return [$chargeTx, $earnTx];
+            });
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        if ($course->sender_id) {
+            $notifier->sendToUser(
+                $course->sender_id,
+                'incident.arbitrated',
+                'Annulation confirmée',
+                "Course {$course->reference} : "
+                . number_format($capturedAmount, 0, ',', ' ') . " FCFA facturés pour le trajet effectué. "
+                . ($capturedAmount < $deliveryFee
+                    ? number_format($deliveryFee - $capturedAmount, 0, ',', ' ') . ' FCFA rendus.'
+                    : ''),
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
+
+        if ($course->driver && $course->driver->user_id) {
+            $notifier->sendToUser(
+                $course->driver->user_id,
+                'incident.arbitrated',
+                'Annulation marchand confirmée',
+                "Course {$course->reference} : "
+                . number_format($totalDriverAmount, 0, ',', ' ') . " FCFA crédités sur votre caution (trajet + bonus retour).",
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
+
+        return response()->json([
+            'message'  => 'Annulation marchand confirmée.',
             'incident' => $incident->fresh(),
             'preset'   => [
                 'marchand_shipping_pct'   => $marchandShippingPct,

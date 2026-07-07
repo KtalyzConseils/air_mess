@@ -152,3 +152,20 @@ export async function returnTripConfirmed(
   })
   return data
 }
+
+/**
+ * Cas 6 — Annulation marchand confirmée (1 clic).
+ * Même structure que returnTripConfirmed : partage les settings
+ * `conflicts_return_*_percent`. Applique capture marchand + crédit driver
+ * (earnings + bonus retour). Prérequis : incident `marchand_cancelled`,
+ * course `failed` avec `is_return_trip=true`.
+ */
+export async function marchandCancelConfirmed(
+  incidentId: number,
+  resolutionNote: string,
+): Promise<ReturnTripConfirmedResponse> {
+  const { data } = await api.post(`/admin/incidents/${incidentId}/marchand-cancel-confirmed`, {
+    resolution_note: resolutionNote,
+  })
+  return data
+}

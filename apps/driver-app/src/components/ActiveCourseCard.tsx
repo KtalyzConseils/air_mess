@@ -6,6 +6,7 @@ import {
   transition,
   registerCallAttempt,
   patchContactAttempts,
+  triggerSos,
   type DriverCourseSummary,
   type TransitionAction,
 } from '../api/driver'
@@ -59,18 +60,38 @@ export default function ActiveCourseCard({ course }: Props) {
   const next = NEXT_ACTION[course.status]
 
   // Phase = quelle destination on vise en ce moment.
-  // `return` = client a refusé, on ramène le colis au marchand (Cas 4).
-  const phase: 'pickup' | 'dropoff' | 'return' =
+  //   `pickup`   : je vais au marchand chercher le colis
+  //   `transfer` : Cas 5 — je vais chercher le colis auprès du driver précédent
+  //                (panne/accident du driver initial)
+  //   `dropoff`  : je vais chez le client livrer
+  //   `return`   : Cas 4 — client a refusé, je ramène au marchand
+  const phase: 'pickup' | 'transfer' | 'dropoff' | 'return' =
     course.status === 'returning_to_sender'
       ? 'return'
-      : ['assigned', 'driver_to_pickup', 'at_pickup'].includes(course.status)
-        ? 'pickup'
-        : 'dropoff'
+      : course.pickup_from_previous_driver && !['picked_up', 'at_dropoff'].includes(course.status)
+        ? 'transfer'
+        : ['assigned', 'driver_to_pickup', 'at_pickup'].includes(course.status)
+          ? 'pickup'
+          : 'dropoff'
 
-  // En phase retour, la cible redevient l'origine (le marchand)
-  const targetLat = phase === 'dropoff' ? course.destination_lat : course.origin_lat
-  const targetLng = phase === 'dropoff' ? course.destination_lng : course.origin_lng
-  const targetLabel = phase === 'dropoff' ? course.destination_name : course.origin_name
+  const targetLat =
+    phase === 'transfer'
+      ? (course.transfer_lat ?? course.origin_lat)
+      : phase === 'dropoff'
+        ? course.destination_lat
+        : course.origin_lat
+  const targetLng =
+    phase === 'transfer'
+      ? (course.transfer_lng ?? course.origin_lng)
+      : phase === 'dropoff'
+        ? course.destination_lng
+        : course.origin_lng
+  const targetLabel =
+    phase === 'transfer'
+      ? 'Livreur précédent'
+      : phase === 'dropoff'
+        ? course.destination_name
+        : course.origin_name
   const targetPhone = phase === 'dropoff' ? course.destination_phone : course.origin_phone
   const targetPhoneRole = phase === 'dropoff' ? 'le client' : 'le marchand'
 
@@ -97,6 +118,42 @@ export default function ActiveCourseCard({ course }: Props) {
     mutationFn: () => registerCallAttempt(course.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-active'] }),
   })
+
+  // Cas 5 — SOS accident/danger.
+  // Fire-and-forget côté ops (push prioritaire + trace incident), pendant
+  // qu'on compose immédiatement le numéro d'urgence renvoyé par le back.
+  const sosMutation = useMutation({
+    mutationFn: () =>
+      triggerSos({
+        course_id: course.id,
+        description: 'SOS déclenché depuis l\'écran de course active',
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['my-active'] })
+      if (data.hotline) {
+        Linking.openURL(`tel:${data.hotline}`)
+      }
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message ?? 'SOS non transmis. Composez directement le 118.'
+      Alert.alert('Erreur SOS', msg)
+    },
+  })
+
+  function confirmSos() {
+    Alert.alert(
+      'Déclencher le SOS ?',
+      'L\'ops sera notifiée immédiatement et le numéro d\'urgence sera composé.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Confirmer',
+          style: 'destructive',
+          onPress: () => sosMutation.mutate(),
+        },
+      ],
+    )
+  }
 
   const patchAttemptsMutation = useMutation({
     mutationFn: () => patchContactAttempts(course.id, parseInt(correctValue, 10) || 0, correctNote || undefined),
@@ -135,21 +192,29 @@ export default function ActiveCourseCard({ course }: Props) {
           <Text className="text-warm-400 text-[10px] font-mono">{course.reference}</Text>
           <View
             className={[
-              'px-2 py-0.5 rounded-md',
-              phase === 'return' ? 'bg-airmess-red/25' : 'bg-white/10',
+              'px-2 py-0.5 rounded-md flex-row items-center',
+              phase === 'return' || phase === 'transfer' ? 'bg-airmess-red/25' : 'bg-white/10',
             ].join(' ')}
           >
+            {phase === 'return' && (
+              <Ionicons name="return-up-back" size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
+            )}
+            {phase === 'transfer' && (
+              <Ionicons name="swap-horizontal" size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
+            )}
             <Text
               className={[
                 'text-[10px] font-extrabold uppercase tracking-widest',
-                phase === 'return' ? 'text-white' : 'text-airmess-yellow',
+                phase === 'return' || phase === 'transfer' ? 'text-white' : 'text-airmess-yellow',
               ].join(' ')}
             >
               {phase === 'pickup'
                 ? 'Phase 1 · Pickup'
                 : phase === 'dropoff'
                   ? 'Phase 2 · Livraison'
-                  : '🔄 Retour marchand'}
+                  : phase === 'transfer'
+                    ? 'Transfert colis'
+                    : 'Retour marchand'}
             </Text>
           </View>
         </View>
@@ -159,7 +224,9 @@ export default function ActiveCourseCard({ course }: Props) {
             ? 'Direction'
             : phase === 'dropoff'
               ? 'Destination client'
-              : 'Retour vers marchand'}
+              : phase === 'transfer'
+                ? 'Récupérer le colis'
+                : 'Retour vers marchand'}
         </Text>
         <Text className="text-white text-2xl font-extrabold mt-1" numberOfLines={2}>
           {targetLabel}
@@ -329,6 +396,19 @@ export default function ActiveCourseCard({ course }: Props) {
 
         {/* Actions secondaires — subtiles, groupées en bas */}
         <View className="flex-row gap-2 mt-4">
+          <Pressable
+            onPress={confirmSos}
+            disabled={sosMutation.isPending}
+            className="flex-1 h-11 rounded-xl border-2 border-airmess-red bg-airmess-red/10 items-center justify-center flex-row"
+            style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+            accessibilityRole="button"
+            accessibilityLabel="Bouton SOS urgence"
+          >
+            <Ionicons name="alert-circle" size={16} color="#D40511" />
+            <Text className="text-airmess-red text-xs font-extrabold ml-1.5 tracking-widest uppercase">
+              {sosMutation.isPending ? '…' : 'SOS'}
+            </Text>
+          </Pressable>
           <Pressable
             onPress={() => setIncidentOpen(true)}
             className="flex-1 h-11 rounded-xl border-2 border-warning/40 bg-warning-bg/50 items-center justify-center flex-row"

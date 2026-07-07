@@ -252,6 +252,9 @@
       "cancelReason": "Cancellation reason",
       "cancelError": "Unable to cancel this delivery.",
       "cancelPlaceholder": "E.g. wrong address, customer unreachable…",
+      "cancelPostPickupTitle": "The package is already with the courier",
+      "cancelPostPickupBody": "By cancelling now, the courier will bring the package back to you. You will be charged for the leg already done (up to {{fee}} FCFA). Ops will finalize the exact billing after the return.",
+      "cancelPostPickupAck": "I understand I will be charged for the completed leg.",
       "deliveryFee": "Delivery fee",
       "collectionAmount": "To collect",
       "waitingDriver": "Waiting for a courier",
@@ -945,7 +948,9 @@
       "reassignImpossible": "Reassignment impossible.",
       "newDriverLabel": "New courier",
       "reasonLabel": "Reason",
-      "reasonPlaceholder": "e.g. courier broke down, no response"
+      "reasonPlaceholder": "e.g. courier broke down, no response",
+      "pickupFromPreviousLabel": "Package is with the previous courier",
+      "pickupFromPreviousHelp": "Check this if the package is already in the courier's hands (breakdown/accident post-pickup). The new courier will pick it up at their current GPS location instead of the merchant."
     },
     "marchants": {
       "title": "Merchants",

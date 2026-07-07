@@ -845,7 +845,83 @@ class DriverController extends Controller
         ], 201);
     }
 
-    // ===== 8. TENTATIVES D'APPEL DU DESTINATAIRE (Cas 3) =====
+    // ===== 8. SOS ACCIDENT/DANGER (Cas 5) =====
+
+    /**
+     * Bouton SOS livreur — déclenche une alerte prioritaire.
+     * Trois effets :
+     *   1. Retourne le sos_hotline_phone au client (l'app compose immédiatement)
+     *   2. Crée un incident type=accident sur la course active (si fournie)
+     *   3. Envoie une push prioritaire à TOUS les admins ops/super avec les coords GPS
+     *
+     * Le client peut fournir `course_id` ou non — un SOS entre courses (livreur
+     * en break) reste valide, on notifie sans incident lié.
+     */
+    public function sos(Request $request, NotificationService $notifier): JsonResponse
+    {
+        $driver = $this->currentDriver($request, requireActive: false);
+
+        $data = $request->validate([
+            'course_id'   => ['nullable', 'integer', 'exists:courses,id'],
+            'lat'         => ['nullable', 'numeric', 'between:-90,90'],
+            'lng'         => ['nullable', 'numeric', 'between:-180,180'],
+            'description' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $lat = $data['lat'] ?? $driver->current_lat;
+        $lng = $data['lng'] ?? $driver->current_lng;
+
+        $course = null;
+        $incident = null;
+        if (! empty($data['course_id'])) {
+            $course = Course::find($data['course_id']);
+            if ($course && $course->driver_id === $driver->id && ! $course->isTerminal()) {
+                $incident = CourseIncident::create([
+                    'course_id'     => $course->id,
+                    'reported_by'   => $driver->user_id,
+                    'reporter_type' => 'driver',
+                    'type'          => 'accident',
+                    'description'   => 'SOS déclenché depuis l\'app. ' . ($data['description'] ?? ''),
+                    'lat'           => $lat,
+                    'lng'           => $lng,
+                    'status'        => 'open',
+                ]);
+                $driver->increment('incidents_count');
+            }
+        }
+
+        // Notif prioritaire à tous les admins ops + super
+        $opsUserIds = Admin::whereIn('sub_role', [Admin::ROLE_OPS, Admin::ROLE_SUPER])
+            ->pluck('user_id')
+            ->toArray();
+
+        $notifier->sendToUsers(
+            $opsUserIds,
+            'driver.sos',
+            'SOS livreur',
+            "Le livreur {$driver->user->name} a déclenché un SOS."
+                . ($course ? " Course {$course->reference}." : '')
+                . ($lat && $lng ? " Position: {$lat}, {$lng}" : ''),
+            [
+                'driver_id'   => $driver->id,
+                'driver_name' => $driver->user->name,
+                'lat'         => $lat,
+                'lng'         => $lng,
+                'course_id'   => $course?->id,
+                'reference'   => $course?->reference,
+                'sos'         => true,
+            ],
+            $course?->id,
+        );
+
+        return response()->json([
+            'message'  => 'SOS déclenché. Composez le numéro d\'urgence.',
+            'hotline'  => (string) \App\Models\AppSetting::get('sos_hotline_phone', '118'),
+            'incident' => $incident,
+        ]);
+    }
+
+    // ===== 9. TENTATIVES D'APPEL DU DESTINATAIRE (Cas 3) =====
 
     /**
      * Incrément silencieux : appelé automatiquement par l'app driver au tap

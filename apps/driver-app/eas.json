@@ -14,7 +14,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://elegant-passion-production-7482.up.railway.app/api"
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.airmess-logistics.com/api"
       }
     },
     "production": {
@@ -23,7 +23,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://elegant-passion-production-7482.up.railway.app/api"
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.airmess-logistics.com/api"
       }
     }
   },

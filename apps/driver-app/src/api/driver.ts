@@ -35,6 +35,11 @@ export interface DriverCourseSummary {
   is_return_trip?: boolean
   return_code?: string | null
   return_confirmed_at?: string | null
+  // Cas 5 — Transfert physique après panne/accident driver
+  previous_driver_id?: number | null
+  pickup_from_previous_driver?: boolean
+  transfer_lat?: number | null
+  transfer_lng?: number | null
   created_at: string
 }
 
@@ -175,6 +180,24 @@ export async function registerCallAttempt(courseId: number): Promise<{
   last_contact_attempt_at: string | null
 }> {
   const { data } = await api.post(`/driver/courses/${courseId}/call-attempt`)
+  return data
+}
+
+/**
+ * Cas 5 — SOS accident/danger.
+ * Déclenche une alerte prioritaire ops + retourne le numéro d'urgence à composer.
+ * `course_id` optionnel : SOS hors course (livreur en break) est autorisé.
+ */
+export async function triggerSos(payload: {
+  course_id?: number
+  lat?: number
+  lng?: number
+  description?: string
+}): Promise<{
+  hotline: string
+  incident: { id: number; type: string; status: string } | null
+}> {
+  const { data } = await api.post('/driver/sos', payload)
   return data
 }
 

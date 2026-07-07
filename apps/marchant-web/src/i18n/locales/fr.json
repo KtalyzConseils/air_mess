@@ -252,6 +252,9 @@
       "cancelReason": "Motif d'annulation",
       "cancelError": "Impossible d'annuler cette course.",
       "cancelPlaceholder": "Ex : erreur d'adresse, client injoignable…",
+      "cancelPostPickupTitle": "Le colis est déjà avec le livreur",
+      "cancelPostPickupBody": "En annulant maintenant, le livreur vous ramène le colis. Vous serez facturé du trajet effectué (jusqu'à {{fee}} FCFA de frais). L'ops finalisera la facturation exacte après la remise du colis.",
+      "cancelPostPickupAck": "Je comprends que je serai facturé du trajet effectué.",
       "deliveryFee": "Frais de livraison",
       "collectionAmount": "À encaisser",
       "waitingDriver": "En attente d'un livreur",
@@ -945,7 +948,9 @@
       "reassignImpossible": "Réaffectation impossible.",
       "newDriverLabel": "Nouveau livreur",
       "reasonLabel": "Motif",
-      "reasonPlaceholder": "ex : livreur en panne, ne répond plus"
+      "reasonPlaceholder": "ex : livreur en panne, ne répond plus",
+      "pickupFromPreviousLabel": "Le colis est chez le livreur précédent",
+      "pickupFromPreviousHelp": "Cochez si le colis est déjà entre les mains du livreur (panne/accident post-pickup). Le nouveau livreur ira le récupérer à sa position GPS actuelle plutôt qu'au marchand."
     },
     "marchants": {
       "title": "Marchands",

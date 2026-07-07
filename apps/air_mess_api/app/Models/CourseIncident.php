@@ -16,6 +16,9 @@ class CourseIncident extends Model
     public const TYPE_VEHICLE_BREAKDOWN     = 'vehicle_breakdown';     // panne véhicule
     public const TYPE_ACCIDENT              = 'accident';              // accident
     public const TYPE_PAYMENT_ISSUE         = 'payment_issue';         // problème d'encaissement
+    // Cas 6 — Marchand annule post-pickup. Créé côté back lors du cancel
+    // (pas signalable manuellement par le driver ; hors MARCHAND_INCIDENT_TYPES).
+    public const TYPE_MARCHAND_CANCELLED    = 'marchand_cancelled';
     public const TYPE_OTHER                 = 'other';
 
     public const TYPES = [
@@ -23,7 +26,8 @@ class CourseIncident extends Model
         self::TYPE_WRONG_ADDRESS, self::TYPE_RECIPIENT_REFUSED,
         self::TYPE_PACKAGE_DAMAGED, self::TYPE_PACKAGE_LOST,
         self::TYPE_VEHICLE_BREAKDOWN, self::TYPE_ACCIDENT,
-        self::TYPE_PAYMENT_ISSUE, self::TYPE_OTHER,
+        self::TYPE_PAYMENT_ISSUE, self::TYPE_MARCHAND_CANCELLED,
+        self::TYPE_OTHER,
     ];
 
     protected $guarded = ['id'];

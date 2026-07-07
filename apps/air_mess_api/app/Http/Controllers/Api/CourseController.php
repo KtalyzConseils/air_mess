@@ -276,13 +276,40 @@ class CourseController extends Controller
             ], 422);
         }
 
-        if (in_array($course->status, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF], true)) {
-            return response()->json([
-                'message' => 'Impossible d\'annuler : le colis est déjà entre les mains du livreur.',
-            ], 422);
-        }
+        $request->validate([
+            'reason'                => ['nullable', 'string', 'max:500'],
+            // Cas 6 — confirmation renforcée post-pickup. Le front DOIT envoyer
+            // ce flag pour valider une annulation après pickup ; sinon on refuse.
+            'confirm_post_pickup'   => ['nullable', 'boolean'],
+        ]);
 
-        $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
+        $isPostPickup = in_array(
+            $course->status,
+            [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF],
+            true,
+        );
+
+        // Cas 6 — Marchand annule après pickup : bascule en course retour.
+        // Seul le SENDER (marchand/particulier) peut déclencher ce chemin ;
+        // le driver a d'autres outils (incident, abandon), l'admin a le support/dispute.
+        if ($isPostPickup) {
+            $user = $request->user();
+            $isSender = ($user->isMarchant() || $user->isIndividual()) && $course->sender_id === $user->id;
+            if (! $isSender) {
+                return response()->json([
+                    'message' => 'Impossible d\'annuler : le colis est déjà entre les mains du livreur.',
+                ], 422);
+            }
+            if (! $request->boolean('confirm_post_pickup')) {
+                return response()->json([
+                    'message'                     => 'Le colis a été récupéré. Confirmez explicitement l\'annulation.',
+                    'requires_post_pickup_confirm' => true,
+                    'delivery_fee'                => (int) $course->delivery_fee,
+                ], 422);
+            }
+
+            return $this->initiateMarchandCancelReturn($course, $request, $notifier);
+        }
 
         $previousStatus = $course->status;
         // Le livreur assigné (s'il y en a un) doit être libéré, sinon il reste bloqué en "busy".
@@ -327,7 +354,7 @@ class CourseController extends Controller
             $notifier->sendToUser(
                 $driver->user_id,
                 'course.cancelled',
-                '↩️ Course annulée',
+                'Course annulée',
                 "La course {$course->reference} a été annulée." . ($reason ? " Motif : {$reason}" : ''),
                 ['reference' => $course->reference],
                 $course->id,
@@ -337,6 +364,90 @@ class CourseController extends Controller
         return response()->json([
             'message' => 'Course annulée.',
             'course'  => $course->fresh(),
+        ]);
+    }
+
+    /**
+     * Cas 6 — Marchand annule après pickup.
+     * Bascule la course en `returning_to_sender` (comme Cas 4), génère un
+     * `return_code`, crée un CourseIncident type=marchand_cancelled pour
+     * que l'ops arbitre financièrement le retour via le preset dédié.
+     *
+     * Le driver-app détecte automatiquement le statut et bascule sur l'écran
+     * de retour vers marchand — flow entièrement partagé avec Cas 4.
+     */
+    private function initiateMarchandCancelReturn(
+        Course $course,
+        \Illuminate\Http\Request $request,
+        NotificationService $notifier,
+    ): JsonResponse {
+        $previousStatus = $course->status;
+        $driver         = $course->driver_id ? Driver::find($course->driver_id) : null;
+        $reason         = $request->input('reason');
+        $user           = $request->user();
+
+        $incident = DB::transaction(function () use ($course, $previousStatus, $reason, $user) {
+            $course->status              = Course::STATUS_RETURNING_TO_SENDER;
+            $course->is_return_trip      = true;
+            $course->return_code         = Course::generateCode();
+            $course->cancellation_reason = $reason;
+            $course->cancelled_by        = $user->id;
+            $course->save();
+
+            $incident = \App\Models\CourseIncident::create([
+                'course_id'     => $course->id,
+                'reported_by'   => $user->id,
+                'reporter_type' => 'marchant',
+                'type'          => \App\Models\CourseIncident::TYPE_MARCHAND_CANCELLED,
+                'description'   => $reason ?: 'Annulation marchand post-pickup.',
+                'status'        => 'open',
+            ]);
+
+            \App\Models\CourseStatusHistory::create([
+                'course_id'       => $course->id,
+                'from_status'     => $previousStatus,
+                'to_status'       => Course::STATUS_RETURNING_TO_SENDER,
+                'changed_by_id'   => $user->id,
+                'changed_by_type' => 'user',
+                'reason'          => 'marchand_cancel_return: ' . ($reason ?: 'sans motif'),
+                'metadata'        => [
+                    'return_code' => $course->return_code,
+                    'incident_id' => $incident->id,
+                ],
+            ]);
+
+            return $incident;
+        });
+
+        // Notif driver : le colis doit revenir chez le marchand.
+        if ($driver) {
+            $notifier->sendToUser(
+                $driver->user_id,
+                'course.marchand_cancelled_return',
+                'Annulation marchand — retour du colis',
+                "Le marchand a annulé la course {$course->reference}. Ramenez le colis à l'origine ; il vous donnera le code de retour à la remise.",
+                [
+                    'reference'   => $course->reference,
+                    'return_code' => null, // le driver ne l'a PAS ; c'est le marchand qui l'a
+                ],
+                $course->id,
+            );
+        }
+
+        // Notif marchand avec le return_code (à donner au driver à la remise).
+        $notifier->sendToUser(
+            $user->id,
+            'course.return_initiated',
+            'Retour du colis en cours',
+            "Le livreur revient. Code à lui donner à la remise : {$course->return_code}",
+            ['reference' => $course->reference, 'return_code' => $course->return_code],
+            $course->id,
+        );
+
+        return response()->json([
+            'message'  => 'Annulation acceptée. Le colis vous est rapporté ; l\'ops finalisera la facturation.',
+            'course'   => $course->fresh(),
+            'incident' => $incident,
         ]);
     }
 

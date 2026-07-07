@@ -12,7 +12,9 @@ import StatusBadge from '../../components/StatusBadge'
 import { fetchAdminCourses, fetchAdminDrivers, reassignCourse } from '../../api/admin'
 import type { Course } from '../../api/courses'
 
-const REASSIGNABLE_BLOCKED = ['delivered', 'cancelled', 'failed', 'picked_up', 'at_dropoff']
+// picked_up et at_dropoff sont désormais réassignables via transfert physique
+// (Cas 5 — panne/accident driver). Le back exige la case cochée dans le modal.
+const REASSIGNABLE_BLOCKED = ['delivered', 'cancelled', 'failed', 'returning_to_sender']
 
 export default function AdminCoursesPage() {
   const { t } = useTranslation()
@@ -23,6 +25,8 @@ export default function AdminCoursesPage() {
   const [reassignFor, setReassignFor] = useState<Course | null>(null)
   const [newDriverId, setNewDriverId] = useState<number | ''>('')
   const [reassignReason, setReassignReason] = useState('')
+  // Cas 5 — Transfert physique quand le colis est déjà chez le driver précédent
+  const [pickupFromPrevious, setPickupFromPrevious] = useState(false)
 
   const coursesQuery = useQuery({
     queryKey: ['admin', 'courses', { search, statusFilter, page }],
@@ -44,7 +48,9 @@ export default function AdminCoursesPage() {
 
   const reassignMutation = useMutation({
     mutationFn: () =>
-      reassignCourse(reassignFor!.id, Number(newDriverId), reassignReason || undefined),
+      reassignCourse(reassignFor!.id, Number(newDriverId), reassignReason || undefined, {
+        pickupFromPreviousDriver: pickupFromPrevious || undefined,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'courses'] })
       closeReassign()
@@ -62,7 +68,13 @@ export default function AdminCoursesPage() {
     setReassignFor(null)
     setNewDriverId('')
     setReassignReason('')
+    setPickupFromPrevious(false)
   }
+
+  // Vrai uniquement si la course est en post-pickup — sinon la case n'apparaît pas
+  const isPostPickup = reassignFor
+    ? ['picked_up', 'at_dropoff'].includes(reassignFor.status)
+    : false
 
   const courses = coursesQuery.data?.data ?? []
   const total = coursesQuery.data?.total ?? courses.length
@@ -210,7 +222,11 @@ export default function AdminCoursesPage() {
             <AdminButton
               variant="primary"
               onClick={() => reassignMutation.mutate()}
-              disabled={!newDriverId || reassignMutation.isPending}
+              disabled={
+                !newDriverId
+                || reassignMutation.isPending
+                || (isPostPickup && !pickupFromPrevious)
+              }
             >
               {reassignMutation.isPending ? t('admin.courses.reassignInProgress') : t('admin.common.confirm')}
             </AdminButton>
@@ -250,6 +266,28 @@ export default function AdminCoursesPage() {
               className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
             />
           </div>
+
+          {/* Cas 5 — Transfert physique post-pickup (panne/accident driver) */}
+          {isPostPickup && (
+            <div className="bg-warning-bg border border-warning/30 rounded-md p-3">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={pickupFromPrevious}
+                  onChange={(e) => setPickupFromPrevious(e.target.checked)}
+                  className="mt-1 accent-airmess-yellow"
+                />
+                <div>
+                  <span className="text-body-s font-semibold text-ink block">
+                    {t('admin.courses.pickupFromPreviousLabel')}
+                  </span>
+                  <span className="text-caption text-warm-600 block mt-0.5">
+                    {t('admin.courses.pickupFromPreviousHelp')}
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
         </div>
       </AdminModal>
     </AdminPageShell>

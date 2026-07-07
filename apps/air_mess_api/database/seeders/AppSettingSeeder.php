@@ -51,6 +51,14 @@ class AppSettingSeeder extends Seeder
                 'group'       => 'wallet',
             ],
             [
+                'key'         => 'sos_hotline_phone',
+                'value'       => '118',
+                'type'        => 'string',
+                'label'       => 'Numéro d\'urgence livreur (SOS)',
+                'description' => 'Numéro composé automatiquement quand un livreur active le SOS depuis l\'app (accident, danger). Par défaut 118 (police secours Bénin). Peut être remplacé par une hotline Air Mess dédiée.',
+                'group'       => 'general',
+            ],
+            [
                 'key'         => 'user_wallet_min_recommended_fcfa',
                 'value'       => '5000',
                 'type'        => 'number',

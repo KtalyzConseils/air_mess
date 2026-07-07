@@ -238,10 +238,26 @@ export async function fetchAdminDrivers(): Promise<DriverFull[]> {
   return data.drivers
 }
 
-export async function reassignCourse(courseId: number, newDriverId: number, reason?: string): Promise<Course> {
+export interface ReassignOptions {
+  /** Cas 5 — Le colis est chez le driver précédent (panne/accident post-pickup). */
+  pickupFromPreviousDriver?: boolean
+  /** Coords du transfert. Si omis, le back utilise la current position du driver initial. */
+  transferLat?: number
+  transferLng?: number
+}
+
+export async function reassignCourse(
+  courseId: number,
+  newDriverId: number,
+  reason?: string,
+  options: ReassignOptions = {},
+): Promise<Course> {
   const { data } = await api.post(`/admin/courses/${courseId}/reassign`, {
     new_driver_id: newDriverId,
     reason,
+    pickup_from_previous_driver: options.pickupFromPreviousDriver ?? undefined,
+    transfer_lat: options.transferLat ?? undefined,
+    transfer_lng: options.transferLng ?? undefined,
   })
   return data.course
 }

@@ -159,8 +159,16 @@ export async function fetchCourseHistory(id: number | string): Promise<CourseSta
   return data.history
 }
 
-export async function cancelCourse(id: number | string, reason?: string): Promise<Course> {
-  const { data } = await api.post(`/courses/${id}/cancel`, { reason })
+export async function cancelCourse(
+  id: number | string,
+  reason?: string,
+  /** Cas 6 — requis quand la course est post-pickup, sinon 422. */
+  confirmPostPickup?: boolean,
+): Promise<Course> {
+  const { data } = await api.post(`/courses/${id}/cancel`, {
+    reason,
+    confirm_post_pickup: confirmPostPickup ?? undefined,
+  })
   return data.course
 }
 

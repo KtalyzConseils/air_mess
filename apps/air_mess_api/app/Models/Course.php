@@ -57,6 +57,9 @@ class Course extends Model
             'last_contact_attempt_at' => 'datetime',
             'is_return_trip' => 'boolean',
             'return_confirmed_at' => 'datetime',
+            'pickup_from_previous_driver' => 'boolean',
+            'transfer_lat' => 'float',
+            'transfer_lng' => 'float',
         ];
     }
 

@@ -12,6 +12,7 @@ import Timeline from '../components/Timeline'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import PageEyebrow from '../components/ui/PageEyebrow'
+import { AlertTriangleIcon } from '../components/ui/icons'
 import { fetchCourse, fetchCourseHistory, cancelCourse } from '../api/courses'
 import { useAuthStore } from '../stores/authStore'
 
@@ -49,13 +50,26 @@ export default function CourseDetailPage() {
     enabled: !!id,
   })
 
+  // Cas 6 — check post-pickup renforcé : la case doit être cochée pour envoyer
+  // confirm_post_pickup=true au back.
+  const [postPickupAck, setPostPickupAck] = useState(false)
+
   const cancelMutation = useMutation({
-    mutationFn: () => cancelCourse(id!, cancelReason),
+    mutationFn: () =>
+      cancelCourse(
+        id!,
+        cancelReason,
+        // Le back n'attend le flag QUE si la course est post-pickup ; sinon undefined
+        courseQuery.data && ['picked_up', 'at_dropoff'].includes(courseQuery.data.status)
+          ? postPickupAck
+          : undefined,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['course', id] })
       queryClient.invalidateQueries({ queryKey: ['course', id, 'history'] })
       queryClient.invalidateQueries({ queryKey: ['courses'] })
       setConfirmCancel(false)
+      setPostPickupAck(false)
     },
   })
 
@@ -95,7 +109,11 @@ export default function CourseDetailPage() {
 
   const course = courseQuery.data!
   const isTerminal = ['delivered', 'cancelled', 'failed'].includes(course.status)
-  const canCancel = !isTerminal && !['picked_up', 'at_dropoff'].includes(course.status)
+  // Cas 6 — l'annulation post-pickup est désormais autorisée pour le marchand,
+  // avec confirmation renforcée dans le modal (case + facturation expliquée).
+  const isPostPickup = ['picked_up', 'at_dropoff'].includes(course.status)
+  // On bloque toujours quand la course est en returning_to_sender (déjà en retour).
+  const canCancel = !isTerminal && !isAdmin && course.status !== 'returning_to_sender'
   // Signalement marchand : autorisé sur les courses non annulées, y compris après livraison
   // (colis endommagé constaté à réception). Interdit uniquement sur cancelled/failed.
   const canReportIncident = !isAdmin && !['cancelled', 'failed'].includes(course.status)
@@ -424,7 +442,38 @@ export default function CourseDetailPage() {
           <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 ams-anim-fade-in">
             <Card variant="signature" padding="lg" className="max-w-md w-full ams-anim-scale-in">
               <h3 className="text-h2 text-ink font-bold">{t('courses.detail.confirmCancel')}</h3>
-              <p className="text-body-s text-warm-500 mt-2">
+
+              {/* Cas 6 — Bloc renforcé si le colis est déjà entre les mains du livreur */}
+              {isPostPickup && (
+                <div className="mt-4 bg-warning-bg border border-warning/40 rounded-md p-3 flex gap-2">
+                  <div className="shrink-0 text-warning mt-0.5">
+                    <AlertTriangleIcon size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-body-s font-bold text-ink">
+                      {t('courses.detail.cancelPostPickupTitle')}
+                    </p>
+                    <p className="text-caption text-warm-600 mt-1">
+                      {t('courses.detail.cancelPostPickupBody', {
+                        fee: course.delivery_fee.toLocaleString('fr-FR'),
+                      })}
+                    </p>
+                    <label className="flex items-start gap-2 mt-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={postPickupAck}
+                        onChange={(e) => setPostPickupAck(e.target.checked)}
+                        className="mt-1 accent-airmess-red"
+                      />
+                      <span className="text-caption text-ink font-semibold">
+                        {t('courses.detail.cancelPostPickupAck')}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-body-s text-warm-500 mt-4">
                 {t('courses.detail.cancelReason')}
               </p>
               <textarea
@@ -432,13 +481,20 @@ export default function CourseDetailPage() {
                 onChange={(e) => setCancelReason(e.target.value)}
                 rows={3}
                 placeholder={t('courses.detail.cancelPlaceholder')}
-                className="w-full mt-4 bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
+                className="w-full mt-2 bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
               />
               {apiError && (
                 <p className="text-body-s text-airmess-red mt-2">{apiError}</p>
               )}
               <div className="flex justify-end gap-3 mt-5">
-                <Button variant="secondary" size="md" onClick={() => setConfirmCancel(false)}>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => {
+                    setConfirmCancel(false)
+                    setPostPickupAck(false)
+                  }}
+                >
                   {t('common.back')}
                 </Button>
                 <Button
@@ -447,6 +503,7 @@ export default function CourseDetailPage() {
                   pill
                   onClick={() => cancelMutation.mutate()}
                   loading={cancelMutation.isPending}
+                  disabled={isPostPickup && !postPickupAck}
                 >
                   {t('common.confirm')}
                 </Button>

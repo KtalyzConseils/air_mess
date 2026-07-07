@@ -70,6 +70,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/courses/{course}/transition', [DriverController::class, 'transition']);
         Route::post('/courses/{course}/incident', [DriverController::class, 'reportIncident']);
 
+        // Cas 5 — SOS accident/danger : notif prioritaire ops + numéro d'urgence
+        Route::post('/sos', [DriverController::class, 'sos']);
+
         // Cas 3 — Client injoignable : compteur de tentatives d'appel.
         // POST = incrément silencieux (au tap "Appeler" côté app driver).
         // PATCH = correction manuelle (appel depuis tel perso, avec note justificative).
@@ -232,6 +235,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/incidents/{incident}/no-show-partial', [AdminController::class, 'noShowPartial']);
         // Cas 4 — preset 1-clic pour course retour confirmée après refus client
         Route::post('/incidents/{incident}/return-trip-confirmed', [AdminController::class, 'returnTripConfirmed']);
+        // Cas 6 — preset 1-clic pour annulation marchand confirmée post-pickup
+        Route::post('/incidents/{incident}/marchand-cancel-confirmed', [AdminController::class, 'marchandCancelConfirmed']);
 
         // Demandes de retrait de caution — argent, donc strictement ops/super.
         Route::get('/withdraw-requests',                          [AdminController::class, 'withdrawRequests']);

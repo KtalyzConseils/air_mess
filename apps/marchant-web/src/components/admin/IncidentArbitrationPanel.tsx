@@ -9,6 +9,7 @@ import {
   arbitrateIncident,
   noShowPartial,
   returnTripConfirmed,
+  marchandCancelConfirmed,
   type AdjustmentReasonCode,
 } from '../../api/adminIncidents'
 import type { Course, CourseIncident } from '../../api/courses'
@@ -133,6 +134,37 @@ export default function IncidentArbitrationPanel({
     returnMutation.mutate()
   }
 
+  // Cas 6 — annulation marchand confirmée (preset 1 clic)
+  const marchandCancelMutation = useMutation({
+    mutationFn: () => marchandCancelConfirmed(incident.id, resolutionNote.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['course', course.id] })
+      queryClient.invalidateQueries({ queryKey: ['course', String(course.id)] })
+    },
+    onError: (err) => {
+      const msg =
+        err instanceof AxiosError
+          ? err.response?.data?.message ?? "Erreur lors du preset annulation marchand."
+          : 'Erreur inattendue.'
+      setError(msg)
+    },
+  })
+
+  function submitMarchandCancel() {
+    setError(null)
+    if (resolutionNote.trim().length < 5) {
+      setError('La note de résolution est requise (5 caractères minimum).')
+      return
+    }
+    if (
+      !window.confirm(
+        "Confirmer l'annulation marchand ? Applique les % configurés — "
+        + 'capture du fee marchand + crédit driver (trajet + bonus retour), incident résolu.',
+      )
+    ) return
+    marchandCancelMutation.mutate()
+  }
+
   function submit() {
     setError(null)
     if (resolutionNote.trim().length < 5) {
@@ -242,6 +274,33 @@ export default function IncidentArbitrationPanel({
       {incident.type === 'recipient_refused' && course.status !== 'failed' && (
         <div className="mb-4 bg-warning-bg border border-warning/30 rounded-md p-3 text-body-s text-warning">
           🔄 <strong>Retour en cours</strong> — le driver doit encore rendre le colis au marchand
+          (saisie du code de retour). Le preset s'affichera une fois le retour confirmé côté driver.
+        </div>
+      )}
+
+      {/* ============ Preset 1-clic : Annulation marchand confirmée (Cas 6) ============ */}
+      {incident.type === 'marchand_cancelled' && course.status === 'failed' && course.is_return_trip && (
+        <div className="mb-4 bg-airmess-yellow/10 border border-airmess-yellow rounded-md p-4">
+          <p className="font-bold text-ink mb-1">Préréglage — Annulation marchand confirmée</p>
+          <p className="text-body-s text-warm-600 mb-3">
+            Le marchand a annulé et le driver a rendu le colis. Applique les mêmes % que "course retour" —
+            capture du fee marchand + crédit driver (trajet + bonus retour). Incident résolu.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            pill
+            onClick={submitMarchandCancel}
+            loading={marchandCancelMutation.isPending}
+            disabled={mutation.isPending || noShowMutation.isPending || returnMutation.isPending}
+          >
+            Appliquer annulation marchand (1 clic)
+          </Button>
+        </div>
+      )}
+      {incident.type === 'marchand_cancelled' && course.status !== 'failed' && (
+        <div className="mb-4 bg-warning-bg border border-warning/30 rounded-md p-3 text-body-s text-warning">
+          <strong>Retour en cours</strong> — le driver doit encore ramener le colis au marchand
           (saisie du code de retour). Le preset s'affichera une fois le retour confirmé côté driver.
         </div>
       )}
@@ -432,6 +491,7 @@ function humanIncidentType(type: string): string {
     vehicle_breakdown:     'Panne véhicule',
     accident:              'Accident',
     payment_issue:         "Problème d'encaissement",
+    marchand_cancelled:    'Annulation marchand post-pickup',
     other:                 'Autre',
   }
   return map[type] ?? type
