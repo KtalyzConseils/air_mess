@@ -188,6 +188,19 @@ export default function AdminWithdrawRequestDetailPage() {
   const { request, active_course, recent_transactions, past_requests } = data
   const { driver, user: userOwner } = request
 
+  // Déclarés AVANT les early returns : renderUserWithdrawView() (appelé juste
+  // en dessous pour un retrait marchand/particulier) référence statusLabels →
+  // sinon TDZ « Cannot access before initialization » = page blanche.
+  const statusLabels: Record<string, string> = {
+    pending: t('admin.withdraws.statusPending'),
+    approved: t('admin.withdraws.statusApproved'),
+    rejected: t('admin.withdraws.statusRejected'),
+    cancelled: t('admin.withdraws.statusCancelled'),
+  }
+  const statusClasses =
+    STATUS_BADGE_CLASSES[request.status] ?? 'bg-warm-100 text-warm-600 border border-warm-200'
+  const statusLabel = statusLabels[request.status] ?? request.status
+
   // La demande peut être portée par un user marchand/particulier au lieu d'un driver.
   // La vue driver ci-dessous n'a pas de sens dans ce cas ; on route vers une vue
   // simplifiée qui affiche les infos user + les actions (les endpoints admin
@@ -402,16 +415,6 @@ export default function AdminWithdrawRequestDetailPage() {
       </AdminPageShell>
     )
   }
-  const statusClasses =
-    STATUS_BADGE_CLASSES[request.status] ?? 'bg-warm-100 text-warm-600 border border-warm-200'
-  const statusLabels: Record<string, string> = {
-    pending: t('admin.withdraws.statusPending'),
-    approved: t('admin.withdraws.statusApproved'),
-    rejected: t('admin.withdraws.statusRejected'),
-    cancelled: t('admin.withdraws.statusCancelled'),
-  }
-  const statusLabel = statusLabels[request.status] ?? request.status
-
   const isBusy = !!active_course
   const balanceShort = wallet ? wallet.balance < request.amount_fcfa : false
   const isPending = request.status === 'pending'
