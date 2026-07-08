@@ -60,6 +60,7 @@ class Course extends Model
             'pickup_from_previous_driver' => 'boolean',
             'transfer_lat' => 'float',
             'transfer_lng' => 'float',
+            'is_fraud' => 'boolean',
         ];
     }
 

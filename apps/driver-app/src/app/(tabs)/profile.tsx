@@ -6,7 +6,7 @@ import Constants from 'expo-constants'
 import { useAuthStore } from '../../stores/authStore'
 import { fetchDriverStats } from '../../api/driver'
 
-type ActivationStatus = 'active' | 'validated' | 'pending' | 'suspended'
+type ActivationStatus = 'active' | 'validated' | 'pending' | 'suspended' | 'banned'
 
 const ACTIVATION_META: Record<
   ActivationStatus,
@@ -16,6 +16,7 @@ const ACTIVATION_META: Record<
   validated: { label: 'Validé',              dotColor: '#16A34A', textColor: 'text-success' },
   pending:   { label: 'En cours de validation', dotColor: '#F59E0B', textColor: 'text-warning' },
   suspended: { label: 'Compte suspendu',     dotColor: '#D40511', textColor: 'text-airmess-red' },
+  banned:    { label: 'Compte banni',        dotColor: '#D40511', textColor: 'text-airmess-red' },
 }
 
 const VEHICLE_META: Record<

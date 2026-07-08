@@ -1,13 +1,23 @@
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { AxiosError } from 'axios'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import { useTranslation } from 'react-i18next'
 import StatusBadge from '../components/StatusBadge'
 import Card from '../components/ui/Card'
+import Button from '../components/ui/Button'
 import Highlight from '../components/Highlight'
-import { fetchTracking } from '../api/tracking'
+import { AlertTriangleIcon } from '../components/ui/icons'
+import { fetchTracking, disputeTracking } from '../api/tracking'
 import mark from '../assets/logo/airmess-mark.svg'
 import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
+
+// Cas 8 — Fenêtre de contestation. Doit rester en phase avec le setting back
+// `dispute_window_days` (défaut 7). Utilisé pour l'affichage conditionnel du
+// bouton "Ce n'est pas moi qui ai reçu". Le back reste seul juge en cas de
+// désaccord (renvoie 422 si dépassé).
+const DISPUTE_WINDOW_DAYS = 7
 
 export default function TrackingPage() {
   const { t } = useTranslation()
@@ -193,6 +203,15 @@ export default function TrackingPage() {
           </ol>
         </Card>
 
+        {/* Cas 8 — Bouton de contestation destinataire (course delivered, fenêtre ouverte) */}
+        {data.status === 'delivered' && data.delivered_at && (
+          <DisputeSection
+            token={token!}
+            deliveredAt={data.delivered_at}
+            reference={data.reference}
+          />
+        )}
+
         {/* Footer */}
         <div className="text-center pt-4 pb-2 flex flex-col items-center gap-3 opacity-60">
           <img src={wordmarkWhite} alt="" aria-hidden className="h-5 w-auto invert opacity-40" />
@@ -202,5 +221,167 @@ export default function TrackingPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+/* ============================================================
+   Cas 8 — Section contestation destinataire
+   ============================================================ */
+function DisputeSection({
+  token,
+  deliveredAt,
+  reference,
+}: {
+  token: string
+  deliveredAt: string
+  reference: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [description, setDescription] = useState('')
+  const [confirmed, setConfirmed] = useState<{ id: number } | null>(null)
+
+  const daysSince = Math.floor((Date.now() - new Date(deliveredAt).getTime()) / (1000 * 60 * 60 * 24))
+  const withinWindow = daysSince <= DISPUTE_WINDOW_DAYS
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      disputeTracking(token, {
+        name: name.trim(),
+        phone: phone.trim(),
+        description: description.trim(),
+      }),
+    onSuccess: (data) => {
+      setConfirmed({ id: data.incident.id })
+    },
+  })
+
+  const apiError =
+    mutation.error instanceof AxiosError
+      ? mutation.error.response?.data?.message ?? 'Erreur inattendue.'
+      : null
+
+  // Une fois soumis avec succès, on remplace la carte par la confirmation
+  if (confirmed) {
+    return (
+      <Card variant="signature" padding="lg" className="mb-6 border-l-4 border-l-success!">
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 text-success mt-0.5">
+            <AlertTriangleIcon size={20} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-eyebrow uppercase text-success font-bold mb-1">
+              Contestation enregistrée
+            </p>
+            <p className="text-body-s text-warm-700">
+              Merci. L'équipe support va enquêter et vous recontacter au numéro fourni.
+            </p>
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
+  if (!withinWindow) {
+    return null
+  }
+
+  return (
+    <Card variant="default" padding="md" className="mb-6">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-eyebrow uppercase text-warm-500 font-bold mb-1">
+            Ce colis ne vous a pas été remis&nbsp;?
+          </p>
+          <p className="text-body-s text-warm-600">
+            Vous pouvez le signaler pendant {DISPUTE_WINDOW_DAYS} jours après la livraison.
+            Notre équipe enquêtera et reviendra vers vous.
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+          Signaler un problème
+        </Button>
+      </div>
+
+      {open && (
+        <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <Card variant="signature" padding="lg" className="max-w-md w-full">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="shrink-0 text-airmess-red mt-1">
+                <AlertTriangleIcon size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-h3 text-ink font-bold">Contester la livraison</h3>
+                <p className="text-caption text-warm-500 mt-1">Course {reference}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-caption font-medium text-warm-600 mb-1">
+                  Votre nom
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Prénom et nom"
+                  className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
+                />
+              </div>
+              <div>
+                <label className="block text-caption font-medium text-warm-600 mb-1">
+                  Votre téléphone
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+229 ..."
+                  className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
+                />
+              </div>
+              <div>
+                <label className="block text-caption font-medium text-warm-600 mb-1">
+                  Décrivez ce qui s'est passé (min. 20 caractères)
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  placeholder="Ex : je n'ai jamais reçu ce colis, personne n'est venu à mon adresse…"
+                  className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
+                />
+              </div>
+            </div>
+
+            {apiError && (
+              <p className="text-body-s text-airmess-red mt-2">{apiError}</p>
+            )}
+
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="secondary" size="md" onClick={() => setOpen(false)}>
+                Annuler
+              </Button>
+              <Button
+                variant="danger"
+                size="md"
+                pill
+                onClick={() => mutation.mutate()}
+                loading={mutation.isPending}
+                disabled={
+                  name.trim().length < 2
+                  || phone.trim().length < 6
+                  || description.trim().length < 20
+                }
+              >
+                Envoyer la contestation
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </Card>
   )
 }

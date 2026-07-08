@@ -19,6 +19,12 @@ class CourseIncident extends Model
     // Cas 6 — Marchand annule post-pickup. Créé côté back lors du cancel
     // (pas signalable manuellement par le driver ; hors MARCHAND_INCIDENT_TYPES).
     public const TYPE_MARCHAND_CANCELLED    = 'marchand_cancelled';
+    // Cas 7 — Vol livreur. Créé par l'endpoint super-admin mark-fraud.
+    // Bannit le driver + saisie caution + refund marchand — action lourde.
+    public const TYPE_DRIVER_THEFT          = 'driver_theft';
+    // Cas 8 — Mauvais destinataire. Signalable POST-livraison par le marchand,
+    // le destinataire (via tracking public) ou l'ops.
+    public const TYPE_WRONG_RECIPIENT       = 'wrong_recipient';
     public const TYPE_OTHER                 = 'other';
 
     public const TYPES = [
@@ -27,7 +33,17 @@ class CourseIncident extends Model
         self::TYPE_PACKAGE_DAMAGED, self::TYPE_PACKAGE_LOST,
         self::TYPE_VEHICLE_BREAKDOWN, self::TYPE_ACCIDENT,
         self::TYPE_PAYMENT_ISSUE, self::TYPE_MARCHAND_CANCELLED,
+        self::TYPE_DRIVER_THEFT, self::TYPE_WRONG_RECIPIENT,
         self::TYPE_OTHER,
+    ];
+
+    /**
+     * Types de signalement autorisés APRÈS delivered, dans la fenêtre
+     * de contestation (setting `dispute_window_days`, défaut 7 jours).
+     */
+    public const POST_DELIVERY_TYPES = [
+        self::TYPE_WRONG_RECIPIENT,
+        self::TYPE_PACKAGE_LOST,
     ];
 
     protected $guarded = ['id'];

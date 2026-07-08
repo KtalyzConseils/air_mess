@@ -200,6 +200,7 @@ class CourseController extends Controller
             CourseIncident::TYPE_PACKAGE_DAMAGED,
             CourseIncident::TYPE_PACKAGE_LOST,
             CourseIncident::TYPE_WRONG_ADDRESS,
+            CourseIncident::TYPE_WRONG_RECIPIENT,
             CourseIncident::TYPE_PAYMENT_ISSUE,
             CourseIncident::TYPE_OTHER,
         ];
@@ -208,6 +209,30 @@ class CourseController extends Controller
             'type'        => ['required', Rule::in($allowedTypes)],
             'description' => ['required', 'string', 'min:10', 'max:1000'],
         ]);
+
+        // Cas 8 — fenêtre de contestation pour signalement POST-livraison.
+        // Sur une course delivered, seuls certains types sont acceptés,
+        // et uniquement dans la fenêtre (défaut 7j). Passé ce délai la
+        // livraison est acquise — l'ops peut toujours créer manuellement
+        // un incident via un support ticket si un cas exceptionnel arrive.
+        if ($course->status === Course::STATUS_DELIVERED) {
+            if (! in_array($data['type'], CourseIncident::POST_DELIVERY_TYPES, true)) {
+                return response()->json([
+                    'message' => 'Ce type d\'incident n\'est pas signalable après livraison.',
+                ], 422);
+            }
+            $windowDays = (int) \App\Models\AppSetting::get('dispute_window_days', 7);
+            if ($course->delivered_at && $course->delivered_at->diffInDays(now()) > $windowDays) {
+                return response()->json([
+                    'message' => "Fenêtre de contestation dépassée ({$windowDays} jours). Contactez le support pour un examen exceptionnel.",
+                ], 422);
+            }
+        } elseif ($course->isTerminal()) {
+            // cancelled / failed : incident non pertinent
+            return response()->json([
+                'message' => 'Impossible de signaler un incident : cette course est déjà clôturée.',
+            ], 422);
+        }
 
         $incident = CourseIncident::create([
             'course_id'     => $course->id,

@@ -51,7 +51,10 @@ export default function BottomSheet({
           style={{ maxHeight: '92%' }}
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            // iOS : padding pousse tout le contenu au-dessus du clavier
+            // Android : height + softwareKeyboardLayoutMode="resize" (app.json)
+            //   travaillent ensemble pour reflower la sheet quand le clavier apparaît
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={12}
           >
             {/* Drag handle */}

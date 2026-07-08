@@ -435,6 +435,10 @@ class DriverController extends Controller
         }
 
         if ($requireActive && $user->driver->activation_status !== 'active') {
+            // Cas 7 — un driver banni reçoit un message dédié (irréversible sans intervention support)
+            if ($user->driver->activation_status === 'banned') {
+                abort(403, 'Votre compte a été banni suite à un signalement. Contactez le support.');
+            }
             abort(403, 'Votre compte est en attente de validation. Vous recevrez un email dès activation.');
         }
 

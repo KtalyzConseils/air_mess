@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, RefreshControl } from 'react-native'
+import { View, Text, ScrollView, Pressable, RefreshControl, Linking, KeyboardAvoidingView, Platform } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -27,7 +27,7 @@ function getInitials(name: string): string {
 }
 
 export default function DriverDashboard() {
-  const { user } = useAuthStore()
+  const { user, logout } = useAuthStore()
   const router = useRouter()
 
   const meQuery = useQuery({
@@ -41,6 +41,7 @@ export default function DriverDashboard() {
 
   const me = meQuery.data ?? user
   const availability = (me?.driver?.availability_status ?? 'offline') as Availability | 'busy'
+  const isBanned = me?.driver?.activation_status === 'banned'
 
   const activeQuery = useQuery({
     queryKey: ['my-active'],
@@ -69,13 +70,60 @@ export default function DriverDashboard() {
 
   const firstName = me?.driver?.first_name ?? me?.name ?? ''
 
+  // Cas 7 — Driver banni : écran de blocage complet. Le back retourne 403 sur
+  // toutes les actions (currentDriver refuse activation_status !== 'active'),
+  // on masque quand même toute l'UI pour éviter la confusion.
+  if (isBanned) {
+    return (
+      <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right', 'bottom']}>
+        <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+        <View className="flex-1 items-center justify-center px-6">
+          <View className="w-20 h-20 rounded-full bg-airmess-red/10 items-center justify-center mb-5">
+            <Ionicons name="alert-circle" size={44} color="#D40511" />
+          </View>
+          <Text className="text-2xl font-extrabold text-ink text-center">
+            Compte banni
+          </Text>
+          <Text className="text-sm text-warm-600 text-center mt-3 leading-5">
+            Votre compte a été banni suite à un signalement de fraude.
+            Contactez le support pour toute réclamation.
+          </Text>
+          <View className="w-full mt-6 gap-2">
+            <Pressable
+              onPress={() => Linking.openURL('tel:118')}
+              className="h-12 rounded-2xl bg-airmess-yellow items-center justify-center flex-row"
+              style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+            >
+              <Ionicons name="call" size={18} color="#1A1614" />
+              <Text className="text-ink font-extrabold ml-2">Contacter le support</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => useAuthStore.getState().logout()}
+              className="h-12 rounded-2xl border-2 border-warm-300 items-center justify-center flex-row"
+              style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#6E6558" />
+              <Text className="text-warm-600 font-bold ml-2">Se déconnecter</Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl
             refreshing={meQuery.isRefetching || activeQuery.isRefetching}
@@ -180,6 +228,7 @@ export default function DriverDashboard() {
           <EmptyStateOffline availability={availability} />
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }

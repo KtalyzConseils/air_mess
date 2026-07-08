@@ -31,3 +31,22 @@ export async function fetchTracking(token: string): Promise<TrackingPayload> {
   const { data } = await api.get(`/tracking/${token}`)
   return data.tracking
 }
+
+/**
+ * Cas 8 — Le destinataire conteste la livraison depuis le lien tracking.
+ * Anti-abus back : autorisé uniquement dans la fenêtre de contestation
+ * (`dispute_window_days`, défaut 7 jours) et un seul incident par course.
+ */
+export interface DisputeTrackingPayload {
+  name: string
+  phone: string
+  description: string
+}
+
+export async function disputeTracking(
+  token: string,
+  payload: DisputeTrackingPayload,
+): Promise<{ message: string; incident: { id: number; type: string; status: string } }> {
+  const { data } = await api.post(`/tracking/${token}/dispute`, payload)
+  return data
+}

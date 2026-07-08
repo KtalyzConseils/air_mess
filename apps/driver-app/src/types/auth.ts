@@ -16,7 +16,7 @@ export interface Driver {
   first_name: string
   last_name: string
   availability_status: 'offline' | 'available' | 'busy' | 'on_break'
-  activation_status: 'pending' | 'validated' | 'active' | 'suspended'
+  activation_status: 'pending' | 'validated' | 'active' | 'suspended' | 'banned'
   vehicle_type: string
   vehicle_plate: string | null
   vehicle_color: string | null

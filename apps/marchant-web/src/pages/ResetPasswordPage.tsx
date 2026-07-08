@@ -121,10 +121,13 @@ export default function ResetPasswordPage() {
                   required
                   minLength={8}
                   value={confirmation}
-                  onChange={(e) => setConfirmation(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmation(e.target.value)
+                    if (mutation.error) mutation.reset()
+                  }}
                   disabled={mutation.isPending}
                   autoComplete="new-password"
-                  error={mismatch ? t('common.passwordMismatch') : undefined}
+                  error={mismatch ? t('common.passwordMismatch') : apiError ? '' : undefined}
                   rightSlot={
                     <button
                       type="button"

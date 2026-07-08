@@ -52,6 +52,9 @@ export interface Course {
   is_return_trip?: boolean
   return_code?: string | null
   return_confirmed_at?: string | null
+  // Cas 7 — Vol livreur
+  is_fraud?: boolean
+  fraud_shortfall_fcfa?: number | null
   incidents?: CourseIncident[]
 }
 
@@ -177,11 +180,12 @@ export async function cancelCourse(
  * (Le back restreint la liste ; ceci en est le mirror pour les selects.)
  */
 export const MARCHAND_INCIDENT_TYPES = [
-  { value: 'package_damaged',  label: '📦 Colis endommagé à la livraison' },
-  { value: 'package_lost',     label: '🚫 Colis perdu / jamais livré' },
-  { value: 'wrong_address',    label: '📍 Livraison à une mauvaise adresse' },
-  { value: 'payment_issue',    label: '💰 Problème d\'encaissement' },
-  { value: 'other',            label: '❓ Autre' },
+  { value: 'package_damaged',  label: 'Colis endommagé à la livraison' },
+  { value: 'package_lost',     label: 'Colis perdu / jamais livré' },
+  { value: 'wrong_address',    label: 'Livraison à une mauvaise adresse' },
+  { value: 'wrong_recipient',  label: 'Livré au mauvais destinataire' },
+  { value: 'payment_issue',    label: 'Problème d\'encaissement' },
+  { value: 'other',            label: 'Autre' },
 ] as const
 
 export type MarchandIncidentType = (typeof MARCHAND_INCIDENT_TYPES)[number]['value']

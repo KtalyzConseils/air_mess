@@ -238,6 +238,32 @@ export async function fetchAdminDrivers(): Promise<DriverFull[]> {
   return data.drivers
 }
 
+/**
+ * Cas 7 — Marque une course comme fraude driver.
+ * Super-admin uniquement. Bannit le driver, saisit sa caution,
+ * rembourse le marchand. Irréversible.
+ */
+export interface MarkFraudResponse {
+  message: string
+  course: Course
+  summary: {
+    refund_owed: number
+    package_value: number
+    collection: number
+    seized_amount: number
+    shortfall: number
+  }
+  incident: unknown
+}
+
+export async function markCourseFraud(
+  courseId: number,
+  note: string,
+): Promise<MarkFraudResponse> {
+  const { data } = await api.post(`/admin/courses/${courseId}/mark-fraud`, { note })
+  return data
+}
+
 export interface ReassignOptions {
   /** Cas 5 — Le colis est chez le driver précédent (panne/accident post-pickup). */
   pickupFromPreviousDriver?: boolean

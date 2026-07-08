@@ -325,8 +325,9 @@ export default function DriverRegisterPage() {
                 />
               </div>
               {fileError && (
-                <p className="mt-4 text-body-s text-airmess-red bg-danger-bg border border-airmess-red/30 px-3 py-2 rounded-md">
-                  ⚠️ {fileError}
+                <p className="mt-4 text-body-s text-airmess-red bg-danger-bg border border-airmess-red/30 px-3 py-2 rounded-md inline-flex items-start gap-2">
+                  <AlertTriangleIcon size={16} />
+                  <span>{fileError}</span>
                 </p>
               )}
             </FormSection>
@@ -335,9 +336,10 @@ export default function DriverRegisterPage() {
             {serverError && (
               <div
                 role="alert"
-                className="bg-danger-bg border border-airmess-red/30 text-airmess-red px-4 py-3 rounded-md text-body-s"
+                className="bg-danger-bg border border-airmess-red/30 text-airmess-red px-4 py-3 rounded-md text-body-s flex items-start gap-2"
               >
-                ⚠️ {serverError}
+                <AlertTriangleIcon size={18} />
+                <span>{serverError}</span>
               </div>
             )}
 

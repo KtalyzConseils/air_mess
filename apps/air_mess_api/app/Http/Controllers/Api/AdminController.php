@@ -302,6 +302,204 @@ class AdminController extends Controller
         return response()->json(['message' => 'Course en litige.', 'course' => $course->fresh()]);
     }
 
+    // ===== Cas 7 — Vol livreur =====
+
+    /**
+     * Marque une course comme fraude et bannit le driver.
+     *
+     * Actions atomiques (rollback si un maillon casse) :
+     *   1. Release du hold marchand si paid_from_wallet (le marchand ne paie pas la course)
+     *   2. Crédit marchand = valeur déclarée + collection_amount (si has_collection)
+     *      via wallet_adjustment reason=incident_refund
+     *   3. Saisie caution driver via wallet_adjustment reason=caution_seizure,
+     *      montant capé sur le solde disponible (Cas 2 réutilisé)
+     *   4. Driver banni : activation_status = 'banned' (irréversible sans intervention super-admin)
+     *   5. Course : is_fraud=true, status=failed, fraud_shortfall_fcfa = manque non couvert
+     *   6. Création d'un CourseIncident type driver_theft résolu immédiatement
+     *
+     * Le manque à combler (shortfall) est stocké dans fraud_shortfall_fcfa pour
+     * la réconciliation comptable. C'est le passif que Air Mess doit soit
+     * absorber, soit récupérer par voie juridique (plainte police, recours civil).
+     *
+     * Endpoint réservé au super-admin (défense en profondeur : bannissement + saisie
+     * = décision lourde, jamais déléguée à un ops).
+     */
+    public function markFraud(
+        Request $request,
+        Course $course,
+        \App\Services\WalletAdjustmentService $adjustments,
+        \App\Services\UserWalletService $userWallet,
+        NotificationService $notifier,
+    ): JsonResponse {
+        $data = $request->validate([
+            'note' => ['required', 'string', 'min:20', 'max:2000'],
+        ]);
+
+        if ($course->is_fraud) {
+            return response()->json(['message' => 'Course déjà marquée comme fraude.'], 422);
+        }
+        if (! $course->driver) {
+            return response()->json(['message' => 'Aucun livreur assigné à cette course.'], 422);
+        }
+        if ($course->status === Course::STATUS_DELIVERED) {
+            return response()->json([
+                'message' => 'La course est marquée livrée. Vérifiez d\'abord avec le client (fraude sur livraison prétendue) avant de bannir le driver.',
+            ], 422);
+        }
+
+        $admin = $request->user()->admin;
+
+        // Calcul du montant dû au marchand.
+        // Colis volé : le marchand perd la valeur déclarée. Sans valeur déclarée
+        // on ne peut pas indemniser (l'ops devra créer un ajustement manuel après enquête).
+        $packageValue    = (int) ($course->package_declared_value ?? 0);
+        $collectionOwed  = $course->has_collection ? (int) ($course->collection_amount ?? 0) : 0;
+        $refundOwed      = $packageValue + $collectionOwed;
+
+        try {
+            $result = DB::transaction(function () use (
+                $course, $data, $admin, $adjustments, $userWallet, $refundOwed, $packageValue, $collectionOwed
+            ) {
+                // 1. Release du hold marchand si posé (le marchand ne paie pas la course foirée).
+                if ($course->paid_from_wallet && $course->sender) {
+                    $userWallet->releaseReservation(
+                        $course->sender,
+                        $course,
+                        (int) $course->delivery_fee,
+                    );
+                }
+
+                // 2. Crédit marchand (valeur colis + encaissement).
+                //    Ne s'applique que si sender existe et qu'il y a quelque chose à créditer.
+                $marchandAdj = null;
+                if ($course->sender && $refundOwed > 0) {
+                    $marchandAdj = $adjustments->applyToUser(
+                        user:       $course->sender,
+                        amount:     $refundOwed,
+                        reasonCode: \App\Models\WalletAdjustment::REASON_INCIDENT_REFUND,
+                        course:     $course,
+                        incident:   null,
+                        adminId:    $admin->id,
+                        notes:      '[Fraude driver] Remboursement colis + encaissement. Valeur colis: '
+                                    . number_format($packageValue, 0, ',', ' ') . ' FCFA'
+                                    . ($collectionOwed > 0 ? ', encaissement: ' . number_format($collectionOwed, 0, ',', ' ') . ' FCFA' : ''),
+                    );
+                }
+
+                // 3. Saisie caution driver — auto-cap sur le solde disponible.
+                //    Réutilise la mécanique Cas 2 mais on cible directement toute la caution.
+                $driverWallet = \App\Models\DriverWallet::where('driver_id', $course->driver->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                $driverAdj    = null;
+                $seizedAmount = 0;
+                if ($driverWallet && $driverWallet->balance > 0) {
+                    $seizedAmount = (int) $driverWallet->balance;
+                    $driverAdj = $adjustments->applyToDriver(
+                        driver:     $course->driver,
+                        amount:     -$seizedAmount,
+                        reasonCode: \App\Models\WalletAdjustment::REASON_CAUTION_SEIZURE,
+                        course:     $course,
+                        incident:   null,
+                        adminId:    $admin->id,
+                        notes:      '[Fraude driver] Saisie intégrale de la caution.',
+                    );
+                }
+
+                // 4. Bannissement driver — plus fort que suspended (temporaire).
+                $course->driver->update([
+                    'activation_status'   => 'banned',
+                    'availability_status' => 'offline',
+                ]);
+
+                // 5. Course : marquée fraude + failed + shortfall.
+                $previousStatus = $course->status;
+                $shortfall      = max(0, $refundOwed - $seizedAmount);
+                $course->update([
+                    'status'                => Course::STATUS_FAILED,
+                    'is_fraud'              => true,
+                    'fraud_shortfall_fcfa'  => $shortfall > 0 ? $shortfall : null,
+                    'cancelled_at'          => now(),
+                ]);
+
+                CourseStatusHistory::create([
+                    'course_id'       => $course->id,
+                    'from_status'     => $previousStatus,
+                    'to_status'       => Course::STATUS_FAILED,
+                    'changed_by_id'   => $admin->user_id ?? null,
+                    'changed_by_type' => 'admin',
+                    'reason'          => 'mark_fraud: ' . $data['note'],
+                    'metadata'        => [
+                        'refund_owed'   => $refundOwed,
+                        'seized_amount' => $seizedAmount,
+                        'shortfall'     => $shortfall,
+                        'driver_id'     => $course->driver->id,
+                    ],
+                ]);
+
+                // 6. Incident driver_theft résolu immédiatement (trace).
+                $incident = \App\Models\CourseIncident::create([
+                    'course_id'       => $course->id,
+                    'reported_by'     => $admin->user_id ?? null,
+                    'reporter_type'   => 'admin',
+                    'type'            => \App\Models\CourseIncident::TYPE_DRIVER_THEFT,
+                    'description'     => $data['note'],
+                    'status'          => 'resolved',
+                    'resolution_note' => 'Saisie caution + bannissement driver + refund marchand appliqués via mark-fraud.',
+                    'resolved_by'     => $admin->user_id ?? null,
+                    'resolved_at'     => now(),
+                ]);
+
+                return [
+                    'marchandAdj'  => $marchandAdj,
+                    'driverAdj'    => $driverAdj,
+                    'seizedAmount' => $seizedAmount,
+                    'shortfall'    => $shortfall,
+                    'incident'     => $incident,
+                ];
+            });
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        // Notifs
+        if ($course->sender_id && $refundOwed > 0) {
+            $notifier->sendToUser(
+                $course->sender_id,
+                'incident.fraud_refund',
+                'Fraude livreur — remboursement',
+                "Course {$course->reference} : votre wallet a été crédité de "
+                . number_format($refundOwed, 0, ',', ' ') . ' FCFA suite à un signalement de fraude livreur.',
+                ['reference' => $course->reference, 'amount' => $refundOwed],
+                $course->id,
+            );
+        }
+        if ($course->driver && $course->driver->user_id) {
+            $notifier->sendToUser(
+                $course->driver->user_id,
+                'driver.banned',
+                'Compte banni',
+                'Votre compte a été banni suite à un signalement de fraude. Contactez le support.',
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
+
+        return response()->json([
+            'message' => 'Course marquée comme fraude. Driver banni, caution saisie, marchand remboursé.',
+            'course'  => $course->fresh(),
+            'summary' => [
+                'refund_owed'   => $refundOwed,
+                'package_value' => $packageValue,
+                'collection'    => $collectionOwed,
+                'seized_amount' => $result['seizedAmount'],
+                'shortfall'     => $result['shortfall'],
+            ],
+            'incident' => $result['incident'],
+        ]);
+    }
+
     // ===== 5. LISTE DES MARCHANDS À VALIDER =====
     public function pendingMarchants(): JsonResponse
     {

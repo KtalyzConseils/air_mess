@@ -14,7 +14,9 @@ import Button from '../components/ui/Button'
 import PageEyebrow from '../components/ui/PageEyebrow'
 import { AlertTriangleIcon } from '../components/ui/icons'
 import { fetchCourse, fetchCourseHistory, cancelCourse } from '../api/courses'
+import { markCourseFraud } from '../api/admin'
 import { useAuthStore } from '../stores/authStore'
+import { hasAdminRole } from '../lib/permissions'
 
 export default function CourseDetailPage() {
   const { t } = useTranslation()
@@ -23,10 +25,15 @@ export default function CourseDetailPage() {
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const isAdmin = user?.type === 'admin'
+  const isSuperAdmin = hasAdminRole(user, 'super')
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [reportIncidentOpen, setReportIncidentOpen] = useState(false)
+  // Cas 7 — Modal signaler vol (super-admin uniquement)
+  const [fraudOpen, setFraudOpen] = useState(false)
+  const [fraudNote, setFraudNote] = useState('')
+  const [fraudAck, setFraudAck] = useState(false)
 
   async function copy(text: string, key: string) {
     try {
@@ -72,6 +79,24 @@ export default function CourseDetailPage() {
       setPostPickupAck(false)
     },
   })
+
+  // Cas 7 — mark-fraud (super-admin uniquement)
+  const fraudMutation = useMutation({
+    mutationFn: () => markCourseFraud(Number(id), fraudNote.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['course', id] })
+      queryClient.invalidateQueries({ queryKey: ['course', id, 'history'] })
+      queryClient.invalidateQueries({ queryKey: ['courses'] })
+      setFraudOpen(false)
+      setFraudNote('')
+      setFraudAck(false)
+    },
+  })
+
+  const fraudError =
+    fraudMutation.error instanceof AxiosError
+      ? fraudMutation.error.response?.data?.message ?? t('common.unexpectedError')
+      : null
 
   // Le wrapper de la page diffère selon le rôle :
   //  - admin : sidebar verticale (AdminPageShell) → cohérent avec le reste de /admin
@@ -179,8 +204,42 @@ export default function CourseDetailPage() {
                 <span className="text-airmess-red">{t('common.cancel')}</span>
               </Button>
             )}
+            {/* Cas 7 — Signaler vol (super-admin uniquement, course non terminale, driver assigné) */}
+            {isSuperAdmin && !course.is_fraud && course.driver && !['delivered', 'cancelled'].includes(course.status) && (
+              <Button variant="ghost" size="sm" onClick={() => setFraudOpen(true)}>
+                <span className="text-airmess-red inline-flex items-center gap-1">
+                  <AlertTriangleIcon size={14} />
+                  Signaler vol
+                </span>
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Cas 7 — Bandeau course frauduleuse */}
+        {course.is_fraud && (
+          <Card variant="signature" padding="lg" className="mb-6 border-l-4 border-l-airmess-red! bg-danger-bg!">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 text-airmess-red mt-0.5">
+                <AlertTriangleIcon size={24} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-eyebrow uppercase text-airmess-red font-bold mb-1">
+                  Course frauduleuse — signalée
+                </p>
+                <p className="text-body-s text-warm-700">
+                  Le livreur a été banni, la caution saisie, et le marchand remboursé.
+                  {typeof course.fraud_shortfall_fcfa === 'number' && course.fraud_shortfall_fcfa > 0 && (
+                    <>
+                      {' '}Manque à combler par la plateforme :{' '}
+                      <strong>{course.fraud_shortfall_fcfa.toLocaleString('fr-FR')} FCFA</strong>.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* ============================================================
             PANNEAU D'ARBITRAGE — admin + incident ouvert
@@ -506,6 +565,94 @@ export default function CourseDetailPage() {
                   disabled={isPostPickup && !postPickupAck}
                 >
                   {t('common.confirm')}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* ============================================================
+            Cas 7 — MODAL SIGNALER VOL (super-admin uniquement)
+            ============================================================ */}
+        {fraudOpen && (
+          <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 ams-anim-fade-in">
+            <Card variant="signature" padding="lg" className="max-w-lg w-full ams-anim-scale-in border-l-4 border-l-airmess-red!">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 text-airmess-red mt-1">
+                  <AlertTriangleIcon size={22} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-h2 text-ink font-bold">Signaler un vol livreur</h3>
+                  <p className="text-body-s text-warm-600 mt-1">
+                    Le livreur sera <strong>banni définitivement</strong>, sa caution sera saisie
+                    en totalité, et le marchand sera remboursé (valeur déclarée + encaissement).
+                    Cette action est <strong>irréversible</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 bg-warm-100 rounded-md p-3 text-caption text-warm-600 space-y-1">
+                <p><strong>Livreur :</strong> {course.driver?.user.name ?? '—'}</p>
+                <p><strong>Valeur déclarée du colis :</strong>{' '}
+                  {typeof course.package_declared_value === 'number'
+                    ? course.package_declared_value.toLocaleString('fr-FR') + ' FCFA'
+                    : 'non renseignée'}
+                </p>
+                {course.has_collection && (
+                  <p><strong>Encaissement :</strong>{' '}
+                    {(course.collection_amount ?? 0).toLocaleString('fr-FR')} FCFA
+                  </p>
+                )}
+              </div>
+
+              <label className="block mt-4 text-caption text-warm-600 font-medium">
+                Note détaillée (min. 20 caractères)
+              </label>
+              <textarea
+                value={fraudNote}
+                onChange={(e) => setFraudNote(e.target.value)}
+                rows={4}
+                placeholder="Contexte, sources, preuves (appels marchand, GPS coupé, tentatives infructueuses…)"
+                className="w-full mt-1 bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body-s text-ink focus:outline-none focus:border-airmess-red"
+              />
+
+              <label className="flex items-start gap-2 mt-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={fraudAck}
+                  onChange={(e) => setFraudAck(e.target.checked)}
+                  className="mt-1 accent-airmess-red"
+                />
+                <span className="text-caption text-ink font-semibold">
+                  Je comprends que cette action est irréversible.
+                </span>
+              </label>
+
+              {fraudError && (
+                <p className="text-body-s text-airmess-red mt-2">{fraudError}</p>
+              )}
+
+              <div className="flex justify-end gap-3 mt-5">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => {
+                    setFraudOpen(false)
+                    setFraudNote('')
+                    setFraudAck(false)
+                  }}
+                >
+                  {t('common.back')}
+                </Button>
+                <Button
+                  variant="danger"
+                  size="md"
+                  pill
+                  onClick={() => fraudMutation.mutate()}
+                  loading={fraudMutation.isPending}
+                  disabled={!fraudAck || fraudNote.trim().length < 20}
+                >
+                  Bannir et rembourser
                 </Button>
               </div>
             </Card>

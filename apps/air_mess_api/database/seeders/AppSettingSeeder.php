@@ -51,6 +51,14 @@ class AppSettingSeeder extends Seeder
                 'group'       => 'wallet',
             ],
             [
+                'key'         => 'dispute_window_days',
+                'value'       => '7',
+                'type'        => 'number',
+                'label'       => 'Fenêtre de contestation (jours)',
+                'description' => 'Nombre de jours après la livraison pendant lesquels le marchand ou le destinataire peut signaler un problème (mauvais destinataire, colis perdu constaté après). Au-delà, la livraison est définitivement acquise.',
+                'group'       => 'general',
+            ],
+            [
                 'key'         => 'sos_hotline_phone',
                 'value'       => '118',
                 'type'        => 'string',

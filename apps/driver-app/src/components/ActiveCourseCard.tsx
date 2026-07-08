@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text, Pressable, TextInput, Linking, Modal, Alert } from 'react-native'
+import { View, Text, Pressable, TextInput, Linking, Modal, Alert, KeyboardAvoidingView, Platform } from 'react-native'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import {
@@ -446,6 +446,10 @@ export default function ActiveCourseCard({ course }: Props) {
         animationType="fade"
         onRequestClose={() => setCorrectOpen(false)}
       >
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
         <View className="flex-1 bg-black/60 items-center justify-center px-6">
           <View className="w-full bg-off-white rounded-2xl p-5">
             <Text className="text-lg font-extrabold text-ink mb-1">
@@ -498,6 +502,7 @@ export default function ActiveCourseCard({ course }: Props) {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   )

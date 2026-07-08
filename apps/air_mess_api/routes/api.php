@@ -33,6 +33,8 @@ Route::prefix('auth')->group(function () {
 
 // routes de tracking de la commande pour destinataire
 Route::get('/tracking/{token}', [TrackingController::class, 'show']);
+// Cas 8 — Contestation destinataire depuis le lien tracking (public, anti-abus applicatif)
+Route::post('/tracking/{token}/dispute', [TrackingController::class, 'dispute']);
 
 
 // Routes protégées (token Sanctum requis)
@@ -274,6 +276,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         // Ajustement manuel des wallets (driver + user) — action comptable très sensible
         Route::post('/drivers/{driver}/wallet-adjustment', [AdminController::class, 'adjustDriverWallet']);
         Route::post('/users/{user}/wallet-adjustment',     [AdminController::class, 'adjustUserWallet']);
+
+        // Cas 7 — Signaler une course frauduleuse (vol livreur).
+        // Bannit le driver + saisit la caution + rembourse le marchand. Irréversible.
+        Route::post('/courses/{course}/mark-fraud', [AdminController::class, 'markFraud']);
 
         // Réconciliation comptable : dashboard financier + export CSV
         Route::get('/reconciliation',            [AdminController::class, 'reconciliation']);
