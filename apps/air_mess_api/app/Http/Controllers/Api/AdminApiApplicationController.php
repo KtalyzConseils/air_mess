@@ -26,7 +26,7 @@ class AdminApiApplicationController extends Controller
         $status = $request->query('status'); // active|suspended|null
 
         $query = ApiApplication::query()
-            ->with(['user:id,email,phone,type,first_name,last_name', 'plan:id,code,name,api_requests_monthly'])
+            ->with(['user:id,email,phone,type,name', 'plan:id,code,name,api_requests_monthly'])
             ->withCount('courses')
             ->orderByDesc('id');
 
@@ -51,7 +51,7 @@ class AdminApiApplicationController extends Controller
 
     public function show(ApiApplication $app): JsonResponse
     {
-        $app->load(['user:id,email,phone,type,first_name,last_name', 'plan:id,code,name,api_requests_monthly'])
+        $app->load(['user:id,email,phone,type,name', 'plan:id,code,name,api_requests_monthly'])
             ->loadCount('courses');
 
         return response()->json(['data' => $this->present($app)]);
@@ -88,7 +88,7 @@ class AdminApiApplicationController extends Controller
                 'type'      => $app->user->type,
                 'email'     => $app->user->email,
                 'phone'     => $app->user->phone,
-                'full_name' => trim(($app->user->first_name ?? '') . ' ' . ($app->user->last_name ?? '')),
+                'full_name' => $app->user->name,
             ] : null,
             'plan' => $app->plan ? [
                 'id'                   => $app->plan->id,
