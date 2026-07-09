@@ -301,7 +301,7 @@ export default function MyWalletPage() {
                           meta.positive ? 'text-success' : 'text-airmess-red',
                         )}
                       >
-                        {meta.positive ? '+' : '−'}{tx.amount_fcfa.toLocaleString('fr-FR')}
+                        {meta.positive ? '+' : '−'}{Math.abs(tx.amount_fcfa).toLocaleString('fr-FR')}
                       </p>
                       <p className="text-caption text-warm-400 tabular-nums">
                         {t('wallet.balanceLabel')} : {tx.balance_after.toLocaleString('fr-FR')}
