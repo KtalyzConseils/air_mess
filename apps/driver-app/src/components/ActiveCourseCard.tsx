@@ -446,8 +446,10 @@ export default function ActiveCourseCard({ course }: Props) {
         transparent
         animationType="fade"
         onRequestClose={() => setCorrectOpen(false)}
+        statusBarTranslucent
+        navigationBarTranslucent
       >
-        <KeyboardProvider>
+        <KeyboardProvider navigationBarTranslucent statusBarTranslucent>
         <KeyboardAvoidingView
           className="flex-1"
           behavior="padding"

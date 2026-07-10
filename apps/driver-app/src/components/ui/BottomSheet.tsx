@@ -42,10 +42,12 @@ export default function BottomSheet({
       transparent
       onRequestClose={onClose}
       statusBarTranslucent
+      navigationBarTranslucent
     >
       {/* KeyboardProvider requis DANS le Modal : le provider racine ne traverse
-          pas la hiérarchie native d'un Modal RN. */}
-      <KeyboardProvider>
+          pas la hiérarchie native d'un Modal RN. navigationBarTranslucent : requis
+          sur Android (edge-to-edge) pour que les insets du clavier soient mesurés. */}
+      <KeyboardProvider navigationBarTranslucent statusBarTranslucent>
       {/* Backdrop cliquable pour fermer */}
       <Pressable onPress={onClose} className="flex-1 bg-airmess-dark/50 justify-end">
         {/* On stoppe la propagation pour que le contenu ne ferme pas */}
