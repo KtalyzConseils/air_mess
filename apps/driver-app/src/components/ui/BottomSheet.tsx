@@ -1,4 +1,5 @@
-import { Modal, View, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
+import { Modal, View, Text, Pressable, ScrollView } from 'react-native'
+import { KeyboardAvoidingView, KeyboardProvider } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
 
 /**
@@ -42,6 +43,9 @@ export default function BottomSheet({
       onRequestClose={onClose}
       statusBarTranslucent
     >
+      {/* KeyboardProvider requis DANS le Modal : le provider racine ne traverse
+          pas la hiérarchie native d'un Modal RN. */}
+      <KeyboardProvider>
       {/* Backdrop cliquable pour fermer */}
       <Pressable onPress={onClose} className="flex-1 bg-airmess-dark/50 justify-end">
         {/* On stoppe la propagation pour que le contenu ne ferme pas */}
@@ -51,10 +55,9 @@ export default function BottomSheet({
           style={{ maxHeight: '92%' }}
         >
           <KeyboardAvoidingView
-            // iOS : padding pousse tout le contenu au-dessus du clavier
-            // Android : height + softwareKeyboardLayoutMode="resize" (app.json)
-            //   travaillent ensemble pour reflower la sheet quand le clavier apparaît
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            // keyboard-controller : gère correctement l'edge-to-edge (RN 0.85),
+            // pousse toute la sheet (champ + footer d'actions) au-dessus du clavier.
+            behavior="padding"
             keyboardVerticalOffset={12}
           >
             {/* Drag handle */}
@@ -99,6 +102,7 @@ export default function BottomSheet({
           </KeyboardAvoidingView>
         </Pressable>
       </Pressable>
+      </KeyboardProvider>
     </Modal>
   )
 }

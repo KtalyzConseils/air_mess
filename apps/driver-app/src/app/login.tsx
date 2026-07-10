@@ -3,14 +3,12 @@ import {
   View,
   Text,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   Image,
   StatusBar,
-  ScrollView,
   Linking,
 } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import Constants from 'expo-constants'
@@ -65,15 +63,12 @@ export default function LoginScreen() {
   return (
     <SafeAreaView className="flex-1 bg-airmess-dark" edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1"
+      <KeyboardAwareScrollView
+        bottomOffset={24}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           {/* Bloc marque — signature du splash prolongée */}
           <View className="items-center pt-10 pb-8 px-6">
             <Image
@@ -178,8 +173,7 @@ export default function LoginScreen() {
               <Text className="text-warm-600 text-[10px] mt-2 font-mono">v{version}</Text>
             ) : null}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   )
 }

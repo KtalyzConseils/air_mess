@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, Pressable, RefreshControl, Linking, KeyboardAvoidingView, Platform } from 'react-native'
+import { View, Text, Pressable, RefreshControl, Linking } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useQuery } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -114,11 +115,8 @@ export default function DriverDashboard() {
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-      <ScrollView
+      <KeyboardAwareScrollView
+        bottomOffset={16}
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
@@ -227,8 +225,7 @@ export default function DriverDashboard() {
         {!activeCourse && availability !== 'available' && availability !== 'busy' && (
           <EmptyStateOffline availability={availability} />
         )}
-      </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   )
 }
