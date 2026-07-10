@@ -18,6 +18,8 @@ import type { Address } from '../api/addresses'
 import LocationPicker from '../components/LocationPicker'
 import { useAuthStore } from '../stores/authStore'
 import { fetchWallet } from '../api/wallet'
+import { useOnboardingStore } from '../stores/onboardingStore'
+import Coachmark, { type CoachStep } from '../components/onboarding/Coachmark'
 
 type FormValues = CreateCoursePayload
 
@@ -87,11 +89,48 @@ export default function NewCoursePage() {
   })
 
   const hasCollection = watch('has_collection')
+  const collectionAmountWatch = Number(watch('collection_amount') ?? 0)
+  const declaredValueWatch = Number(watch('package_declared_value') ?? 0)
+  // Suggestion d'ajouter la valeur déclarée quand l'encaissement est élevé ET qu'aucune valeur n'a été renseignée.
+  // Sert d'incitation à déclarer honnêtement pour l'indemnisation en cas de vol/perte.
+  const shouldSuggestDeclared = collectionAmountWatch >= 20000 && !declaredValueWatch
+  // Preview de l'exposition — le back marquera la course en "premium" au-delà de 30k (setting).
+  const exposurePreview = Math.max(collectionAmountWatch || 0, declaredValueWatch || 0)
+  const HIGH_VALUE_UI_THRESHOLD = 30000
+  const willBePremium = exposurePreview >= HIGH_VALUE_UI_THRESHOLD
 
   const [collectionDecided, setCollectionDecided] = useState(false)
   const [pendingValues, setPendingValues] = useState<FormValues | null>(null)
   const [quotaError, setQuotaError] = useState<string | null>(null)
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'success' | 'denied'>('idle')
+
+  // Onboarding — coach-marks du formulaire. S'affichent la 1ère fois puis
+  // sont rejouables via le bouton "Aide" du header (qui reset le flag).
+  const formTipsSeen = useOnboardingStore((s) => s.formTipsSeen)
+  const markFormTipsSeen = useOnboardingStore((s) => s.markFormTipsSeen)
+
+  const coachSteps: CoachStep[] = [
+    {
+      targetSelector: '[data-onboarding-id="origin"]',
+      title: t('onboarding.tips.origin.title'),
+      body: t('onboarding.tips.origin.body'),
+    },
+    {
+      targetSelector: '[data-onboarding-id="urgency"]',
+      title: t('onboarding.tips.urgency.title'),
+      body: t('onboarding.tips.urgency.body'),
+    },
+    {
+      targetSelector: '[data-onboarding-id="collection"]',
+      title: t('onboarding.tips.collection.title'),
+      body: t('onboarding.tips.collection.body'),
+    },
+    {
+      targetSelector: '[data-onboarding-id="declared"]',
+      title: t('onboarding.tips.declared.title'),
+      body: t('onboarding.tips.declared.body'),
+    },
+  ]
 
   useEffect(() => {
     if (user?.type !== 'individual') return
@@ -167,6 +206,7 @@ export default function NewCoursePage() {
       destination_lng: Number(values.destination_lng),
       collection_amount: values.has_collection ? Number(values.collection_amount) : undefined,
       collection_method: values.has_collection ? values.collection_method : undefined,
+      package_declared_value: values.package_declared_value ? Number(values.package_declared_value) : undefined,
       // callback_url pour le pay-as-you-go Fedapay : nécessaire dès que le user
       // peut être payeur — marchand (toujours) comme particulier (hors quota).
       callback_url: `${window.location.origin}/billing/return`,
@@ -357,21 +397,25 @@ export default function NewCoursePage() {
                 />
               </Field>
 
-              <Field label={t('courses.new.urgencyLabel')}>
-                <select {...register('urgency')} className={inputClass}>
-                  <option value="standard">{t('courses.new.urgencyStandardOption', { fee: fees.standard.toLocaleString('fr-FR') })}</option>
-                  <option value="express">{t('courses.new.urgencyExpressOption', { fee: fees.express.toLocaleString('fr-FR') })}</option>
-                </select>
-              </Field>
+              <div data-onboarding-id="urgency">
+                <Field label={t('courses.new.urgencyLabel')}>
+                  <select {...register('urgency')} className={inputClass}>
+                    <option value="standard">{t('courses.new.urgencyStandardOption', { fee: fees.standard.toLocaleString('fr-FR') })}</option>
+                    <option value="express">{t('courses.new.urgencyExpressOption', { fee: fees.express.toLocaleString('fr-FR') })}</option>
+                  </select>
+                </Field>
+              </div>
             </div>
           </FormSection>
 
           {/* ORIGINE */}
           <FormSection title={t('courses.new.originSectionTitle')} description={t('courses.new.originSectionDesc')}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label={t('courses.new.senderName')} required error={errors.origin_name?.message}>
-                <input {...register('origin_name', { required: t('courses.new.required') })} className={inputClass} />
-              </Field>
+              <div data-onboarding-id="origin">
+                <Field label={t('courses.new.senderName')} required error={errors.origin_name?.message}>
+                  <input {...register('origin_name', { required: t('courses.new.required') })} className={inputClass} />
+                </Field>
+              </div>
               <Field label={t('courses.new.phoneLabel')} required error={errors.origin_phone?.message}>
                 <input {...register('origin_phone', { required: t('courses.new.required') })} className={inputClass} />
               </Field>
@@ -449,7 +493,7 @@ export default function NewCoursePage() {
 
           {/* ENCAISSEMENT */}
           <FormSection title={t('courses.new.collectionSectionTitle')} description={t('courses.new.collectionSectionDesc')}>
-            <label className="inline-flex items-center gap-2 cursor-pointer">
+            <label data-onboarding-id="collection" className="inline-flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 {...register('has_collection')}
@@ -473,6 +517,35 @@ export default function NewCoursePage() {
                 </Field>
               </div>
             )}
+
+            {/* Valeur déclarée du colis — importante pour l'indemnisation en cas de vol/perte */}
+            <div data-onboarding-id="declared" className="mt-4">
+              <Field label={t('courses.new.declaredValueLabel')}>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="0"
+                  {...register('package_declared_value')}
+                  className={inputClass}
+                />
+              </Field>
+              <p className="mt-1.5 text-caption text-warm-500">
+                {t('courses.new.declaredValueHelper')}
+              </p>
+
+              {shouldSuggestDeclared && (
+                <p className="mt-2 text-caption text-warning bg-warning-bg border border-warning/30 rounded-md px-3 py-2">
+                  {t('courses.new.declaredValueSuggestion')}
+                </p>
+              )}
+              {willBePremium && (
+                <p className="mt-2 text-caption text-ink bg-airmess-yellow/10 border border-airmess-yellow/40 rounded-md px-3 py-2">
+                  {t('courses.new.premiumHint', {
+                    threshold: HIGH_VALUE_UI_THRESHOLD.toLocaleString('fr-FR'),
+                  })}
+                </p>
+              )}
+            </div>
           </FormSection>
 
           {apiError && (
@@ -545,6 +618,15 @@ export default function NewCoursePage() {
           </Card>
         </div>
       )}
+
+      {/* Onboarding — coach-marks du formulaire (4 bulles séquentielles).
+          S'affichent la 1ère fois puis rejouables via "Aide" du header. */}
+      <Coachmark
+        open={!formTipsSeen}
+        steps={coachSteps}
+        onClose={markFormTipsSeen}
+        onFinish={markFormTipsSeen}
+      />
     </div>
   )
 }

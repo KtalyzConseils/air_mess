@@ -216,6 +216,27 @@ export default function CourseDetailPage() {
           </div>
         </div>
 
+        {/* Course premium — hors pool driver, prise en charge manuelle par l'ops */}
+        {course.is_high_value && !course.driver && !['delivered', 'cancelled', 'failed'].includes(course.status) && (
+          <Card variant="signature" padding="lg" className="mb-6 border-l-4 border-l-airmess-yellow!">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 text-airmess-yellow mt-0.5">
+                <AlertTriangleIcon size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-eyebrow uppercase text-warm-500 font-bold mb-1">
+                  Course en prise en charge premium
+                </p>
+                <p className="text-body-s text-warm-700">
+                  Cette course dépasse le seuil grand public. Elle n'est pas proposée à nos livreurs
+                  standards. Un membre de notre équipe va vous contacter pour l'assigner à un
+                  livreur dédié.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Cas 7 — Bandeau course frauduleuse */}
         {course.is_fraud && (
           <Card variant="signature" padding="lg" className="mb-6 border-l-4 border-l-airmess-red! bg-danger-bg!">

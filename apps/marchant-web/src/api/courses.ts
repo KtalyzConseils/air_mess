@@ -55,6 +55,9 @@ export interface Course {
   // Cas 7 — Vol livreur
   is_fraud?: boolean
   fraud_shortfall_fcfa?: number | null
+  // Course premium (au-delà du seuil high_value_threshold_fcfa) : hors pool driver,
+  // prise en charge manuelle par l'ops.
+  is_high_value?: boolean
   incidents?: CourseIncident[]
 }
 
@@ -91,6 +94,8 @@ export interface CreateCoursePayload {
   package_description: string
   package_size: 'S' | 'M' | 'L' | 'XL'
   package_weight_kg?: number
+  /** Valeur déclarée du colis en FCFA — sert d'indemnisation en cas de vol/perte. */
+  package_declared_value?: number
   origin_name: string
   origin_phone: string
   origin_street?: string
@@ -124,6 +129,8 @@ export interface CreateCourseResult {
   quota_reached?: boolean
   used?: number
   limit?: number
+  // course premium (seuil dépassé) : hors pool driver, prise en charge manuelle
+  is_high_value?: boolean
 }
 
 export async function createCourse(

@@ -43,15 +43,20 @@ export default function DriverRegisterPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>()
+
+  // Le permis de conduire n'est demandé que pour une voiture.
+  const isCar = watch('vehicle_type') === 'voiture'
 
   async function onSubmit(values: FormValues) {
     setServerError(null)
     setFileError(null)
     setServerFieldErrors({})
 
-    if (!cni || !drivingLicense) {
+    const carSelected = values.vehicle_type === 'voiture'
+    if (!cni || (carSelected && !drivingLicense)) {
       setFileError(t('driverRegister.cniLicenseRequired'))
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
       return
@@ -62,7 +67,8 @@ export default function DriverRegisterPage() {
         ...values,
         photo,
         cni,
-        driving_license: drivingLicense,
+        // Permis pris en compte uniquement pour une voiture.
+        driving_license: carSelected ? drivingLicense : null,
       })
       navigate('/register/driver/success')
     } catch (err) {
@@ -285,7 +291,7 @@ export default function DriverRegisterPage() {
             {/* ====================== DOCUMENTS ====================== */}
             <FormSection
               title={t('driverRegister.sectionDocumentsTitle')}
-              description={t('driverRegister.sectionDocumentsDesc')}
+              description={isCar ? t('driverRegister.sectionDocumentsDesc') : t('driverRegister.sectionDocumentsDescNoLicense')}
             >
               <div className="space-y-3">
                 <FileDropZone
@@ -311,18 +317,21 @@ export default function DriverRegisterPage() {
                   clickSelectLabel={t('driverRegister.fileClickSelect')}
                   removeAriaLabel={t('driverRegister.fileRemoveAria')}
                 />
-                <FileDropZone
-                  label={t('driverRegister.licenseLabel')}
-                  required
-                  helper={t('driverRegister.licenseHelper')}
-                  accept="image/jpeg,image/png,application/pdf"
-                  file={drivingLicense}
-                  onChange={setDrivingLicense}
-                  error={serverErr('driving_license')}
-                  clickReplaceLabel={t('driverRegister.fileClickReplace')}
-                  clickSelectLabel={t('driverRegister.fileClickSelect')}
-                  removeAriaLabel={t('driverRegister.fileRemoveAria')}
-                />
+                {/* Permis de conduire : demandé uniquement si le véhicule est une voiture. */}
+                {isCar && (
+                  <FileDropZone
+                    label={t('driverRegister.licenseLabel')}
+                    required
+                    helper={t('driverRegister.licenseHelper')}
+                    accept="image/jpeg,image/png,application/pdf"
+                    file={drivingLicense}
+                    onChange={setDrivingLicense}
+                    error={serverErr('driving_license')}
+                    clickReplaceLabel={t('driverRegister.fileClickReplace')}
+                    clickSelectLabel={t('driverRegister.fileClickSelect')}
+                    removeAriaLabel={t('driverRegister.fileRemoveAria')}
+                  />
+                )}
               </div>
               {fileError && (
                 <p className="mt-4 text-body-s text-airmess-red bg-danger-bg border border-airmess-red/30 px-3 py-2 rounded-md inline-flex items-start gap-2">

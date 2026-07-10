@@ -12,6 +12,8 @@ import StatusBadge from '../components/StatusBadge'
 import { fetchCourses, type Course } from '../api/courses'
 import { fetchWallet } from '../api/wallet'
 import { useAuthStore } from '../stores/authStore'
+import { useOnboardingStore } from '../stores/onboardingStore'
+import OnboardingModal from '../components/onboarding/OnboardingModal'
 
 const IN_PROGRESS_STATUSES = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff']
 
@@ -20,6 +22,11 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const [copiedId, setCopiedId] = useState<number | null>(null)
+
+  // Onboarding — 1er passage : la modale de bienvenue s'affiche. Le bouton "Aide"
+  // du header remet le flag à false pour la rejouer à la demande.
+  const welcomeSeen = useOnboardingStore((s) => s.welcomeSeen)
+  const markWelcomeSeen = useOnboardingStore((s) => s.markWelcomeSeen)
 
   const isPendingMarchant = user?.type === 'marchant' && !user.marchant?.validated_at
   const greetingName =
@@ -241,6 +248,10 @@ export default function DashboardPage() {
         )}
 
       </main>
+
+      {/* Onboarding — modale de bienvenue (3 slides). S'affiche automatiquement
+          la 1ère fois, puis rejouable depuis le bouton "Aide" du header. */}
+      <OnboardingModal open={!welcomeSeen} onClose={markWelcomeSeen} />
     </div>
   )
 }

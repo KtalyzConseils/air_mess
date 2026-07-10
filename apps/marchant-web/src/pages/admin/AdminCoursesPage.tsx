@@ -169,7 +169,17 @@ export default function AdminCoursesPage() {
                         </p>
                       </td>
                       <td className="px-4 py-2.5">
-                        <StatusBadge status={c.status} />
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <StatusBadge status={c.status} />
+                          {c.is_high_value && (
+                            <span
+                              className="text-[10px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-airmess-yellow/20 text-ink border border-airmess-yellow/50"
+                              title="Course premium — hors pool driver, prise en charge manuelle"
+                            >
+                              Premium
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-2.5 text-warm-600 truncate max-w-[160px]">
                         {c.driver?.user?.name ?? (

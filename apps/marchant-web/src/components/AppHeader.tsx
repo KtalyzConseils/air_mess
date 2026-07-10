@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { fetchUnreadCount } from '../api/notifications'
@@ -9,6 +9,8 @@ import EnableNotificationsButton from './EnableNotificationsButton'
 import markWhite from '../assets/logo/airmess-mark-white.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 import { useUiPrefsStore } from '../stores/uiPrefsStore'
+import { useOnboardingStore } from '../stores/onboardingStore'
+import { HelpCircleIcon } from './ui/icons'
 
 /**
  * Header global de l'app marchand/particulier.
@@ -20,6 +22,20 @@ import { useUiPrefsStore } from '../stores/uiPrefsStore'
 export default function AppHeader() {
   const { t } = useTranslation()
   const clientNavMode = useUiPrefsStore((s) => s.clientNavMode)
+  const location = useLocation()
+  const replayWelcome = useOnboardingStore((s) => s.replayWelcome)
+  const replayFormTips = useOnboardingStore((s) => s.replayFormTips)
+
+  // A2 — le bouton "Aide" est contextuel :
+  //   sur /courses/new → rejoue les astuces du formulaire
+  //   ailleurs         → rejoue la présentation générale
+  function handleHelpClick() {
+    if (location.pathname.startsWith('/courses/new')) {
+      replayFormTips()
+    } else {
+      replayWelcome()
+    }
+  }
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -85,6 +101,17 @@ export default function AppHeader() {
           <EnableNotificationsButton />
         </div>
 
+        {/* Bouton Aide — rejoue le guide (contextuel : /courses/new = astuces form, ailleurs = présentation) */}
+        <button
+          type="button"
+          onClick={handleHelpClick}
+          className="hidden sm:flex w-10 h-10 rounded-full items-center justify-center text-warm-300 hover:text-cream hover:bg-warm-600/20 transition-colors"
+          title={t('header.helpTitle')}
+          aria-label={t('header.helpTitle')}
+        >
+          <HelpCircleIcon size={20} />
+        </button>
+
         <NavLink
           to="/notifications"
           className={({ isActive }) =>
@@ -147,7 +174,18 @@ export default function AppHeader() {
                 👤 {t('nav.profile')}
               </NavLink>
             </nav>
-            <div className="mt-4 pt-4 border-t border-warm-600/20">
+            <div className="mt-4 pt-4 border-t border-warm-600/20 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  handleHelpClick()
+                  setMobileOpen(false)
+                }}
+                className="w-full flex items-center gap-2 px-4 py-3 rounded-md text-body font-medium text-warm-200 hover:bg-warm-600/20 transition-colors"
+              >
+                <HelpCircleIcon size={18} />
+                {t('header.helpTitle')}
+              </button>
               <EnableNotificationsButton />
             </div>
 

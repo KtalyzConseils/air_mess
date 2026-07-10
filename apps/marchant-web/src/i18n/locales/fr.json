@@ -72,7 +72,48 @@
   "header": {
     "workspace": "Espace marchand",
     "menu": "Menu",
-    "notificationsTitle": "Notifications"
+    "notificationsTitle": "Notifications",
+    "helpTitle": "Aide"
+  },
+  "onboarding": {
+    "skip": "Passer",
+    "finalCta": "Créer ma première course",
+    "stepOf": "Étape {{current}} sur {{total}}",
+    "goToStep": "Aller à l'étape {{step}}",
+    "tipsBadge": "Astuce {{current}} / {{total}}",
+    "tipsDone": "C'est parti",
+    "slides": {
+      "describe": {
+        "title": "Décrivez votre livraison",
+        "body": "Où part le colis, où il arrive, ce qu'il contient. Renseignez la position sur la carte pour que le livreur trouve du 1er coup."
+      },
+      "assign": {
+        "title": "Un livreur prend en charge",
+        "body": "Air Mess trouve automatiquement un livreur près de vous. Un code de pickup et un code de livraison vous sont remis — à donner uniquement aux bonnes personnes."
+      },
+      "track": {
+        "title": "Suivez en temps réel",
+        "body": "Vous recevez un lien de suivi à partager au destinataire. Vous voyez le livreur sur la carte jusqu'à la remise du colis."
+      }
+    },
+    "tips": {
+      "origin": {
+        "title": "L'adresse de départ",
+        "body": "C'est d'ici que le livreur récupère le colis. Assurez-vous que la position sur la carte est précise."
+      },
+      "urgency": {
+        "title": "Standard ou Express",
+        "body": "Standard = tarif de base, prise en charge normale. Express = livreur dédié, plus rapide, un peu plus cher."
+      },
+      "collection": {
+        "title": "Encaissement à la livraison",
+        "body": "Cochez si le livreur doit collecter l'argent auprès du destinataire — en cash, mobile money, ou déjà prépayé."
+      },
+      "declared": {
+        "title": "Valeur du colis (indemnisation)",
+        "body": "En cas de vol ou perte, c'est le montant qu'Air Mess vous rembourse. Soyez honnête : sous-déclarer réduit votre indemnisation."
+      }
+    }
   },
   "userMenu": {
     "myWallet": "Mon wallet",
@@ -357,7 +398,11 @@
       "collectionModalTitle": "💰 Encaissement à la livraison ?",
       "collectionModalBody": "Vous n'avez pas précisé si le livreur doit récupérer un montant à la livraison. Souhaitez-vous activer l'encaissement ?",
       "collectionModalNo": "Non, pas d'encaissement",
-      "collectionModalYes": "Oui, je précise"
+      "collectionModalYes": "Oui, je précise",
+      "declaredValueLabel": "Valeur déclarée du colis (FCFA)",
+      "declaredValueHelper": "Sert d'indemnisation en cas de vol ou de perte. Facultatif pour les colis peu coûteux (documents, petits objets).",
+      "declaredValueSuggestion": "Vous encaissez un montant important. Renseignez la valeur du colis pour être indemnisé si le livreur le vole ou le perd — sans valeur déclarée, vous ne pourrez récupérer que l'encaissement.",
+      "premiumHint": "Cette course dépasse le seuil grand public ({{threshold}} FCFA). Elle sera prise en charge par notre équipe qui vous rappellera pour assigner un livreur dédié."
     }
   },
   "courseStatus": {
@@ -784,6 +829,7 @@
     "emergencyPhoneRequired": "Téléphone du contact requis",
     "sectionDocumentsTitle": "📄 Vos documents",
     "sectionDocumentsDesc": "CNI et permis sont obligatoires. Photo de profil optionnelle.",
+    "sectionDocumentsDescNoLicense": "La CNI est obligatoire. Photo de profil optionnelle.",
     "photoProfileLabel": "Photo de profil",
     "photoProfileHelper": "Optionnel · JPG/PNG · max 2 Mo · min 200×200",
     "cniShort": "CNI",

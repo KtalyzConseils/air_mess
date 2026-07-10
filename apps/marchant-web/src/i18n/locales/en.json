@@ -72,7 +72,48 @@
   "header": {
     "workspace": "Merchant workspace",
     "menu": "Menu",
-    "notificationsTitle": "Notifications"
+    "notificationsTitle": "Notifications",
+    "helpTitle": "Help"
+  },
+  "onboarding": {
+    "skip": "Skip",
+    "finalCta": "Create my first delivery",
+    "stepOf": "Step {{current}} of {{total}}",
+    "goToStep": "Go to step {{step}}",
+    "tipsBadge": "Tip {{current}} / {{total}}",
+    "tipsDone": "Let's go",
+    "slides": {
+      "describe": {
+        "title": "Describe your delivery",
+        "body": "Where the package starts, where it arrives, what it contains. Pin the map so the driver finds it on the first try."
+      },
+      "assign": {
+        "title": "A driver takes it on",
+        "body": "Air Mess automatically finds a nearby driver. You get a pickup code and a delivery code — give each one only to the right person."
+      },
+      "track": {
+        "title": "Track in real time",
+        "body": "You receive a tracking link to share with the recipient. Watch the driver on the map all the way to the drop-off."
+      }
+    },
+    "tips": {
+      "origin": {
+        "title": "The pickup address",
+        "body": "This is where the driver picks up the package. Make sure the pin on the map is accurate."
+      },
+      "urgency": {
+        "title": "Standard or Express",
+        "body": "Standard = base rate, regular handling. Express = dedicated driver, faster, a bit pricier."
+      },
+      "collection": {
+        "title": "Cash-on-delivery",
+        "body": "Tick this if the driver has to collect money from the recipient — in cash, mobile money, or already prepaid."
+      },
+      "declared": {
+        "title": "Package value (insurance)",
+        "body": "If the package is lost or stolen, this is the amount Air Mess refunds you. Be honest: under-declaring means less refund."
+      }
+    }
   },
   "userMenu": {
     "myWallet": "My wallet",
@@ -357,7 +398,11 @@
       "collectionModalTitle": "💰 Collection on delivery?",
       "collectionModalBody": "You didn't specify whether the courier should collect an amount on delivery. Would you like to enable collection?",
       "collectionModalNo": "No, no collection",
-      "collectionModalYes": "Yes, specify"
+      "collectionModalYes": "Yes, specify",
+      "declaredValueLabel": "Declared package value (FCFA)",
+      "declaredValueHelper": "Used as reimbursement in case of theft or loss. Optional for low-cost items (documents, small objects).",
+      "declaredValueSuggestion": "You're collecting a significant amount. Declare the package value to be reimbursed if the courier steals or loses it — without a declared value, you can only recover the collection amount.",
+      "premiumHint": "This delivery exceeds the retail threshold ({{threshold}} FCFA). Our team will take charge and call you back to assign a dedicated courier."
     }
   },
   "courseStatus": {
@@ -784,6 +829,7 @@
     "emergencyPhoneRequired": "Contact phone is required",
     "sectionDocumentsTitle": "📄 Your documents",
     "sectionDocumentsDesc": "ID card and driver's licence are required. Profile photo optional.",
+    "sectionDocumentsDescNoLicense": "ID card is required. Profile photo optional.",
     "photoProfileLabel": "Profile photo",
     "photoProfileHelper": "Optional · JPG/PNG · max 2 MB · min 200×200",
     "cniShort": "ID card",

@@ -329,6 +329,61 @@ export function IdCardIcon(props: IconProps) {
   )
 }
 
+// Point d'interrogation cerclé — bouton "Aide" / onboarding
+export function HelpCircleIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  )
+}
+
+// Étincelles — accent onboarding, "nouveauté", CTA final du guide
+export function SparklesIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+      <path d="M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  )
+}
+
+// Épingle carte — étape "où" du guide (origine/destination)
+export function MapPinIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  )
+}
+
+// Route — étape "un livreur prend en charge"
+export function RouteIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <circle cx="6" cy="19" r="3" />
+      <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+      <circle cx="18" cy="5" r="3" />
+    </svg>
+  )
+}
+
+// Œil radar — étape "suivez en temps réel"
+export function RadarIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" opacity="0.5" />
+      <circle cx="12" cy="12" r="1.75" />
+      <path d="M12 3v3" />
+    </svg>
+  )
+}
+
 // Flocon — chaîne du froid / sac réfrigéré
 export function SnowflakeIcon(props: IconProps) {
   return (

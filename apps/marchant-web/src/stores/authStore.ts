@@ -42,7 +42,7 @@ export interface RegisterDriverPayload {
   // Documents
   photo: File | null // optionnel
   cni: File // requis
-  driving_license: File // requis
+  driving_license: File | null // requis uniquement si vehicle_type === 'voiture'
   // Contact d'urgence
   emergency_contact_name: string
   emergency_contact_phone: string
@@ -121,7 +121,8 @@ export const useAuthStore = create<AuthState>()(
         // Fichiers
         if (payload.photo) form.append('photo', payload.photo)
         form.append('cni', payload.cni)
-        form.append('driving_license', payload.driving_license)
+        // Permis : envoyé seulement s'il est fourni (voiture uniquement)
+        if (payload.driving_license) form.append('driving_license', payload.driving_license)
 
         await api.post('/auth/register/driver', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
