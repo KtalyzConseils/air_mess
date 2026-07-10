@@ -260,7 +260,7 @@ export default function NewCoursePage() {
         </p>
 
         {/* ============================================================
-            BANDEAUX D'ÉTAT (quota / wallet / individual quota)
+            BANDEAUX D'ÉTAT (erreur / couverture wallet)
             ============================================================ */}
         {quotaError && (
           <Card
@@ -279,13 +279,8 @@ export default function NewCoursePage() {
         )}
 
         {isPayerUser && wallet && (() => {
-          const individualOutOfQuota =
-            user?.type === 'individual' &&
-            user.individual &&
-            user.individual.monthly_courses_used >= user.individual.monthly_courses_limit
-          const isPayer = user?.type === 'marchant' || individualOutOfQuota
-          if (!isPayer) return null
-
+          // Paiement direct pour tous (marchand comme particulier) : plus de
+          // quota gratuit, on affiche donc toujours la couverture wallet.
           const canCover = wallet.available >= currentFee
 
           return canCover ? (
@@ -314,36 +309,6 @@ export default function NewCoursePage() {
               <Link to="/wallet" className="shrink-0">
                 <Button variant="primary" size="sm" pill>{t('courses.new.topUpCta')}</Button>
               </Link>
-            </Card>
-          )
-        })()}
-
-        {user?.type === 'individual' && user.individual && (() => {
-          const used = user.individual.monthly_courses_used
-          const limit = user.individual.monthly_courses_limit
-          const reached = used >= limit
-          return (
-            <Card
-              padding="md"
-              className={
-                reached
-                  ? 'mb-4 bg-warning-bg! border-warning/30! flex items-start gap-2'
-                  : 'mb-4 bg-info-bg! border-info/20! flex items-start gap-2'
-              }
-            >
-              <span>{reached ? '💳' : 'ℹ️'}</span>
-              <div className={reached ? 'text-warning' : 'text-info'}>
-                <p className="font-semibold text-body-s">
-                  {reached
-                    ? t('courses.new.quotaReachedTitle', { used, limit })
-                    : t('courses.new.quotaProgress', { used, limit })}
-                </p>
-                {reached && (
-                  <p className="text-caption mt-0.5">
-                    {t('courses.new.quotaReachedBody')}
-                  </p>
-                )}
-              </div>
             </Card>
           )
         })()}

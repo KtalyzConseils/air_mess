@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router'
 import { View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery } from '@tanstack/react-query'
 import { fetchUnreadCount } from '../../api/notifications'
@@ -42,6 +43,10 @@ function TabIcon({
 }
 
 export default function TabsLayout() {
+  // Décale la tab bar au-dessus de la barre de navigation système (edge-to-edge
+  // RN 0.85) : sans ça, les icônes tombent dans la zone des boutons système et
+  // les taps sont interceptés.
+  const insets = useSafeAreaInsets()
   const { data: unread = 0 } = useQuery({
     queryKey: ['notifications-unread'],
     queryFn: fetchUnreadCount,
@@ -58,8 +63,8 @@ export default function TabsLayout() {
           backgroundColor: OFF_WHITE,
           borderTopWidth: 1,
           borderTopColor: WARM_200,
-          height: 70,
-          paddingBottom: 10,
+          height: 70 + insets.bottom,
+          paddingBottom: 10 + insets.bottom,
           paddingTop: 4,
         },
         tabBarLabelStyle: {
