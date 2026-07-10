@@ -1,10 +1,15 @@
-import { View, Text, ScrollView, Pressable, Alert } from 'react-native'
+import { View, Text, ScrollView, Pressable, Alert, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import Constants from 'expo-constants'
 import { useAuthStore } from '../../stores/authStore'
 import { fetchDriverStats } from '../../api/driver'
+import { openFullScreenIntentSettings } from '../../lib/fullScreenPermission'
+
+// Android 14+ : la permission "notifications plein écran" doit être accordée par l'utilisateur.
+const IS_ANDROID_14_PLUS =
+  Platform.OS === 'android' && typeof Platform.Version === 'number' && Platform.Version >= 34
 
 type ActivationStatus = 'active' | 'validated' | 'pending' | 'suspended' | 'banned'
 
@@ -157,6 +162,13 @@ export default function ProfileScreen() {
         <View className="mx-5 mt-5">
           <SectionLabel icon="settings-outline">Compte</SectionLabel>
           <View className="bg-off-white border border-warm-200 rounded-2xl overflow-hidden">
+            {IS_ANDROID_14_PLUS && (
+              <ActionRow
+                icon="notifications-outline"
+                label="Alertes plein écran"
+                onPress={() => { void openFullScreenIntentSettings() }}
+              />
+            )}
             <ActionRow icon="create-outline" label="Modifier mon profil" comingSoon />
             <ActionRow icon="shield-checkmark-outline" label="Mes documents" comingSoon />
             <ActionRow icon="help-circle-outline" label="Aide & support" comingSoon />

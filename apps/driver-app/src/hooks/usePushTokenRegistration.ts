@@ -58,6 +58,11 @@ export function usePushTokenRegistration() {
           platform: Platform.OS,
         })
         console.log('🔔 Push token enregistre:', tokenData.data)
+
+        // Android 14+ : inviter à activer les notifications plein écran (une fois),
+        // sinon l'alerte "course entrante" ne réveille pas l'écran verrouillé.
+        const { promptFullScreenIntentIfNeeded } = await import('../lib/fullScreenPermission')
+        await promptFullScreenIntentIfNeeded()
       } catch (err) {
         console.warn('Push registration failed:', err)
       }
