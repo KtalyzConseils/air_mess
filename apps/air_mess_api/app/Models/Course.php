@@ -61,6 +61,7 @@ class Course extends Model
             'transfer_lat' => 'float',
             'transfer_lng' => 'float',
             'is_fraud' => 'boolean',
+            'is_high_value' => 'boolean',
         ];
     }
 

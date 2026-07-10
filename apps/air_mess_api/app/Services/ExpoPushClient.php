@@ -13,19 +13,30 @@ class ExpoPushClient
      * Envoie un push à plusieurs tokens Expo en un seul batch.
      * Expo accepte jusqu'à 100 messages par appel.
      */
-    public function push(array $tokens, string $title, string $body, array $data = []): void
+    /**
+     * @param  string       $sound      Son iOS + fallback Android <8 ('default' ou basename bundlé, ex 'new-course.wav')
+     * @param  string|null  $channelId  Canal Android portant le son (le son Android vient du canal, pas de $sound)
+     */
+    public function push(array $tokens, string $title, string $body, array $data = [], string $sound = 'default', ?string $channelId = null): void
     {
         $tokens = array_values(array_unique(array_filter($tokens)));
         if (empty($tokens)) return;
 
-        $messages = array_map(fn($t) => [
-            'to'    => $t,
-            'sound' => 'default',
-            'title' => $title,
-            'body'  => $body,
-            'data'  => $data,
-            'priority' => 'high',
-        ], $tokens);
+        $messages = array_map(function ($t) use ($title, $body, $data, $sound, $channelId) {
+            $message = [
+                'to'    => $t,
+                'sound' => $sound,
+                'title' => $title,
+                'body'  => $body,
+                'data'  => $data,
+                'priority' => 'high',
+            ];
+            // channelId : uniquement pour Android, ignoré par iOS.
+            if ($channelId !== null) {
+                $message['channelId'] = $channelId;
+            }
+            return $message;
+        }, $tokens);
 
         try {
             $response = Http::acceptJson()->asJson()->post(self::ENDPOINT, $messages);

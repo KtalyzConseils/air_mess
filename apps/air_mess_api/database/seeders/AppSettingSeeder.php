@@ -51,6 +51,14 @@ class AppSettingSeeder extends Seeder
                 'group'       => 'wallet',
             ],
             [
+                'key'         => 'high_value_threshold_fcfa',
+                'value'       => '30000',
+                'type'        => 'number',
+                'label'       => 'Seuil "course premium" (FCFA)',
+                'description' => 'Au-delà de MAX(encaissement, valeur déclarée) ≥ ce seuil, la course sort du pool driver public et bascule en prise en charge manuelle par les admins (livreur premium dédié). Protège les drivers à faible caution ET Air Mess du risque financier > caution.',
+                'group'       => 'general',
+            ],
+            [
                 'key'         => 'dispute_window_days',
                 'value'       => '7',
                 'type'        => 'number',

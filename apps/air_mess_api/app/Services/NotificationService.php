@@ -7,6 +7,13 @@ use App\Models\Notification;
 
 class NotificationService
 {
+    /** Type de notif « nouvelle course proposée » : reçoit le son/canal personnalisés. */
+    private const TYPE_NEW_COURSE = 'course.offered';
+
+    /** Doit correspondre au canal créé côté app (lib/notifications.ts > NEW_COURSE_CHANNEL). */
+    private const NEW_COURSE_CHANNEL = 'new-course';
+    private const NEW_COURSE_SOUND   = 'new_course.wav';
+
     public function __construct(private ExpoPushClient $expo) {}
 
     /**
@@ -23,12 +30,17 @@ class NotificationService
             'course_id' => $courseId,
         ]);
 
+        // Nouvelle course : son + canal Android personnalisés. Toute autre notif : son système.
+        $isNewCourse = $type === self::TYPE_NEW_COURSE;
+        $sound     = $isNewCourse ? self::NEW_COURSE_SOUND : 'default';
+        $channelId = $isNewCourse ? self::NEW_COURSE_CHANNEL : null;
+
         $tokens = DeviceToken::where('user_id', $userId)->pluck('token')->toArray();
         $this->expo->push($tokens, $title, $body, array_merge($data, [
             'notification_id' => $notif->id,
             'type'            => $type,
             'course_id'       => $courseId,
-        ]));
+        ]), $sound, $channelId);
 
         return $notif;
     }

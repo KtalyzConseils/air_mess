@@ -157,7 +157,8 @@ class AuthController extends Controller
             'photo'           => ['nullable', 'image', 'mimes:jpg,jpeg,png',
                                   'max:2048', 'dimensions:min_width=200,min_height=200'],
             'cni'             => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
-            'driving_license' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            // Permis exigé uniquement pour une voiture ; ignoré (nullable) pour moto/scooter/vélo.
+            'driving_license' => ['nullable', 'required_if:vehicle_type,voiture', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
 
             // Contact d'urgence (obligatoire)
             'emergency_contact_name'  => ['required', 'string', 'max:255'],
@@ -290,17 +291,22 @@ class AuthController extends Controller
 
         $paths = [
             'photo_url'           => null,
+            'driving_license_url' => null,
             'cni_url'             => $disk->putFileAs(
                 $dir,
                 $request->file('cni'),
                 'cni.' . $request->file('cni')->extension(),
             ),
-            'driving_license_url' => $disk->putFileAs(
+        ];
+
+        // Permis : présent seulement pour une voiture (voir validation required_if).
+        if ($request->hasFile('driving_license')) {
+            $paths['driving_license_url'] = $disk->putFileAs(
                 $dir,
                 $request->file('driving_license'),
                 'permis.' . $request->file('driving_license')->extension(),
-            ),
-        ];
+            );
+        }
 
         if ($request->hasFile('photo')) {
             $paths['photo_url'] = $disk->putFileAs(

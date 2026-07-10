@@ -52,8 +52,18 @@ class CourseController extends Controller
             }
         }
 
+        // Détection "course premium" : exposition risque > caution driver moyenne.
+        // MAX(encaissement, valeur déclarée) — l'encaissement est un débit driver
+        // au pickup (débité pour de vrai sur sa caution), la valeur déclarée est
+        // ce qu'on doit indemniser au marchand en cas de vol (Cas 7).
+        $threshold = (int) \App\Models\AppSetting::get('high_value_threshold_fcfa', 30000);
+        $collection = (int) ($data['collection_amount'] ?? 0);
+        $declared   = (int) ($data['package_declared_value'] ?? 0);
+        $exposure   = max($collection, $declared);
+        $isHighValue = $threshold > 0 && $exposure >= $threshold;
+
         try {
-            $course = DB::transaction(function () use ($data, $user, $deliveryFee, $driverEarnings, $isPayer, $walletService) {
+            $course = DB::transaction(function () use ($data, $user, $deliveryFee, $driverEarnings, $isPayer, $walletService, $isHighValue) {
                 $course = Course::create(array_merge($data, [
                     'sender_id'       => $user->id,
                     'status'          => isset($data['scheduled_for'])
@@ -63,6 +73,7 @@ class CourseController extends Controller
                     'driver_earnings' => $driverEarnings,
                     'has_collection'  => $data['has_collection'] ?? false,
                     'urgency'         => $data['urgency'] ?? 'standard',
+                    'is_high_value'   => $isHighValue,
 
                     // Filet de sécurité : on génère reference+token ici même si les events firent
                     'reference'       => $this->generateReference(),
@@ -89,22 +100,60 @@ class CourseController extends Controller
             return $billing->initiateOneShotCheckout($user, $data, $deliveryFee, $driverEarnings);
         }
 
-        // PUSH aux livreurs disponibles dans un rayon de 8 km
-        $driverUserIds = Driver::availableNear($course->origin_lat, $course->origin_lng, 8.0)
-        ->pluck('user_id')
-        ->toArray();
+        if ($course->is_high_value) {
+            // Course premium : ne PAS pusher aux drivers publics.
+            // Alerter les 4 rôles admin — ops prend le lead, les autres en visibilité.
+            $adminUserIds = Admin::whereIn('sub_role', [
+                Admin::ROLE_SUPER, Admin::ROLE_OPS,
+                Admin::ROLE_COMMERCIAL, Admin::ROLE_SUPPORT,
+            ])->pluck('user_id')->toArray();
 
-        $title = $course->urgency === 'express' ? '⚡ Course Express' : '📦 Nouvelle course';
-        $body  = "{$course->origin_quartier} → {$course->destination_quartier} · {$course->driver_earnings} FCFA";
+            $notifier->sendToUsers(
+                $adminUserIds,
+                'course.high_value',
+                'Course premium à traiter',
+                "Course {$course->reference} — exposition "
+                . number_format($exposure, 0, ',', ' ') . " FCFA. "
+                . "Prise en charge manuelle requise (hors pool driver).",
+                [
+                    'reference'      => $course->reference,
+                    'exposure_fcfa'  => $exposure,
+                    'is_high_value'  => true,
+                ],
+                $course->id,
+            );
 
-        $notifier->sendToUsers($driverUserIds, 'course.offered', $title, $body,
-            ['reference' => $course->reference],
-            $course->id,
-        );
+            // Notif marchand : transparence sur la prise en charge premium.
+            $notifier->sendToUser(
+                $course->sender_id,
+                'course.high_value.marchand',
+                'Course en prise en charge premium',
+                "Votre course {$course->reference} dépasse le seuil grand public. "
+                . "Notre équipe va vous contacter pour assigner un livreur dédié.",
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        } else {
+            // Flow normal : PUSH aux livreurs disponibles dans un rayon de 8 km
+            $driverUserIds = Driver::availableNear($course->origin_lat, $course->origin_lng, 8.0)
+            ->pluck('user_id')
+            ->toArray();
+
+            $title = $course->urgency === 'express' ? '⚡ Course Express' : '📦 Nouvelle course';
+            $body  = "{$course->origin_quartier} → {$course->destination_quartier} · {$course->driver_earnings} FCFA";
+
+            $notifier->sendToUsers($driverUserIds, 'course.offered', $title, $body,
+                ['reference' => $course->reference],
+                $course->id,
+            );
+        }
 
         return response()->json([
-            'message' => 'Course créée. En attente d\'attribution.',
-            'course'  => $course->load(['sender', 'packageCategory']),
+            'message'       => $course->is_high_value
+                ? 'Course créée. Prise en charge premium en cours.'
+                : 'Course créée. En attente d\'attribution.',
+            'course'        => $course->load(['sender', 'packageCategory']),
+            'is_high_value' => (bool) $course->is_high_value,
         ], 201);
     }
 

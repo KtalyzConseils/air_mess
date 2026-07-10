@@ -82,6 +82,8 @@ class DriverController extends Controller
 
         $query = Course::where('status', Course::STATUS_AWAITING)
             ->whereNull('driver_id')
+            // Course premium : jamais dans le pool public. Prise en charge manuelle par l'ops.
+            ->where('is_high_value', false)
             ->with('packageCategory');
 
         // Filtre caution : on cache les courses avec encaissement > balance du wallet.
