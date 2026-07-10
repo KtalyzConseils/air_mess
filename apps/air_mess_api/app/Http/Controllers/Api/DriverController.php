@@ -348,6 +348,24 @@ class DriverController extends Controller
                     $walletService->creditEarning($driver, $course, (int) $course->driver_earnings);
                 }
 
+                // Hook wallet MARCHAND : livraison + course avec encaissement → on
+                // transfère le collection_amount au wallet du marchand. Le driver a
+                // été débité de ce montant sur sa caution au pickup et a collecté
+                // physiquement le cash chez le destinataire — c'est le pendant
+                // comptable qui rembourse le marchand.
+                if (
+                    $nextStatus === Course::STATUS_DELIVERED
+                    && $course->has_collection
+                    && (int) $course->collection_amount > 0
+                    && $course->sender
+                ) {
+                    $userWalletService->creditForDelivery(
+                        $course->sender,
+                        $course,
+                        (int) $course->collection_amount,
+                    );
+                }
+
                 // ===== Hook wallet USER (marchand/particulier payeur) =====
                 // Si la course était payable depuis le wallet (paid_from_wallet=true) :
                 //  - delivered → capture du hold : on débite réellement le wallet

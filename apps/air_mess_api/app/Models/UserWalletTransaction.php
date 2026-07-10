@@ -9,8 +9,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
  * Journal IMMUABLE des opérations sur les user_wallets.
  *
  * Convention de signe (enforcée par CHECK Postgres) :
- *  - deposit, refund, adjustment_credit  : amount_fcfa > 0
- *  - course_charge, adjustment_debit     : amount_fcfa < 0
+ *  - deposit, refund, adjustment_credit, collection_credit  : amount_fcfa > 0
+ *  - course_charge, adjustment_debit, withdraw              : amount_fcfa < 0
  */
 class UserWalletTransaction extends Model
 {
@@ -22,6 +22,9 @@ class UserWalletTransaction extends Model
     public const TYPE_ADJUSTMENT_CREDIT  = 'adjustment_credit';
     public const TYPE_ADJUSTMENT_DEBIT   = 'adjustment_debit';
     public const TYPE_WITHDRAW           = 'withdraw';
+    // Livraison réussie d'une course avec has_collection : le driver a collecté
+    // le cash chez le destinataire, on transfère cet argent au wallet marchand.
+    public const TYPE_COLLECTION_CREDIT  = 'collection_credit';
 
     public $timestamps = false;
     protected $dates   = ['created_at'];

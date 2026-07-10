@@ -223,6 +223,55 @@ class UserWalletService
     }
 
     /**
+     * Crédite le wallet du marchand quand une course avec encaissement est livrée.
+     *
+     * Modèle : au pickup, le driver a été débité de collection_amount sur sa
+     * caution (via DriverWalletService::debitForPickup). Il a ensuite collecté
+     * physiquement ce cash chez le destinataire. À la livraison, on transfère
+     * cet argent au marchand via son wallet — le driver reste équilibré
+     * (caution −X compensée par le cash physique +X).
+     *
+     * Idempotent via UNIQUE partielle (course_id, type=collection_credit).
+     *
+     * @throws \InvalidArgumentException si $amount <= 0
+     */
+    public function creditForDelivery(User $marchand, Course $course, int $amount): UserWalletTransaction
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException("Collection credit must be > 0, got {$amount}.");
+        }
+
+        // Idempotence applicative : déjà crédité ?
+        $existing = UserWalletTransaction::where('course_id', $course->id)
+            ->where('type', UserWalletTransaction::TYPE_COLLECTION_CREDIT)
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        return DB::transaction(function () use ($marchand, $course, $amount) {
+            $wallet = UserWallet::where('user_id', $marchand->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $wallet->balance += $amount;
+            $wallet->save();
+
+            return UserWalletTransaction::create([
+                'user_id'       => $marchand->id,
+                'type'          => UserWalletTransaction::TYPE_COLLECTION_CREDIT,
+                'amount_fcfa'   => $amount,
+                'balance_after' => $wallet->balance,
+                'course_id'     => $course->id,
+                'metadata'      => [
+                    'source' => 'driver_collection',
+                    'note'   => 'Encaissement livré — cash collecté par le driver chez le destinataire',
+                ],
+            ]);
+        });
+    }
+
+    /**
      * Course annulée/échouée AVANT livraison : libère la réservation sans débit.
      * Idempotent : si la course n'est pas paid_from_wallet, no-op.
      */
