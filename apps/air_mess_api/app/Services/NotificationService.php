@@ -30,17 +30,23 @@ class NotificationService
             'course_id' => $courseId,
         ]);
 
-        // Nouvelle course : son + canal Android personnalisés. Toute autre notif : son système.
-        $isNewCourse = $type === self::TYPE_NEW_COURSE;
-        $sound     = $isNewCourse ? self::NEW_COURSE_SOUND : 'default';
-        $channelId = $isNewCourse ? self::NEW_COURSE_CHANNEL : null;
-
         $tokens = DeviceToken::where('user_id', $userId)->pluck('token')->toArray();
-        $this->expo->push($tokens, $title, $body, array_merge($data, [
+
+        $payload = array_merge($data, [
             'notification_id' => $notif->id,
             'type'            => $type,
             'course_id'       => $courseId,
-        ]), $sound, $channelId);
+        ]);
+
+        if ($type === self::TYPE_NEW_COURSE) {
+            // Nouvelle course = alerte "appel entrant". On envoie un push DATA-ONLY :
+            // aucune notif système, c'est la tâche de fond du client + Notifee qui
+            // affichent l'écran plein "course entrante" (son en boucle, réveil écran).
+            $this->expo->push($tokens, '', '', $payload, 'default', null, dataOnly: true);
+        } else {
+            // Toute autre notif : notif système classique avec son par défaut.
+            $this->expo->push($tokens, $title, $body, $payload, 'default', null);
+        }
 
         return $notif;
     }

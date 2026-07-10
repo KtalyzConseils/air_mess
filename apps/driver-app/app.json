@@ -29,7 +29,8 @@
       ],
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
-      "package": "com.anonymous.driverapp"
+      "package": "com.anonymous.driverapp",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -61,7 +62,8 @@
         }
       ],
       "expo-image",
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withFullScreenNotifications"
     ],
     "experiments": {
       "typedRoutes": true,

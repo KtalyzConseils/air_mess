@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1000800600713",
+    "project_id": "air-mess",
+    "storage_bucket": "air-mess.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1000800600713:android:a8ef3a926578d6b21cbc58",
+        "android_client_info": {
+          "package_name": "com.anonymous.driverapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFuJ8fok79WajcIdCWglCX7TkH9RX639w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

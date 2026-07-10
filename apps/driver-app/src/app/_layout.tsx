@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
+import notifee, { EventType } from '@notifee/react-native'
 import { useAuthStore } from '../stores/authStore'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
@@ -21,6 +22,8 @@ export default function RootLayout() {
   const router = useRouter()
   const segments = useSegments()
   const [minElapsed, setMinElapsed] = useState(false)
+  // course_id d'une "course entrante" à ouvrir dès que l'app est prête + connectée.
+  const [pendingCourseId, setPendingCourseId] = useState<number | null>(null)
 
   // Setup du handler (lazy : noop en Expo Go)
   useEffect(() => { initNotifications() }, [])
@@ -41,6 +44,67 @@ export default function RootLayout() {
   }, [router])
 
   usePushTokenRegistration()
+
+  // ── Course entrante : détection de l'événement qui doit ouvrir l'écran d'appel ──
+
+  // 1. Cold start : l'app a été lancée par le full-screen intent Notifee.
+  useEffect(() => {
+    if (IS_EXPO_GO) return
+    notifee.getInitialNotification().then((initial) => {
+      const data = initial?.notification?.data as any
+      if (data?.type === 'course.offered' && data?.course_id != null) {
+        setPendingCourseId(Number(data.course_id))
+      }
+    })
+  }, [])
+
+  // 2. App vivante : notif full-screen pressée / délivrée (événement Notifee).
+  useEffect(() => {
+    if (IS_EXPO_GO) return
+    return notifee.onForegroundEvent(({ type, detail }) => {
+      const data = detail.notification?.data as any
+      // On ouvre l'écran d'appel pour tout événement SAUF un rejet explicite
+      // (DISMISSED = l'utilisateur a balayé la notif). Couvre le réveil depuis
+      // l'arrière-plan/verrouillage où le type peut être UNKNOWN(0).
+      if (
+        type !== EventType.DISMISSED &&
+        data?.type === 'course.offered' &&
+        data?.course_id != null
+      ) {
+        setPendingCourseId(Number(data.course_id))
+      }
+    })
+  }, [])
+
+  // 3. App au premier plan : un push data "course.offered" arrive.
+  useEffect(() => {
+    if (IS_EXPO_GO) return
+    let sub: { remove: () => void } | null = null
+    import('expo-notifications').then((Notifications) => {
+      sub = Notifications.addNotificationReceivedListener((notif) => {
+        const data = notif.request.content.data as any
+        if (data?.type === 'course.offered' && data?.course_id != null) {
+          setPendingCourseId(Number(data.course_id))
+        }
+      })
+    })
+    return () => sub?.remove()
+  }, [])
+
+  // Ouvre l'écran d'appel dès que le store est hydraté et qu'un livreur est connecté.
+  useEffect(() => {
+    if (pendingCourseId == null) return
+    // Déjà sur l'écran d'appel → on ignore (évite le double-empilement).
+    if (segments[0] === 'incoming-course') {
+      setPendingCourseId(null)
+      return
+    }
+    if (hydrated && user) {
+      const id = pendingCourseId
+      setPendingCourseId(null)
+      router.push({ pathname: '/incoming-course', params: { course_id: String(id) } })
+    }
+  }, [pendingCourseId, hydrated, user, router, segments])
 
   useEffect(() => { hydrate() }, [hydrate])
 

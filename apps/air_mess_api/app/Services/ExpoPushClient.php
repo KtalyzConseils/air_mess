@@ -16,13 +16,26 @@ class ExpoPushClient
     /**
      * @param  string       $sound      Son iOS + fallback Android <8 ('default' ou basename bundlé, ex 'new-course.wav')
      * @param  string|null  $channelId  Canal Android portant le son (le son Android vient du canal, pas de $sound)
+     * @param  bool         $dataOnly   Push silencieux "data-only" : aucune notif système affichée, seule la
+     *                                  tâche de fond du client est réveillée (elle affiche l'alerte plein écran
+     *                                  "course entrante" via Notifee). Cf. driver-app lib/backgroundNotifications.
      */
-    public function push(array $tokens, string $title, string $body, array $data = [], string $sound = 'default', ?string $channelId = null): void
+    public function push(array $tokens, string $title, string $body, array $data = [], string $sound = 'default', ?string $channelId = null, bool $dataOnly = false): void
     {
         $tokens = array_values(array_unique(array_filter($tokens)));
         if (empty($tokens)) return;
 
-        $messages = array_map(function ($t) use ($title, $body, $data, $sound, $channelId) {
+        $messages = array_map(function ($t) use ($title, $body, $data, $sound, $channelId, $dataOnly) {
+            // Push "data-only" : pas de title/body → Android ne montre rien, la tâche de fond prend le relais.
+            if ($dataOnly) {
+                return [
+                    'to'                => $t,
+                    'data'              => $data,
+                    'priority'          => 'high',
+                    '_contentAvailable' => true, // iOS : réveil en arrière-plan
+                ];
+            }
+
             $message = [
                 'to'    => $t,
                 'sound' => $sound,
