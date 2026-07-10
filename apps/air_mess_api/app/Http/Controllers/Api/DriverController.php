@@ -83,7 +83,11 @@ class DriverController extends Controller
         $query = Course::where('status', Course::STATUS_AWAITING)
             ->whereNull('driver_id')
             // Course premium : jamais dans le pool public. Prise en charge manuelle par l'ops.
-            ->where('is_high_value', false)
+            // NULL-safe : les courses créées avant la migration `add_is_high_value_to_courses`
+            // peuvent avoir la colonne à NULL — on les traite comme non-premium (défaut sain).
+            ->where(function ($q) {
+                $q->where('is_high_value', false)->orWhereNull('is_high_value');
+            })
             ->with('packageCategory');
 
         // Filtre caution : on cache les courses avec encaissement > balance du wallet.
