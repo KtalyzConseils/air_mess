@@ -50,7 +50,9 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Air Mess utilise votre position pour vous proposer les courses les plus proches et permettre aux clients de vous suivre."
+          "locationAlwaysAndWhenInUsePermission": "Air Mess utilise votre position pour vous proposer les courses les plus proches et permettre aux clients de vous suivre.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       "expo-secure-store",
