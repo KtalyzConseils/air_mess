@@ -9,6 +9,7 @@ import {
   Image,
   StatusBar,
   ScrollView,
+  Linking,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -31,6 +32,8 @@ import Button from '../components/ui/Button'
  *
  *   v1.0.0
  */
+const REGISTER_URL = 'https://app.airmess-logistics.com/register/driver'
+
 export default function LoginScreen() {
   const login = useAuthStore((s) => s.login)
   const [email, setEmail] = useState('')
@@ -151,6 +154,20 @@ export default function LoginScreen() {
               Se connecter
             </Button>
           </View>
+
+          {/* Lien inscription — onboarding nouveau livreur via le web */}
+          <Pressable
+            onPress={() => Linking.openURL(REGISTER_URL)}
+            className="items-center mt-6"
+            hitSlop={8}
+            accessibilityRole="link"
+            accessibilityLabel="Créer un compte livreur"
+          >
+            <Text className="text-warm-400 text-sm">
+              Pas encore livreur ?{' '}
+              <Text className="text-airmess-yellow font-bold">Crée ton compte</Text>
+            </Text>
+          </Pressable>
 
           {/* Footer version + mention équipe */}
           <View className="items-center mt-8">

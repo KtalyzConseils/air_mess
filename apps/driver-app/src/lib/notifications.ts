@@ -1,6 +1,13 @@
 import Constants from 'expo-constants'
+import { Platform } from 'react-native'
 
 export const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient'
+
+/**
+ * Canal Android dédié aux nouvelles courses (son + vibration personnalisés).
+ * Doit correspondre au channelId envoyé par l'API (NotificationService).
+ */
+export const NEW_COURSE_CHANNEL = 'new-course'
 
 /**
  * Setup le handler de notifications.
@@ -22,4 +29,17 @@ export async function initNotifications(): Promise<void> {
       shouldSetBadge:   true,
     }),
   })
+
+  // Sur Android, le son d'une notif provient du CANAL, pas du champ `sound` du push.
+  // On crée un canal dédié aux nouvelles courses avec le son bundlé (app.json > sounds).
+  // NB : Android verrouille les réglages d'un canal après sa 1re création — un
+  // changement de son ultérieur nécessite une désinstallation/réinstallation.
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync(NEW_COURSE_CHANNEL, {
+      name: 'Nouvelles courses',
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: 'new_course.wav', // basename du fichier bundlé (avec extension)
+      vibrationPattern: [0, 250, 100, 250],
+    })
+  }
 }

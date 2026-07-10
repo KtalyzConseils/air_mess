@@ -15,7 +15,7 @@ export function useNewCourseAlert(count: number) {
   // Charge le player une seule fois
   useEffect(() => {
     try {
-      playerRef.current = createAudioPlayer(require('../../assets/sounds/new-course.mp3'))
+      playerRef.current = createAudioPlayer(require('../../assets/sounds/new_course.wav'))
     } catch (e) {
       console.warn('Impossible de charger le son d\'alerte:', e)
     }

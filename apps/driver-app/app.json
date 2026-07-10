@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Air Mess Driver",
+    "name": "Driver",
     "slug": "driver-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -54,6 +54,12 @@
       ],
       "expo-secure-store",
       "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "sounds": ["./assets/sounds/new_course.wav"]
+        }
+      ],
       "expo-image",
       "expo-asset"
     ],
