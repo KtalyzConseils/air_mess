@@ -16,7 +16,7 @@ export const links = {
   registerSender: `${APP_URL}/login`,
   registerDriver: `${APP_URL}/register/driver`,
   // Direct download of the courier (driver) Android app (APK build, Expo).
-  driverApp: 'https://expo.dev/artifacts/eas/IMZCtBGTAO20GcXw3sjG2CoHXOAM_48b8ulhMB4lUY8.apk',
+  driverApp: 'https://expo.dev/artifacts/eas/8fRF9DMpyM5w92Mad9ckWHRz6zyk1AHOlLBoc2uE668.apk',
 } as const
 
 export const contact = {
