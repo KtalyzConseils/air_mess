@@ -54,8 +54,12 @@ class FedapayService
             ]);
 
         if ($txResponse->failed()) {
-            Log::error('Fedapay createTransaction failed', ['body' => $txResponse->body()]);
-            throw new RuntimeException('Échec de création de la transaction Fedapay.');
+            Log::error('Fedapay createTransaction failed', [
+                'status' => $txResponse->status(),
+                'body'   => $txResponse->body(),
+            ]);
+            $apiMessage = $txResponse->json('message') ?? $txResponse->body();
+            throw new RuntimeException("Échec FedaPay (HTTP {$txResponse->status()}) : {$apiMessage}");
         }
 
         $transaction = $txResponse->json('v1/transaction');
@@ -66,8 +70,12 @@ class FedapayService
             ->post("{$this->apiUrl}/transactions/{$transaction['id']}/token");
 
         if ($tokenResponse->failed()) {
-            Log::error('Fedapay token generation failed', ['body' => $tokenResponse->body()]);
-            throw new RuntimeException('Échec de génération du lien de paiement.');
+            Log::error('Fedapay token generation failed', [
+                'status' => $tokenResponse->status(),
+                'body'   => $tokenResponse->body(),
+            ]);
+            $apiMessage = $tokenResponse->json('message') ?? $tokenResponse->body();
+            throw new RuntimeException("Échec FedaPay token (HTTP {$tokenResponse->status()}) : {$apiMessage}");
         }
 
         return [
@@ -131,5 +139,74 @@ class FedapayService
             throw new RuntimeException('Impossible de récupérer la transaction.');
         }
         return $response->json('v1/transaction');
+    }
+
+    /**
+     * Crée un payout (versement sortant) vers un numéro MoMo ou un compte bancaire.
+     *
+     * @param 'mtn'|'moov'|'bank' $mode Type de destination
+     * @param string $accountNumber Numéro MoMo (format Bénin) ou IBAN si bank
+     * @return array ['id', 'reference', 'status'] — id sert à matcher le webhook
+     *
+     * Cf. https://docs.fedapay.com/api/payouts — endpoint POST /v1/payouts.
+     * En sandbox, aucun virement réel n'est effectué, mais le cycle webhook fonctionne.
+     */
+    public function createPayout(
+        int $amountFcfa,
+        string $mode,
+        string $accountNumber,
+        array $customer,
+        string $description = '',
+    ): array {
+        $response = Http::withToken($this->secretKey)
+            ->acceptJson()
+            ->post("{$this->apiUrl}/payouts", [
+                'amount'      => $amountFcfa,
+                'mode'        => $mode,
+                'currency'    => ['iso' => $this->currency],
+                'description' => $description,
+                'customer'    => [
+                    'email'        => $customer['email'] ?? null,
+                    'firstname'    => $customer['firstname'] ?? 'Livreur',
+                    'lastname'     => $customer['lastname']  ?? 'RMess',
+                    'phone_number' => [
+                        'number'  => $accountNumber,
+                        'country' => 'bj',
+                    ],
+                ],
+            ]);
+
+        if ($response->failed()) {
+            Log::error('Fedapay createPayout failed', [
+                'status' => $response->status(),
+                'body'   => $response->body(),
+            ]);
+            $apiMessage = $response->json('message') ?? $response->body();
+            throw new RuntimeException("Échec FedaPay (HTTP {$response->status()}) : {$apiMessage}");
+        }
+
+        $payout = $response->json('v1/payout');
+
+        // Étape 2 : démarrer le payout (nécessaire pour qu'il quitte le statut "pending")
+        // Sandbox : le webhook arrive après quelques secondes. Production : peut prendre 5-30 min.
+        $startResponse = Http::withToken($this->secretKey)
+            ->acceptJson()
+            ->put("{$this->apiUrl}/payouts/start", [
+                'payouts' => [['id' => $payout['id']]],
+            ]);
+
+        if ($startResponse->failed()) {
+            Log::warning('Fedapay startPayout failed (le payout existe mais n\'est pas lancé)', [
+                'payout_id' => $payout['id'],
+                'body'      => $startResponse->body(),
+            ]);
+            // On ne throw pas : l'admin pourra retenter ou marquer manuellement.
+        }
+
+        return [
+            'id'        => (string) $payout['id'],
+            'reference' => $payout['reference'] ?? null,
+            'status'    => $payout['status'] ?? 'pending',
+        ];
     }
 }
