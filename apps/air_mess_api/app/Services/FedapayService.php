@@ -54,8 +54,12 @@ class FedapayService
             ]);
 
         if ($txResponse->failed()) {
-            Log::error('Fedapay createTransaction failed', ['body' => $txResponse->body()]);
-            throw new RuntimeException('Échec de création de la transaction Fedapay.');
+            Log::error('Fedapay createTransaction failed', [
+                'status' => $txResponse->status(),
+                'body'   => $txResponse->body(),
+            ]);
+            $apiMessage = $txResponse->json('message') ?? $txResponse->body();
+            throw new RuntimeException("Échec FedaPay (HTTP {$txResponse->status()}) : {$apiMessage}");
         }
 
         $transaction = $txResponse->json('v1/transaction');
@@ -66,8 +70,12 @@ class FedapayService
             ->post("{$this->apiUrl}/transactions/{$transaction['id']}/token");
 
         if ($tokenResponse->failed()) {
-            Log::error('Fedapay token generation failed', ['body' => $tokenResponse->body()]);
-            throw new RuntimeException('Échec de génération du lien de paiement.');
+            Log::error('Fedapay token generation failed', [
+                'status' => $tokenResponse->status(),
+                'body'   => $tokenResponse->body(),
+            ]);
+            $apiMessage = $tokenResponse->json('message') ?? $tokenResponse->body();
+            throw new RuntimeException("Échec FedaPay token (HTTP {$tokenResponse->status()}) : {$apiMessage}");
         }
 
         return [
