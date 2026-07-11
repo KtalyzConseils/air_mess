@@ -45,6 +45,9 @@ export default function IncomingCourseScreen() {
 
   // ── Sonnerie en boucle + vibration ────────────────────────────────
   useEffect(() => {
+    // L'écran d'appel prend le relais : on coupe la notif (et sa sonnerie de canal)
+    // pour éviter le double son avec la boucle in-app.
+    notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
     try {
       const player = createAudioPlayer(require('../../assets/sounds/new_course.wav'))
       player.loop = true

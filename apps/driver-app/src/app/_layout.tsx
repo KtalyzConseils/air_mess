@@ -4,7 +4,10 @@ import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import notifee, { EventType } from '@notifee/react-native'
+import { AppState } from 'react-native'
+import * as SecureStore from 'expo-secure-store'
 import { useAuthStore } from '../stores/authStore'
+import { handleNotifeeEvent, PENDING_COURSE_KEY } from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import BrandSplash from '../components/BrandSplash'
@@ -58,14 +61,38 @@ export default function RootLayout() {
     })
   }, [])
 
+  // 1bis. Navigation ROBUSTE : la tâche de fond mémorise la course entrante ; à chaque
+  // ouverture / retour au premier plan, on ouvre l'écran d'appel si une course fraîche
+  // est en attente. Indépendant des events Notifee (capricieux au réveil).
+  useEffect(() => {
+    if (IS_EXPO_GO) return
+    async function checkPending() {
+      try {
+        const raw = await SecureStore.getItemAsync(PENDING_COURSE_KEY)
+        if (!raw) return
+        const { course_id, ts } = JSON.parse(raw)
+        await SecureStore.deleteItemAsync(PENDING_COURSE_KEY)
+        if (course_id != null && Date.now() - ts < 45_000) {
+          setPendingCourseId(Number(course_id))
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    checkPending()
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') checkPending()
+    })
+    return () => sub.remove()
+  }, [])
+
   // 2. App vivante : notif full-screen pressée / délivrée (événement Notifee).
   useEffect(() => {
     if (IS_EXPO_GO) return
-    return notifee.onForegroundEvent(({ type, detail }) => {
+    return notifee.onForegroundEvent((event) => {
+      handleNotifeeEvent(event) // boutons Accepter/Refuser pressés app ouverte
+      const { type, detail } = event
       const data = detail.notification?.data as any
-      // On ouvre l'écran d'appel pour tout événement SAUF un rejet explicite
-      // (DISMISSED = l'utilisateur a balayé la notif). Couvre le réveil depuis
-      // l'arrière-plan/verrouillage où le type peut être UNKNOWN(0).
       if (
         type !== EventType.DISMISSED &&
         data?.type === 'course.offered' &&

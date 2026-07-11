@@ -41,7 +41,13 @@ class NotificationService
         if ($type === self::TYPE_NEW_COURSE) {
             // Nouvelle course = alerte "appel entrant". On envoie un push DATA-ONLY :
             // aucune notif système, c'est la tâche de fond du client + Notifee qui
-            // affichent l'écran plein "course entrante" (son en boucle, réveil écran).
+            // affichent la notif "appel" (sonnerie longue, boutons) + l'écran plein.
+            // On joint trajet + gains pour afficher directement l'offre sur la notif.
+            if ($courseId && ($course = \App\Models\Course::find($courseId))) {
+                $payload['origin']      = $course->origin_quartier;
+                $payload['destination'] = $course->destination_quartier;
+                $payload['earnings']    = $course->driver_earnings;
+            }
             $this->expo->push($tokens, '', '', $payload, 'default', null, dataOnly: true);
         } else {
             // Toute autre notif : notif système classique avec son par défaut.
