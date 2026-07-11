@@ -98,6 +98,13 @@ export async function showIncomingCourseNotification(
 
 // ── Définition + enregistrement de la tâche de fond (scope module) ──────────────
 if (!IS_EXPO_GO) {
+  // REQUIS par Notifee : sans gestionnaire d'événement d'arrière-plan, Notifee
+  // REFUSE d'afficher une notification depuis un contexte background (notre tâche
+  // de fond) → l'alerte plein écran ne s'affichait pas app en arrière-plan/verrouillée.
+  // La navigation vers l'écran "course entrante" se fait à l'ouverture de l'app
+  // (getInitialNotification / onForegroundEvent), rien de spécial à faire ici.
+  notifee.onBackgroundEvent(async () => {})
+
   TaskManager.defineTask(INCOMING_TASK, async ({ data, error }: any) => {
     if (error) return
     try {
