@@ -11,18 +11,24 @@ interface Options {
   distanceM?: number
 }
 
+// Throttle au niveau module : plafonne les tentatives de démarrage même si l'effet
+// re-run souvent (re-render). Persiste entre les montages.
+let lastStartAttempt = 0
+const START_THROTTLE_MS = 2500
+
 /**
  * Suivi de position via FOREGROUND SERVICE (Niveau 2).
  *
- * Tant que le livreur est `available` ou `busy`, on lance un service de premier plan
- * (notification permanente "en ligne") qui garde l'app vivante (push fiables) + envoie
- * la position. Il s'arrête dès le passage hors-ligne.
+ * Tant que le livreur est `available`/`busy`, un service de premier plan (notif permanente
+ * "Air Mess — en ligne") garde l'app vivante (push fiables) + envoie la position.
  *
- * IMPORTANT (Android 12+) : un service de premier plan ne peut être démarré QUE si
- * l'app est au premier plan ("active"). À l'ouverture, l'effet peut tourner avant que
- * l'app soit active → on diffère alors le démarrage au listener AppState 'active'.
- * (Sans ça : "Foreground service cannot be started when the application is in the
- * background" en boucle, et la notif "en ligne" n'apparaissait pas.)
+ * Fiabilité (leçons terrain) :
+ *  - Android 12+ : le FGS ne peut démarrer QUE si l'app est au premier plan ('active').
+ *  - `hasStartedLocationUpdatesAsync` N'EST PAS FIABLE : il renvoie "started" même quand le
+ *    service a été tué (registre expo périmé). On ne s'en sert donc PAS pour décider s'il
+ *    faut (re)démarrer — on rappelle TOUJOURS `startLocationUpdatesAsync` quand on doit
+ *    tracker : ça ranime le service mort, ou met juste à jour les options s'il tourne.
+ *  - Auto-guérison : ré-assert périodique tant qu'on est en ligne + au retour au premier plan.
  */
 export function useDriverLocationTracker({ availability, intervalMs = 15_000, distanceM = 20 }: Options) {
   useEffect(() => {
@@ -31,12 +37,19 @@ export function useDriverLocationTracker({ availability, intervalMs = 15_000, di
     const shouldTrack = availability === 'available' || availability === 'busy'
     let cancelled = false
 
-    async function start() {
-      // On ne démarre le FGS que si l'app est réellement au premier plan.
+    async function ensureStarted() {
+      if (cancelled || !shouldTrack) return
+      // FGS interdit en arrière-plan : on retentera au retour 'active' / au prochain tick.
       if (AppState.currentState !== 'active') return
+      const now = Date.now()
+      if (now - lastStartAttempt < START_THROTTLE_MS) return
+      lastStartAttempt = now
       try {
-        const fg = await Location.requestForegroundPermissionsAsync()
-        if (fg.status !== 'granted') return
+        let perm = await Location.getForegroundPermissionsAsync()
+        if (perm.status !== 'granted') {
+          perm = await Location.requestForegroundPermissionsAsync()
+        }
+        if (perm.status !== 'granted') return
         try {
           await Location.requestBackgroundPermissionsAsync()
         } catch {
@@ -44,9 +57,10 @@ export function useDriverLocationTracker({ availability, intervalMs = 15_000, di
         }
         if (cancelled || AppState.currentState !== 'active') return
 
-        const already = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false)
-        if (already) return
-
+        // stop PUIS start : `startLocationUpdatesAsync` seul ne ranime pas un service mort
+        // dont le registre est périmé (il croit que ça tourne). Le stop nettoie le registre,
+        // le start crée un service RÉELLEMENT frais → notif "en ligne" garantie.
+        await Location.stopLocationUpdatesAsync(LOCATION_TASK).catch(() => {})
         await Location.startLocationUpdatesAsync(LOCATION_TASK, {
           accuracy: Location.Accuracy.High,
           timeInterval: intervalMs,
@@ -60,29 +74,35 @@ export function useDriverLocationTracker({ availability, intervalMs = 15_000, di
           },
         })
       } catch (e) {
-        // FGS refusé (app pas encore au premier plan, etc.) : on retentera au prochain
-        // passage 'active'. On NE laisse PAS la promesse rejeter (sinon spam d'erreurs).
-        console.warn('[tracker] démarrage service différé:', String(e))
+        // Refus transitoire (fenêtre foreground pas encore ouverte au démarrage) : le tick
+        // périodique / le retour 'active' retentera.
+        console.warn('[tracker] FGS ensure échec:', String(e))
       }
     }
 
     async function stop() {
       try {
-        const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false)
+        const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(
+          () => false,
+        )
         if (started) await Location.stopLocationUpdatesAsync(LOCATION_TASK)
       } catch {
         /* ignore */
       }
     }
 
-    if (shouldTrack) void start()
-    else void stop()
+    if (!shouldTrack) {
+      void stop()
+      return () => {
+        cancelled = true
+      }
+    }
 
-    // Démarre/relance le service quand l'app (re)passe au premier plan — couvre
-    // l'ouverture de l'app où le démarrage immédiat est refusé.
+    void ensureStarted()
+    // Auto-guérison au retour au premier plan (si l'OEM a tué le service en arrière-plan).
+    // Pas d'intervalle périodique : éviterait un stop→start régulier = notif qui clignote.
     const sub = AppState.addEventListener('change', (s) => {
-      if (cancelled) return
-      if (s === 'active' && shouldTrack) void start()
+      if (!cancelled && s === 'active') void ensureStarted()
     })
 
     return () => {

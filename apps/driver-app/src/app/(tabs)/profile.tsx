@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text, ScrollView, Pressable, Alert, Platform } from 'react-native'
+import { View, Text, ScrollView, Pressable, Alert, Platform, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
@@ -48,6 +48,7 @@ export default function ProfileScreen() {
   const driver = user?.driver
   const initials = `${driver?.first_name?.[0] ?? ''}${driver?.last_name?.[0] ?? ''}`.toUpperCase()
   const [supportOpen, setSupportOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   const activationKey = (driver?.activation_status ?? 'pending') as ActivationStatus
   const activation = ACTIVATION_META[activationKey] ?? ACTIVATION_META.pending
@@ -73,7 +74,20 @@ export default function ProfileScreen() {
   function confirmLogout() {
     Alert.alert('Déconnexion', "Tu seras déconnecté de l'application.", [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Se déconnecter', style: 'destructive', onPress: () => logout() },
+      {
+        text: 'Se déconnecter',
+        style: 'destructive',
+        onPress: async () => {
+          // Loader pendant le nettoyage (token push + FGS + /auth/logout), puis la
+          // redirection vers le login se fait via le store (user = null).
+          setLoggingOut(true)
+          try {
+            await logout()
+          } catch {
+            setLoggingOut(false) // en cas d'échec inattendu, on rend la main
+          }
+        },
+      },
     ])
   }
 
@@ -212,6 +226,19 @@ export default function ProfileScreen() {
         onClose={() => setSupportOpen(false)}
         context="Profil driver"
       />
+
+      {/* Loader plein écran pendant la déconnexion (puis redirection auto vers le login). */}
+      {loggingOut && (
+        <View
+          className="absolute inset-0 items-center justify-center bg-airmess-dark/70"
+          style={{ zIndex: 50 }}
+        >
+          <View className="bg-off-white rounded-2xl px-8 py-6 items-center">
+            <ActivityIndicator size="large" color="#1A1614" />
+            <Text className="text-ink font-bold mt-3">Déconnexion…</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   )
 }

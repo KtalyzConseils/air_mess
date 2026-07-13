@@ -68,7 +68,23 @@ export default function AvailabilityToggle({ current }: Props) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
     mutationFn: updateAvailability,
-    onSuccess: () => {
+    // Optimiste : on bascule le statut TOUT DE SUITE dans le cache. Le hook de tracking
+    // (piloté par ce statut) démarre alors le service "en ligne" pendant que l'app est
+    // active — sans attendre le round-trip réseau. Sinon le FGS pouvait ne pas apparaître.
+    onMutate: async (next: Availability) => {
+      await queryClient.cancelQueries({ queryKey: ['me'] })
+      const prev = queryClient.getQueryData(['me'])
+      queryClient.setQueryData(['me'], (old: any) =>
+        old
+          ? { ...old, driver: { ...old.driver, availability_status: next } }
+          : old,
+      )
+      return { prev }
+    },
+    onError: (_e, _v, ctx: any) => {
+      if (ctx?.prev !== undefined) queryClient.setQueryData(['me'], ctx.prev)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] })
       queryClient.invalidateQueries({ queryKey: ['offered-courses'] })
     },

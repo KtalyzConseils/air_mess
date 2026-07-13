@@ -11,9 +11,13 @@ const api = axios.create({
 })
 
 api.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync('airmess_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+  // Un Authorization explicite (ex : nettoyage de déconnexion avec le token sortant)
+  // a priorité : on ne l'écrase pas avec le token courant de SecureStore.
+  if (!config.headers.Authorization) {
+    const token = await SecureStore.getItemAsync('airmess_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
   }
   return config
 })

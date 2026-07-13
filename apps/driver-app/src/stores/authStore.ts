@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import * as SecureStore from 'expo-secure-store'
 import api from '../api/client'
 import type { User } from '../types/auth'
-import { getDeviceExpoPushToken } from '../lib/notifications'
 import { stopLocationTracking } from '../lib/locationTask'
 
 interface AuthState {
@@ -15,7 +14,7 @@ interface AuthState {
   hydrate: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   hydrated: false,
@@ -30,19 +29,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
-    // Nettoyage PAR APPAREIL (tant que le token est encore valide) : ce device ne doit
-    // plus recevoir de courses ni rester "en ligne". On NE touche PAS à la disponibilité :
-    // elle est partagée entre les appareils du livreur (déconnecter ici ne doit pas mettre
-    // hors-ligne un autre appareil du même livreur).
+    // Nettoyage PAR APPAREIL, attendu (le bouton affiche un loader pendant ce temps, puis
+    // la page de login apparaît). On NE touche PAS à la disponibilité : elle est partagée
+    // entre les appareils du même livreur.
+    const prevToken = get().token
+    const auth = prevToken ? { headers: { Authorization: `Bearer ${prevToken}` } } : {}
+
+    // Token push lu depuis SecureStore (rapide) — enregistré à l'inscription du device.
+    // Évite getExpoPushTokenAsync (appel réseau lent qui gelait le bouton).
     try {
-      const pushToken = await getDeviceExpoPushToken()
+      const pushToken = await SecureStore.getItemAsync('airmess_push_token')
       if (pushToken) {
-        await api.delete('/device-tokens', { data: { token: pushToken } })
+        await api.delete('/device-tokens', { data: { token: pushToken }, ...auth })
       }
     } catch { /* endpoint absent / réseau : ignore */ }
+
     try { await stopLocationTracking() } catch { /* ignore */ }
-    try { await api.post('/auth/logout') } catch { /* ignore */ }
-    await SecureStore.deleteItemAsync('airmess_token')
+    try { await api.post('/auth/logout', {}, auth) } catch { /* ignore */ }
+
+    await SecureStore.deleteItemAsync('airmess_token').catch(() => {})
+    await SecureStore.deleteItemAsync('airmess_push_token').catch(() => {})
     set({ user: null, token: null })
   },
 

@@ -57,6 +57,10 @@ export function usePushTokenRegistration() {
           token: tokenData.data,
           platform: Platform.OS,
         })
+        // Mémorise le token pour pouvoir le SUPPRIMER à la déconnexion sans re-appeler
+        // getExpoPushTokenAsync (lent). Lu par authStore.logout.
+        const SecureStore = await import('expo-secure-store')
+        await SecureStore.setItemAsync('airmess_push_token', tokenData.data)
         console.log('🔔 Push token enregistre:', tokenData.data)
 
         // Android 14+ : inviter à activer les notifications plein écran (une fois),
