@@ -27,6 +27,13 @@ class User extends Authenticatable
     public const TYPE_DRIVER = 'driver';
     public const TYPE_ADMIN = 'admin';
 
+    /**
+     * Version courante des CGU + politique de confidentialité.
+     * À bumper d'un cran quand tu modifies substantiellement l'un des 2 documents :
+     * tous les utilisateurs revoient la modale d'acceptation au prochain accès.
+     */
+    public const TERMS_VERSION = 1;
+
     protected $fillable = [
         'name',
         'email',
@@ -37,6 +44,8 @@ class User extends Authenticatable
         'email_verified_at',
         'phone_verified_at',
         'last_login_at',
+        'accepted_terms_at',
+        'accepted_terms_version',
     ];
 
     protected $hidden = [
@@ -50,9 +59,23 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'accepted_terms_at' => 'datetime',
+            'accepted_terms_version' => 'integer',
             'is_active' => 'boolean',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * L'utilisateur doit-il (re)voir la modale de consentement CGU/privacy ?
+     * True si jamais accepté OU si accepté une ancienne version.
+     */
+    public function needsToAcceptTerms(): bool
+    {
+        if ($this->accepted_terms_at === null) {
+            return true;
+        }
+        return ((int) $this->accepted_terms_version) < self::TERMS_VERSION;
     }
 
     // ===== Relations vers les profils =====

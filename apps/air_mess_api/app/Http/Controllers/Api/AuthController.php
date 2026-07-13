@@ -38,15 +38,19 @@ class AuthController extends Controller
                 'supermarche', 'restaurant', 'boutique',
                 'pharmacie', 'ecommerce', 'autre',
             ])],
+            // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
+            'accepted_terms'   => ['required', 'accepted'],
         ]);
 
         $user = DB::transaction(function () use ($data) {
             $user = User::create([
-                'name'     => $data['name'],
-                'email'    => $data['email'],
-                'phone'    => $data['phone'],
-                'password' => $data['password'], // hashé via cast 'hashed'
-                'type'     => User::TYPE_MARCHANT,
+                'name'                   => $data['name'],
+                'email'                  => $data['email'],
+                'phone'                  => $data['phone'],
+                'password'               => $data['password'], // hashé via cast 'hashed'
+                'type'                   => User::TYPE_MARCHANT,
+                'accepted_terms_at'      => now(),
+                'accepted_terms_version' => User::TERMS_VERSION,
             ]);
 
             Marchant::create([
@@ -90,15 +94,19 @@ class AuthController extends Controller
             'phone'      => ['required', 'string', 'max:20', 'unique:users,phone'],
             'password'   => ['required', 'string', 'min:8', 'confirmed'],
             'gender'     => ['nullable', Rule::in(['M', 'F', 'autre'])],
+            // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
+            'accepted_terms' => ['required', 'accepted'],
         ]);
 
         $user = DB::transaction(function () use ($data) {
             $user = User::create([
-                'name'     => $data['first_name'] . ' ' . $data['last_name'],
-                'email'    => $data['email'],
-                'phone'    => $data['phone'],
-                'password' => $data['password'],
-                'type'     => User::TYPE_INDIVIDUAL,
+                'name'                   => $data['first_name'] . ' ' . $data['last_name'],
+                'email'                  => $data['email'],
+                'phone'                  => $data['phone'],
+                'password'               => $data['password'],
+                'type'                   => User::TYPE_INDIVIDUAL,
+                'accepted_terms_at'      => now(),
+                'accepted_terms_version' => User::TERMS_VERSION,
             ]);
 
             Individual::create([
@@ -169,6 +177,9 @@ class AuthController extends Controller
             'equipment.isothermal_bag'   => ['nullable', 'boolean'],
             'equipment.top_case'         => ['nullable', 'boolean'],
             'equipment.refrigerated_bag' => ['nullable', 'boolean'],
+
+            // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
+            'accepted_terms' => ['required', 'accepted'],
         ]);
 
         // Stockage des documents AVANT la transaction (les fichiers sont indépendants de la DB).
@@ -179,11 +190,13 @@ class AuthController extends Controller
         try {
             $driver = DB::transaction(function () use ($data, $paths) {
                 $user = User::create([
-                    'name'     => $data['first_name'] . ' ' . $data['last_name'],
-                    'email'    => $data['email'],
-                    'phone'    => $data['phone'],
-                    'password' => $data['password'], // hashé via cast 'hashed' sur le model
-                    'type'     => User::TYPE_DRIVER,
+                    'name'                   => $data['first_name'] . ' ' . $data['last_name'],
+                    'email'                  => $data['email'],
+                    'phone'                  => $data['phone'],
+                    'password'               => $data['password'], // hashé via cast 'hashed' sur le model
+                    'type'                   => User::TYPE_DRIVER,
+                    'accepted_terms_at'      => now(),
+                    'accepted_terms_version' => User::TERMS_VERSION,
                 ]);
 
                 $driver = Driver::create([
@@ -350,6 +363,14 @@ class AuthController extends Controller
         return response()->json([
             'user'    => $user->load($user->type), // charge marchant, individual, driver ou admin
             'token'   => $token,
+            // Statut d'acceptation des CGU — le front s'en sert immédiatement après login
+            // pour décider d'afficher la modale bloquante (utilisateurs pré-existant à la mise en place des CGU).
+            'terms' => [
+                'current_version'  => User::TERMS_VERSION,
+                'accepted_version' => $user->accepted_terms_version,
+                'accepted_at'      => $user->accepted_terms_at?->toIso8601String(),
+                'needs_acceptance' => $user->needsToAcceptTerms(),
+            ],
         ]);
     }
 
@@ -371,7 +392,37 @@ class AuthController extends Controller
         $user = $request->user();
 
         return response()->json([
-            'user'    => $user->load($user->type),
+            'user' => $user->load($user->type),
+            // Version courante des CGU + statut d'acceptation de l'utilisateur.
+            // Le front s'en sert pour décider s'il affiche la modale bloquante.
+            'terms' => [
+                'current_version'      => User::TERMS_VERSION,
+                'accepted_version'     => $user->accepted_terms_version,
+                'accepted_at'          => $user->accepted_terms_at?->toIso8601String(),
+                'needs_acceptance'     => $user->needsToAcceptTerms(),
+            ],
+        ]);
+    }
+
+    /**
+     * Enregistre l'acceptation des CGU + politique de confidentialité par
+     * l'utilisateur connecté. Datée + versionnée pour traçabilité juridique.
+     * Idempotent : appeler N fois n'a pas d'effet néfaste, on met juste à jour.
+     */
+    public function acceptTerms(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $user->accepted_terms_at      = now();
+        $user->accepted_terms_version = User::TERMS_VERSION;
+        $user->save();
+
+        return response()->json([
+            'terms' => [
+                'current_version'  => User::TERMS_VERSION,
+                'accepted_version' => $user->accepted_terms_version,
+                'accepted_at'      => $user->accepted_terms_at?->toIso8601String(),
+                'needs_acceptance' => false,
+            ],
         ]);
     }
 

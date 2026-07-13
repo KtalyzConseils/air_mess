@@ -211,6 +211,31 @@ class AppSettingSeeder extends Seeder
                 'description' => 'Cas 4/6 : part des gains versée au livreur qui doit refaire le trajet retour vers le marchand.',
                 'group'       => 'conflicts',
             ],
+            // ===== Contacts support (exposés côté public via /support-contact) =====
+            [
+                'key'         => 'support_phone',
+                'value'       => '',
+                'type'        => 'string',
+                'label'       => 'Téléphone support',
+                'description' => 'Numéro téléphone du support Air Mess (format international, ex. +229XXXXXXXX). Utilisé par le bouton "Appeler" dans les modales de contact des 3 apps. Laisser vide pour masquer l\'option.',
+                'group'       => 'support',
+            ],
+            [
+                'key'         => 'support_whatsapp_number',
+                'value'       => '',
+                'type'        => 'string',
+                'label'       => 'WhatsApp support (E.164 sans +)',
+                'description' => 'Numéro WhatsApp Business (format E.164 sans le +, ex. 229XXXXXXXX). Utilisé pour construire les liens wa.me. Laisser vide pour masquer l\'option.',
+                'group'       => 'support',
+            ],
+            [
+                'key'         => 'support_email',
+                'value'       => '',
+                'type'        => 'string',
+                'label'       => 'Email support',
+                'description' => 'Adresse email du support (ex. support@airmess-logistics.com). Utilisée par le bouton "Écrire" via mailto:. Laisser vide pour masquer l\'option.',
+                'group'       => 'support',
+            ],
         ];
 
         foreach ($settings as $s) {

@@ -36,12 +36,27 @@ Route::get('/tracking/{token}', [TrackingController::class, 'show']);
 // Cas 8 — Contestation destinataire depuis le lien tracking (public, anti-abus applicatif)
 Route::post('/tracking/{token}/dispute', [TrackingController::class, 'dispute']);
 
+// Contacts support publics — utilisés par les modales "Contacter le support"
+// des 3 apps (marchant-web, driver-app, tracking public). Values vides = option
+// masquée côté UI. Les settings sont éditables dans /admin/settings (super-admin).
+Route::get('/support-contact', function () {
+    return [
+        'phone'    => \App\Models\AppSetting::get('support_phone', ''),
+        'whatsapp' => \App\Models\AppSetting::get('support_whatsapp_number', ''),
+        'email'    => \App\Models\AppSetting::get('support_email', ''),
+    ];
+});
+
 
 // Routes protégées (token Sanctum requis)
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+        // Enregistre l'acceptation des CGU + politique confidentialité par l'utilisateur connecté.
+        // Requis pour les utilisateurs pré-existant à la mise en place (accepted_terms_at IS NULL)
+        // ET pour tout bump de TERMS_VERSION.
+        Route::post('/accept-terms', [AuthController::class, 'acceptTerms']);
     });
 
     // Courses
