@@ -4,7 +4,7 @@ import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import notifee, { EventType } from '@notifee/react-native'
-import { AppState } from 'react-native'
+import { AppState, View, StatusBar } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 import { useAuthStore } from '../stores/authStore'
 import { handleNotifeeEvent, PENDING_COURSE_KEY } from '../lib/registerBackgroundNotifications'
@@ -161,6 +161,21 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <Stack screenOptions={{ headerShown: false }} />
       </QueryClientProvider>
+      {/* Bandeau sombre derrière la barre de statut : les icônes système (blanches)
+          restent visibles sur TOUS les écrans, sans dépendre du contrôle JS des icônes
+          (inopérant en edge-to-edge sur cet OEM). */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: StatusBar.currentHeight ?? 28,
+          backgroundColor: '#1A1614',
+          zIndex: 100,
+        }}
+      />
     </KeyboardProvider>
   )
 }

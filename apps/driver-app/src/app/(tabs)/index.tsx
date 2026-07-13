@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { StatusBar } from 'react-native'
 import { useAuthStore } from '../../stores/authStore'
 import AvailabilityToggle from '../../components/AvailabilityToggle'
 import ActiveCourseCard from '../../components/ActiveCourseCard'
@@ -77,7 +76,6 @@ export default function DriverDashboard() {
   if (isBanned) {
     return (
       <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right', 'bottom']}>
-        <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
         <View className="flex-1 items-center justify-center px-6">
           <View className="w-20 h-20 rounded-full bg-airmess-red/10 items-center justify-center mb-5">
             <Ionicons name="alert-circle" size={44} color="#D40511" />
@@ -114,7 +112,6 @@ export default function DriverDashboard() {
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       <KeyboardAwareScrollView
         bottomOffset={16}
         className="flex-1"
