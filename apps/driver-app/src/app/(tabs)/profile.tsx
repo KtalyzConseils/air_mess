@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, Text, ScrollView, Pressable, Alert, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
@@ -6,6 +7,7 @@ import Constants from 'expo-constants'
 import { useAuthStore } from '../../stores/authStore'
 import { fetchDriverStats } from '../../api/driver'
 import { openFullScreenIntentSettings } from '../../lib/fullScreenPermission'
+import SupportContactSheet from '../../components/SupportContactSheet'
 
 // Android 14+ : la permission "notifications plein écran" doit être accordée par l'utilisateur.
 const IS_ANDROID_14_PLUS =
@@ -45,6 +47,7 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore()
   const driver = user?.driver
   const initials = `${driver?.first_name?.[0] ?? ''}${driver?.last_name?.[0] ?? ''}`.toUpperCase()
+  const [supportOpen, setSupportOpen] = useState(false)
 
   const activationKey = (driver?.activation_status ?? 'pending') as ActivationStatus
   const activation = ACTIVATION_META[activationKey] ?? ACTIVATION_META.pending
@@ -171,7 +174,11 @@ export default function ProfileScreen() {
             )}
             <ActionRow icon="create-outline" label="Modifier mon profil" comingSoon />
             <ActionRow icon="shield-checkmark-outline" label="Mes documents" comingSoon />
-            <ActionRow icon="help-circle-outline" label="Aide & support" comingSoon />
+            <ActionRow
+              icon="help-circle-outline"
+              label="Aide & support"
+              onPress={() => setSupportOpen(true)}
+            />
             <ActionRow
               icon="document-text-outline"
               label="Conditions générales"
@@ -199,6 +206,12 @@ export default function ProfileScreen() {
           Air Mess Driver{version ? ` · v${version}` : ''}
         </Text>
       </ScrollView>
+
+      <SupportContactSheet
+        visible={supportOpen}
+        onClose={() => setSupportOpen(false)}
+        context="Profil driver"
+      />
     </SafeAreaView>
   )
 }

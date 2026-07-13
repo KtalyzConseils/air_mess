@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, Text, Pressable, RefreshControl, Linking } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useQuery } from '@tanstack/react-query'
@@ -8,6 +9,8 @@ import { useAuthStore } from '../../stores/authStore'
 import AvailabilityToggle from '../../components/AvailabilityToggle'
 import ActiveCourseCard from '../../components/ActiveCourseCard'
 import OfferedCourseItem from '../../components/OfferedCourseItem'
+import SupportContactSheet from '../../components/SupportContactSheet'
+import AcceptTermsSheet from '../../components/AcceptTermsSheet'
 import { useDriverLocationTracker } from '../../hooks/useDriverLocationTracker'
 import { fetchOfferedCourses, fetchMyActiveCourses, type Availability } from '../../api/driver'
 import api from '../../api/client'
@@ -34,14 +37,15 @@ export default function DriverDashboard() {
     queryKey: ['me'],
     queryFn: async () => {
       const { data } = await api.get('/auth/me')
-      return data.user
+      return data as { user: any; terms?: { needs_acceptance: boolean } }
     },
     refetchInterval: 15_000,
   })
 
-  const me = meQuery.data ?? user
+  const me = meQuery.data?.user ?? user
   const availability = (me?.driver?.availability_status ?? 'offline') as Availability | 'busy'
   const isBanned = me?.driver?.activation_status === 'banned'
+  const needsTermsAcceptance = meQuery.data?.terms?.needs_acceptance ?? false
 
   const activeQuery = useQuery({
     queryKey: ['my-active'],
@@ -70,6 +74,8 @@ export default function DriverDashboard() {
 
   const firstName = me?.driver?.first_name ?? me?.name ?? ''
 
+  const [bannedSupportOpen, setBannedSupportOpen] = useState(false)
+
   // Cas 7 — Driver banni : écran de blocage complet. Le back retourne 403 sur
   // toutes les actions (currentDriver refuse activation_status !== 'active'),
   // on masque quand même toute l'UI pour éviter la confusion.
@@ -89,11 +95,11 @@ export default function DriverDashboard() {
           </Text>
           <View className="w-full mt-6 gap-2">
             <Pressable
-              onPress={() => Linking.openURL('tel:118')}
+              onPress={() => setBannedSupportOpen(true)}
               className="h-12 rounded-2xl bg-airmess-yellow items-center justify-center flex-row"
               style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
             >
-              <Ionicons name="call" size={18} color="#1A1614" />
+              <Ionicons name="help-circle" size={18} color="#1A1614" />
               <Text className="text-ink font-extrabold ml-2">Contacter le support</Text>
             </Pressable>
             <Pressable
@@ -106,6 +112,12 @@ export default function DriverDashboard() {
             </Pressable>
           </View>
         </View>
+
+        <SupportContactSheet
+          visible={bannedSupportOpen}
+          onClose={() => setBannedSupportOpen(false)}
+          context="Compte banni — demande de réclamation"
+        />
       </SafeAreaView>
     )
   }
@@ -223,6 +235,12 @@ export default function DriverDashboard() {
           <EmptyStateOffline availability={availability} />
         )}
       </KeyboardAwareScrollView>
+
+      {/* CGU — modale plein écran bloquante si non accepté */}
+      <AcceptTermsSheet
+        visible={needsTermsAcceptance}
+        onAccepted={() => meQuery.refetch()}
+      />
     </SafeAreaView>
   )
 }
