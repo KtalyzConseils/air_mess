@@ -128,6 +128,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::post('/device-tokens', [NotificationController::class, 'registerToken']);
+    Route::delete('/device-tokens', [NotificationController::class, 'deleteToken']);
 
     // Abonnements (payement et tout) — masqués côté UI mais conservés pour réversibilité
     Route::prefix('subscription')->group(function () {

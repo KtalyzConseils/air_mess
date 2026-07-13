@@ -34,6 +34,23 @@ class NotificationController extends Controller
     }
 
     /**
+     * Supprime le token push d'un device (à la déconnexion) pour que ce device
+     * ne reçoive plus les notifications de course. Scopé au user courant.
+     */
+    public function deleteToken(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'max:255'],
+        ]);
+
+        DeviceToken::where('token', $data['token'])
+            ->where('user_id', $request->user()->id)
+            ->delete();
+
+        return response()->json(['deleted' => true]);
+    }
+
+    /**
      * Liste paginée des notifications du user courant.
      */
     public function index(Request $request): JsonResponse
