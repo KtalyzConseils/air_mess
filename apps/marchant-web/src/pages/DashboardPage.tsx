@@ -14,6 +14,8 @@ import { fetchWallet } from '../api/wallet'
 import { useAuthStore } from '../stores/authStore'
 import { useOnboardingStore } from '../stores/onboardingStore'
 import OnboardingModal from '../components/onboarding/OnboardingModal'
+import AcceptTermsModal from '../components/AcceptTermsModal'
+import { fetchTermsStatus } from '../api/terms'
 
 const IN_PROGRESS_STATUSES = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff']
 
@@ -27,6 +29,15 @@ export default function DashboardPage() {
   // du header remet le flag à false pour la rejouer à la demande.
   const welcomeSeen = useOnboardingStore((s) => s.welcomeSeen)
   const markWelcomeSeen = useOnboardingStore((s) => s.markWelcomeSeen)
+
+  // CGU — statut d'acceptation. Modale bloquante si l'utilisateur n'a jamais
+  // accepté (comptes créés avant la mise en place) ou si la version courante
+  // a été bumpée depuis sa dernière acceptation.
+  const termsQuery = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: fetchTermsStatus,
+  })
+  const needsTermsAcceptance = termsQuery.data?.needs_acceptance ?? false
 
   const isPendingMarchant = user?.type === 'marchant' && !user.marchant?.validated_at
   const greetingName =
@@ -250,8 +261,12 @@ export default function DashboardPage() {
       </main>
 
       {/* Onboarding — modale de bienvenue (3 slides). S'affiche automatiquement
-          la 1ère fois, puis rejouable depuis le bouton "Aide" du header. */}
-      <OnboardingModal open={!welcomeSeen} onClose={markWelcomeSeen} />
+          la 1ère fois, puis rejouable depuis le bouton "Aide" du header.
+          On la masque tant que la modale CGU (plus prioritaire) est ouverte. */}
+      <OnboardingModal open={!welcomeSeen && !needsTermsAcceptance} onClose={markWelcomeSeen} />
+
+      {/* CGU — modale BLOQUANTE si jamais accepté ou version obsolète. */}
+      <AcceptTermsModal open={needsTermsAcceptance} onAccepted={() => termsQuery.refetch()} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -6,11 +6,12 @@ import { fetchUnreadCount } from '../api/notifications'
 import UserMenu from './UserMenu'
 import { useDesktopNotifications } from '../hooks/useDesktopNotifications'
 import EnableNotificationsButton from './EnableNotificationsButton'
+import SupportContactModal from './SupportContactModal'
 import markWhite from '../assets/logo/airmess-mark-white.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 import { useUiPrefsStore } from '../stores/uiPrefsStore'
 import { useOnboardingStore } from '../stores/onboardingStore'
-import { HelpCircleIcon } from './ui/icons'
+import { HelpCircleIcon, SparklesIcon, MapPinIcon, PhoneIcon } from './ui/icons'
 
 /**
  * Header global de l'app marchand/particulier.
@@ -26,16 +27,29 @@ export default function AppHeader() {
   const replayWelcome = useOnboardingStore((s) => s.replayWelcome)
   const replayFormTips = useOnboardingStore((s) => s.replayFormTips)
 
-  // A2 — le bouton "Aide" est contextuel :
-  //   sur /courses/new → rejoue les astuces du formulaire
-  //   ailleurs         → rejoue la présentation générale
-  function handleHelpClick() {
-    if (location.pathname.startsWith('/courses/new')) {
-      replayFormTips()
-    } else {
-      replayWelcome()
+  const isOnNewCourse = location.pathname.startsWith('/courses/new')
+
+  // Menu "Aide" — dropdown desktop, sections repliées en liste sur mobile.
+  // 3 entrées : présentation, astuces formulaire (si /courses/new), support.
+  const [helpMenuOpen, setHelpMenuOpen] = useState(false)
+  const [supportOpen, setSupportOpen] = useState(false)
+  const helpMenuRef = useRef<HTMLDivElement>(null)
+
+  // Ferme le dropdown au clic extérieur / à la nav vers une autre page
+  useEffect(() => {
+    if (!helpMenuOpen) return
+    function onClickOutside(e: MouseEvent) {
+      if (helpMenuRef.current && !helpMenuRef.current.contains(e.target as Node)) {
+        setHelpMenuOpen(false)
+      }
     }
-  }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [helpMenuOpen])
+
+  useEffect(() => {
+    setHelpMenuOpen(false)
+  }, [location.pathname])
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -101,16 +115,73 @@ export default function AppHeader() {
           <EnableNotificationsButton />
         </div>
 
-        {/* Bouton Aide — rejoue le guide (contextuel : /courses/new = astuces form, ailleurs = présentation) */}
-        <button
-          type="button"
-          onClick={handleHelpClick}
-          className="hidden sm:flex w-10 h-10 rounded-full items-center justify-center text-warm-300 hover:text-cream hover:bg-warm-600/20 transition-colors"
-          title={t('header.helpTitle')}
-          aria-label={t('header.helpTitle')}
-        >
-          <HelpCircleIcon size={20} />
-        </button>
+        {/* Menu Aide — dropdown : présentation, astuces form (contextuel), support */}
+        <div ref={helpMenuRef} className="hidden sm:block relative">
+          <button
+            type="button"
+            onClick={() => setHelpMenuOpen((v) => !v)}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-warm-300 hover:text-cream hover:bg-warm-600/20 transition-colors"
+            title={t('header.helpTitle')}
+            aria-label={t('header.helpTitle')}
+            aria-expanded={helpMenuOpen}
+            aria-haspopup="menu"
+          >
+            <HelpCircleIcon size={20} />
+          </button>
+          {helpMenuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full mt-2 w-64 bg-off-white text-ink rounded-xl shadow-lg border border-warm-200 overflow-hidden z-50 ams-anim-fade-in"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  replayWelcome()
+                  setHelpMenuOpen(false)
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-cream/60 transition-colors text-left"
+              >
+                <span className="w-8 h-8 rounded-full bg-airmess-yellow/20 text-ink flex items-center justify-center shrink-0">
+                  <SparklesIcon size={16} />
+                </span>
+                <span className="text-body-s font-medium">{t('header.helpMenu.replayWelcome')}</span>
+              </button>
+
+              {isOnNewCourse && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    replayFormTips()
+                    setHelpMenuOpen(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-cream/60 transition-colors text-left border-t border-warm-100"
+                >
+                  <span className="w-8 h-8 rounded-full bg-info-bg text-info flex items-center justify-center shrink-0">
+                    <MapPinIcon size={16} />
+                  </span>
+                  <span className="text-body-s font-medium">{t('header.helpMenu.replayFormTips')}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setSupportOpen(true)
+                  setHelpMenuOpen(false)
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-cream/60 transition-colors text-left border-t border-warm-100"
+              >
+                <span className="w-8 h-8 rounded-full bg-airmess-red/10 text-airmess-red flex items-center justify-center shrink-0">
+                  <PhoneIcon size={16} />
+                </span>
+                <span className="text-body-s font-medium">{t('header.helpMenu.contactSupport')}</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         <NavLink
           to="/notifications"
@@ -174,19 +245,48 @@ export default function AppHeader() {
                 👤 {t('nav.profile')}
               </NavLink>
             </nav>
-            <div className="mt-4 pt-4 border-t border-warm-600/20 space-y-2">
+            <div className="mt-4 pt-4 border-t border-warm-600/20 space-y-1">
+              <p className="px-4 pt-1 pb-2 text-caption uppercase tracking-widest text-warm-400 font-bold">
+                {t('header.helpTitle')}
+              </p>
               <button
                 type="button"
                 onClick={() => {
-                  handleHelpClick()
+                  replayWelcome()
                   setMobileOpen(false)
                 }}
                 className="w-full flex items-center gap-2 px-4 py-3 rounded-md text-body font-medium text-warm-200 hover:bg-warm-600/20 transition-colors"
               >
-                <HelpCircleIcon size={18} />
-                {t('header.helpTitle')}
+                <SparklesIcon size={18} />
+                {t('header.helpMenu.replayWelcome')}
               </button>
-              <EnableNotificationsButton />
+              {isOnNewCourse && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    replayFormTips()
+                    setMobileOpen(false)
+                  }}
+                  className="w-full flex items-center gap-2 px-4 py-3 rounded-md text-body font-medium text-warm-200 hover:bg-warm-600/20 transition-colors"
+                >
+                  <MapPinIcon size={18} />
+                  {t('header.helpMenu.replayFormTips')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSupportOpen(true)
+                  setMobileOpen(false)
+                }}
+                className="w-full flex items-center gap-2 px-4 py-3 rounded-md text-body font-medium text-warm-200 hover:bg-warm-600/20 transition-colors"
+              >
+                <PhoneIcon size={18} />
+                {t('header.helpMenu.contactSupport')}
+              </button>
+              <div className="pt-2">
+                <EnableNotificationsButton />
+              </div>
             </div>
 
             {/* Petit mark décoratif en bas du drawer mobile */}
@@ -197,6 +297,9 @@ export default function AppHeader() {
           </div>
         </>
       )}
+
+      {/* Modale contact support (montée au niveau header pour rester dispo partout) */}
+      <SupportContactModal open={supportOpen} onClose={() => setSupportOpen(false)} />
     </header>
   )
 }

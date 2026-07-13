@@ -8,8 +8,9 @@ import StatusBadge from '../components/StatusBadge'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Highlight from '../components/Highlight'
-import { AlertTriangleIcon } from '../components/ui/icons'
+import { AlertTriangleIcon, HelpCircleIcon } from '../components/ui/icons'
 import { fetchTracking, disputeTracking } from '../api/tracking'
+import SupportContactModal from '../components/SupportContactModal'
 import mark from '../assets/logo/airmess-mark.svg'
 import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
 
@@ -218,9 +219,36 @@ export default function TrackingPage() {
           <p className="text-caption text-warm-500">
             {t('tracking.footerAutoRefresh')}
           </p>
+          <TrackingSupportLink reference={data.reference} />
         </div>
       </main>
     </div>
+  )
+}
+
+/* ============================================================
+   Lien "Un problème ?" — expose la modale support au destinataire
+   depuis la page tracking publique (aucun compte requis).
+   ============================================================ */
+function TrackingSupportLink({ reference }: { reference: string }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 text-caption text-warm-500 hover:text-ink transition-colors underline-offset-2 hover:underline"
+      >
+        <HelpCircleIcon size={14} />
+        {t('support.needHelpLink')}
+      </button>
+      <SupportContactModal
+        open={open}
+        onClose={() => setOpen(false)}
+        context={`Tracking ${reference}`}
+      />
+    </>
   )
 }
 

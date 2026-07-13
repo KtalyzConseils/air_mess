@@ -73,7 +73,57 @@
     "workspace": "Espace marchand",
     "menu": "Menu",
     "notificationsTitle": "Notifications",
-    "helpTitle": "Aide"
+    "helpTitle": "Aide",
+    "helpMenu": {
+      "replayWelcome": "Revoir la présentation",
+      "replayFormTips": "Revoir les astuces du formulaire",
+      "contactSupport": "Contacter le support"
+    }
+  },
+  "support": {
+    "title": "Contacter le support",
+    "subtitle": "On te rappelle vite. Choisis un canal.",
+    "callAction": "Appeler",
+    "whatsappAction": "WhatsApp",
+    "whatsappHint": "Message pré-rempli avec ton compte",
+    "emailAction": "Envoyer un email",
+    "emailSubject": "Demande support Air Mess",
+    "messagePrefix": "Bonjour, j'ai besoin d'aide.",
+    "noContactYet": "Les contacts support ne sont pas encore configurés. Réessayez plus tard.",
+    "needHelpLink": "Besoin d'aide ?"
+  },
+  "legal": {
+    "eyebrow": "Documents légaux",
+    "placeholderNotice": "Ce texte est un modèle à faire valider par un juriste avant la mise en production. La structure ci-dessous est fournie à titre d'exemple.",
+    "readTermsInstead": "Lire plutôt les conditions générales",
+    "readPrivacyInstead": "Lire plutôt la politique de confidentialité",
+    "footerLinkTerms": "Conditions",
+    "footerLinkPrivacy": "Confidentialité",
+    "terms": {
+      "title": "Conditions",
+      "titleHighlight": "générales",
+      "subtitle": "Les règles qui encadrent votre utilisation d'Air Mess.",
+      "lastUpdated": "Dernière mise à jour : version en préparation."
+    },
+    "privacy": {
+      "title": "Politique de",
+      "titleHighlight": "confidentialité",
+      "subtitle": "Ce que nous collectons, pourquoi, et comment nous protégeons vos données.",
+      "lastUpdated": "Dernière mise à jour : version en préparation."
+    },
+    "checkbox": {
+      "label": "J'ai lu et j'accepte les <terms>conditions générales</terms> et la <privacy>politique de confidentialité</privacy> d'Air Mess.",
+      "requiredError": "Vous devez accepter les conditions pour continuer."
+    },
+    "acceptModal": {
+      "title": "Nos conditions ont besoin de votre accord",
+      "body": "Depuis votre inscription, nous avons formalisé nos règles d'utilisation et notre politique de confidentialité. Prenez un moment pour les lire.",
+      "readTerms": "Lire les conditions générales",
+      "readPrivacy": "Lire la politique de confidentialité",
+      "checkbox": "J'ai lu et j'accepte les conditions générales et la politique de confidentialité d'Air Mess.",
+      "submit": "J'accepte et continue",
+      "errorGeneric": "Impossible d'enregistrer votre acceptation. Vérifiez votre connexion et réessayez."
+    }
   },
   "onboarding": {
     "skip": "Passer",

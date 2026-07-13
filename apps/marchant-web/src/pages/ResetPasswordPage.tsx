@@ -9,6 +9,7 @@ import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
 import { EyeIcon, EyeOffIcon, ArrowRightIcon } from '../components/ui/icons'
 import LanguageToggle from '../components/ui/LanguageToggle'
+import AuthSupportFooter from '../components/AuthSupportFooter'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 
 export default function ResetPasswordPage() {
@@ -165,6 +166,8 @@ export default function ResetPasswordPage() {
             </>
           )}
         </Card>
+
+        <AuthSupportFooter context="ResetPassword" />
       </div>
     </div>
   )

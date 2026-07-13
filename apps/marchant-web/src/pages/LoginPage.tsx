@@ -8,6 +8,7 @@ import Input from '../components/ui/Input'
 import Highlight from '../components/Highlight'
 import { EyeIcon, EyeOffIcon, ArrowRightIcon } from '../components/ui/icons'
 import LanguageToggle from '../components/ui/LanguageToggle'
+import AuthSupportFooter from '../components/AuthSupportFooter'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
 
@@ -154,6 +155,8 @@ export default function LoginPage() {
               {t('auth.login.createAccount')}
             </Button>
           </Link>
+
+          <AuthSupportFooter context="Login" />
 
           <p className="text-caption text-warm-400 mt-10">
             {t('auth.login.copyright')}

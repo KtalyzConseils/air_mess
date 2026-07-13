@@ -8,6 +8,7 @@ import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
 import { ArrowRightIcon } from '../components/ui/icons'
+import AuthSupportFooter from '../components/AuthSupportFooter'
 import LanguageToggle from '../components/ui/LanguageToggle'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 
@@ -113,6 +114,8 @@ export default function ForgotPasswordPage() {
             </>
           )}
         </Card>
+
+        <AuthSupportFooter context="ForgotPassword" />
       </div>
     </div>
   )

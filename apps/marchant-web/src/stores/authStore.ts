@@ -11,6 +11,8 @@ export interface RegisterIndividualPayload {
   password: string
   password_confirmation: string
   gender?: 'M' | 'F' | 'autre'
+  /** Consentement CGU + politique confidentialité (checkbox obligatoire). */
+  accepted_terms: boolean
 }
 
 export interface RegisterMarchantPayload {
@@ -22,6 +24,8 @@ export interface RegisterMarchantPayload {
   raison_sociale: string
   ifu_rccm?: string
   secteur_activite: 'supermarche' | 'restaurant' | 'boutique' | 'pharmacie' | 'ecommerce' | 'autre'
+  /** Consentement CGU + politique confidentialité (checkbox obligatoire). */
+  accepted_terms: boolean
 }
 
 export interface RegisterDriverPayload {
@@ -50,6 +54,8 @@ export interface RegisterDriverPayload {
   equipment_isothermal_bag?: boolean
   equipment_top_case?: boolean
   equipment_refrigerated_bag?: boolean
+  /** Consentement CGU + politique confidentialité (checkbox obligatoire). */
+  accepted_terms: boolean
 }
 
 interface AuthState {
@@ -123,6 +129,8 @@ export const useAuthStore = create<AuthState>()(
         form.append('cni', payload.cni)
         // Permis : envoyé seulement s'il est fourni (voiture uniquement)
         if (payload.driving_license) form.append('driving_license', payload.driving_license)
+        // Consentement CGU (checkbox obligatoire côté back)
+        form.append('accepted_terms', payload.accepted_terms ? '1' : '0')
 
         await api.post('/auth/register/driver', form, {
           headers: { 'Content-Type': 'multipart/form-data' },

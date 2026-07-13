@@ -10,6 +10,8 @@ import Highlight from '../components/Highlight'
 import { cn } from '../lib/cn'
 import { EyeIcon, EyeOffIcon, ArrowRightIcon } from '../components/ui/icons'
 import LanguageToggle from '../components/ui/LanguageToggle'
+import AuthSupportFooter from '../components/AuthSupportFooter'
+import TermsCheckbox from '../components/TermsCheckbox'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 
@@ -46,6 +48,9 @@ export default function RegisterPage() {
   const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string[]>>({})
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [showTermsError, setShowTermsError] = useState(false)
+
   const {
     register,
     handleSubmit,
@@ -55,6 +60,10 @@ export default function RegisterPage() {
   async function onSubmit(values: RegisterFormValues) {
     setError(null)
     setServerFieldErrors({})
+    if (!acceptedTerms) {
+      setShowTermsError(true)
+      return
+    }
     try {
       if (type === 'individual') {
         await registerIndividual({
@@ -65,6 +74,7 @@ export default function RegisterPage() {
           password: values.password,
           password_confirmation: values.password_confirmation,
           gender: values.gender || undefined,
+          accepted_terms: true,
         })
       } else {
         await registerMarchant({
@@ -76,6 +86,7 @@ export default function RegisterPage() {
           raison_sociale: values.raison_sociale!,
           secteur_activite: values.secteur_activite!,
           ifu_rccm: values.ifu_rccm || undefined,
+          accepted_terms: true,
         })
       }
       navigate('/dashboard')
@@ -256,6 +267,12 @@ export default function RegisterPage() {
               }
             />
 
+            <TermsCheckbox
+              checked={acceptedTerms}
+              onChange={setAcceptedTerms}
+              error={showTermsError && !acceptedTerms ? t('legal.checkbox.requiredError') : undefined}
+            />
+
             {error && (
               <div
                 role="alert"
@@ -293,6 +310,8 @@ export default function RegisterPage() {
               </Link>
             </p>
           </div>
+
+          <AuthSupportFooter context="Register" />
         </div>
       </div>
 

@@ -33,6 +33,8 @@ import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDe
 import AdminReconciliationPage from './pages/admin/AdminReconciliationPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import TermsPage from './pages/legal/TermsPage'
+import PrivacyPage from './pages/legal/PrivacyPage'
 import ClientQuickNav from './components/ClientQuickNav'
 
 
@@ -56,6 +58,8 @@ function App() {
           <Route path="/register/driver/success" element={<DriverRegisterSuccessPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/legal/terms" element={<TermsPage />} />
+          <Route path="/legal/privacy" element={<PrivacyPage />} />
           <Route path="/t/:token" element={<TrackingPage />} />  {/* PUBLIQUE POUR LE TRACKING */}
           <Route path="/billing/return" element={<BillingReturnPage />} />  {/* PUBLIQUE : retour Fedapay, le webhook fait foi */}
 

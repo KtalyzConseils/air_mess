@@ -11,6 +11,8 @@ import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
 import Highlight from '../components/Highlight'
 import { BagIcon, PackageIcon, SnowflakeIcon, IdCardIcon, LockIcon, BikeIcon, AlertTriangleIcon } from '../components/ui/icons'
+import AuthSupportFooter from '../components/AuthSupportFooter'
+import TermsCheckbox from '../components/TermsCheckbox'
 import { cn } from '../lib/cn'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
@@ -39,6 +41,8 @@ export default function DriverRegisterPage() {
   const [fileError, setFileError] = useState<string | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string[]>>({})
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [showTermsError, setShowTermsError] = useState(false)
 
   const {
     register,
@@ -62,6 +66,12 @@ export default function DriverRegisterPage() {
       return
     }
 
+    if (!acceptedTerms) {
+      setShowTermsError(true)
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+      return
+    }
+
     try {
       await registerDriver({
         ...values,
@@ -69,6 +79,7 @@ export default function DriverRegisterPage() {
         cni,
         // Permis pris en compte uniquement pour une voiture.
         driving_license: carSelected ? drivingLicense : null,
+        accepted_terms: true,
       })
       navigate('/register/driver/success')
     } catch (err) {
@@ -352,6 +363,12 @@ export default function DriverRegisterPage() {
               </div>
             )}
 
+            <TermsCheckbox
+              checked={acceptedTerms}
+              onChange={setAcceptedTerms}
+              error={showTermsError && !acceptedTerms ? t('legal.checkbox.requiredError') : undefined}
+            />
+
             {/* ====================== SUBMIT ====================== */}
             <Card variant="default" padding="md" className="mt-6">
               <Button
@@ -373,6 +390,8 @@ export default function DriverRegisterPage() {
               </p>
             </Card>
           </form>
+
+          <AuthSupportFooter context="DriverRegister" />
         </div>
       </div>
     </div>

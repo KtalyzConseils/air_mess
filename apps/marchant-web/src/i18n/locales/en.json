@@ -73,7 +73,57 @@
     "workspace": "Merchant workspace",
     "menu": "Menu",
     "notificationsTitle": "Notifications",
-    "helpTitle": "Help"
+    "helpTitle": "Help",
+    "helpMenu": {
+      "replayWelcome": "Replay the intro",
+      "replayFormTips": "Replay the form tips",
+      "contactSupport": "Contact support"
+    }
+  },
+  "support": {
+    "title": "Contact support",
+    "subtitle": "We'll get back to you fast. Pick a channel.",
+    "callAction": "Call us",
+    "whatsappAction": "WhatsApp",
+    "whatsappHint": "Message pre-filled with your account",
+    "emailAction": "Send an email",
+    "emailSubject": "Air Mess support request",
+    "messagePrefix": "Hi, I need help.",
+    "noContactYet": "Support contacts aren't configured yet. Try again later.",
+    "needHelpLink": "Need help?"
+  },
+  "legal": {
+    "eyebrow": "Legal documents",
+    "placeholderNotice": "This text is a template to be validated by a lawyer before production. The structure below is provided as an example.",
+    "readTermsInstead": "Read the terms of service instead",
+    "readPrivacyInstead": "Read the privacy policy instead",
+    "footerLinkTerms": "Terms",
+    "footerLinkPrivacy": "Privacy",
+    "terms": {
+      "title": "Terms of",
+      "titleHighlight": "service",
+      "subtitle": "The rules that frame your use of Air Mess.",
+      "lastUpdated": "Last updated: draft version."
+    },
+    "privacy": {
+      "title": "Privacy",
+      "titleHighlight": "policy",
+      "subtitle": "What we collect, why, and how we protect your data.",
+      "lastUpdated": "Last updated: draft version."
+    },
+    "checkbox": {
+      "label": "I have read and I accept the <terms>Terms of service</terms> and the <privacy>Privacy policy</privacy> of Air Mess.",
+      "requiredError": "You must accept the terms to continue."
+    },
+    "acceptModal": {
+      "title": "Our terms need your consent",
+      "body": "Since you signed up, we have formalised our terms of service and privacy policy. Take a moment to review them.",
+      "readTerms": "Read the Terms of service",
+      "readPrivacy": "Read the Privacy policy",
+      "checkbox": "I have read and I accept Air Mess's Terms of service and Privacy policy.",
+      "submit": "Accept and continue",
+      "errorGeneric": "We couldn't record your acceptance. Please check your connection and retry."
+    }
   },
   "onboarding": {
     "skip": "Skip",
