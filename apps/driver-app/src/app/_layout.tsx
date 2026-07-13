@@ -4,10 +4,13 @@ import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import notifee, { EventType } from '@notifee/react-native'
-import { AppState, View, StatusBar } from 'react-native'
-import * as SecureStore from 'expo-secure-store'
+import { AppState } from 'react-native'
 import { useAuthStore } from '../stores/authStore'
-import { handleNotifeeEvent, PENDING_COURSE_KEY } from '../lib/registerBackgroundNotifications'
+import {
+  handleNotifeeEvent,
+  getRingQueue,
+  enqueueCourseFromPush,
+} from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import BrandSplash from '../components/BrandSplash'
@@ -61,27 +64,24 @@ export default function RootLayout() {
     })
   }, [])
 
-  // 1bis. Navigation ROBUSTE : la tâche de fond mémorise la course entrante ; à chaque
-  // ouverture / retour au premier plan, on ouvre l'écran d'appel si une course fraîche
-  // est en attente. Indépendant des events Notifee (capricieux au réveil).
+  // 1bis. Navigation ROBUSTE : la tâche de fond empile les courses entrantes dans une
+  // file ; à chaque ouverture / retour au premier plan, on ouvre l'écran d'appel sur la
+  // TÊTE de file (course la plus ancienne non traitée). Indépendant des events Notifee
+  // (capricieux au réveil). La file est vidée par l'écran d'appel au fil des actions.
   useEffect(() => {
     if (IS_EXPO_GO) return
-    async function checkPending() {
+    async function checkQueue() {
       try {
-        const raw = await SecureStore.getItemAsync(PENDING_COURSE_KEY)
-        if (!raw) return
-        const { course_id, ts } = JSON.parse(raw)
-        await SecureStore.deleteItemAsync(PENDING_COURSE_KEY)
-        if (course_id != null && Date.now() - ts < 45_000) {
-          setPendingCourseId(Number(course_id))
-        }
+        const items = await getRingQueue()
+        const head = items[0]
+        if (head) setPendingCourseId(head.course_id)
       } catch {
         /* ignore */
       }
     }
-    checkPending()
+    checkQueue()
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') checkPending()
+      if (s === 'active') checkQueue()
     })
     return () => sub.remove()
   }, [])
@@ -89,7 +89,7 @@ export default function RootLayout() {
   // 2. App vivante : notif full-screen pressée / délivrée (événement Notifee).
   useEffect(() => {
     if (IS_EXPO_GO) return
-    return notifee.onForegroundEvent((event) => {
+    return notifee.onForegroundEvent(async (event) => {
       handleNotifeeEvent(event) // boutons Accepter/Refuser pressés app ouverte
       const { type, detail } = event
       const data = detail.notification?.data as any
@@ -98,7 +98,8 @@ export default function RootLayout() {
         data?.type === 'course.offered' &&
         data?.course_id != null
       ) {
-        setPendingCourseId(Number(data.course_id))
+        const head = await enqueueCourseFromPush(data)
+        setPendingCourseId(head ?? Number(data.course_id))
       }
     })
   }, [])
@@ -108,10 +109,11 @@ export default function RootLayout() {
     if (IS_EXPO_GO) return
     let sub: { remove: () => void } | null = null
     import('expo-notifications').then((Notifications) => {
-      sub = Notifications.addNotificationReceivedListener((notif) => {
+      sub = Notifications.addNotificationReceivedListener(async (notif) => {
         const data = notif.request.content.data as any
         if (data?.type === 'course.offered' && data?.course_id != null) {
-          setPendingCourseId(Number(data.course_id))
+          const head = await enqueueCourseFromPush(data)
+          setPendingCourseId(head ?? Number(data.course_id))
         }
       })
     })
@@ -161,21 +163,6 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <Stack screenOptions={{ headerShown: false }} />
       </QueryClientProvider>
-      {/* Bandeau sombre derrière la barre de statut : les icônes système (blanches)
-          restent visibles sur TOUS les écrans, sans dépendre du contrôle JS des icônes
-          (inopérant en edge-to-edge sur cet OEM). */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: StatusBar.currentHeight ?? 28,
-          backgroundColor: '#1A1614',
-          zIndex: 100,
-        }}
-      />
     </KeyboardProvider>
   )
 }

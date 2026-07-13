@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import * as SecureStore from 'expo-secure-store'
 import api from '../api/client'
 import type { User } from '../types/auth'
+import { getDeviceExpoPushToken } from '../lib/notifications'
+import { stopLocationTracking } from '../lib/locationTask'
 
 interface AuthState {
   user: User | null
@@ -28,6 +30,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
+    // Nettoyage PAR APPAREIL (tant que le token est encore valide) : ce device ne doit
+    // plus recevoir de courses ni rester "en ligne". On NE touche PAS à la disponibilité :
+    // elle est partagée entre les appareils du livreur (déconnecter ici ne doit pas mettre
+    // hors-ligne un autre appareil du même livreur).
+    try {
+      const pushToken = await getDeviceExpoPushToken()
+      if (pushToken) {
+        await api.delete('/device-tokens', { data: { token: pushToken } })
+      }
+    } catch { /* endpoint absent / réseau : ignore */ }
+    try { await stopLocationTracking() } catch { /* ignore */ }
     try { await api.post('/auth/logout') } catch { /* ignore */ }
     await SecureStore.deleteItemAsync('airmess_token')
     set({ user: null, token: null })

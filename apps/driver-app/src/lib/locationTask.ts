@@ -1,4 +1,5 @@
 import * as TaskManager from 'expo-task-manager'
+import * as Location from 'expo-location'
 import { updatePosition } from '../api/driver'
 import { IS_EXPO_GO } from './notifications'
 
@@ -17,6 +18,23 @@ export const LOCATION_TASK = 'AIRMESS-LOCATION-TASK'
 
 const MIN_INTERVAL_MS = 15_000
 let lastSent = 0
+
+/**
+ * Arrête le service de premier plan de localisation (notif "en ligne").
+ * Appelé à la déconnexion : sinon le FGS reste actif et le device continue
+ * d'apparaître "en ligne" alors que le livreur s'est déconnecté.
+ */
+export async function stopLocationTracking(): Promise<void> {
+  if (IS_EXPO_GO) return
+  try {
+    const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(
+      () => false,
+    )
+    if (started) await Location.stopLocationUpdatesAsync(LOCATION_TASK)
+  } catch {
+    /* ignore */
+  }
+}
 
 if (!IS_EXPO_GO) {
   TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {

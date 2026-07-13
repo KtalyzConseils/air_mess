@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router'
 import { View } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery } from '@tanstack/react-query'
@@ -54,7 +55,27 @@ export default function TabsLayout() {
   })
 
   return (
-    <Tabs
+    <>
+      {/* Barre de statut : les écrans à onglets ont un fond CLAIR (crème/blanc).
+          L'OEM Transsion/TECNO ignore setAppearanceLightStatusBars : les icônes
+          système restent BLANCHES quoi qu'on demande → invisibles sur fond clair.
+          Fallback : un bandeau sombre derrière la barre de statut, sur lequel les
+          icônes blanches restent lisibles. (Les écrans sombres — login, splash,
+          course entrante — gardent StatusBar style="light" sans bandeau.) */}
+      <StatusBar style="light" />
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top,
+          backgroundColor: INK,
+          zIndex: 100,
+        }}
+      />
+      <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: INK,
@@ -130,6 +151,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-    </Tabs>
+      </Tabs>
+    </>
   )
 }

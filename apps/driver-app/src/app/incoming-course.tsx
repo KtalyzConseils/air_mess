@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator, Vibration } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { StatusBar } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
@@ -13,7 +13,12 @@ import {
   declineCourse,
   type DriverCourseSummary,
 } from '../api/driver'
-import { INCOMING_NOTIF_ID } from '../lib/registerBackgroundNotifications'
+import {
+  INCOMING_NOTIF_ID,
+  getRingQueue,
+  dequeueRing,
+  clearRingQueue,
+} from '../lib/registerBackgroundNotifications'
 
 const COUNTDOWN_SECONDS = 30
 
@@ -29,6 +34,8 @@ export default function IncomingCourseScreen() {
 
   const [remaining, setRemaining] = useState(COUNTDOWN_SECONDS)
   const [acting, setActing] = useState<null | 'accept' | 'decline'>(null)
+  // Nombre de courses encore en file DERRIÈRE celle affichée (badge "+N en attente").
+  const [waiting, setWaiting] = useState(0)
   const playerRef = useRef<AudioPlayer | null>(null)
   const dismissedRef = useRef(false)
 
@@ -44,7 +51,15 @@ export default function IncomingCourseScreen() {
   })
 
   // ── Sonnerie en boucle + vibration ────────────────────────────────
+  // Re-déclenchée à chaque course (courseId) : quand on enchaîne sur la suivante,
+  // l'écran ne se démonte pas → il faut relancer son/vibration/état.
   useEffect(() => {
+    dismissedRef.current = false
+    setActing(null)
+    // Combien de courses attendent derrière celle-ci ?
+    getRingQueue()
+      .then((items) => setWaiting(Math.max(0, items.length - 1)))
+      .catch(() => setWaiting(0))
     // L'écran d'appel prend le relais : on coupe la notif (et sa sonnerie de canal)
     // pour éviter le double son avec la boucle in-app.
     notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
@@ -64,10 +79,11 @@ export default function IncomingCourseScreen() {
       playerRef.current?.release()
       playerRef.current = null
     }
-  }, [])
+  }, [courseId])
 
   // ── Compte à rebours ──────────────────────────────────────────────
   useEffect(() => {
+    setRemaining(COUNTDOWN_SECONDS)
     const t = setInterval(() => {
       setRemaining((r) => {
         if (r <= 1) {
@@ -80,7 +96,7 @@ export default function IncomingCourseScreen() {
     }, 1000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [courseId])
 
   function stopAlert() {
     playerRef.current?.pause()
@@ -88,17 +104,27 @@ export default function IncomingCourseScreen() {
     notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
   }
 
-  function dismiss() {
+  /** Enchaîne sur la course suivante de la file, ou revient au dashboard si file vide. */
+  function goNext(nextCourseId: number | null) {
+    if (nextCourseId != null) {
+      // Même route, nouveau course_id → les effets [courseId] relancent la sonnerie.
+      router.replace({
+        pathname: '/incoming-course',
+        params: { course_id: String(nextCourseId) },
+      })
+    } else {
+      router.replace('/(tabs)')
+    }
+  }
+
+  async function onTimeout() {
     if (dismissedRef.current) return
     dismissedRef.current = true
     stopAlert()
-    // Retour au dashboard (remplace pour ne pas empiler l'écran d'appel).
-    router.replace('/(tabs)')
-  }
-
-  function onTimeout() {
-    // Expiration : on arrête tout, la course reste dans le pool (pas de refus enregistré).
-    dismiss()
+    // Expiration : la course reste dans le pool (pas de refus enregistré) mais sort de
+    // la file de sonnerie ; on enchaîne sur la suivante s'il y en a une.
+    const next = courseId ? await dequeueRing(courseId) : null
+    goNext(next?.course_id ?? null)
   }
 
   async function onAccept() {
@@ -108,10 +134,13 @@ export default function IncomingCourseScreen() {
     try {
       await acceptCourse(courseId)
       dismissedRef.current = true
+      await clearRingQueue() // livreur occupé → plus aucune course ne doit sonner
       router.replace('/(tabs)')
     } catch {
-      // Déjà prise par un autre / plus dispo.
-      dismiss()
+      // Déjà prise par un autre / plus dispo → on passe à la suivante de la file.
+      dismissedRef.current = true
+      const next = await dequeueRing(courseId)
+      goNext(next?.course_id ?? null)
     }
   }
 
@@ -125,7 +154,8 @@ export default function IncomingCourseScreen() {
       /* ignore */
     }
     dismissedRef.current = true
-    router.replace('/(tabs)')
+    const next = await dequeueRing(courseId)
+    goNext(next?.course_id ?? null)
   }
 
   const earnings = course?.driver_earnings ?? null
@@ -133,7 +163,7 @@ export default function IncomingCourseScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-airmess-dark" edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar style="light" />
       <View className="flex-1 px-6 pt-8 pb-6">
         {/* En-tête pulsé */}
         <View className="items-center mb-6">
@@ -146,6 +176,14 @@ export default function IncomingCourseScreen() {
           <Text className="text-white text-2xl font-extrabold mt-1">
             {course?.urgency === 'express' ? '⚡ Express' : 'Course entrante'}
           </Text>
+          {waiting > 0 && (
+            <View className="mt-2 flex-row items-center bg-airmess-yellow/15 px-3 py-1 rounded-full">
+              <Ionicons name="layers" size={12} color="#FFCC00" />
+              <Text className="text-airmess-yellow text-xs font-extrabold ml-1.5">
+                +{waiting} course{waiting > 1 ? 's' : ''} en attente
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Carte détails */}

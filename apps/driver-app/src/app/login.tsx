@@ -5,9 +5,9 @@ import {
   TextInput,
   Pressable,
   Image,
-  StatusBar,
   Linking,
 } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -46,12 +46,28 @@ export default function LoginScreen() {
     setError(null)
     setLoading(true)
     try {
-      await login(email, password)
+      // Nettoie l'email (espaces parasites de l'autofill/clavier = 401 injustifié).
+      await login(email.trim(), password)
     } catch (err) {
-      const msg =
-        err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Identifiants invalides.'
-          : (err as Error).message
+      let msg: string
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          // Aucune réponse HTTP = serveur injoignable (réseau/DNS/timeout),
+          // ce N'EST PAS un mauvais mot de passe.
+          msg =
+            err.code === 'ECONNABORTED'
+              ? 'Le serveur met trop de temps à répondre. Réessaie.'
+              : 'Impossible de joindre le serveur. Vérifie ta connexion internet.'
+        } else if (err.response.status === 401) {
+          msg = 'Email ou mot de passe incorrect.'
+        } else {
+          msg =
+            (err.response.data as any)?.message ??
+            `Erreur serveur (${err.response.status}).`
+        }
+      } else {
+        msg = (err as Error).message
+      }
       setError(msg)
     } finally {
       setLoading(false)
@@ -62,7 +78,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-airmess-dark" edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar style="light" />
       <KeyboardAwareScrollView
         bottomOffset={24}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}

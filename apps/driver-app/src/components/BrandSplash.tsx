@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { View, Image, Animated, StatusBar, Easing } from 'react-native'
+import { View, Image, Animated, Easing } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 
 /**
  * BrandSplash — splash React qui prend la relève dès que l'app React démarre.
@@ -44,7 +45,7 @@ export default function BrandSplash() {
         justifyContent: 'center',
       }}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#1A1614" translucent />
+      <StatusBar style="light" />
       <Animated.View style={{ opacity, transform: [{ scale }] }}>
         <Image
           source={require('../../assets/images/splash-icon.png')}

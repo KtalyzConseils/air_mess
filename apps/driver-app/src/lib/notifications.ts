@@ -4,6 +4,26 @@ import { Platform } from 'react-native'
 export const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient'
 
 /**
+ * Token push Expo de CE device (null en Expo Go / si indisponible).
+ * Sert à la fois à l'enregistrement et à la SUPPRESSION du token à la déconnexion.
+ */
+export async function getDeviceExpoPushToken(): Promise<string | null> {
+  if (IS_EXPO_GO) return null
+  try {
+    const Notifications = await import('expo-notifications')
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      (Constants as any).easConfig?.projectId
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    )
+    return tokenData.data
+  } catch {
+    return null
+  }
+}
+
+/**
  * Canal Android dédié aux nouvelles courses (son + vibration personnalisés).
  * Doit correspondre au channelId envoyé par l'API (NotificationService).
  */
