@@ -6,8 +6,8 @@ import api from './client'
  * les selects côté panneau d'arbitrage.
  */
 export const ADJUSTMENT_REASON_CODES = {
-  incident_refund:      { side: 'marchand' as const, sign: 'credit' as const, label: 'Refund marchand (incident)' },
-  no_show_refund:       { side: 'marchand' as const, sign: 'credit' as const, label: 'Refund marchand (no-show partiel)' },
+  incident_refund:      { side: 'marchand' as const, sign: 'credit' as const, label: 'Remboursement marchand (incident)' },
+  no_show_refund:       { side: 'marchand' as const, sign: 'credit' as const, label: 'Remboursement marchand (no-show partiel)' },
   return_shipping_fee:  { side: 'marchand' as const, sign: 'debit'  as const, label: 'Frais course retour (marchand)' },
   incident_debit:       { side: 'driver'   as const, sign: 'debit'  as const, label: 'Débit driver (incident)' },
   caution_seizure:      { side: 'driver'   as const, sign: 'debit'  as const, label: 'Saisie caution (fraude)' },
