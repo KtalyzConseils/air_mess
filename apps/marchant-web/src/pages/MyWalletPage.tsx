@@ -26,6 +26,8 @@ const TX_META: Record<WalletTransactionType, { labelKey: string; icon: string; p
   adjustment_credit: { labelKey: 'wallet.txAdjustmentCredit', icon: '✨', positive: true  },
   adjustment_debit:  { labelKey: 'wallet.txAdjustmentDebit',  icon: '⚠️', positive: false },
   withdraw:          { labelKey: 'wallet.txWithdraw',         icon: '🏦', positive: false },
+  collection_credit: { labelKey: 'wallet.txCollectionCredit', icon: '💵', positive: true  },
+  adjustment_incident: { labelKey: 'wallet.txAdjustmentIncident', icon: '⚖️', positive: false },
 }
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000]
@@ -279,7 +281,11 @@ export default function MyWalletPage() {
           ) : (
             <ul className="divide-y divide-warm-100">
               {data.recent_transactions.map((tx: WalletTransaction) => {
-                const meta = TX_META[tx.type]
+                // Fallback : un type inconnu (nouveau côté API) ne doit jamais
+                // faire planter la page. Le signe suit le montant réel (ex.
+                // adjustment_incident peut être un crédit OU un débit).
+                const meta = TX_META[tx.type] ?? { labelKey: 'wallet.txOther', icon: '•', positive: tx.amount_fcfa >= 0 }
+                const positive = tx.amount_fcfa >= 0
                 return (
                   <li key={tx.id} className="py-3 flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
@@ -298,10 +304,10 @@ export default function MyWalletPage() {
                       <p
                         className={cn(
                           'text-body font-bold tabular-nums',
-                          meta.positive ? 'text-success' : 'text-airmess-red',
+                          positive ? 'text-success' : 'text-airmess-red',
                         )}
                       >
-                        {meta.positive ? '+' : '−'}{Math.abs(tx.amount_fcfa).toLocaleString('fr-FR')}
+                        {positive ? '+' : '−'}{Math.abs(tx.amount_fcfa).toLocaleString('fr-FR')}
                       </p>
                       <p className="text-caption text-warm-400 tabular-nums">
                         {t('wallet.balanceLabel')} : {tx.balance_after.toLocaleString('fr-FR')}

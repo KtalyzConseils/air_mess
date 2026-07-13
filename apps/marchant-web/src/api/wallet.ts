@@ -7,6 +7,8 @@ export type WalletTransactionType =
   | 'adjustment_credit'
   | 'adjustment_debit'
   | 'withdraw'
+  | 'collection_credit'
+  | 'adjustment_incident'
 
 export interface WalletTransaction {
   id: number
