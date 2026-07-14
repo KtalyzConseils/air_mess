@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import { AdminButton } from '../../components/admin/AdminToolbar'
-import { ArrowLeftIcon, SettingsIcon, CheckIcon, AlertTriangleIcon } from '../../components/ui/icons'
+import { ArrowLeftIcon, SettingsIcon, CheckIcon, AlertTriangleIcon, WhatsappIcon } from '../../components/ui/icons'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
 import SupportNotesPanel from '../../components/SupportNotesPanel'
 import { fetchDriver, validateDriver, openDriverDocument } from '../../api/admin'
@@ -204,16 +204,29 @@ export default function AdminDriverDetailPage() {
                 <p className="text-body-s text-warning/90 mb-3">
                   {t('admin.drivers.validationPendingBody')}
                 </p>
-                <AdminButton
-                  variant="primary"
-                  onClick={() => validateMutation.mutate()}
-                  disabled={validateMutation.isPending}
-                  leftIcon={<CheckIcon size={14} />}
-                >
-                  {validateMutation.isPending
-                    ? t('admin.drivers.validating')
-                    : t('admin.drivers.validateDriver')}
-                </AdminButton>
+                <div className="flex flex-wrap items-center gap-2">
+                  <AdminButton
+                    variant="primary"
+                    onClick={() => validateMutation.mutate()}
+                    disabled={validateMutation.isPending}
+                    leftIcon={<CheckIcon size={14} />}
+                  >
+                    {validateMutation.isPending
+                      ? t('admin.drivers.validating')
+                      : t('admin.drivers.validateDriver')}
+                  </AdminButton>
+                  {/* Canal préféré = WhatsApp : la réponse se fait manuellement via wa.me */}
+                  {data.driver.preferred_response_channel === 'whatsapp' && data.driver.user.phone && (
+                    <a
+                      href={`https://wa.me/${data.driver.user.phone.replace(/\D/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-success/40 bg-success-bg px-3 py-1.5 text-caption font-medium text-success hover:border-success"
+                    >
+                      <WhatsappIcon size={14} /> {t('admin.drivers.contactWhatsapp')}
+                    </a>
+                  )}
+                </div>
                 {validateError && (
                   <p className="text-body-s text-airmess-red mt-2 flex items-center gap-1.5">
                     <AlertTriangleIcon size={14} /> {validateError}
@@ -229,6 +242,11 @@ export default function AdminDriverDetailPage() {
                 <Row label={t('admin.drivers.fieldBirthDate')}>{formatDate(data.driver.birth_date)}</Row>
                 <Row label={t('admin.drivers.fieldPhone')}>{data.driver.user.phone ?? '—'}</Row>
                 <Row label={t('admin.drivers.fieldEmail')}>{data.driver.user.email}</Row>
+                <Row label={t('admin.drivers.fieldPreferredChannel')}>
+                  {data.driver.preferred_response_channel
+                    ? t(`admin.drivers.channel.${data.driver.preferred_response_channel}`)
+                    : '—'}
+                </Row>
               </Section>
 
               <Section title={t('admin.drivers.sectionVehicle')}>
@@ -240,6 +258,8 @@ export default function AdminDriverDetailPage() {
               <Section title={t('admin.drivers.sectionEmergency')}>
                 <Row label={t('admin.drivers.fieldEmergencyName')}>{data.driver.emergency_contact_name ?? '—'}</Row>
                 <Row label={t('admin.drivers.fieldEmergencyPhone')}>{data.driver.emergency_contact_phone ?? '—'}</Row>
+                <Row label={t('admin.drivers.fieldEmergencyName2')}>{data.driver.emergency_contact2_name ?? '—'}</Row>
+                <Row label={t('admin.drivers.fieldEmergencyPhone2')}>{data.driver.emergency_contact2_phone ?? '—'}</Row>
                 <Row label={t('admin.drivers.fieldLastPosition')}>{formatDate(data.driver.last_position_at)}</Row>
               </Section>
 

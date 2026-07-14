@@ -142,8 +142,16 @@ class AuthController extends Controller
      * Inscription d'un livreur (validation manuelle ensuite par un admin ops).
      * Le compte est créé en activation_status='pending' tant qu'aucun admin n'a vérifié les documents.
      */
-    public function registerDriver(Request $request, NotificationService $notifier): JsonResponse
-    {
+    public function registerDriver(
+        Request $request,
+        NotificationService $notifier,
+        \App\Services\FirebaseTokenVerifier $firebaseVerifier,
+    ): JsonResponse {
+        // Le numéro est normalisé en E.164 AVANT validation pour que l'unicité
+        // users.phone porte sur un format canonique (+2290190123456) et que la
+        // comparaison avec le claim phone_number du jeton Firebase soit fiable.
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
         $data = $request->validate([
             // Identité
             'first_name' => ['required', 'string', 'max:100'],
@@ -156,21 +164,29 @@ class AuthController extends Controller
             'phone'    => ['required', 'string', 'max:20', 'unique:users,phone'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
 
+            // Preuve de possession du numéro : ID token Firebase Phone Auth
+            // obtenu côté web après confirmation du code SMS.
+            'firebase_id_token' => ['required', 'string'],
+
             // Véhicule
             'vehicle_type'  => ['required', Rule::in(['scooter', 'moto', 'voiture', 'velo'])],
             'vehicle_plate' => ['required', 'string', 'max:20'],
             'vehicle_color' => ['nullable', 'string', 'max:30'],
 
             // Documents (photo nullable, CNI + permis obligatoires)
+            // max photo 4096 : filet de sécurité — la compression canvas côté
+            // client ramène les photos caméra mobile bien en dessous.
             'photo'           => ['nullable', 'image', 'mimes:jpg,jpeg,png',
-                                  'max:2048', 'dimensions:min_width=200,min_height=200'],
+                                  'max:4096', 'dimensions:min_width=200,min_height=200'],
             'cni'             => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
             // Permis exigé uniquement pour une voiture ; ignoré (nullable) pour moto/scooter/vélo.
             'driving_license' => ['nullable', 'required_if:vehicle_type,voiture', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
 
-            // Contact d'urgence (obligatoire)
-            'emergency_contact_name'  => ['required', 'string', 'max:255'],
-            'emergency_contact_phone' => ['required', 'string', 'max:20'],
+            // Contacts d'urgence (2 obligatoires)
+            'emergency_contact_name'   => ['required', 'string', 'max:255'],
+            'emergency_contact_phone'  => ['required', 'string', 'max:20'],
+            'emergency_contact2_name'  => ['required', 'string', 'max:255'],
+            'emergency_contact2_phone' => ['required', 'string', 'max:20'],
 
             // Équipement (optionnel, défauts à false si non envoyés)
             'equipment'                  => ['nullable', 'array'],
@@ -181,6 +197,15 @@ class AuthController extends Controller
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms' => ['required', 'accepted'],
         ]);
+
+        // Le jeton Firebase doit prouver la possession du numéro soumis :
+        // claim phone_number (E.164) === phone normalisé du formulaire.
+        $verifiedPhone = $firebaseVerifier->verifyPhoneToken($data['firebase_id_token']);
+        if ($verifiedPhone === null || $verifiedPhone !== $data['phone']) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'phone' => ['Numéro non vérifié. Refaites la vérification par SMS.'],
+            ]);
+        }
 
         // Stockage des documents AVANT la transaction (les fichiers sont indépendants de la DB).
         // Si la transaction échoue, on supprime le dossier dans le catch ci-dessous pour ne pas
@@ -213,6 +238,8 @@ class AuthController extends Controller
                     'vehicle_color'            => $data['vehicle_color'] ?? null,
                     'emergency_contact_name'   => $data['emergency_contact_name'],
                     'emergency_contact_phone'  => $data['emergency_contact_phone'],
+                    'emergency_contact2_name'  => $data['emergency_contact2_name'],
+                    'emergency_contact2_phone' => $data['emergency_contact2_phone'],
                     'equipment'                => [
                         'isothermal_bag'   => filter_var($data['equipment']['isothermal_bag']   ?? false, FILTER_VALIDATE_BOOL),
                         'top_case'         => filter_var($data['equipment']['top_case']         ?? false, FILTER_VALIDATE_BOOL),

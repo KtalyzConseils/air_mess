@@ -70,6 +70,29 @@ class DriverController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    // ===== 2bis. CANAL DE RÉPONSE PRÉFÉRÉ (candidature) =====
+    /**
+     * Choisi par le candidat sur la page de confirmation d'inscription (web),
+     * avec le token renvoyé par register. Accessible en activation_status
+     * 'pending' (requireActive: false) : c'est justement avant validation
+     * que ce choix a du sens.
+     */
+    public function setResponseChannel(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'channel' => ['required', Rule::in(['email', 'sms', 'whatsapp'])],
+        ]);
+
+        $driver = $this->currentDriver($request);
+
+        $driver->update(['preferred_response_channel' => $data['channel']]);
+
+        return response()->json([
+            'message' => 'Canal de réponse enregistré.',
+            'channel' => $data['channel'],
+        ]);
+    }
+
     // ===== 3. PROPOSITIONS DE COURSES (matching par distance) =====
 
     public function offeredCourses(Request $request): JsonResponse

@@ -826,7 +826,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      * d'un driver fraîchement inscrit, après vérification de ses documents par l'admin.
      * Envoie un email "Compte activé" au driver.
      */
-    public function validateDriver(Driver $driver): JsonResponse
+    public function validateDriver(Driver $driver, \App\Services\BrevoSmsService $sms): JsonResponse
     {
         if ($driver->activation_status !== 'pending') {
             return response()->json([
@@ -839,7 +839,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             $driver->user->update(['is_active' => true]);
         });
 
-        // Email de validation au driver (queued)
+        // Email de validation au driver (queued) — envoyé quel que soit le canal préféré.
         try {
             \Illuminate\Support\Facades\Mail::to($driver->user->email)
                 ->send(new \App\Mail\DriverValidatedMail($driver->user));
@@ -848,6 +848,18 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 'err' => $e->getMessage(),
                 'driver_id' => $driver->id,
             ]);
+        }
+
+        // Canal préféré choisi à la candidature. Branche 'sms' actuellement
+        // DORMANTE (option grisée "bientôt disponible" côté front) — le code
+        // reste prêt pour l'activation. 'whatsapp' = contact manuel par l'ops
+        // (lien wa.me affiché sur la fiche driver admin). Si un flux "refus de
+        // candidature" est créé plus tard, réutiliser la même logique.
+        if ($driver->preferred_response_channel === 'sms' && $driver->user->phone) {
+            $sms->send(
+                \App\Support\Phone::normalize($driver->user->phone),
+                'Air Mess : votre compte livreur est activé ! Connectez-vous sur l\'app Air Mess Livreur.',
+            );
         }
 
         return response()->json([

@@ -73,6 +73,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('driver')->group(function () {
         Route::post('/availability', [DriverController::class, 'updateAvailability']);
         Route::post('/position',     [DriverController::class, 'updatePosition']);
+        // Canal de réponse à la candidature — accessible au driver pending
+        // (choisi sur la page de confirmation d'inscription web).
+        Route::post('/response-channel', [DriverController::class, 'setResponseChannel']);
         Route::get('/offered-courses', [DriverController::class, 'offeredCourses']);
         Route::get('/stats', [DriverController::class, 'stats']);
 

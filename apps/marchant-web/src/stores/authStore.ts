@@ -39,6 +39,8 @@ export interface RegisterDriverPayload {
   phone: string
   password: string
   password_confirmation: string
+  /** ID token Firebase (Phone Auth) prouvant la possession du numéro. */
+  firebase_id_token: string
   // Véhicule
   vehicle_type: 'scooter' | 'moto' | 'voiture' | 'velo'
   vehicle_plate: string
@@ -47,9 +49,11 @@ export interface RegisterDriverPayload {
   photo: File | null // optionnel
   cni: File // requis
   driving_license: File | null // requis uniquement si vehicle_type === 'voiture'
-  // Contact d'urgence
+  // Contacts d'urgence (2 obligatoires)
   emergency_contact_name: string
   emergency_contact_phone: string
+  emergency_contact2_name: string
+  emergency_contact2_phone: string
   // Équipement (booléens optionnels)
   equipment_isothermal_bag?: boolean
   equipment_top_case?: boolean
@@ -66,7 +70,8 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>
   registerIndividual: (payload: RegisterIndividualPayload) => Promise<void>
   registerMarchant: (payload: RegisterMarchantPayload) => Promise<void>
-  registerDriver: (payload: RegisterDriverPayload) => Promise<void>
+  /** Retourne le token Sanctum du compte créé (pour le choix du canal de réponse sur la page succès). */
+  registerDriver: (payload: RegisterDriverPayload) => Promise<{ token: string }>
   logout: () => Promise<void>
   fetchMe: () => Promise<void>
   setUser: (user: User) => void
@@ -115,11 +120,14 @@ export const useAuthStore = create<AuthState>()(
         form.append('phone', payload.phone)
         form.append('password', payload.password)
         form.append('password_confirmation', payload.password_confirmation)
+        form.append('firebase_id_token', payload.firebase_id_token)
         form.append('vehicle_type', payload.vehicle_type)
         form.append('vehicle_plate', payload.vehicle_plate)
         if (payload.vehicle_color) form.append('vehicle_color', payload.vehicle_color)
         form.append('emergency_contact_name', payload.emergency_contact_name)
         form.append('emergency_contact_phone', payload.emergency_contact_phone)
+        form.append('emergency_contact2_name', payload.emergency_contact2_name)
+        form.append('emergency_contact2_phone', payload.emergency_contact2_phone)
         // Équipement (Laravel reconstruit l'objet equipment depuis equipment[xxx])
         form.append('equipment[isothermal_bag]',   payload.equipment_isothermal_bag   ? '1' : '0')
         form.append('equipment[top_case]',         payload.equipment_top_case         ? '1' : '0')
@@ -132,10 +140,13 @@ export const useAuthStore = create<AuthState>()(
         // Consentement CGU (checkbox obligatoire côté back)
         form.append('accepted_terms', payload.accepted_terms ? '1' : '0')
 
-        await api.post('/auth/register/driver', form, {
+        const { data } = await api.post('/auth/register/driver', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
         // Pas de set() : le driver ne reste pas connecté côté web, il télécharge l'app mobile.
+        // Le token est passé à la page succès (navigation state) pour enregistrer
+        // le canal de réponse préféré — jamais persisté dans localStorage.
+        return { token: data.token as string }
       },
 
 

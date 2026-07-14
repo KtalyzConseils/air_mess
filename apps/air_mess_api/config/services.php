@@ -24,6 +24,16 @@ return [
 
     'brevo' => [
         'key' => env('BREVO_API_KEY'),
+        // SMS transactionnels (réponse de candidature driver). Sender ID : max 11
+        // caractères alphanumériques, à faire valider dans le compte Brevo.
+        'sms_sender' => env('BREVO_SMS_SENDER', 'AirMess'),
+        // true = pas d'appel réseau, SMS loggé (dev/tests sans crédits).
+        'sms_fake' => env('BREVO_SMS_FAKE', env('APP_ENV') === 'local'),
+    ],
+
+    'firebase' => [
+        // Project ID Firebase — sert à valider aud/iss des ID tokens Phone Auth.
+        'project_id' => env('FIREBASE_PROJECT_ID'),
     ],
 
     'ses' => [

@@ -384,6 +384,97 @@ export function RadarIcon(props: IconProps) {
   )
 }
 
+// Moto — type de véhicule (carénage + guidon haut)
+export function MotorcycleIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <circle cx="5" cy="17" r="3.5" />
+      <circle cx="19" cy="17" r="3.5" />
+      <path d="M9.5 17 12 11h3.5" />
+      <path d="M12 11 9.5 8H7" />
+      <path d="M15.5 11 17 8h1.5" />
+      <path d="M17 8l2 9" />
+    </svg>
+  )
+}
+
+// Scooter — type de véhicule (plancher plat + colonne de direction)
+export function ScooterIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <circle cx="5.5" cy="17.5" r="3" />
+      <circle cx="18.5" cy="17.5" r="3" />
+      <path d="M8.5 17.5h4L15 6h2.5" />
+      <path d="M15.5 8.5 18 17.5" />
+      <path d="M13.5 6H15" />
+    </svg>
+  )
+}
+
+// Voiture — type de véhicule
+export function CarIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M5 11 6.5 6.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11" />
+      <path d="M3 16v-3a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3" />
+      <path d="M3 16h18" />
+      <circle cx="7" cy="16" r="2" />
+      <circle cx="17" cy="16" r="2" />
+    </svg>
+  )
+}
+
+// Fichier texte — section documents
+export function FileTextIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6" />
+      <line x1="9" y1="13" x2="15" y2="13" />
+      <line x1="9" y1="17" x2="13" y2="17" />
+    </svg>
+  )
+}
+
+// Smartphone — bannière téléchargement app
+export function SmartphoneIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect x="7" y="2" width="10" height="20" rx="2" />
+      <line x1="11" y1="18" x2="13" y2="18" />
+    </svg>
+  )
+}
+
+// Appareil photo — capture de documents
+export function CameraIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </svg>
+  )
+}
+
+// Trombone — bouton "choisir un fichier"
+export function PaperclipIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  )
+}
+
+// WhatsApp — canal de réponse (bulle + combiné, style trait maison)
+export function WhatsappIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.65-1.15A9 9 0 1 0 12 3Z" />
+      <path d="M9.3 8.2c-.6.6-.6 1.7.1 2.9a9.2 9.2 0 0 0 3.5 3.5c1.2.7 2.3.7 2.9.1l.5-.5-1.9-1.3-1 .7a7.1 7.1 0 0 1-2.5-2.5l.7-1-1.3-1.9-.5.5" />
+    </svg>
+  )
+}
+
 // Flocon — chaîne du froid / sac réfrigéré
 export function SnowflakeIcon(props: IconProps) {
   return (

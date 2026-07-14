@@ -95,6 +95,9 @@ export interface DriverDetail {
   driving_license_url: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
+  emergency_contact2_name: string | null
+  emergency_contact2_phone: string | null
+  preferred_response_channel: 'email' | 'sms' | 'whatsapp' | null
   user: { id: number; name: string; email: string; phone: string | null }
   wallet: DriverWallet | null
 }

@@ -10,10 +10,16 @@ import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
 import Highlight from '../components/Highlight'
-import { BagIcon, PackageIcon, SnowflakeIcon, IdCardIcon, LockIcon, BikeIcon, AlertTriangleIcon } from '../components/ui/icons'
+import {
+  BagIcon, PackageIcon, SnowflakeIcon, IdCardIcon, LockIcon, BikeIcon, AlertTriangleIcon,
+  MotorcycleIcon, ScooterIcon, CarIcon, FileTextIcon,
+} from '../components/ui/icons'
 import AuthSupportFooter from '../components/AuthSupportFooter'
 import TermsCheckbox from '../components/TermsCheckbox'
-import { cn } from '../lib/cn'
+import VehicleTypeCards from '../components/driver/VehicleTypeCards'
+import AppDownloadBanner from '../components/driver/AppDownloadBanner'
+import DocumentCapture from '../components/driver/DocumentCapture'
+import PhoneOtpField from '../components/driver/PhoneOtpField'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 
@@ -28,7 +34,7 @@ const MAX_BIRTH_DATE = (() => {
   return d.toISOString().split('T')[0]
 })()
 
-type FormValues = Omit<RegisterDriverPayload, 'photo' | 'cni' | 'driving_license'>
+type FormValues = Omit<RegisterDriverPayload, 'photo' | 'cni' | 'driving_license' | 'firebase_id_token'>
 
 export default function DriverRegisterPage() {
   const { t } = useTranslation()
@@ -39,6 +45,9 @@ export default function DriverRegisterPage() {
   const [cni, setCni] = useState<File | null>(null)
   const [drivingLicense, setDrivingLicense] = useState<File | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
+  // ID token Firebase une fois le numéro vérifié par SMS (null = pas encore vérifié).
+  const [phoneToken, setPhoneToken] = useState<string | null>(null)
+  const [phoneTokenError, setPhoneTokenError] = useState<string | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string[]>>({})
   const [acceptedTerms, setAcceptedTerms] = useState(false)
@@ -57,7 +66,15 @@ export default function DriverRegisterPage() {
   async function onSubmit(values: FormValues) {
     setServerError(null)
     setFileError(null)
+    setPhoneTokenError(null)
     setServerFieldErrors({})
+
+    // Le numéro doit avoir été vérifié par SMS (Firebase) avant soumission.
+    if (!phoneToken) {
+      setPhoneTokenError(t('driverRegister.otp.requiredBeforeSubmit'))
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
 
     const carSelected = values.vehicle_type === 'voiture'
     if (!cni || (carSelected && !drivingLicense)) {
@@ -73,15 +90,18 @@ export default function DriverRegisterPage() {
     }
 
     try {
-      await registerDriver({
+      const { token } = await registerDriver({
         ...values,
+        firebase_id_token: phoneToken,
         photo,
         cni,
         // Permis pris en compte uniquement pour une voiture.
         driving_license: carSelected ? drivingLicense : null,
         accepted_terms: true,
       })
-      navigate('/register/driver/success')
+      // Le token Sanctum permet à la page succès d'enregistrer le canal de
+      // réponse préféré (navigation state uniquement, jamais localStorage).
+      navigate('/register/driver/success', { state: { registrationToken: token } })
     } catch (err) {
       // Messages toujours en FR : cohérence avec les messages Laravel côté API.
       if (err instanceof AxiosError) {
@@ -158,6 +178,9 @@ export default function DriverRegisterPage() {
             {t('driverRegister.formSubtitle')}
           </p>
 
+          {/* Canal privilégié : l'inscription directement dans l'app livreur */}
+          <AppDownloadBanner />
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {/* ====================== IDENTITÉ ====================== */}
             <FormSection icon={<IdCardIcon size={20} />} title={t('driverRegister.sectionIdentityTitle')} description={t('driverRegister.sectionIdentityDesc')}>
@@ -205,13 +228,15 @@ export default function DriverRegisterPage() {
                   {...register('email', { required: t('driverRegister.emailRequired') })}
                   error={errors.email?.message ?? serverErr('email')}
                 />
-                <Input
-                  type="tel"
+                <PhoneOtpField
                   label={t('driverRegister.phone')}
-                  placeholder="+229 90 12 34 56"
-                  autoComplete="tel"
-                  {...register('phone', { required: t('driverRegister.phoneRequired') })}
-                  error={errors.phone?.message ?? serverErr('phone')}
+                  registration={register('phone', { required: t('driverRegister.phoneRequired') })}
+                  phoneValue={watch('phone') ?? ''}
+                  error={errors.phone?.message ?? serverErr('phone') ?? phoneTokenError ?? undefined}
+                  onTokenChange={(token) => {
+                    setPhoneToken(token)
+                    if (token) setPhoneTokenError(null)
+                  }}
                 />
                 <Input
                   type="password"
@@ -236,20 +261,18 @@ export default function DriverRegisterPage() {
 
             {/* ====================== VÉHICULE ====================== */}
             <FormSection icon={<BikeIcon size={20} />} title={t('driverRegister.sectionVehicleTitle')}>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Field label={`${t('driverRegister.vehicleType')} *`} error={errors.vehicle_type?.message ?? serverErr('vehicle_type')}>
-                  <select
-                    {...register('vehicle_type', { required: t('driverRegister.typeRequired') })}
-                    className={selectClass}
-                    defaultValue=""
-                  >
-                    <option value="" disabled>{t('driverRegister.selectPlaceholder')}</option>
-                    <option value="moto">{t('driverRegister.vehicleTypeMotoLong')}</option>
-                    <option value="scooter">{t('driverRegister.vehicleTypeScooterLong')}</option>
-                    <option value="voiture">{t('driverRegister.vehicleTypeCarLong')}</option>
-                    <option value="velo">{t('driverRegister.vehicleTypeBikeLong')}</option>
-                  </select>
-                </Field>
+              <VehicleTypeCards
+                label={t('driverRegister.vehicleType')}
+                registration={register('vehicle_type', { required: t('driverRegister.typeRequired') })}
+                error={errors.vehicle_type?.message ?? serverErr('vehicle_type')}
+                options={[
+                  { value: 'moto',    label: t('driverRegister.vehicleTypeMotoLong'),    icon: <MotorcycleIcon size={28} /> },
+                  { value: 'scooter', label: t('driverRegister.vehicleTypeScooterLong'), icon: <ScooterIcon size={28} /> },
+                  { value: 'voiture', label: t('driverRegister.vehicleTypeCarLong'),     icon: <CarIcon size={28} /> },
+                  { value: 'velo',    label: t('driverRegister.vehicleTypeBikeLong'),    icon: <BikeIcon size={28} /> },
+                ]}
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <Input
                   label={t('driverRegister.plate')}
                   {...register('vehicle_plate', { required: t('driverRegister.plateRequired') })}
@@ -277,12 +300,15 @@ export default function DriverRegisterPage() {
               </div>
             </FormSection>
 
-            {/* ====================== CONTACT D'URGENCE ====================== */}
+            {/* ====================== CONTACTS D'URGENCE (2) ====================== */}
             <FormSection
               icon={<AlertTriangleIcon size={20} />}
               title={t('driverRegister.sectionEmergencyTitle')}
               description={t('driverRegister.sectionEmergencyDesc')}
             >
+              <p className="text-caption text-warm-600 font-semibold uppercase tracking-wide mb-2">
+                {t('driverRegister.emergencyContact1')}
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label={t('driverRegister.emergencyName')}
@@ -292,55 +318,75 @@ export default function DriverRegisterPage() {
                 <Input
                   type="tel"
                   label={t('driverRegister.emergencyPhone')}
-                  placeholder="+229 90 12 34 56"
+                  placeholder="+229 01 90 12 34 56"
                   {...register('emergency_contact_phone', { required: t('driverRegister.emergencyPhoneRequired') })}
                   error={errors.emergency_contact_phone?.message ?? serverErr('emergency_contact_phone')}
+                />
+              </div>
+
+              <p className="text-caption text-warm-600 font-semibold uppercase tracking-wide mb-2 mt-5">
+                {t('driverRegister.emergencyContact2')}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label={t('driverRegister.emergencyName')}
+                  {...register('emergency_contact2_name', { required: t('driverRegister.emergencyNameRequired') })}
+                  error={errors.emergency_contact2_name?.message ?? serverErr('emergency_contact2_name')}
+                />
+                <Input
+                  type="tel"
+                  label={t('driverRegister.emergencyPhone')}
+                  placeholder="+229 01 90 12 34 56"
+                  {...register('emergency_contact2_phone', {
+                    required: t('driverRegister.emergencyPhoneRequired'),
+                    validate: (value) =>
+                      value.replace(/\D/g, '') !== (watch('emergency_contact_phone') ?? '').replace(/\D/g, '') ||
+                      t('driverRegister.emergencyPhonesMustDiffer'),
+                  })}
+                  error={errors.emergency_contact2_phone?.message ?? serverErr('emergency_contact2_phone')}
                 />
               </div>
             </FormSection>
 
             {/* ====================== DOCUMENTS ====================== */}
             <FormSection
+              icon={<FileTextIcon size={20} />}
               title={t('driverRegister.sectionDocumentsTitle')}
               description={isCar ? t('driverRegister.sectionDocumentsDesc') : t('driverRegister.sectionDocumentsDescNoLicense')}
             >
               <div className="space-y-3">
-                <FileDropZone
+                <DocumentCapture
                   label={t('driverRegister.photoProfileLabel')}
                   helper={t('driverRegister.photoProfileHelper')}
-                  accept="image/jpeg,image/png"
+                  captureMode="user"
+                  minDimension={200}
                   file={photo}
                   onChange={setPhoto}
                   error={serverErr('photo')}
-                  clickReplaceLabel={t('driverRegister.fileClickReplace')}
-                  clickSelectLabel={t('driverRegister.fileClickSelect')}
-                  removeAriaLabel={t('driverRegister.fileRemoveAria')}
                 />
-                <FileDropZone
+                <DocumentCapture
                   label={t('driverRegister.cniShort')}
                   required
                   helper={t('driverRegister.cniHelper')}
-                  accept="image/jpeg,image/png,application/pdf"
+                  allowPdf
+                  captureMode="environment"
+                  minDimension={500}
                   file={cni}
                   onChange={setCni}
                   error={serverErr('cni')}
-                  clickReplaceLabel={t('driverRegister.fileClickReplace')}
-                  clickSelectLabel={t('driverRegister.fileClickSelect')}
-                  removeAriaLabel={t('driverRegister.fileRemoveAria')}
                 />
                 {/* Permis de conduire : demandé uniquement si le véhicule est une voiture. */}
                 {isCar && (
-                  <FileDropZone
+                  <DocumentCapture
                     label={t('driverRegister.licenseLabel')}
                     required
                     helper={t('driverRegister.licenseHelper')}
-                    accept="image/jpeg,image/png,application/pdf"
+                    allowPdf
+                    captureMode="environment"
+                    minDimension={500}
                     file={drivingLicense}
                     onChange={setDrivingLicense}
                     error={serverErr('driving_license')}
-                    clickReplaceLabel={t('driverRegister.fileClickReplace')}
-                    clickSelectLabel={t('driverRegister.fileClickSelect')}
-                    removeAriaLabel={t('driverRegister.fileRemoveAria')}
                   />
                 )}
               </div>
@@ -445,96 +491,5 @@ const CheckboxRow = (() => {
   }
 })()
 
-/* ============================================================
-   Sous-composant : FileDropZone
-   Drop-zone visuelle pour les uploads — état vide / rempli
-   ============================================================ */
-interface FileDropZoneProps {
-  label: string
-  helper?: string
-  required?: boolean
-  accept: string
-  file: File | null
-  onChange: (f: File | null) => void
-  error?: string
-  clickReplaceLabel: string
-  clickSelectLabel: string
-  removeAriaLabel: string
-}
-
-function FileDropZone({
-  label,
-  helper,
-  required,
-  accept,
-  file,
-  onChange,
-  error,
-  clickReplaceLabel,
-  clickSelectLabel,
-  removeAriaLabel,
-}: FileDropZoneProps) {
-  const inputId = `file-${label.replace(/\s+/g, '-').toLowerCase()}`
-  const isImage = file && file.type.startsWith('image/')
-
-  return (
-    <div>
-      <label htmlFor={inputId} className="block mb-1.5 text-caption text-warm-600 font-medium">
-        {label} {required && <span className="text-airmess-red">*</span>}
-      </label>
-
-      <label
-        htmlFor={inputId}
-        className={cn(
-          'flex items-center gap-3 px-4 py-3 rounded-md cursor-pointer transition-all duration-200',
-          file
-            ? 'bg-success-bg border border-success/30'
-            : 'bg-off-white border border-dashed border-warm-300 hover:border-airmess-yellow hover:bg-airmess-yellow/5',
-          error && 'border-airmess-red bg-danger-bg!',
-        )}
-      >
-        <span className="text-h3 leading-none shrink-0" aria-hidden>
-          {file ? (isImage ? '🖼' : '📄') : '📎'}
-        </span>
-        <div className="flex-1 min-w-0">
-          {file ? (
-            <>
-              <p className="text-body-s font-medium text-success truncate">{file.name}</p>
-              <p className="text-caption text-warm-500">
-                {(file.size / 1024).toFixed(0)} Ko · {clickReplaceLabel}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-body-s font-medium text-ink">{clickSelectLabel}</p>
-              {helper && <p className="text-caption text-warm-500">{helper}</p>}
-            </>
-          )}
-        </div>
-        {file && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault()
-              onChange(null)
-            }}
-            className="shrink-0 text-warm-500 hover:text-airmess-red text-body-s"
-            aria-label={removeAriaLabel}
-          >
-            ✕
-          </button>
-        )}
-      </label>
-
-      <input
-        id={inputId}
-        type="file"
-        accept={accept}
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-        className="hidden"
-      />
-
-      {error && <p className="mt-1.5 text-caption text-airmess-red">{error}</p>}
-    </div>
-  )
-}
+// (l'ancien FileDropZone a été remplacé par components/driver/DocumentCapture :
+// capture caméra directe, aperçu réel, consignes de clarté et compression.)
