@@ -911,6 +911,9 @@
       "errorBadCode": "Incorrect code. Check and try again.",
       "errorExpired": "Code expired. Request a new one.",
       "errorTooMany": "Too many attempts. Try again in a few minutes.",
+      "errorBilling": "Firebase billing not enabled: upgrade the project to the Blaze plan (Firebase console) for SMS verification.",
+      "errorProviderDisabled": "The Phone provider is not enabled in the Firebase console (Authentication → Sign-in method).",
+      "errorDomain": "Unauthorized domain or reCAPTCHA rejected: check the Authorized domains in the Firebase console.",
       "errorGeneric": "Could not send the SMS. Check the number and try again.",
       "requiredBeforeSubmit": "Verify your phone number by SMS before submitting."
     },

@@ -911,6 +911,9 @@
       "errorBadCode": "Code incorrect. Vérifiez et réessayez.",
       "errorExpired": "Code expiré. Renvoyez un nouveau code.",
       "errorTooMany": "Trop de tentatives. Réessayez dans quelques minutes.",
+      "errorBilling": "Facturation Firebase non activée : passez le projet au plan Blaze (console Firebase) pour la vérification par SMS.",
+      "errorProviderDisabled": "Le fournisseur « Téléphone » n'est pas activé dans la console Firebase (Authentication → Sign-in method).",
+      "errorDomain": "Domaine non autorisé ou reCAPTCHA refusé : vérifiez les Authorized domains dans la console Firebase.",
       "errorGeneric": "Impossible d'envoyer le SMS. Vérifiez le numéro et réessayez.",
       "requiredBeforeSubmit": "Vérifiez votre numéro de téléphone par SMS avant de soumettre."
     },

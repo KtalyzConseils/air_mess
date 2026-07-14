@@ -82,17 +82,33 @@ export default function PhoneOtpField({
 
   function mapFirebaseError(err: unknown): string {
     const codeStr = (err as { code?: string })?.code ?? ''
+    // Trace complète en console pour diagnostiquer les causes de config
+    // (billing, provider désactivé, domaine, clé API restreinte…).
+    console.error('[PhoneOtpField] Firebase error:', codeStr, err)
     switch (codeStr) {
       case 'auth/invalid-phone-number':
+      case 'auth/missing-phone-number':
         return t('driverRegister.otp.errorInvalidPhone')
       case 'auth/invalid-verification-code':
         return t('driverRegister.otp.errorBadCode')
       case 'auth/code-expired':
         return t('driverRegister.otp.errorExpired')
       case 'auth/too-many-requests':
+      case 'auth/quota-exceeded':
         return t('driverRegister.otp.errorTooMany')
+      case 'auth/billing-not-enabled':
+        return t('driverRegister.otp.errorBilling')
+      case 'auth/operation-not-allowed':
+        return t('driverRegister.otp.errorProviderDisabled')
+      case 'auth/app-not-authorized':
+      case 'auth/invalid-app-credential':
+      case 'auth/captcha-check-failed':
+        return t('driverRegister.otp.errorDomain')
       default:
-        return t('driverRegister.otp.errorGeneric')
+        // Code inconnu : on l'affiche pour ne pas déboguer à l'aveugle.
+        return codeStr
+          ? `${t('driverRegister.otp.errorGeneric')} (${codeStr})`
+          : t('driverRegister.otp.errorGeneric')
     }
   }
 
