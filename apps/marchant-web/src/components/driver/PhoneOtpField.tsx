@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   RecaptchaVerifier,
@@ -40,7 +40,7 @@ export default function PhoneOtpField({
   onTokenChange,
 }: Props) {
   const { t } = useTranslation()
-  const recaptchaContainerId = useId()
+  const recaptchaHostRef = useRef<HTMLDivElement>(null)
 
   const [status, setStatus] = useState<OtpStatus>('idle')
   const [code, setCode] = useState('')
@@ -104,11 +104,13 @@ export default function PhoneOtpField({
       case 'auth/invalid-app-credential':
       case 'auth/captcha-check-failed':
         return t('driverRegister.otp.errorDomain')
-      default:
-        // Code inconnu : on l'affiche pour ne pas déboguer à l'aveugle.
-        return codeStr
-          ? `${t('driverRegister.otp.errorGeneric')} (${codeStr})`
+      default: {
+        // Code ou message brut affiché pour ne pas déboguer à l'aveugle.
+        const detail = codeStr || (err instanceof Error ? err.message : '')
+        return detail
+          ? `${t('driverRegister.otp.errorGeneric')} (${detail})`
           : t('driverRegister.otp.errorGeneric')
+      }
     }
   }
 
@@ -123,18 +125,24 @@ export default function PhoneOtpField({
     setOtpError(null)
     setStatus('sending')
     try {
-      if (!verifierRef.current) {
-        verifierRef.current = new RecaptchaVerifier(firebaseAuth, recaptchaContainerId, {
-          size: 'invisible',
-        })
-      }
+      // Un widget reCAPTCHA ne peut être rendu qu'une fois par élément
+      // ("reCAPTCHA has already been rendered in this element") : on détruit
+      // l'ancien verifier et on monte le nouveau dans un enfant DOM vierge.
+      verifierRef.current?.clear()
+      verifierRef.current = null
+      const host = recaptchaHostRef.current
+      if (!host) throw new Error('recaptcha host missing')
+      host.innerHTML = ''
+      const slot = document.createElement('div')
+      host.appendChild(slot)
+      verifierRef.current = new RecaptchaVerifier(firebaseAuth, slot, { size: 'invisible' })
+
       confirmationRef.current = await signInWithPhoneNumber(firebaseAuth, phone, verifierRef.current)
       verifiedPhoneRef.current = phone // mémorisé dès l'envoi pour détecter un changement
       setStatus('code_sent')
       setCode('')
       setResendIn(RESEND_COOLDOWN_S)
     } catch (err) {
-      // Un verifier "consommé" par un échec ne peut pas resservir : on le recrée.
       verifierRef.current?.clear()
       verifierRef.current = null
       setStatus('idle')
@@ -232,8 +240,8 @@ export default function PhoneOtpField({
         </div>
       )}
 
-      {/* Conteneur requis par le reCAPTCHA invisible de Firebase. */}
-      <div id={recaptchaContainerId} />
+      {/* Hôte du reCAPTCHA invisible — un enfant vierge est recréé à chaque envoi. */}
+      <div ref={recaptchaHostRef} />
     </div>
   )
 }
