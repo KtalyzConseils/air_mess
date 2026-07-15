@@ -17,6 +17,15 @@
         "EXPO_PUBLIC_API_BASE_URL": "https://api.airmess-logistics.com/api"
       }
     },
+    "preview-dev": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://dev.api.airmess-logistics.com/api"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "android": {

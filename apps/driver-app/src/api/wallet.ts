@@ -1,6 +1,15 @@
 import api from './client'
 
-export type WalletTransactionType = 'deposit' | 'withdraw' | 'pickup_debit' | 'refund' | 'earning'
+export type WalletTransactionType =
+  | 'deposit'
+  | 'withdraw'
+  | 'pickup_debit'
+  | 'refund'
+  | 'earning'
+  | 'adjustment_credit'
+  | 'adjustment_debit'
+
+export type PayoutMode = 'admin_approval' | 'instant'
 
 export interface WalletTransactionItem {
   id: number
@@ -28,6 +37,16 @@ export interface WalletState {
   min_withdraw_fcfa: number
   recent_transactions: WalletTransactionItem[]
   pending_withdraw_request: PendingWithdrawRequest | null
+  /**
+   * Mode de retrait paramétré côté admin :
+   *  - admin_approval : la demande est mise en file, l'admin valide.
+   *  - instant : le débit et l'appel Fedapay ont lieu immédiatement.
+   */
+  payout_mode: PayoutMode
+  /** Cooldown obligatoire entre 2 retraits en mode instant (informationnel). */
+  payout_cooldown_hours: number
+  /** ISO8601 de la prochaine demande autorisée si en période de cooldown, sinon null. */
+  next_withdraw_allowed_at: string | null
 }
 
 export async function fetchWallet(): Promise<WalletState> {

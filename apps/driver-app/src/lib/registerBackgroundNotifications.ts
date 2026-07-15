@@ -1,14 +1,17 @@
-import * as TaskManager from 'expo-task-manager'
-import * as Notifications from 'expo-notifications'
 import * as SecureStore from 'expo-secure-store'
 import notifee, {
   AndroidImportance,
   AndroidCategory,
   AndroidVisibility,
   EventType,
-} from '@notifee/react-native'
+} from './notifeeSafe'
 import { IS_EXPO_GO } from './notifications'
 import { acceptCourse, declineCourse } from '../api/driver'
+
+// expo-notifications et expo-task-manager NE DOIVENT PAS être importés en Expo Go :
+// depuis SDK 53, expo-notifications a des side-effects de module (auto push register)
+// qui plantent en Expo Go. On les charge en require() SYNC conditionnel — sync pour
+// que TaskManager.defineTask soit appelé au scope module dès le boot headless.
 
 /**
  * Alerte "course entrante" façon appel entrant (Yango/Uber), avec FILE SÉQUENTIELLE.
@@ -299,6 +302,14 @@ export async function handleNotifeeEvent({ type, detail }: any): Promise<void> {
 
 // ── Enregistrements en scope module (démarrage, y compris headless) ──────────────
 if (!IS_EXPO_GO) {
+  // require() sync : n'exécute les side-effects d'expo-notifications QUE hors Expo Go,
+  // et permet à TaskManager.defineTask d'être appelé SYNCHRONE au scope module (requis
+  // par le contexte headless — app tuée réveillée par un push data-only).
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Notifications = require('expo-notifications') as typeof import('expo-notifications')
+
   // REQUIS par Notifee pour afficher/gérer des notifs en arrière-plan.
   notifee.onBackgroundEvent(handleNotifeeEvent)
 
@@ -319,7 +330,7 @@ if (!IS_EXPO_GO) {
     }
   })
 
-  Notifications.registerTaskAsync(INCOMING_TASK).catch((e) =>
+  Notifications.registerTaskAsync(INCOMING_TASK).catch((e: unknown) =>
     console.warn('[bg-notif] registerTaskAsync failed:', e),
   )
 }

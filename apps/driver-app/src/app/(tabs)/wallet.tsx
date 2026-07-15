@@ -43,11 +43,13 @@ const TX_META: Record<
   WalletTransactionType,
   { label: string; icon: keyof typeof Ionicons.glyphMap; positive: boolean }
 > = {
-  deposit:      { label: 'Dépôt',          icon: 'arrow-down-outline', positive: true },
-  earning:      { label: 'Gain de course', icon: 'trophy-outline',     positive: true },
-  withdraw:     { label: 'Retrait',        icon: 'arrow-up-outline',   positive: false },
-  pickup_debit: { label: 'Encaissement',   icon: 'cube-outline',       positive: false },
-  refund:       { label: 'Remboursement',  icon: 'refresh-outline',    positive: true },
+  deposit:           { label: 'Dépôt',              icon: 'arrow-down-outline',    positive: true },
+  earning:           { label: 'Gain de course',     icon: 'trophy-outline',        positive: true },
+  withdraw:          { label: 'Retrait',            icon: 'arrow-up-outline',      positive: false },
+  pickup_debit:      { label: 'Encaissement',       icon: 'cube-outline',          positive: false },
+  refund:            { label: 'Remboursement',      icon: 'refresh-outline',       positive: true },
+  adjustment_credit: { label: 'Ajustement crédit',  icon: 'add-circle-outline',    positive: true },
+  adjustment_debit:  { label: 'Ajustement débit',   icon: 'remove-circle-outline', positive: false },
 }
 
 function fcfa(n: number): string {
@@ -109,7 +111,17 @@ export default function WalletScreen() {
     )
   }
 
-  const canWithdraw = data.balance >= data.min_withdraw_fcfa && !data.pending_withdraw_request
+  // Cooldown : en mode instant, si next_withdraw_allowed_at est dans le futur,
+  // on désactive le bouton et on affiche un message d'attente clair.
+  const cooldownActive =
+    data.payout_mode === 'instant' &&
+    data.next_withdraw_allowed_at !== null &&
+    new Date(data.next_withdraw_allowed_at).getTime() > Date.now()
+
+  const canWithdraw =
+    data.balance >= data.min_withdraw_fcfa &&
+    !data.pending_withdraw_request &&
+    !cooldownActive
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
@@ -220,6 +232,23 @@ export default function WalletScreen() {
           </View>
         )}
 
+        {/* Cooldown mode instant : prochain retrait autorisé plus tard */}
+        {cooldownActive && data.next_withdraw_allowed_at && (
+          <View className="mt-3 flex-row items-center bg-warning-bg border border-warning/30 rounded-xl px-3 py-2.5">
+            <Ionicons name="time-outline" size={16} color="#B45309" />
+            <Text className="text-xs text-warm-700 ml-2 flex-1 font-semibold">
+              Prochain retrait autorisé le{' '}
+              {new Date(data.next_withdraw_allowed_at).toLocaleString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+              .
+            </Text>
+          </View>
+        )}
+
         {/* Historique */}
         <View className="mt-7 mb-2 flex-row items-center">
           <Ionicons name="time-outline" size={14} color="#8A7E68" />
@@ -253,6 +282,7 @@ export default function WalletScreen() {
         onClose={() => setWithdrawVisible(false)}
         minAmount={data.min_withdraw_fcfa}
         maxAmount={data.balance}
+        payoutMode={data.payout_mode}
       />
     </SafeAreaView>
   )
@@ -416,16 +446,20 @@ function WithdrawModal({
   onClose,
   minAmount,
   maxAmount,
+  payoutMode,
 }: {
   visible: boolean
   onClose: () => void
   minAmount: number
   maxAmount: number
+  payoutMode: 'admin_approval' | 'instant'
 }) {
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<'momo' | 'bank'>('momo')
   const [account, setAccount] = useState('')
   const queryClient = useQueryClient()
+
+  const isInstant = payoutMode === 'instant'
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -437,7 +471,12 @@ function WithdrawModal({
     onSuccess: () => {
       handleClose()
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
-      Alert.alert('Demande envoyée', 'Un administrateur va la traiter. Tu seras notifié.')
+      Alert.alert(
+        isInstant ? 'Retrait en cours' : 'Demande envoyée',
+        isInstant
+          ? 'Le virement a été lancé. Tu seras notifié dès sa réception sur ton MoMo.'
+          : 'Un administrateur va la traiter. Tu seras notifié.',
+      )
     },
     onError: (err) => {
       const msg =
@@ -475,8 +514,12 @@ function WithdrawModal({
     <BottomSheet
       visible={visible}
       onClose={handleClose}
-      title="Demander un retrait"
-      subtitle="Un admin validera dans les heures qui suivent."
+      title={isInstant ? 'Retirer maintenant' : 'Demander un retrait'}
+      subtitle={
+        isInstant
+          ? 'Virement automatique sur ton MoMo. Vérifie bien le numéro.'
+          : 'Un admin validera dans les heures qui suivent.'
+      }
       footer={
         <View className="flex-row gap-2">
           <View className="flex-1">
@@ -492,7 +535,7 @@ function WithdrawModal({
               loading={mutation.isPending}
               rightIcon={<Ionicons name="paper-plane" size={14} color="#ffffff" />}
             >
-              Envoyer la demande
+              {isInstant ? 'Retirer maintenant' : 'Envoyer la demande'}
             </Button>
           </View>
         </View>

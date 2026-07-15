@@ -324,24 +324,48 @@ export default function ActiveCourseCard({ course }: Props) {
           </View>
         )}
 
-        {/* Encaissement */}
-        {course.has_collection && (
-          <View className="bg-airmess-yellow rounded-2xl p-4 mb-3 flex-row items-center">
-            <View className="w-10 h-10 rounded-full bg-ink items-center justify-center mr-3">
-              <Ionicons name="cash" size={20} color="#FFCC00" />
+        {/* Encaissement — 2 modes possibles :
+              - Course sender-paid : on affiche uniquement le collection_amount si has_collection.
+              - Course recipient-paid : le livreur doit AUSSI collecter les frais de livraison
+                (delivery_fee) chez le destinataire. On affiche le total et le breakdown pour
+                qu'il annonce le bon montant sans se planter. */}
+        {(() => {
+          const isRecipientPaid = course.delivery_fee_paid_by === 'recipient'
+          const collectionValue = course.collection_amount ?? 0
+          const feeValue = isRecipientPaid ? course.delivery_fee : 0
+          const totalToCollect = collectionValue + feeValue
+          if (totalToCollect <= 0) return null
+
+          return (
+            <View className="bg-airmess-yellow rounded-2xl p-4 mb-3 flex-row items-center">
+              <View className="w-10 h-10 rounded-full bg-ink items-center justify-center mr-3">
+                <Ionicons name="cash" size={20} color="#FFCC00" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-[10px] uppercase tracking-widest font-extrabold text-ink/70">
+                  {isRecipientPaid ? 'Total à collecter' : 'À encaisser'}
+                </Text>
+                <Text className="text-ink text-2xl font-extrabold" numberOfLines={1}>
+                  {totalToCollect.toLocaleString('fr-FR')}{' '}
+                  <Text className="text-base font-bold">FCFA</Text>
+                </Text>
+                {isRecipientPaid && collectionValue > 0 && (
+                  <Text className="text-xs text-ink/70 mt-0.5">
+                    Produit {collectionValue.toLocaleString('fr-FR')} + Livraison {feeValue.toLocaleString('fr-FR')}
+                  </Text>
+                )}
+                {isRecipientPaid && collectionValue === 0 && (
+                  <Text className="text-xs text-ink/70 mt-0.5">
+                    Frais de livraison — payés par le client
+                  </Text>
+                )}
+                {!isRecipientPaid && (
+                  <Text className="text-xs text-ink/70 mt-0.5">via {course.collection_method}</Text>
+                )}
+              </View>
             </View>
-            <View className="flex-1">
-              <Text className="text-[10px] uppercase tracking-widest font-extrabold text-ink/70">
-                À encaisser
-              </Text>
-              <Text className="text-ink text-2xl font-extrabold" numberOfLines={1}>
-                {course.collection_amount?.toLocaleString('fr-FR')}{' '}
-                <Text className="text-base font-bold">FCFA</Text>
-              </Text>
-              <Text className="text-xs text-ink/70 mt-0.5">via {course.collection_method}</Text>
-            </View>
-          </View>
-        )}
+          )
+        })()}
 
         {/* Autre extrémité : rappel des deux points */}
         <View className="flex-row items-stretch mb-4">

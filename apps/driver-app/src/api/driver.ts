@@ -40,6 +40,11 @@ export interface DriverCourseSummary {
   pickup_from_previous_driver?: boolean
   transfer_lat?: number | null
   transfer_lng?: number | null
+  /**
+   * Qui paie les frais de livraison. `recipient` = le driver collecte
+   * delivery_fee + collection_amount chez le destinataire (mode Airmess).
+   */
+  delivery_fee_paid_by?: 'sender' | 'recipient'
   created_at: string
 }
 

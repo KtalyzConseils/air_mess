@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
-import notifee, { EventType } from '@notifee/react-native'
+import notifee, { EventType } from '../lib/notifeeSafe'
 import { AppState } from 'react-native'
 import { useAuthStore } from '../stores/authStore'
 import {

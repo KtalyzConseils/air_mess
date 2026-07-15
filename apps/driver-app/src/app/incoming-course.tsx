@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio'
-import notifee from '@notifee/react-native'
+import notifee from '../lib/notifeeSafe'
 import {
   fetchOfferedCourses,
   acceptCourse,
