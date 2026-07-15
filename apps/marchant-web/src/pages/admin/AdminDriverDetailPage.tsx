@@ -117,7 +117,7 @@ export default function AdminDriverDetailPage() {
     },
   })
 
-  async function handleOpenDocument(type: 'photo' | 'cni' | 'driving_license') {
+  async function handleOpenDocument(type: 'photo' | 'cni' | 'cni_back' | 'driving_license') {
     setDocError(null)
     try {
       await openDriverDocument(Number(id), type)
@@ -380,14 +380,34 @@ export default function AdminDriverDetailPage() {
 
             {/* Documents */}
             <Section title={t('admin.drivers.sectionDocuments')}>
+              {/* Type de pièce fournie (cnib = recto+verso, cip/passeport = 1 face) */}
+              <p className="text-body-s text-warm-600 mb-3">
+                {t('admin.drivers.fieldCniType')}{' '}
+                <strong className="text-ink">
+                  {data.driver.cni_type
+                    ? t(`admin.drivers.cniType.${data.driver.cni_type}`)
+                    : '—'}
+                </strong>
+              </p>
               <div className="flex flex-wrap gap-2">
                 <AdminButton
                   variant="primary"
                   onClick={() => handleOpenDocument('cni')}
                   disabled={!data.driver.cni_url}
                 >
-                  {t('admin.drivers.docViewCni')}
+                  {data.driver.cni_type === 'cnib'
+                    ? t('admin.drivers.docViewCniFront')
+                    : t('admin.drivers.docViewCni')}
                 </AdminButton>
+                {data.driver.cni_type === 'cnib' && (
+                  <AdminButton
+                    variant="primary"
+                    onClick={() => handleOpenDocument('cni_back')}
+                    disabled={!data.driver.cni_back_url}
+                  >
+                    {t('admin.drivers.docViewCniBack')}
+                  </AdminButton>
+                )}
                 <AdminButton
                   variant="primary"
                   onClick={() => handleOpenDocument('driving_license')}

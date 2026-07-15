@@ -880,6 +880,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         $column = match ($type) {
             'photo'           => 'photo_url',
             'cni'             => 'cni_url',
+            'cni_back'        => 'cni_back_url',
             'driving_license' => 'driving_license_url',
             default           => null,
         };

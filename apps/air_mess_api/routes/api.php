@@ -219,7 +219,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/drivers',                   [AdminController::class, 'drivers']);
         Route::get('/drivers/{driver}',          [AdminController::class, 'showDriver']);
         Route::get('/drivers/{driver}/document/{type}', [AdminController::class, 'driverDocument'])
-            ->whereIn('type', ['photo', 'cni', 'driving_license']);
+            ->whereIn('type', ['photo', 'cni', 'cni_back', 'driving_license']);
         Route::get('/incidents',                 [AdminController::class, 'incidents']);
 
         // API dev apps — lecture partagée (utile au support pour aider un dev)

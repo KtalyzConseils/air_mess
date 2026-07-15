@@ -178,7 +178,10 @@ class AuthController extends Controller
             // client ramène les photos caméra mobile bien en dessous.
             'photo'           => ['nullable', 'image', 'mimes:jpg,jpeg,png',
                                   'max:4096', 'dimensions:min_width=200,min_height=200'],
+            // Pièce d'identité : cnib = recto + verso, cip/passeport = 1 seule face.
+            'cni_type'        => ['required', Rule::in(['cnib', 'cip', 'passeport'])],
             'cni'             => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            'cni_back'        => ['nullable', 'required_if:cni_type,cnib', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
             // Permis exigé uniquement pour une voiture ; ignoré (nullable) pour moto/scooter/vélo.
             'driving_license' => ['nullable', 'required_if:vehicle_type,voiture', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
 
@@ -232,6 +235,8 @@ class AuthController extends Controller
                     'birth_date'               => $data['birth_date'],
                     'photo_url'                => $paths['photo_url'],
                     'cni_url'                  => $paths['cni_url'],
+                    'cni_type'                 => $data['cni_type'],
+                    'cni_back_url'             => $paths['cni_back_url'],
                     'driving_license_url'      => $paths['driving_license_url'],
                     'vehicle_type'             => $data['vehicle_type'],
                     'vehicle_plate'            => $data['vehicle_plate'],
@@ -331,6 +336,7 @@ class AuthController extends Controller
 
         $paths = [
             'photo_url'           => null,
+            'cni_back_url'        => null,
             'driving_license_url' => null,
             'cni_url'             => $disk->putFileAs(
                 $dir,
@@ -338,6 +344,15 @@ class AuthController extends Controller
                 'cni.' . $request->file('cni')->extension(),
             ),
         ];
+
+        // Verso de la pièce : présent uniquement pour une CNIB (voir required_if).
+        if ($request->hasFile('cni_back')) {
+            $paths['cni_back_url'] = $disk->putFileAs(
+                $dir,
+                $request->file('cni_back'),
+                'cni_verso.' . $request->file('cni_back')->extension(),
+            );
+        }
 
         // Permis : présent seulement pour une voiture (voir validation required_if).
         if ($request->hasFile('driving_license')) {

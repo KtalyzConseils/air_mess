@@ -22,6 +22,8 @@ class Driver extends Model
         'birth_date',
         'photo_url',
         'cni_url',
+        'cni_type',
+        'cni_back_url',
         'driving_license_url',
         'vehicle_type',
         'vehicle_plate',

@@ -890,6 +890,21 @@
     "photoProfileHelper": "Optionnel · JPG/PNG · min 200×200",
     "cniShort": "CNI",
     "cniHelper": "JPG/PNG/PDF · max 5 Mo",
+    "cniType": {
+      "label": "Type de pièce d'identité",
+      "required": "Choisissez votre type de pièce",
+      "cnib": "CNIB",
+      "cnibDesc": "Carte Nationale d'Identité Biométrique — recto + verso",
+      "cip": "CIP",
+      "cipDesc": "Certificat d'Identification Personnelle — 1 face",
+      "passport": "Passeport",
+      "passportDesc": "Page photo uniquement"
+    },
+    "cniFrontLabel": "CNIB — recto",
+    "cniBackLabel": "CNIB — verso",
+    "cipLabel": "Votre CIP",
+    "passportLabel": "Passeport — page photo",
+    "cniBackRequired": "Le verso de votre CNIB est obligatoire.",
     "licenseHelper": "JPG/PNG/PDF · max 5 Mo",
     "appBanner": {
       "title": "Inscris-toi directement sur l'application",
@@ -1352,6 +1367,14 @@
       "declineReasonPersonal": "Raison personnelle",
       "declineReasonOther": "Autre",
       "docViewCni": "Voir CNI",
+      "docViewCniFront": "Voir CNIB (recto)",
+      "docViewCniBack": "Voir CNIB (verso)",
+      "fieldCniType": "Pièce fournie :",
+      "cniType": {
+        "cnib": "CNIB (Carte Nationale d'Identité Biométrique)",
+        "cip": "CIP (Certificat d'Identification Personnelle)",
+        "passeport": "Passeport"
+      },
       "docViewLicense": "Voir Permis",
       "docViewPhoto": "Voir photo",
       "docNoPhoto": "Pas de photo",

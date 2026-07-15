@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate, Link } from 'react-router-dom'
 import { AxiosError } from 'axios'
@@ -34,7 +34,7 @@ const MAX_BIRTH_DATE = (() => {
   return d.toISOString().split('T')[0]
 })()
 
-type FormValues = Omit<RegisterDriverPayload, 'photo' | 'cni' | 'driving_license' | 'firebase_id_token'>
+type FormValues = Omit<RegisterDriverPayload, 'photo' | 'cni' | 'cni_back' | 'driving_license' | 'firebase_id_token'>
 
 export default function DriverRegisterPage() {
   const { t } = useTranslation()
@@ -43,6 +43,7 @@ export default function DriverRegisterPage() {
 
   const [photo, setPhoto] = useState<File | null>(null)
   const [cni, setCni] = useState<File | null>(null)
+  const [cniBack, setCniBack] = useState<File | null>(null)
   const [drivingLicense, setDrivingLicense] = useState<File | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   // ID token Firebase une fois le numéro vérifié par SMS (null = pas encore vérifié).
@@ -62,6 +63,14 @@ export default function DriverRegisterPage() {
 
   // Le permis de conduire n'est demandé que pour une voiture.
   const isCar = watch('vehicle_type') === 'voiture'
+  // Type de pièce d'identité : la CNIB a un verso, CIP/passeport une seule face.
+  const cniType = watch('cni_type')
+  const isCnib = cniType === 'cnib'
+
+  // Si on quitte la CNIB, le verso déjà capturé n'a plus de sens : on le retire.
+  useEffect(() => {
+    if (cniType !== 'cnib') setCniBack(null)
+  }, [cniType])
 
   async function onSubmit(values: FormValues) {
     setServerError(null)
@@ -77,8 +86,13 @@ export default function DriverRegisterPage() {
     }
 
     const carSelected = values.vehicle_type === 'voiture'
-    if (!cni || (carSelected && !drivingLicense)) {
-      setFileError(t('driverRegister.cniLicenseRequired'))
+    const cnibSelected = values.cni_type === 'cnib'
+    if (!cni || (cnibSelected && !cniBack) || (carSelected && !drivingLicense)) {
+      setFileError(
+        cnibSelected && cni && !cniBack
+          ? t('driverRegister.cniBackRequired')
+          : t('driverRegister.cniLicenseRequired'),
+      )
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
       return
     }
@@ -95,6 +109,8 @@ export default function DriverRegisterPage() {
         firebase_id_token: phoneToken,
         photo,
         cni,
+        // Verso pris en compte uniquement pour une CNIB.
+        cni_back: cnibSelected ? cniBack : null,
         // Permis pris en compte uniquement pour une voiture.
         driving_license: carSelected ? drivingLicense : null,
         accepted_terms: true,
@@ -364,17 +380,72 @@ export default function DriverRegisterPage() {
                   onChange={setPhoto}
                   error={serverErr('photo')}
                 />
-                <DocumentCapture
-                  label={t('driverRegister.cniShort')}
-                  required
-                  helper={t('driverRegister.cniHelper')}
-                  allowPdf
-                  captureMode="environment"
-                  minDimension={500}
-                  file={cni}
-                  onChange={setCni}
-                  error={serverErr('cni')}
-                />
+                {/* Type de pièce d'identité — détermine le nombre de faces à fournir */}
+                <fieldset>
+                  <legend className="block mb-1.5 text-caption text-warm-600 font-medium">
+                    {t('driverRegister.cniType.label')} <span className="text-airmess-red">*</span>
+                  </legend>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    {([
+                      { value: 'cnib',      title: t('driverRegister.cniType.cnib'),     desc: t('driverRegister.cniType.cnibDesc') },
+                      { value: 'cip',       title: t('driverRegister.cniType.cip'),      desc: t('driverRegister.cniType.cipDesc') },
+                      { value: 'passeport', title: t('driverRegister.cniType.passport'), desc: t('driverRegister.cniType.passportDesc') },
+                    ] as const).map((option) => (
+                      <label
+                        key={option.value}
+                        className="relative flex cursor-pointer flex-col gap-0.5 rounded-md border border-warm-300 bg-off-white px-3 py-2.5 transition-all duration-200 hover:border-warm-400 has-checked:border-airmess-yellow has-checked:bg-airmess-yellow/10"
+                      >
+                        <input
+                          type="radio"
+                          value={option.value}
+                          className="peer sr-only"
+                          {...register('cni_type', { required: t('driverRegister.cniType.required') })}
+                        />
+                        <span className="text-body-s font-medium text-ink">{option.title}</span>
+                        <span className="text-caption text-warm-500">{option.desc}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {(errors.cni_type?.message ?? serverErr('cni_type')) && (
+                    <p className="mt-1.5 text-caption text-airmess-red">
+                      {errors.cni_type?.message ?? serverErr('cni_type')}
+                    </p>
+                  )}
+                </fieldset>
+
+                {/* Face(s) de la pièce — affichées une fois le type choisi */}
+                {cniType && (
+                  <DocumentCapture
+                    label={
+                      isCnib
+                        ? t('driverRegister.cniFrontLabel')
+                        : cniType === 'cip'
+                          ? t('driverRegister.cipLabel')
+                          : t('driverRegister.passportLabel')
+                    }
+                    required
+                    helper={t('driverRegister.cniHelper')}
+                    allowPdf
+                    captureMode="environment"
+                    minDimension={500}
+                    file={cni}
+                    onChange={setCni}
+                    error={serverErr('cni')}
+                  />
+                )}
+                {isCnib && (
+                  <DocumentCapture
+                    label={t('driverRegister.cniBackLabel')}
+                    required
+                    helper={t('driverRegister.cniHelper')}
+                    allowPdf
+                    captureMode="environment"
+                    minDimension={500}
+                    file={cniBack}
+                    onChange={setCniBack}
+                    error={serverErr('cni_back')}
+                  />
+                )}
                 {/* Permis de conduire : demandé uniquement si le véhicule est une voiture. */}
                 {isCar && (
                   <DocumentCapture

@@ -47,7 +47,10 @@ export interface RegisterDriverPayload {
   vehicle_color?: string
   // Documents
   photo: File | null // optionnel
-  cni: File // requis
+  /** Type de pièce : cnib = recto+verso, cip/passeport = 1 seule face. */
+  cni_type: 'cnib' | 'cip' | 'passeport'
+  cni: File // requis (recto ou page photo)
+  cni_back: File | null // requis uniquement si cni_type === 'cnib'
   driving_license: File | null // requis uniquement si vehicle_type === 'voiture'
   // Contacts d'urgence (2 obligatoires)
   emergency_contact_name: string
@@ -134,7 +137,10 @@ export const useAuthStore = create<AuthState>()(
         form.append('equipment[refrigerated_bag]', payload.equipment_refrigerated_bag ? '1' : '0')
         // Fichiers
         if (payload.photo) form.append('photo', payload.photo)
+        form.append('cni_type', payload.cni_type)
         form.append('cni', payload.cni)
+        // Verso : envoyé seulement pour une CNIB
+        if (payload.cni_back) form.append('cni_back', payload.cni_back)
         // Permis : envoyé seulement s'il est fourni (voiture uniquement)
         if (payload.driving_license) form.append('driving_license', payload.driving_license)
         // Consentement CGU (checkbox obligatoire côté back)

@@ -35,6 +35,7 @@ class RegisterDriverTest extends TestCase
             'emergency_contact2_name'  => 'Yao Agbodjan',
             'emergency_contact2_phone' => '+229 01 91 00 00 02',
             'accepted_terms' => '1',
+            'cni_type' => 'cip', // 1 seule face — cas le plus simple par défaut
             'cni' => UploadedFile::fake()->create('cni.pdf', 200, 'application/pdf'),
         ], $overrides);
     }
@@ -112,6 +113,44 @@ class RegisterDriverTest extends TestCase
         $this->assertSame('+229 01 91 00 00 02', $driver->emergency_contact2_phone);
         $this->assertSame('pending', $driver->activation_status);
         $this->assertNull($driver->preferred_response_channel);
+    }
+
+    public function test_cnib_requires_back_side(): void
+    {
+        Storage::fake('local');
+        $this->mockVerifier('+2290190123456');
+
+        // CNIB sans verso → rejet (recto + verso obligatoires pour ce type).
+        $this->postJson('/api/auth/register/driver', $this->payload(['cni_type' => 'cnib']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['cni_back']);
+    }
+
+    public function test_cnib_with_back_side_stores_both_faces(): void
+    {
+        Storage::fake('local');
+        Http::fake();
+        $this->mockVerifier('+2290190123456');
+
+        $this->postJson('/api/auth/register/driver', $this->payload([
+            'cni_type' => 'cnib',
+            'cni_back' => UploadedFile::fake()->create('verso.pdf', 200, 'application/pdf'),
+        ]))->assertStatus(201);
+
+        $driver = Driver::firstOrFail();
+        $this->assertSame('cnib', $driver->cni_type);
+        $this->assertNotNull($driver->cni_back_url);
+        Storage::disk('local')->assertExists($driver->cni_back_url);
+    }
+
+    public function test_register_rejects_unknown_cni_type(): void
+    {
+        Storage::fake('local');
+        $this->mockVerifier('+2290190123456');
+
+        $this->postJson('/api/auth/register/driver', $this->payload(['cni_type' => 'permis']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['cni_type']);
     }
 
     public function test_pending_driver_can_set_response_channel_with_register_token(): void

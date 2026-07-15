@@ -92,6 +92,8 @@ export interface DriverDetail {
   current_lng: number | null
   photo_url: string | null
   cni_url: string | null
+  cni_type: 'cnib' | 'cip' | 'passeport' | null
+  cni_back_url: string | null
   driving_license_url: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
@@ -324,7 +326,7 @@ export async function validateDriver(id: number): Promise<void> {
  */
 export async function openDriverDocument(
   driverId: number,
-  type: 'photo' | 'cni' | 'driving_license',
+  type: 'photo' | 'cni' | 'cni_back' | 'driving_license',
 ): Promise<void> {
   const response = await api.get(`/admin/drivers/${driverId}/document/${type}`, {
     responseType: 'blob',

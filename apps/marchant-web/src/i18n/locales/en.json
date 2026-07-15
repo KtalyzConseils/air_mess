@@ -890,6 +890,21 @@
     "photoProfileHelper": "Optional · JPG/PNG · min 200×200",
     "cniShort": "ID card",
     "cniHelper": "JPG/PNG/PDF · max 5 MB",
+    "cniType": {
+      "label": "Type of ID document",
+      "required": "Choose your document type",
+      "cnib": "CNIB",
+      "cnibDesc": "Biometric National Identity Card — front + back",
+      "cip": "CIP",
+      "cipDesc": "Personal Identification Certificate — 1 side",
+      "passport": "Passport",
+      "passportDesc": "Photo page only"
+    },
+    "cniFrontLabel": "CNIB — front",
+    "cniBackLabel": "CNIB — back",
+    "cipLabel": "Your CIP",
+    "passportLabel": "Passport — photo page",
+    "cniBackRequired": "The back of your CNIB is required.",
     "licenseHelper": "JPG/PNG/PDF · max 5 MB",
     "appBanner": {
       "title": "Sign up directly in the app",
@@ -1352,6 +1367,14 @@
       "declineReasonPersonal": "Personal reason",
       "declineReasonOther": "Other",
       "docViewCni": "View ID card",
+      "docViewCniFront": "View CNIB (front)",
+      "docViewCniBack": "View CNIB (back)",
+      "fieldCniType": "Document provided:",
+      "cniType": {
+        "cnib": "CNIB (Biometric National Identity Card)",
+        "cip": "CIP (Personal Identification Certificate)",
+        "passeport": "Passport"
+      },
       "docViewLicense": "View licence",
       "docViewPhoto": "View photo",
       "docNoPhoto": "No photo",
