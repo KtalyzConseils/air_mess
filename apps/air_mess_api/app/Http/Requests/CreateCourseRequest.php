@@ -75,6 +75,10 @@ class CreateCourseRequest extends FormRequest
             'collection_amount'        => ['required_if:has_collection,true', 'nullable', 'numeric', 'min:0'],
             'collection_method'        => ['required_if:has_collection,true', 'nullable', Rule::in(['cash', 'mobile_money', 'prepaid'])],
 
+            // Qui paie la livraison : marchand (défaut, débit wallet) ou destinataire
+            // (driver collecte à la remise). Cf. Course::PAID_BY_*.
+            'delivery_fee_paid_by'     => ['nullable', Rule::in([Course::PAID_BY_SENDER, Course::PAID_BY_RECIPIENT])],
+
             // Timing
             'scheduled_for'            => ['nullable', 'date', 'after:now'],
 

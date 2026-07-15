@@ -296,6 +296,11 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/drivers/{driver}/wallet-adjustment', [AdminController::class, 'adjustDriverWallet']);
         Route::post('/users/{user}/wallet-adjustment',     [AdminController::class, 'adjustUserWallet']);
 
+        // Bascule "livreur freelance ↔ salarié Air Mess" — impacte le routing des
+        // courses (paid_by_recipient + is_high_value) et bypass caution. Traçable via
+        // support_notes automatique.
+        Route::patch('/drivers/{driver}/kind', [AdminController::class, 'updateDriverKind']);
+
         // Cas 7 — Signaler une course frauduleuse (vol livreur).
         // Bannit le driver + saisit la caution + rembourse le marchand. Irréversible.
         Route::post('/courses/{course}/mark-fraud', [AdminController::class, 'markFraud']);

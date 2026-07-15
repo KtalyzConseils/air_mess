@@ -9,6 +9,7 @@ use App\Models\Driver;
 use App\Models\Individual;
 use App\Models\Marchant;
 use App\Models\Payment;
+use App\Models\SupportNote;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -816,6 +817,56 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         return response()->json([
             'message' => $activate ? 'Compte livreur activé.' : 'Compte livreur désactivé.',
+            'driver'  => $driver->fresh()->load('user'),
+        ]);
+    }
+
+    // ===== 7ter. BASCULER LE TYPE DE LIVREUR (independent ↔ airmess) =====
+    /**
+     * Un livreur "airmess" bypass la caution et est le seul autorisé sur les courses
+     * "aux frais du destinataire" et high_value (>30k). Action très sensible — réservée
+     * au super-admin. Traçabilité automatique via une SupportNote sur le user du driver.
+     */
+    public function updateDriverKind(Request $request, Driver $driver): JsonResponse
+    {
+        $data = $request->validate([
+            'kind' => ['required', Rule::in([Driver::KIND_INDEPENDENT, Driver::KIND_AIRMESS])],
+        ]);
+
+        // Idempotence — cliquer 2 fois sur le même choix : 200 sans effet secondaire.
+        if ($driver->kind === $data['kind']) {
+            return response()->json([
+                'message' => 'Aucun changement.',
+                'driver'  => $driver->fresh()->load('user'),
+            ]);
+        }
+
+        $previousKind = $driver->kind;
+        $newKind      = $data['kind'];
+        $adminUser    = $request->user();
+
+        DB::transaction(function () use ($driver, $newKind, $previousKind, $adminUser) {
+            $driver->update(['kind' => $newKind]);
+
+            // Trace d'audit sur le User du driver — retrouvable depuis /admin/notes.
+            SupportNote::create([
+                'admin_id'     => $adminUser->admin?->id,
+                'notable_type' => SupportNote::NOTABLE_USER,
+                'notable_id'   => $driver->user_id,
+                'body'         => sprintf(
+                    "Type de livreur : %s → %s (par %s)",
+                    $previousKind,
+                    $newKind,
+                    $adminUser->name ?? $adminUser->email
+                ),
+                'escalated_to' => null,
+            ]);
+        });
+
+        $label = $newKind === Driver::KIND_AIRMESS ? 'Airmess' : 'indépendant';
+
+        return response()->json([
+            'message' => "Livreur passé en {$label}.",
             'driver'  => $driver->fresh()->load('user'),
         ]);
     }
@@ -2096,7 +2147,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         \App\Models\WalletWithdrawRequest $withdraw,
         \App\Services\DriverWalletService $driverWallet,
         \App\Services\UserWalletService $userWallet,
-        \App\Services\FedapayService $fedapay,
+        \App\Services\WalletWithdrawPayoutInitiator $payoutInitiator,
         NotificationService $notifier,
     ): JsonResponse {
         if ($withdraw->status !== \App\Models\WalletWithdrawRequest::STATUS_PENDING) {
@@ -2150,7 +2201,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         //    Le webhook FedaPay remplira paid_at + external_payout_reference quand le virement aboutit.
         //    Si l'API échoue, la demande reste approved avec payout_failed_at → admin peut retenter
         //    ou faire le virement manuel via le bouton "Marquer comme viré" (filet de sécurité).
-        $this->tryInitiateFedapayPayout($withdraw->fresh(), $fedapay);
+        $payoutInitiator->initiate($withdraw->fresh());
 
         return response()->json([
             'message'  => 'Demande approuvée. Tentative de virement automatique lancée.',
@@ -2170,74 +2221,12 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     }
 
     /**
-     * Tente d'initier un payout FedaPay pour une demande approuvée.
-     * Idempotent : ne fait rien si payout_initiated_at est déjà rempli (sauf si payout_failed_at).
-     * Pas de throw : c'est un best-effort. En cas d'échec, l'admin a le filet manuel.
-     */
-    private function tryInitiateFedapayPayout(
-        \App\Models\WalletWithdrawRequest $withdraw,
-        \App\Services\FedapayService $fedapay,
-    ): void {
-        // Idempotence : on n'appelle pas 2 fois sauf si la 1ère a échoué (retentative)
-        if ($withdraw->payout_initiated_at && ! $withdraw->payout_failed_at) {
-            return;
-        }
-        // Bank n'est pas encore supporté par FedaPay → l'admin fera le virement manuel
-        if ($withdraw->target_method !== \App\Models\WalletWithdrawRequest::METHOD_MOMO) {
-            return;
-        }
-
-        // Coordonnées Fedapay adaptées au propriétaire (driver ou user marchand/particulier).
-        if ($withdraw->isForDriver()) {
-            $customer = [
-                'email'     => $withdraw->driver->user->email ?? null,
-                'firstname' => $withdraw->driver->first_name,
-                'lastname'  => $withdraw->driver->last_name,
-            ];
-            $description = "Air Mess — Retrait caution #{$withdraw->id}";
-        } else {
-            $u = $withdraw->user;
-            $customer = [
-                'email'     => $u->email ?? null,
-                'firstname' => $u->name,
-            ];
-            $description = "Air Mess — Retrait wallet #{$withdraw->id}";
-        }
-
-        try {
-            $payout = $fedapay->createPayout(
-                amountFcfa:    $withdraw->amount_fcfa,
-                mode:          'mtn', // sandbox accepte 'mtn' pour tester
-                accountNumber: $withdraw->target_account,
-                customer: $customer,
-                description: $description,
-            );
-
-            $withdraw->update([
-                'payout_initiated_at'    => now(),
-                'payout_provider_ref'    => $payout['id'],
-                'payout_failed_at'       => null, // on efface un éventuel échec précédent (retentative)
-                'payout_failure_reason'  => null,
-            ]);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('FedaPay payout initiation failed', [
-                'withdraw_id' => $withdraw->id,
-                'error'       => $e->getMessage(),
-            ]);
-            $withdraw->update([
-                'payout_failed_at'      => now(),
-                'payout_failure_reason' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
      * Retentative explicite d'un payout FedaPay (super-admin).
      * Utile quand le 1er appel a échoué (timeout, API down, etc).
      */
     public function retryWithdrawPayout(
         \App\Models\WalletWithdrawRequest $withdraw,
-        \App\Services\FedapayService $fedapay,
+        \App\Services\WalletWithdrawPayoutInitiator $payoutInitiator,
     ): JsonResponse {
         if ($withdraw->status !== \App\Models\WalletWithdrawRequest::STATUS_APPROVED) {
             return response()->json(['message' => 'Seules les demandes approuvées peuvent retenter un payout.'], 422);
@@ -2249,7 +2238,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             return response()->json(['message' => 'Un payout est déjà en cours, attendez le webhook.'], 422);
         }
 
-        $this->tryInitiateFedapayPayout($withdraw, $fedapay);
+        $payoutInitiator->initiate($withdraw);
 
         return response()->json([
             'message' => 'Nouvelle tentative de payout lancée.',

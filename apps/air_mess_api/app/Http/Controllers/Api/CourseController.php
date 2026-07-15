@@ -38,13 +38,20 @@ class CourseController extends Controller
         $driverEarnings = (int) round($deliveryFee * $driverPercent / 100);
 
         // ===== Modèle de paiement (cf. project_wallet_user) =====
-        // Tout expéditeur est payeur : marchand ET particulier. Plus de quota
-        // gratuit pour les particuliers → une course coûte le delivery_fee,
+        // Tout expéditeur peut être payeur : marchand ET particulier. Plus de quota
+        // gratuit pour les particuliers → une course sender-paid coûte le delivery_fee,
         // réglé par le wallet (ou pay-as-you-go Fedapay si solde insuffisant).
-        $isPayer = $user->isMarchant() || $user->isIndividual();
+        //
+        // Nouveau : si `delivery_fee_paid_by = recipient`, le marchand ne paie RIEN
+        // à la création. Le driver Airmess collectera les frais chez le destinataire
+        // à la livraison, et le revenu ira directement dans platform_earnings.
+        $paidBy = $data['delivery_fee_paid_by'] ?? Course::PAID_BY_SENDER;
+        $isSenderPaid = $paidBy === Course::PAID_BY_SENDER;
+        $isPayer = ($user->isMarchant() || $user->isIndividual()) && $isSenderPaid;
 
-        // Si payeur, on tente d'abord le wallet. Si dispo insuffisant → fallback Fedapay.
-        // Pre-check sans hold (le hold sera posé sous lock dans la transaction).
+        // Si payeur (mode sender-paid uniquement), on tente d'abord le wallet.
+        // Si dispo insuffisant → fallback Fedapay. Pre-check sans hold (le hold
+        // sera posé sous lock dans la transaction).
         if ($isPayer) {
             $wallet = $user->wallet;
             if (! $wallet || ! $wallet->canReserve($deliveryFee)) {
@@ -74,6 +81,9 @@ class CourseController extends Controller
                     'has_collection'  => $data['has_collection'] ?? false,
                     'urgency'         => $data['urgency'] ?? 'standard',
                     'is_high_value'   => $isHighValue,
+                    // Défaut explicite si le front n'envoie rien : marchand paie (comportement historique).
+                    // Le pipeline financier reste inchangé en 5b — pas de branchement conditionnel encore.
+                    'delivery_fee_paid_by' => $data['delivery_fee_paid_by'] ?? Course::PAID_BY_SENDER,
 
                     // Filet de sécurité : on génère reference+token ici même si les events firent
                     'reference'       => $this->generateReference(),

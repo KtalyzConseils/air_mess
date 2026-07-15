@@ -52,13 +52,15 @@ class DriverWalletService
     }
 
     /**
-     * Retire une partie de la caution du driver. Appelé après validation admin
-     * d'une demande de retrait (le virement réel MoMo/banque se fait hors système).
+     * Retire une partie de la caution du driver. Appelé :
+     *  - depuis AdminController après validation admin (mode admin_approval) — adminId renseigné
+     *  - depuis DriverController quand driver_payout_mode=instant (self-service) — adminId=null
+     * Le virement réel MoMo est initié ensuite via WalletWithdrawPayoutInitiator (Fedapay).
      *
      * @throws \InvalidArgumentException si $amount <= 0 (bug d'appelant)
      * @throws \DomainException          si règle métier violée (solde, busy, min)
      */
-    public function withdraw(Driver $driver, int $amount, int $adminId, string $reason): WalletTransaction
+    public function withdraw(Driver $driver, int $amount, ?int $adminId, string $reason): WalletTransaction
     {
         // 1. Sanity (bug d'appelant)
         if ($amount <= 0) {
@@ -312,6 +314,57 @@ class DriverWalletService
                 'amount_fcfa'   => -$amount,
                 'balance_after' => $wallet->balance,
                 'metadata'      => ['admin_id' => $adminId, 'reason' => $reason],
+            ]);
+        });
+    }
+
+    /**
+     * Refund automatique du wallet driver quand Fedapay a définitivement échoué
+     * le payout (webhook payout.failed/canceled/declined). L'argent est restitué
+     * au driver — l'admin verra la trace dans wallet_transactions.
+     *
+     * Idempotent : si un refund existe déjà pour ce withdraw (metadata match),
+     * la méthode est no-op — le webhook Fedapay peut être renvoyé plusieurs fois.
+     *
+     * Utilise TYPE_ADJUSTMENT_CREDIT avec un metadata dédié (withdraw_refund_for)
+     * plutôt qu'un nouveau type — évite une migration CHECK et la trace metadata
+     * suffit pour les besoins compta actuels.
+     */
+    public function refundFailedWithdraw(Driver $driver, \App\Models\WalletWithdrawRequest $withdraw): ?WalletTransaction
+    {
+        $existing = WalletTransaction::where('driver_id', $driver->id)
+            ->where('type', WalletTransaction::TYPE_ADJUSTMENT_CREDIT)
+            ->whereJsonContains('metadata->withdraw_refund_for', $withdraw->id)
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $amount = (int) $withdraw->amount_fcfa;
+        if ($amount <= 0) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($driver, $withdraw, $amount) {
+            $wallet = DriverWallet::where('driver_id', $driver->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $wallet->balance         += $amount;
+            $wallet->total_withdrawn  = max(0, ((int) $wallet->total_withdrawn) - $amount);
+            $wallet->save();
+
+            return WalletTransaction::create([
+                'driver_id'     => $driver->id,
+                'type'          => WalletTransaction::TYPE_ADJUSTMENT_CREDIT,
+                'amount_fcfa'   => $amount,
+                'balance_after' => $wallet->balance,
+                'metadata'      => [
+                    'system'                => true,
+                    'withdraw_refund_for'   => $withdraw->id,
+                    'reason'                => 'Fedapay payout failed — automatic refund',
+                    'payout_failure_reason' => $withdraw->payout_failure_reason,
+                ],
             ]);
         });
     }

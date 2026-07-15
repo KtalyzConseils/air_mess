@@ -33,6 +33,13 @@ class Course extends Model
         self::STATUS_FAILED,
     ];
 
+    // Qui paie les frais de livraison — cf. migration add_delivery_fee_paid_by_to_courses.
+    // 'sender'    : marchand paie via son wallet à la création (défaut, historique)
+    // 'recipient' : destinataire paie à la remise, driver collecte total = produit + livraison.
+    //               Réservé aux drivers Airmess (filtre appliqué dans offeredCourses).
+    public const PAID_BY_SENDER    = 'sender';
+    public const PAID_BY_RECIPIENT = 'recipient';
+
     protected $guarded = ['id']; // mass assignment OK sur tous les champs sauf id
 
     protected function casts(): array

@@ -60,6 +60,20 @@ class TrackingController extends Controller
                     'category'    => $course->packageCategory?->name,
                 ],
 
+                // Paiement à préparer par le destinataire : uniquement affiché
+                // pour les courses "aux frais du destinataire". Sinon rien
+                // n'est dû à la remise (le marchand a déjà payé).
+                'payment' => $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT
+                    ? [
+                        'paid_by'          => Course::PAID_BY_RECIPIENT,
+                        'delivery_fee'     => (int) $course->delivery_fee,
+                        'collection_amount'=> $course->has_collection ? (int) $course->collection_amount : 0,
+                        'collection_method'=> $course->has_collection ? $course->collection_method : null,
+                        'total_to_pay'     => (int) $course->delivery_fee
+                                              + ($course->has_collection ? (int) $course->collection_amount : 0),
+                    ]
+                    : null,
+
                 'driver' => $course->driver
                     ? [
                         // On expose juste le prénom et le tel (masqué côté plus tard via numéro de relais)

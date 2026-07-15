@@ -14,6 +14,10 @@ class Driver extends Model
     public const STATUS_BUSY = 'busy';
     public const STATUS_ON_BREAK = 'on_break';
 
+    // Type de livreur — cf. migration 2026_07_14_100000_add_kind_to_drivers
+    public const KIND_INDEPENDENT = 'independent';
+    public const KIND_AIRMESS     = 'airmess';
+
     protected $fillable = [
         'user_id',
         'first_name',
@@ -37,6 +41,7 @@ class Driver extends Model
         'health_card',
         'activation_status',
         'availability_status',
+        'kind',
         'current_lat',
         'current_lng',
         'last_position_at',
@@ -64,6 +69,15 @@ class Driver extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Le driver est-il un salarié Air Mess ? Si oui il bypass certaines règles
+     * (caution, filtre high_value) et peut prendre les courses "aux frais du destinataire".
+     */
+    public function isAirmess(): bool
+    {
+        return $this->kind === self::KIND_AIRMESS;
     }
 
     public function earnings()

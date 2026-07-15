@@ -103,26 +103,41 @@ class DriverController extends Controller
             return response()->json(['courses' => []]);
         }
 
+        $isAirmess = $driver->isAirmess();
+
         $query = Course::where('status', Course::STATUS_AWAITING)
             ->whereNull('driver_id')
-            // Course premium : jamais dans le pool public. Prise en charge manuelle par l'ops.
-            // NULL-safe : les courses créées avant la migration `add_is_high_value_to_courses`
-            // peuvent avoir la colonne à NULL — on les traite comme non-premium (défaut sain).
-            ->where(function ($q) {
-                $q->where('is_high_value', false)->orWhereNull('is_high_value');
-            })
             ->with('packageCategory');
 
-        // Filtre caution : on cache les courses avec encaissement > balance du wallet.
-        // Le driver ne verra que ce qu'il peut couvrir avec sa caution.
-        $balance = $driver->wallet?->balance ?? 0;
-        $query->where(function ($q) use ($balance) {
-            $q->where('has_collection', false)
-              ->orWhere('collection_amount', '<=', $balance);
-        });
+        // Filtre premium (>= high_value_threshold_fcfa) + filtre "aux frais du destinataire"
+        // + filtre caution : réservés aux drivers Airmess. Un driver indépendant ne voit
+        // JAMAIS ces courses — l'ops ou un Airmess les prend.
+        // NULL-safe pour les colonnes ajoutées après-coup (rows historiques).
+        if (! $isAirmess) {
+            $query->where(function ($q) {
+                $q->where('is_high_value', false)->orWhereNull('is_high_value');
+            });
+
+            // Mode "aux frais du destinataire" : réservé Airmess (le marchand n'a rien payé,
+            // c'est un modèle économique dédié aux salariés Air Mess).
+            $query->where(function ($q) {
+                $q->where('delivery_fee_paid_by', Course::PAID_BY_SENDER)
+                  ->orWhereNull('delivery_fee_paid_by');
+            });
+
+            // Filtre caution : on cache les courses avec encaissement > balance du wallet.
+            // Le driver indépendant ne verra que ce qu'il peut couvrir avec sa caution.
+            // Le driver Airmess bypass — Air Mess porte le risque via sa relation salariale.
+            $balance = $driver->wallet?->balance ?? 0;
+            $query->where(function ($q) use ($balance) {
+                $q->where('has_collection', false)
+                  ->orWhere('collection_amount', '<=', $balance);
+            });
+        }
 
         // Filtre refus : on cache les courses que ce driver a déjà refusées explicitement.
-        // Évite qu'il revoie son refus dans la liste. Cf. project_wallet_driver_todo #7.
+        // Évite qu'il revoie son refus dans la liste. S'applique aussi aux Airmess.
+        // Cf. project_wallet_driver_todo #7.
         $query->whereNotIn('id', function ($sub) use ($driver) {
             $sub->select('course_id')
                 ->from('course_decline_records')
@@ -367,8 +382,38 @@ class DriverController extends Controller
 
                 // Créditer le livreur quand la course est livrée : les gains s'ajoutent
                 // directement à son wallet (cf. project_wallet_driver).
-                if ($nextStatus === Course::STATUS_DELIVERED && $course->driver_earnings > 0) {
+                //
+                // Cas spécial : un driver Airmess qui livre une course "aux frais du
+                // destinataire" ne reçoit PAS de commission — il est salarié et le
+                // revenu delivery_fee revient à la plateforme via platform_earnings.
+                // Sur une course sender-paid, l'Airmess touche la commission comme
+                // n'importe quel driver (le marchand a payé, l'argent existe déjà).
+                $isRecipientPaid = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
+                $skipEarning = $driver->isAirmess() && $isRecipientPaid;
+
+                if ($nextStatus === Course::STATUS_DELIVERED && $course->driver_earnings > 0 && ! $skipEarning) {
                     $walletService->creditEarning($driver, $course, (int) $course->driver_earnings);
+                }
+
+                // Hook plateforme : livraison d'une course "aux frais du destinataire"
+                // → on trace le delivery_fee comme revenu direct Air Mess. L'argent
+                // physique est chez le driver Airmess (il l'a collecté chez le client)
+                // et sera restitué en fin de shift. Idempotent via UNIQUE(course_id, kind).
+                if ($nextStatus === Course::STATUS_DELIVERED && $isRecipientPaid && $course->delivery_fee > 0) {
+                    \App\Models\PlatformEarning::firstOrCreate(
+                        [
+                            'course_id' => $course->id,
+                            'kind'      => \App\Models\PlatformEarning::KIND_DELIVERY_FEE,
+                        ],
+                        [
+                            'amount_fcfa' => (int) $course->delivery_fee,
+                            'driver_id'   => $driver->id,
+                            'metadata'    => [
+                                'source' => 'recipient_paid_delivery',
+                                'note'   => 'Frais collectés chez le destinataire, dus à Air Mess',
+                            ],
+                        ],
+                    );
                 }
 
                 // Hook wallet MARCHAND : livraison + course avec encaissement → on
@@ -525,6 +570,17 @@ class DriverController extends Controller
             'used'               => $usage,
         ];
 
+        // Mode payout + cooldown : l'app driver adapte son UX (message form, disable pendant cooldown)
+        $payoutMode    = (string) \App\Models\AppSetting::get('driver_payout_mode', 'admin_approval');
+        $cooldownHours = (int) \App\Models\AppSetting::get('driver_payout_cooldown_hours', 24);
+        $nextAllowedAt = null;
+        if ($payoutMode === 'instant' && $cooldownHours > 0) {
+            $lastAt = \App\Models\WalletWithdrawRequest::lastRequestAt($driver->id);
+            if ($lastAt && $lastAt->diffInHours(now(), absolute: true) < $cooldownHours) {
+                $nextAllowedAt = $lastAt->copy()->addHours($cooldownHours)->toIso8601String();
+            }
+        }
+
         return response()->json([
             'balance'         => $wallet->balance,
             'total_deposited' => $wallet->total_deposited,
@@ -533,6 +589,9 @@ class DriverController extends Controller
             'recent_transactions' => $recentTransactions,
             'pending_withdraw_request' => $pendingWithdraw,
             'withdraw_limits' => $withdrawLimits,
+            'payout_mode'              => $payoutMode,
+            'payout_cooldown_hours'    => $cooldownHours,
+            'next_withdraw_allowed_at' => $nextAllowedAt,
         ]);
     }
 
@@ -602,11 +661,23 @@ class DriverController extends Controller
     }
 
     /**
-     * Création d'une demande de retrait. Le débit du wallet n'a pas lieu ici :
-     * il attend la validation admin (étape 7).
+     * Création d'une demande de retrait.
+     *
+     * Bifurque selon le setting `driver_payout_mode` :
+     *  - admin_approval (défaut) : la demande est créée en `pending`. L'admin l'approuve
+     *    plus tard depuis /admin/withdraws — c'est à l'approbation que le wallet est débité
+     *    et que Fedapay Payout est appelé.
+     *  - instant : le driver retire depuis l'app sans admin. Vérifs supplémentaires
+     *    (activation validée, cooldown), débit immédiat du wallet + création directe en
+     *    `approved` + appel Fedapay Payout dans la foulée. En cas d'échec Fedapay, la
+     *    demande reste approved avec payout_failed_at → admin peut retenter manuellement.
      */
-    public function requestWithdraw(Request $request): JsonResponse
-    {
+    public function requestWithdraw(
+        Request $request,
+        DriverWalletService $driverWallet,
+        \App\Services\WalletWithdrawPayoutInitiator $payoutInitiator,
+        NotificationService $notifier,
+    ): JsonResponse {
         $driver = $this->currentDriver($request);
 
         $minAmount = (int) \App\Models\AppSetting::get('driver_min_withdraw_fcfa', 500);
@@ -673,6 +744,93 @@ class DriverController extends Controller
             ], 422);
         }
 
+        // ===== Bifurcation mode payout =====
+        $mode = (string) \App\Models\AppSetting::get('driver_payout_mode', 'admin_approval');
+
+        if ($mode === 'instant') {
+            // Q1 : réservé aux comptes livreur validés (KYC minimum)
+            if ($driver->activation_status !== 'active') {
+                return response()->json([
+                    'message' => 'Le retrait instant est réservé aux comptes livreur validés. Un admin doit d\'abord activer votre compte.',
+                ], 403);
+            }
+
+            // Cooldown : évite les double-clics et l'abus rapide
+            $cooldownH = (int) \App\Models\AppSetting::get('driver_payout_cooldown_hours', 24);
+            $lastAt    = \App\Models\WalletWithdrawRequest::lastRequestAt($driver->id);
+            if ($lastAt && $lastAt->diffInHours(now(), absolute: true) < $cooldownH) {
+                $nextAt = $lastAt->copy()->addHours($cooldownH);
+                return response()->json([
+                    'message'         => "Retrait autorisé toutes les {$cooldownH}h. Réessayez le " . $nextAt->format('d/m/Y à H:i') . '.',
+                    'next_allowed_at' => $nextAt->toIso8601String(),
+                ], 429);
+            }
+
+            // Transaction atomique : création + débit wallet. Si le débit throw
+            // (solde, busy, min), le create est rollback → aucune trace incohérente.
+            try {
+                $req = DB::transaction(function () use ($driver, $data, $driverWallet) {
+                    $req = \App\Models\WalletWithdrawRequest::create([
+                        'driver_id'      => $driver->id,
+                        'amount_fcfa'    => $data['amount'],
+                        'target_method'  => $data['target_method'],
+                        'target_account' => $data['target_account'],
+                        'status'         => \App\Models\WalletWithdrawRequest::STATUS_APPROVED,
+                        'decided_at'     => now(),
+                        // decided_by_admin_id reste null (self-service)
+                    ]);
+                    $driverWallet->withdraw(
+                        driver:  $driver,
+                        amount:  $data['amount'],
+                        adminId: null,
+                        reason:  "Instant self-service withdraw #{$req->id}",
+                    );
+                    return $req;
+                });
+            } catch (\DomainException $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            // Appel Fedapay HORS transaction (best-effort). Un échec n'annule pas le
+            // débit — l'admin a le filet manuel via /admin/withdraws/{id}/retry-payout.
+            $payoutInitiator->initiate($req->fresh());
+            $req = $req->fresh();
+
+            // Notif de confirmation au driver. Le webhook Fedapay peut prendre 5-30 min à
+            // arriver — sans cette notif, le driver ne sait pas si son geste a bien été pris
+            // en compte entre la demande et la confirmation "virement effectué".
+            if ($req->payout_failed_at) {
+                $notifier->sendToUser(
+                    $driver->user_id,
+                    'wallet.withdraw_failed_initiation',
+                    'Retrait en attente',
+                    'Ta demande a été enregistrée mais le virement automatique a échoué. Notre équipe prend le relais.',
+                    ['withdraw_id' => $req->id],
+                    null,
+                );
+
+                return response()->json([
+                    'message' => 'Votre retrait a été enregistré, mais le virement automatique a échoué. Notre équipe va prendre le relais rapidement.',
+                    'request' => $req,
+                ], 201);
+            }
+
+            $notifier->sendToUser(
+                $driver->user_id,
+                'wallet.withdraw_initiated',
+                'Retrait en cours',
+                'Virement de ' . number_format($req->amount_fcfa, 0, ',', ' ') . " FCFA lancé vers ton {$req->target_method}. Confirmation dès réception.",
+                ['withdraw_id' => $req->id],
+                null,
+            );
+
+            return response()->json([
+                'message' => 'Retrait en cours de virement. Vous serez notifié(e) dès réception sur votre ' . $data['target_method'] . '.',
+                'request' => $req,
+            ], 201);
+        }
+
+        // ===== Mode admin_approval (défaut MVP) =====
         $req = \App\Models\WalletWithdrawRequest::create([
             'driver_id'      => $driver->id,
             'amount_fcfa'    => $data['amount'],

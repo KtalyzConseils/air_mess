@@ -125,6 +125,26 @@ class WalletWithdrawRequest extends Model
         return self::usageForColumn('user_id', $userId);
     }
 
+    /**
+     * Date de la dernière demande (tous statuts) pour un driver — sert au calcul du
+     * cooldown en mode `driver_payout_mode = instant`.
+     *
+     * On inclut les cancelled/rejected volontairement : le cooldown est un anti-spam
+     * technique (pas un anti-fraude métier) — les count_* dans usageForDriver()
+     * gèrent déjà l'abus. Ici l'objectif est simplement d'éviter les double-clics.
+     *
+     * Retourne null si le driver n'a jamais fait de demande.
+     */
+    public static function lastRequestAt(int $driverId): ?\Illuminate\Support\Carbon
+    {
+        $last = static::query()
+            ->where('driver_id', $driverId)
+            ->latest('created_at')
+            ->value('created_at');
+
+        return $last ? \Illuminate\Support\Carbon::parse($last) : null;
+    }
+
     private static function usageForColumn(string $column, int $id): array
     {
         $day  = now()->subDay();

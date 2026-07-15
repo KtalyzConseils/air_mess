@@ -82,6 +82,31 @@ class AppSettingSeeder extends Seeder
                 'description' => 'Montant en dessous duquel on affiche un bandeau "rechargez votre wallet" au marchand/particulier.',
                 'group'       => 'wallet',
             ],
+            // ===== Mode de payout driver (retrait de caution) =====
+            // Deux modes :
+            //  - admin_approval : historique, chaque demande créée en `pending` attend qu'un admin
+            //    la valide et effectue le virement (le débit wallet a lieu à l'approbation).
+            //  - instant        : le driver retire sans admin. Le débit wallet + l'appel Fedapay
+            //    ont lieu immédiatement. Le webhook confirme (paid) ou fait un refund (failed).
+            //  Défaut MVP : admin_approval — passer en instant quand la clé Fedapay Payout est
+            //  active et que l'ops est confortable avec l'automatisation.
+            [
+                'key'         => 'driver_payout_mode',
+                'value'       => 'admin_approval',
+                'type'        => 'string',
+                'label'       => 'Mode de retrait driver',
+                'description' => 'admin_approval : chaque retrait passe par la validation manuelle d\'un admin (défaut MVP). instant : le driver retire depuis l\'app, débit immédiat + appel Fedapay Payout API automatique.',
+                'group'       => 'wallet',
+            ],
+            [
+                'key'         => 'driver_payout_cooldown_hours',
+                'value'       => '24',
+                'type'        => 'number',
+                'label'       => 'Cooldown entre retraits (heures)',
+                'description' => 'Délai minimal en heures entre deux demandes de retrait par un même driver (compte à partir de la dernière demande, quel que soit son statut). Ignore les demandes cancelled/rejected pour ne pas pénaliser un driver qui s\'est trompé de numéro.',
+                'group'       => 'wallet',
+            ],
+
             // ===== Plafonds anti-abus des retraits driver (cap rolling 24h / 7j) =====
             [
                 'key'         => 'driver_withdraw_max_per_day_count',

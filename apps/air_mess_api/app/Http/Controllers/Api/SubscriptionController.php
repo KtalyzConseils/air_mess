@@ -138,7 +138,7 @@ class SubscriptionController extends Controller
         // 2bis. Si l'event est un payout, on route vers une logique séparée
         // (les payouts matchent un WalletWithdrawRequest, pas un Payment).
         if (is_string($event) && str_starts_with($event, 'payout.')) {
-            return $this->handlePayoutWebhook($event, $tx, $txId, $notifier);
+            return $this->handlePayoutWebhook($event, $tx, $txId, $notifier, $walletService, $userWalletService);
         }
 
         // 3. Idempotence : si on a déjà traité, stop
@@ -288,6 +288,8 @@ class SubscriptionController extends Controller
         array $tx,
         $txId,
         NotificationService $notifier,
+        \App\Services\DriverWalletService $driverWallet,
+        \App\Services\UserWalletService $userWallet,
     ): JsonResponse {
         $withdraw = \App\Models\WalletWithdrawRequest::where('payout_provider_ref', (string) $txId)->first();
         if (! $withdraw) {
@@ -300,8 +302,12 @@ class SubscriptionController extends Controller
             return response()->json(['message' => 'Déjà traité.'], 200);
         }
 
+        $notifyUserId = $withdraw->isForDriver()
+            ? (int) $withdraw->driver->user_id
+            : (int) $withdraw->user_id;
+
         if (in_array($event, ['payout.approved', 'payout.processed'], true)) {
-            DB::transaction(function () use ($withdraw, $tx, $notifier) {
+            DB::transaction(function () use ($withdraw, $tx, $notifier, $notifyUserId) {
                 $withdraw->update([
                     'paid_at'                  => now(),
                     'external_payout_reference' => $tx['reference'] ?? ('fedapay:' . $tx['id']),
@@ -311,20 +317,41 @@ class SubscriptionController extends Controller
                 ]);
 
                 $notifier->sendToUser(
-                    $withdraw->driver->user_id,
+                    $notifyUserId,
                     'wallet.withdraw_paid',
-                    '✅ Virement effectué',
+                    'Virement effectué',
                     "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA a été viré automatiquement.",
                     ['withdraw_id' => $withdraw->id, 'reference' => $withdraw->external_payout_reference],
                     null,
                 );
             });
         } elseif (in_array($event, ['payout.failed', 'payout.canceled', 'payout.declined'], true)) {
-            $withdraw->update([
-                'payout_failed_at'      => now(),
-                'payout_failure_reason' => $tx['failure_reason'] ?? $tx['status'] ?? $event,
-            ]);
-            Log::warning('Fedapay payout failed', [
+            // Marquage échec + refund AUTOMATIQUE du wallet (driver OU user marchand)
+            // — sinon l'argent reste débité alors que Fedapay a confirmé l'échec définitif.
+            // Idempotent : refund déjà émis pour ce withdraw → no-op via metadata match.
+            DB::transaction(function () use ($withdraw, $tx, $event, $notifier, $driverWallet, $userWallet, $notifyUserId) {
+                $withdraw->update([
+                    'payout_failed_at'      => now(),
+                    'payout_failure_reason' => $tx['failure_reason'] ?? $tx['status'] ?? $event,
+                ]);
+
+                if ($withdraw->isForDriver()) {
+                    $driverWallet->refundFailedWithdraw($withdraw->driver, $withdraw);
+                } else {
+                    $userWallet->refundFailedWithdraw($withdraw->user, $withdraw);
+                }
+
+                $notifier->sendToUser(
+                    $notifyUserId,
+                    'wallet.withdraw_refunded',
+                    'Virement échoué',
+                    "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA n'a pas pu être effectué. La somme a été remise sur votre solde. Vérifiez votre numéro et réessayez.",
+                    ['withdraw_id' => $withdraw->id, 'failure_reason' => $withdraw->payout_failure_reason],
+                    null,
+                );
+            });
+
+            Log::warning('Fedapay payout failed → refund automatique', [
                 'withdraw_id' => $withdraw->id,
                 'event'       => $event,
                 'tx'          => $tx,

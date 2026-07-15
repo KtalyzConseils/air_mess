@@ -429,6 +429,52 @@ class UserWalletService
     }
 
     /**
+     * Refund automatique du wallet user quand Fedapay a définitivement échoué le
+     * payout (webhook payout.failed/canceled/declined). Symétrique de
+     * DriverWalletService::refundFailedWithdraw.
+     *
+     * Idempotent : refund déjà émis pour ce withdraw → no-op (metadata match).
+     */
+    public function refundFailedWithdraw(User $user, \App\Models\WalletWithdrawRequest $withdraw): ?UserWalletTransaction
+    {
+        $existing = UserWalletTransaction::where('user_id', $user->id)
+            ->where('type', UserWalletTransaction::TYPE_ADJUSTMENT_CREDIT)
+            ->whereJsonContains('metadata->withdraw_refund_for', $withdraw->id)
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $amount = (int) $withdraw->amount_fcfa;
+        if ($amount <= 0) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($user, $withdraw, $amount) {
+            $wallet = UserWallet::where('user_id', $user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $wallet->balance    += $amount;
+            $wallet->total_spent = max(0, ((int) $wallet->total_spent) - $amount);
+            $wallet->save();
+
+            return UserWalletTransaction::create([
+                'user_id'       => $user->id,
+                'type'          => UserWalletTransaction::TYPE_ADJUSTMENT_CREDIT,
+                'amount_fcfa'   => $amount,
+                'balance_after' => $wallet->balance,
+                'metadata'      => [
+                    'system'                => true,
+                    'withdraw_refund_for'   => $withdraw->id,
+                    'reason'                => 'Fedapay payout failed — automatic refund',
+                    'payout_failure_reason' => $withdraw->payout_failure_reason,
+                ],
+            ]);
+        });
+    }
+
+    /**
      * Ajustement admin : débit hors course (correction d'erreur).
      *
      * @throws \DomainException si solde disponible insuffisant
