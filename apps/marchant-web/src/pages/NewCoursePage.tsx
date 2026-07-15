@@ -85,12 +85,15 @@ export default function NewCoursePage() {
       origin_city: 'Cotonou',
       destination_city: 'Cotonou',
       has_collection: false,
+      delivery_fee_paid_by: 'sender',
     },
   })
 
   const hasCollection = watch('has_collection')
   const collectionAmountWatch = Number(watch('collection_amount') ?? 0)
   const declaredValueWatch = Number(watch('package_declared_value') ?? 0)
+  const paidBy = watch('delivery_fee_paid_by') ?? 'sender'
+  const isRecipientPaid = paidBy === 'recipient'
   // Suggestion d'ajouter la valeur déclarée quand l'encaissement est élevé ET qu'aucune valeur n'a été renseignée.
   // Sert d'incitation à déclarer honnêtement pour l'indemnisation en cas de vol/perte.
   const shouldSuggestDeclared = collectionAmountWatch >= 20000 && !declaredValueWatch
@@ -454,6 +457,69 @@ export default function NewCoursePage() {
                 <textarea {...register('destination_instructions')} className={inputClass} rows={2} placeholder={t('courses.new.driverInstructionsPlaceholder')} />
               </Field>
             </div>
+          </FormSection>
+
+          {/* PAIEMENT DE LA LIVRAISON — Qui paie les frais de livraison */}
+          <FormSection
+            title={t('courses.new.paidBySectionTitle')}
+            description={t('courses.new.paidBySectionDesc')}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {(['sender', 'recipient'] as const).map((opt) => {
+                const selected = paidBy === opt
+                return (
+                  <label
+                    key={opt}
+                    className={[
+                      'block cursor-pointer rounded-xl border-2 px-4 py-3 transition-all',
+                      selected
+                        ? 'border-airmess-yellow bg-airmess-yellow/10'
+                        : 'border-warm-200 hover:border-warm-300 bg-off-white',
+                    ].join(' ')}
+                  >
+                    <input
+                      type="radio"
+                      value={opt}
+                      {...register('delivery_fee_paid_by')}
+                      className="sr-only"
+                    />
+                    <p className="text-body font-bold text-ink">
+                      {opt === 'sender'
+                        ? t('courses.new.paidByOptionSender')
+                        : t('courses.new.paidByOptionRecipient')}
+                    </p>
+                    <p className="text-caption text-warm-600 mt-0.5">
+                      {opt === 'sender'
+                        ? t('courses.new.paidByOptionSenderHint')
+                        : t('courses.new.paidByOptionRecipientHint')}
+                    </p>
+                  </label>
+                )
+              })}
+            </div>
+
+            {isRecipientPaid && (() => {
+              const feeToCollect = currentFee
+              const totalToCollect = (collectionAmountWatch || 0) + feeToCollect
+              return (
+                <div className="mt-4 space-y-2">
+                  <div className="rounded-md bg-airmess-yellow/10 border border-airmess-yellow/40 px-3 py-2.5 text-body-s text-ink">
+                    {hasCollection && collectionAmountWatch > 0
+                      ? t('courses.new.paidByPreviewCombined', {
+                          product: (collectionAmountWatch || 0).toLocaleString('fr-FR'),
+                          fee: feeToCollect.toLocaleString('fr-FR'),
+                          total: totalToCollect.toLocaleString('fr-FR'),
+                        })
+                      : t('courses.new.paidByPreviewFeeOnly', {
+                          fee: feeToCollect.toLocaleString('fr-FR'),
+                        })}
+                  </div>
+                  <div className="rounded-md bg-info-bg border border-info/20 px-3 py-2.5 text-caption text-info">
+                    {t('courses.new.paidByAirmessNote')}
+                  </div>
+                </div>
+              )
+            })()}
           </FormSection>
 
           {/* ENCAISSEMENT */}

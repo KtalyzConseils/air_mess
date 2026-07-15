@@ -184,12 +184,22 @@ export default function AdminDriversPage() {
                     {filtered.map((d) => (
                       <tr key={d.id} className="hover:bg-cream/40 transition-colors">
                         <td className="px-5 py-2.5">
-                          <Link
-                            to={`/admin/drivers/${d.id}`}
-                            className="font-semibold text-ink hover:text-airmess-red"
-                          >
-                            {d.first_name} {d.last_name}
-                          </Link>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Link
+                              to={`/admin/drivers/${d.id}`}
+                              className="font-semibold text-ink hover:text-airmess-red"
+                            >
+                              {d.first_name} {d.last_name}
+                            </Link>
+                            {d.kind === 'airmess' && (
+                              <span
+                                className="text-[10px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-airmess-yellow/20 text-ink border border-airmess-yellow/50"
+                                title={t('admin.drivers.kindAirmessTooltip')}
+                              >
+                                {t('admin.drivers.kindAirmessBadge')}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-2.5 text-warm-600 tabular-nums">{d.user.phone}</td>
                         <td className="px-5 py-2.5 text-warm-600">{d.vehicle_type ?? '—'}</td>

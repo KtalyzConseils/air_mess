@@ -9,7 +9,7 @@ import { AdminButton } from '../../components/admin/AdminToolbar'
 import { ArrowLeftIcon, SettingsIcon, CheckIcon, AlertTriangleIcon, WhatsappIcon } from '../../components/ui/icons'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
 import SupportNotesPanel from '../../components/SupportNotesPanel'
-import { fetchDriver, validateDriver, openDriverDocument } from '../../api/admin'
+import { fetchDriver, validateDriver, openDriverDocument, updateDriverKind, type DriverKind } from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 
@@ -117,6 +117,31 @@ export default function AdminDriverDetailPage() {
     },
   })
 
+  const kindMutation = useMutation({
+    mutationFn: (kind: DriverKind) => updateDriverKind(Number(id), kind),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'driver', id] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] })
+    },
+  })
+
+  function handleToggleKind() {
+    if (!data?.driver) return
+    const nextKind: DriverKind = data.driver.kind === 'airmess' ? 'independent' : 'airmess'
+    const promptMsg =
+      nextKind === 'airmess'
+        ? t('admin.drivers.kindConfirmPromote')
+        : t('admin.drivers.kindConfirmDemote')
+    if (!window.confirm(promptMsg)) return
+    kindMutation.mutate(nextKind)
+  }
+
+  const kindError =
+    kindMutation.error instanceof AxiosError
+      ? (kindMutation.error.response?.data as { message?: string })?.message ??
+        t('admin.drivers.kindErrorGeneric')
+      : null
+
   async function handleOpenDocument(type: 'photo' | 'cni' | 'cni_back' | 'driving_license') {
     setDocError(null)
     try {
@@ -176,6 +201,12 @@ export default function AdminDriverDetailPage() {
                   'bg-warm-100 text-warm-600 border border-warm-200'
                 }
               />
+              {data.driver.kind === 'airmess' && (
+                <Badge
+                  label={t('admin.drivers.kindAirmessBadge')}
+                  classes="bg-airmess-yellow/20 text-ink border border-airmess-yellow/50"
+                />
+              )}
             </div>
           )
         }
@@ -234,6 +265,44 @@ export default function AdminDriverDetailPage() {
                 )}
               </section>
             )}
+
+            {/* Section : Type de livreur (indépendant ↔ salarié Airmess) — super-admin only */}
+            <section className="bg-off-white border border-warm-200 rounded-lg px-5 py-4">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <h2 className="text-body font-bold text-ink mb-1">
+                    {t('admin.drivers.kindSectionTitle')}
+                  </h2>
+                  <p className="text-caption text-warm-600 max-w-lg">
+                    {data.driver.kind === 'airmess'
+                      ? t('admin.drivers.kindDescAirmess')
+                      : t('admin.drivers.kindDescIndependent')}
+                  </p>
+                </div>
+                {isSuperAdmin ? (
+                  <AdminButton
+                    variant={data.driver.kind === 'airmess' ? 'secondary' : 'primary'}
+                    onClick={handleToggleKind}
+                    disabled={kindMutation.isPending}
+                  >
+                    {kindMutation.isPending
+                      ? t('common.loading')
+                      : data.driver.kind === 'airmess'
+                        ? t('admin.drivers.kindDemoteCta')
+                        : t('admin.drivers.kindPromoteCta')}
+                  </AdminButton>
+                ) : (
+                  <span className="text-caption text-warm-500 italic">
+                    {t('admin.drivers.kindSuperOnly')}
+                  </span>
+                )}
+              </div>
+              {kindError && (
+                <p className="text-body-s text-airmess-red mt-3 flex items-center gap-1.5">
+                  <AlertTriangleIcon size={14} /> {kindError}
+                </p>
+              )}
+            </section>
 
             {/* Grille identité / véhicule / urgence / performance */}
             <div className="grid gap-4 md:grid-cols-2">

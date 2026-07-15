@@ -114,6 +114,37 @@ export default function TrackingPage() {
               )}
             </div>
           )}
+
+          {/* Bandeau "À préparer" — uniquement si le destinataire paie à la livraison.
+              Affiché dès l'assignation pour laisser au client le temps de préparer
+              le cash ou d'aller retirer du Mobile Money. */}
+          {data.payment && data.status !== 'delivered' && data.status !== 'cancelled' && data.status !== 'failed' && (
+            <div className="mt-6 p-5 bg-airmess-yellow rounded-lg text-left">
+              <p className="text-eyebrow text-ink/70 uppercase font-mono">
+                {t('tracking.paymentEyebrow')}
+              </p>
+              <p className="text-h1 text-ink mt-2 font-bold tabular-nums">
+                {data.payment.total_to_pay.toLocaleString('fr-FR')}{' '}
+                <span className="text-body-l font-bold">FCFA</span>
+              </p>
+              {data.payment.collection_amount > 0 && (
+                <p className="text-body-s text-ink/80 mt-2 leading-relaxed">
+                  {t('tracking.paymentBreakdown', {
+                    product: data.payment.collection_amount.toLocaleString('fr-FR'),
+                    fee: data.payment.delivery_fee.toLocaleString('fr-FR'),
+                  })}
+                </p>
+              )}
+              {data.payment.collection_amount === 0 && (
+                <p className="text-body-s text-ink/80 mt-2">
+                  {t('tracking.paymentFeeOnlyNote')}
+                </p>
+              )}
+              <p className="text-caption text-ink/70 mt-3 pt-3 border-t border-ink/10">
+                {t('tracking.paymentPrepareHint')}
+              </p>
+            </div>
+          )}
         </Card>
 
         {/* ============================================================

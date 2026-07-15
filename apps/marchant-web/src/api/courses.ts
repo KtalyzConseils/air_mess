@@ -38,6 +38,12 @@ export interface Course {
   has_collection: boolean
   collection_amount: number | null
   collection_method: 'cash' | 'mobile_money' | 'prepaid' | null
+  /**
+   * Qui paie les frais de livraison :
+   *   - 'sender'    : marchand débité via son wallet à la création (défaut, historique)
+   *   - 'recipient' : destinataire paie à la remise, le driver Airmess collecte tout
+   */
+  delivery_fee_paid_by?: 'sender' | 'recipient'
   status_label?: string
   created_at: string
   delivered_at: string | null
@@ -115,6 +121,11 @@ export interface CreateCoursePayload {
   has_collection: boolean
   collection_amount?: number
   collection_method?: 'cash' | 'mobile_money' | 'prepaid'
+  /**
+   * Qui paie les frais de livraison. Défaut `sender` (marchand paie via wallet).
+   * `recipient` = mode "aux frais du client", exclusif aux drivers Airmess.
+   */
+  delivery_fee_paid_by?: 'sender' | 'recipient'
 }
 
 export interface CreateCourseResult {

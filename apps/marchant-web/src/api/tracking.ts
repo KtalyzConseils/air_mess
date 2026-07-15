@@ -17,6 +17,18 @@ export interface TrackingPayload {
     lng: number
   }
   package: { description: string; category: string | null }
+  /**
+   * Uniquement présent pour les courses "aux frais du destinataire".
+   * Le destinataire doit préparer `total_to_pay` en cash à la livraison.
+   * Null si le marchand a déjà payé la livraison.
+   */
+  payment: {
+    paid_by: 'recipient'
+    delivery_fee: number
+    collection_amount: number
+    collection_method: 'cash' | 'mobile_money' | 'prepaid' | null
+    total_to_pay: number
+  } | null
   driver: {
     first_name: string
     phone: string | null

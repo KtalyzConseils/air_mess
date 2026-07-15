@@ -38,17 +38,20 @@ export interface DashboardResponse {
   recent_incidents: DashboardIncident[]
 }
 
+export type DriverKind = 'independent' | 'airmess'
+
 export interface DriverFull {
   id: number
   first_name: string
   last_name: string
   availability_status: string
   activation_status: string
+  kind: DriverKind
   vehicle_type: string
   current_lat: number | null
   current_lng: number | null
   user: { name: string; phone: string }
-  pending_balance_fcfa: number | null 
+  pending_balance_fcfa: number | null
 }
 export interface DriverStats {
   courses_total: number
@@ -100,6 +103,7 @@ export interface DriverDetail {
   emergency_contact2_name: string | null
   emergency_contact2_phone: string | null
   preferred_response_channel: 'email' | 'sms' | 'whatsapp' | null
+  kind: DriverKind
   user: { id: number; name: string; email: string; phone: string | null }
   wallet: DriverWallet | null
 }
@@ -137,6 +141,18 @@ export async function fetchDriver(
   id: number | string,
 ): Promise<{ driver: DriverDetail; stats: DriverStats; declines: DriverDeclines }> {
   const { data } = await api.get(`/admin/drivers/${id}`)
+  return data
+}
+
+/**
+ * Bascule le type d'un livreur : freelance ↔ salarié Air Mess.
+ * Réservé au super-admin (403 sinon). Trace automatique dans support_notes.
+ */
+export async function updateDriverKind(
+  id: number | string,
+  kind: DriverKind,
+): Promise<{ driver: DriverDetail; message: string }> {
+  const { data } = await api.patch(`/admin/drivers/${id}/kind`, { kind })
   return data
 }
 

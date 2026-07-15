@@ -196,7 +196,19 @@ export default function AdminWithdrawRequestsPage() {
                         <p className="text-caption text-warm-500 font-mono">{r.target_account}</p>
                       </td>
                       <td className="px-4 py-2.5">
-                        <StatusBadge status={r.status} />
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <StatusBadge status={r.status} />
+                          {/* Retrait self-service (mode instant driver) : distingue visuellement
+                              d'une demande approuvée par un admin — l'ops sait qu'il n'a rien à faire. */}
+                          {r.status === 'approved' && r.decided_by_admin_id === null && (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-airmess-yellow/20 text-warm-700 border border-airmess-yellow/40"
+                              title={t('admin.withdraws.instantHint')}
+                            >
+                              {t('admin.withdraws.instantBadge')}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-2.5 text-caption text-warm-500 tabular-nums whitespace-nowrap">
                         {formatDateTime(r.created_at)}
