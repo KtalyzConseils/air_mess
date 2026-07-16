@@ -926,6 +926,13 @@
     "passportLabel": "Passeport — page photo",
     "cniBackRequired": "Le verso de votre CNIB est obligatoire.",
     "licenseHelper": "JPG/PNG/PDF · max 5 Mo",
+    "steps": {
+      "aria": "Étape {{step}} sur 2",
+      "step1": "Profil & véhicule",
+      "step2": "Documents & contacts",
+      "next": "Suivant",
+      "back": "Retour"
+    },
     "appBanner": {
       "title": "Inscris-toi directement sur l'application",
       "body": "Télécharge l'app Air Mess Livreur et fais ta candidature depuis ton téléphone — c'est le moyen le plus rapide.",

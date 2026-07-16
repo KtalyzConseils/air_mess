@@ -12,7 +12,7 @@ import Card from '../components/ui/Card'
 import Highlight from '../components/Highlight'
 import {
   BagIcon, PackageIcon, SnowflakeIcon, IdCardIcon, LockIcon, BikeIcon, AlertTriangleIcon,
-  MotorcycleIcon, ScooterIcon, CarIcon, FileTextIcon,
+  MotorcycleIcon, ScooterIcon, CarIcon, FileTextIcon, ArrowRightIcon, ArrowLeftIcon,
 } from '../components/ui/icons'
 import AuthSupportFooter from '../components/AuthSupportFooter'
 import TermsCheckbox from '../components/TermsCheckbox'
@@ -20,6 +20,7 @@ import VehicleTypeCards from '../components/driver/VehicleTypeCards'
 import AppDownloadBanner from '../components/driver/AppDownloadBanner'
 import DocumentCapture from '../components/driver/DocumentCapture'
 import PhoneOtpField from '../components/PhoneOtpField'
+import { cn } from '../lib/cn'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 
@@ -35,6 +36,13 @@ const MAX_BIRTH_DATE = (() => {
 })()
 
 type FormValues = Omit<RegisterDriverPayload, 'photo' | 'cni' | 'cni_back' | 'driving_license' | 'firebase_id_token'>
+
+// Champs validés au passage de l'étape 1 → 2 (le reste est validé à la soumission).
+const STEP1_FIELDS = [
+  'first_name', 'last_name', 'gender', 'birth_date',
+  'email', 'phone', 'password', 'password_confirmation',
+  'vehicle_type', 'vehicle_plate',
+] as const
 
 export default function DriverRegisterPage() {
   const { t } = useTranslation()
@@ -53,11 +61,14 @@ export default function DriverRegisterPage() {
   const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string[]>>({})
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showTermsError, setShowTermsError] = useState(false)
+  // Formulaire découpé en 2 étapes : 1 = profil/compte/véhicule, 2 = équipement/contacts/documents.
+  const [step, setStep] = useState<1 | 2>(1)
 
   const {
     register,
     handleSubmit,
     watch,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>()
 
@@ -72,6 +83,23 @@ export default function DriverRegisterPage() {
     if (cniType !== 'cnib') setCniBack(null)
   }, [cniType])
 
+  /** Étape 1 → 2 : valide les champs de l'étape + exige le numéro vérifié par SMS. */
+  async function goToStep2() {
+    setPhoneTokenError(null)
+    const fieldsOk = await trigger([...STEP1_FIELDS])
+    if (!phoneToken) {
+      setPhoneTokenError(t('driverRegister.otp.requiredBeforeSubmit'))
+    }
+    if (!fieldsOk || !phoneToken) return
+    setStep(2)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function backToStep1() {
+    setStep(1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function onSubmit(values: FormValues) {
     setServerError(null)
     setFileError(null)
@@ -79,8 +107,10 @@ export default function DriverRegisterPage() {
     setServerFieldErrors({})
 
     // Le numéro doit avoir été vérifié par SMS (Firebase) avant soumission.
+    // (déjà exigé au passage à l'étape 2 — filet si le numéro a changé entre-temps)
     if (!phoneToken) {
       setPhoneTokenError(t('driverRegister.otp.requiredBeforeSubmit'))
+      setStep(1)
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
@@ -124,6 +154,13 @@ export default function DriverRegisterPage() {
         const data = err.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
         setServerError(data?.message ?? "Erreur lors de l'inscription.")
         setServerFieldErrors(data?.errors ?? {})
+        // Si l'erreur serveur concerne un champ de l'étape 1 (email/téléphone pris…),
+        // on y ramène l'utilisateur pour qu'il voie le champ en rouge.
+        const errorFields = Object.keys(data?.errors ?? {})
+        if (errorFields.some((f) => (STEP1_FIELDS as readonly string[]).includes(f))) {
+          setStep(1)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }
       } else {
         setServerError('Erreur inattendue.')
       }
@@ -194,10 +231,30 @@ export default function DriverRegisterPage() {
             {t('driverRegister.formSubtitle')}
           </p>
 
-          {/* Canal privilégié : l'inscription directement dans l'app livreur */}
-          <AppDownloadBanner />
+          {/* Canal privilégié : l'inscription directement dans l'app livreur (étape 1 seulement) */}
+          {step === 1 && <AppDownloadBanner />}
+
+          {/* Indicateur d'étape */}
+          <div className="flex items-center gap-3 mb-6" aria-label={t('driverRegister.steps.aria', { step })}>
+            {([1, 2] as const).map((s) => (
+              <div key={s} className="flex-1">
+                <div
+                  className={cn(
+                    'h-1.5 rounded-full transition-colors duration-300',
+                    s <= step ? 'bg-airmess-yellow' : 'bg-warm-200',
+                  )}
+                />
+                <p className={cn('mt-1.5 text-caption font-medium', s === step ? 'text-ink' : 'text-warm-400')}>
+                  {s}. {s === 1 ? t('driverRegister.steps.step1') : t('driverRegister.steps.step2')}
+                </p>
+              </div>
+            ))}
+          </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {/* ============ ÉTAPE 1 — Profil, compte & véhicule ============ */}
+            <div className={cn(step !== 1 && 'hidden')}>
+              <div className="space-y-4">
             {/* ====================== IDENTITÉ ====================== */}
             <FormSection icon={<IdCardIcon size={20} />} title={t('driverRegister.sectionIdentityTitle')} description={t('driverRegister.sectionIdentityDesc')}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -303,6 +360,32 @@ export default function DriverRegisterPage() {
               </div>
             </FormSection>
 
+            {/* Bouton Suivant — valide l'étape 1 + exige le numéro vérifié */}
+            <Card variant="default" padding="md" className="mt-6">
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                pill
+                fullWidth
+                onClick={() => void goToStep2()}
+                rightIcon={<ArrowRightIcon size={18} />}
+              >
+                {t('driverRegister.steps.next')}
+              </Button>
+              <p className="text-center text-body-s text-warm-500 mt-4">
+                {t('driverRegister.alreadyRegistered')}{' '}
+                <Link to="/login" className="text-ink font-semibold hover:text-airmess-red">
+                  {t('driverRegister.loginLink')}
+                </Link>
+              </p>
+            </Card>
+              </div>
+            </div>
+
+            {/* ============ ÉTAPE 2 — Équipement, contacts & documents ============ */}
+            <div className={cn(step !== 2 && 'hidden')}>
+              <div className="space-y-4">
             {/* ====================== ÉQUIPEMENT ====================== */}
             <FormSection
               icon={<BagIcon size={20} />}
@@ -486,19 +569,32 @@ export default function DriverRegisterPage() {
               error={showTermsError && !acceptedTerms ? t('legal.checkbox.requiredError') : undefined}
             />
 
-            {/* ====================== SUBMIT ====================== */}
+            {/* ====================== RETOUR + SUBMIT ====================== */}
             <Card variant="default" padding="md" className="mt-6">
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                pill
-                fullWidth
-                loading={isSubmitting}
-                rightIcon={!isSubmitting && <span aria-hidden>→</span>}
-              >
-                {t('driverRegister.submitCta')}
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  onClick={backToStep1}
+                  leftIcon={<ArrowLeftIcon size={18} />}
+                  className="sm:w-auto"
+                >
+                  {t('driverRegister.steps.back')}
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  pill
+                  fullWidth
+                  loading={isSubmitting}
+                  rightIcon={!isSubmitting && <ArrowRightIcon size={18} />}
+                  className="flex-1"
+                >
+                  {t('driverRegister.submitCta')}
+                </Button>
+              </div>
               <p className="text-center text-body-s text-warm-500 mt-4">
                 {t('driverRegister.alreadyRegistered')}{' '}
                 <Link to="/login" className="text-ink font-semibold hover:text-airmess-red">
@@ -506,6 +602,8 @@ export default function DriverRegisterPage() {
                 </Link>
               </p>
             </Card>
+              </div>
+            </div>
           </form>
 
           <AuthSupportFooter context="DriverRegister" />

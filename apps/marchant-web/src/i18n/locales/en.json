@@ -926,6 +926,13 @@
     "passportLabel": "Passport — photo page",
     "cniBackRequired": "The back of your CNIB is required.",
     "licenseHelper": "JPG/PNG/PDF · max 5 MB",
+    "steps": {
+      "aria": "Step {{step}} of 2",
+      "step1": "Profile & vehicle",
+      "step2": "Documents & contacts",
+      "next": "Next",
+      "back": "Back"
+    },
     "appBanner": {
       "title": "Sign up directly in the app",
       "body": "Download the Air Mess Courier app and apply from your phone — it's the fastest way.",
