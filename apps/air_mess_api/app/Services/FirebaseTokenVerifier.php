@@ -27,9 +27,58 @@ class FirebaseTokenVerifier
      */
     public function verifyPhoneToken(string $idToken): ?string
     {
+        $payload = $this->decode($idToken);
+        $phoneNumber = $payload?->phone_number ?? null;
+
+        if (! is_string($phoneNumber)) {
+            if ($payload !== null) {
+                Log::info('Firebase ID token sans claim phone_number');
+            }
+
+            return null;
+        }
+
+        return $phoneNumber;
+    }
+
+    /**
+     * Retourne l'email vérifié (minuscules) si le jeton est un ID token issu
+     * d'une connexion Google (sign_in_provider google.com, email_verified),
+     * sinon null. Utilisé par l'inscription marchand/particulier.
+     */
+    public function verifyGoogleEmail(string $idToken): ?string
+    {
+        $payload = $this->decode($idToken);
+        if ($payload === null) {
+            return null;
+        }
+
+        $provider = $payload->firebase->sign_in_provider ?? null;
+        $email    = $payload->email ?? null;
+        $verified = (bool) ($payload->email_verified ?? false);
+
+        if ($provider !== 'google.com' || ! is_string($email) || ! $verified) {
+            Log::info('Firebase ID token Google invalide', [
+                'provider' => $provider,
+                'has_email' => is_string($email),
+                'email_verified' => $verified,
+            ]);
+
+            return null;
+        }
+
+        return mb_strtolower($email);
+    }
+
+    /**
+     * Décode et valide un ID token Firebase (signature RS256 + aud/iss/sub).
+     * Retourne le payload, ou null si le jeton est invalide.
+     */
+    private function decode(string $idToken): ?object
+    {
         $projectId = config('services.firebase.project_id');
         if (! $projectId) {
-            Log::error('FIREBASE_PROJECT_ID manquant — vérification téléphone impossible.');
+            Log::error('FIREBASE_PROJECT_ID manquant — vérification Firebase impossible.');
 
             return null;
         }
@@ -56,20 +105,18 @@ class FirebaseTokenVerifier
         $validAudience = ($payload->aud ?? null) === $projectId;
         $validIssuer   = ($payload->iss ?? null) === "https://securetoken.google.com/{$projectId}";
         $validSubject  = ! empty($payload->sub ?? null);
-        $phoneNumber   = $payload->phone_number ?? null;
 
-        if (! $validAudience || ! $validIssuer || ! $validSubject || ! is_string($phoneNumber)) {
+        if (! $validAudience || ! $validIssuer || ! $validSubject) {
             Log::info('Firebase ID token invalide (claims)', [
                 'aud_ok' => $validAudience,
                 'iss_ok' => $validIssuer,
                 'sub_ok' => $validSubject,
-                'has_phone' => is_string($phoneNumber),
             ]);
 
             return null;
         }
 
-        return $phoneNumber;
+        return $payload;
     }
 
     /**

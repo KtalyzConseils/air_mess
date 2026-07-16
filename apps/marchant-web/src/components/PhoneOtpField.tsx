@@ -7,9 +7,9 @@ import {
   type ConfirmationResult,
 } from 'firebase/auth'
 import type { UseFormRegisterReturn } from 'react-hook-form'
-import Input from '../ui/Input'
-import { firebaseAuth, normalizePhone } from '../../lib/firebase'
-import { CheckIcon } from '../ui/icons'
+import Input from './ui/Input'
+import { firebaseAuth, normalizePhone } from '../lib/firebase'
+import { CheckIcon } from './ui/icons'
 
 type OtpStatus = 'idle' | 'sending' | 'code_sent' | 'verifying' | 'verified'
 

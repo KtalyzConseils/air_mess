@@ -11,6 +11,10 @@ export interface RegisterIndividualPayload {
   password: string
   password_confirmation: string
   gender?: 'M' | 'F' | 'autre'
+  /** ID token Firebase (Phone Auth) prouvant la possession du numéro. */
+  firebase_id_token: string
+  /** ID token Firebase d'une connexion Google (email vérifié) — optionnel. */
+  firebase_google_id_token?: string
   /** Consentement CGU + politique confidentialité (checkbox obligatoire). */
   accepted_terms: boolean
 }
@@ -24,6 +28,10 @@ export interface RegisterMarchantPayload {
   raison_sociale: string
   ifu_rccm?: string
   secteur_activite: 'supermarche' | 'restaurant' | 'boutique' | 'pharmacie' | 'ecommerce' | 'autre'
+  /** ID token Firebase (Phone Auth) prouvant la possession du numéro. */
+  firebase_id_token: string
+  /** ID token Firebase d'une connexion Google (email vérifié) — optionnel. */
+  firebase_google_id_token?: string
   /** Consentement CGU + politique confidentialité (checkbox obligatoire). */
   accepted_terms: boolean
 }

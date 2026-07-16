@@ -7,8 +7,10 @@ import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Highlight from '../components/Highlight'
+import PhoneOtpField from '../components/PhoneOtpField'
 import { cn } from '../lib/cn'
-import { EyeIcon, EyeOffIcon, ArrowRightIcon } from '../components/ui/icons'
+import { signInWithGoogle } from '../lib/firebase'
+import { EyeIcon, EyeOffIcon, ArrowRightIcon, GoogleIcon, CheckIcon } from '../components/ui/icons'
 import LanguageToggle from '../components/ui/LanguageToggle'
 import AuthSupportFooter from '../components/AuthSupportFooter'
 import TermsCheckbox from '../components/TermsCheckbox'
@@ -50,20 +52,65 @@ export default function RegisterPage() {
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showTermsError, setShowTermsError] = useState(false)
+  // ID token Firebase une fois le numéro vérifié par SMS (null = pas encore vérifié).
+  const [phoneToken, setPhoneToken] = useState<string | null>(null)
+  const [phoneTokenError, setPhoneTokenError] = useState<string | null>(null)
+  // Connexion Google (optionnelle) : jeton + email prouvé, champ email verrouillé.
+  const [googleToken, setGoogleToken] = useState<string | null>(null)
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null)
+  const [googleBusy, setGoogleBusy] = useState(false)
 
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>()
 
+  async function handleGoogle() {
+    setError(null)
+    setGoogleBusy(true)
+    try {
+      const result = await signInWithGoogle()
+      setGoogleToken(result.idToken)
+      setGoogleEmail(result.email)
+      // Pré-remplissage : email (verrouillé) + nom selon le type de compte.
+      setValue('email', result.email, { shouldValidate: true })
+      if (result.firstName && !watch('first_name')) setValue('first_name', result.firstName)
+      if (result.lastName && !watch('last_name')) setValue('last_name', result.lastName)
+      if (result.displayName && !watch('name')) setValue('name', result.displayName)
+    } catch (err) {
+      // Popup fermée par l'utilisateur = pas une erreur à afficher.
+      const code = (err as { code?: string })?.code ?? ''
+      if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+        setError(t('auth.register.googleError'))
+      }
+    } finally {
+      setGoogleBusy(false)
+    }
+  }
+
+  function clearGoogle() {
+    setGoogleToken(null)
+    setGoogleEmail(null)
+  }
+
   async function onSubmit(values: RegisterFormValues) {
     setError(null)
+    setPhoneTokenError(null)
     setServerFieldErrors({})
+    // Le numéro doit avoir été vérifié par SMS (Firebase) avant soumission.
+    if (!phoneToken) {
+      setPhoneTokenError(t('driverRegister.otp.requiredBeforeSubmit'))
+      return
+    }
     if (!acceptedTerms) {
       setShowTermsError(true)
       return
     }
+    // Sécurité : le jeton Google ne vaut que pour l'email prouvé par Google.
+    const googleStillValid = googleToken && googleEmail?.toLowerCase() === values.email.toLowerCase()
     try {
       if (type === 'individual') {
         await registerIndividual({
@@ -74,6 +121,8 @@ export default function RegisterPage() {
           password: values.password,
           password_confirmation: values.password_confirmation,
           gender: values.gender || undefined,
+          firebase_id_token: phoneToken,
+          firebase_google_id_token: googleStillValid ? googleToken : undefined,
           accepted_terms: true,
         })
       } else {
@@ -86,6 +135,8 @@ export default function RegisterPage() {
           raison_sociale: values.raison_sociale!,
           secteur_activite: values.secteur_activite!,
           ifu_rccm: values.ifu_rccm || undefined,
+          firebase_id_token: phoneToken,
+          firebase_google_id_token: googleStillValid ? googleToken : undefined,
           accepted_terms: true,
         })
       }
@@ -142,6 +193,28 @@ export default function RegisterPage() {
                 {kind === 'individual' ? t('auth.register.typeIndividual') : t('auth.register.typeMarchant')}
               </button>
             ))}
+          </div>
+
+          {/* Connexion Google : pré-remplit et prouve l'email (optionnel). */}
+          <button
+            type="button"
+            onClick={() => void handleGoogle()}
+            disabled={googleBusy || !!googleToken}
+            className="w-full inline-flex items-center justify-center gap-3 rounded-md border border-warm-300 bg-off-white px-4 py-2.5 text-body font-medium text-ink transition-all duration-200 hover:border-warm-400 hover:bg-warm-100 disabled:opacity-60 disabled:cursor-not-allowed mb-4"
+          >
+            <GoogleIcon size={18} />
+            {googleToken
+              ? t('auth.register.googleConnected')
+              : googleBusy
+                ? t('auth.register.googleBusy')
+                : t('auth.register.googleCta')}
+            {googleToken && <CheckIcon size={16} className="text-success" />}
+          </button>
+
+          <div className="flex items-center gap-3 mb-4" role="separator">
+            <span className="h-px flex-1 bg-warm-200" aria-hidden />
+            <span className="text-caption text-warm-500 uppercase">{t('auth.register.googleOr')}</span>
+            <span className="h-px flex-1 bg-warm-200" aria-hidden />
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -218,15 +291,30 @@ export default function RegisterPage() {
               placeholder={t('auth.register.emailPlaceholder')}
               {...register('email', { required: t('auth.register.emailRequired') })}
               error={errors.email?.message ?? serverErr('email')}
+              helper={googleToken ? t('auth.register.googleEmailLocked') : undefined}
+              readOnly={!!googleToken}
               autoComplete="email"
+              rightSlot={
+                googleToken ? (
+                  <button
+                    type="button"
+                    onClick={clearGoogle}
+                    className="p-2 text-caption text-warm-500 hover:text-airmess-red"
+                  >
+                    {t('auth.register.googleUnlink')}
+                  </button>
+                ) : undefined
+              }
             />
-            <Input
-              type="tel"
+            <PhoneOtpField
               label={t('common.phone')}
-              placeholder={t('auth.register.phonePlaceholder')}
-              {...register('phone', { required: t('auth.register.phoneRequired') })}
-              error={errors.phone?.message ?? serverErr('phone')}
-              autoComplete="tel"
+              registration={register('phone', { required: t('auth.register.phoneRequired') })}
+              phoneValue={watch('phone') ?? ''}
+              error={errors.phone?.message ?? serverErr('phone') ?? phoneTokenError ?? undefined}
+              onTokenChange={(token) => {
+                setPhoneToken(token)
+                if (token) setPhoneTokenError(null)
+              }}
             />
             <Input
               type={showPassword ? 'text' : 'password'}

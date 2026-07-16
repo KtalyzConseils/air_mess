@@ -19,7 +19,7 @@ import TermsCheckbox from '../components/TermsCheckbox'
 import VehicleTypeCards from '../components/driver/VehicleTypeCards'
 import AppDownloadBanner from '../components/driver/AppDownloadBanner'
 import DocumentCapture from '../components/driver/DocumentCapture'
-import PhoneOtpField from '../components/driver/PhoneOtpField'
+import PhoneOtpField from '../components/PhoneOtpField'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 

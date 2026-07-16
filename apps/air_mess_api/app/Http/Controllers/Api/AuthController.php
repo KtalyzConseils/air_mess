@@ -25,13 +25,20 @@ class AuthController extends Controller
     /**
      * Inscription d'un marchand (validation manuelle ensuite par un admin).
      */
-    public function registerMarchant(Request $request): JsonResponse
-    {
+    public function registerMarchant(
+        Request $request,
+        \App\Services\FirebaseTokenVerifier $firebaseVerifier,
+    ): JsonResponse {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
         $data = $request->validate([
             'name'             => ['required', 'string', 'max:255'],
             'email'            => ['required', 'email', 'unique:users,email'],
             'phone'            => ['required', 'string', 'max:20', 'unique:users,phone'],
             'password'         => ['required', 'string', 'min:8', 'confirmed'],
+            // OTP téléphone (obligatoire) + connexion Google (optionnelle)
+            'firebase_id_token'        => ['required', 'string'],
+            'firebase_google_id_token' => ['nullable', 'string'],
             'raison_sociale'   => ['required', 'string', 'max:255'],
             'ifu_rccm'         => ['nullable', 'string', 'max:50'],
             'secteur_activite' => ['required', Rule::in([
@@ -42,13 +49,17 @@ class AuthController extends Controller
             'accepted_terms'   => ['required', 'accepted'],
         ]);
 
-        $user = DB::transaction(function () use ($data) {
+        $emailVerifiedAt = $this->assertRegistrationTokens($firebaseVerifier, $data);
+
+        $user = DB::transaction(function () use ($data, $emailVerifiedAt) {
             $user = User::create([
                 'name'                   => $data['name'],
                 'email'                  => $data['email'],
                 'phone'                  => $data['phone'],
                 'password'               => $data['password'], // hashé via cast 'hashed'
                 'type'                   => User::TYPE_MARCHANT,
+                'phone_verified_at'      => now(), // prouvé par l'OTP Firebase
+                'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
                 'accepted_terms_version' => User::TERMS_VERSION,
             ]);
@@ -85,8 +96,12 @@ class AuthController extends Controller
     /**
      * Inscription d'un particulier (self-service, accès immédiat).
      */
-    public function registerIndividual(Request $request): JsonResponse
-    {
+    public function registerIndividual(
+        Request $request,
+        \App\Services\FirebaseTokenVerifier $firebaseVerifier,
+    ): JsonResponse {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
         $data = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name'  => ['required', 'string', 'max:100'],
@@ -94,17 +109,24 @@ class AuthController extends Controller
             'phone'      => ['required', 'string', 'max:20', 'unique:users,phone'],
             'password'   => ['required', 'string', 'min:8', 'confirmed'],
             'gender'     => ['nullable', Rule::in(['M', 'F', 'autre'])],
+            // OTP téléphone (obligatoire) + connexion Google (optionnelle)
+            'firebase_id_token'        => ['required', 'string'],
+            'firebase_google_id_token' => ['nullable', 'string'],
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms' => ['required', 'accepted'],
         ]);
 
-        $user = DB::transaction(function () use ($data) {
+        $emailVerifiedAt = $this->assertRegistrationTokens($firebaseVerifier, $data);
+
+        $user = DB::transaction(function () use ($data, $emailVerifiedAt) {
             $user = User::create([
                 'name'                   => $data['first_name'] . ' ' . $data['last_name'],
                 'email'                  => $data['email'],
                 'phone'                  => $data['phone'],
                 'password'               => $data['password'],
                 'type'                   => User::TYPE_INDIVIDUAL,
+                'phone_verified_at'      => now(), // prouvé par l'OTP Firebase
+                'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
                 'accepted_terms_version' => User::TERMS_VERSION,
             ]);
@@ -231,6 +253,7 @@ class AuthController extends Controller
                     'phone'                  => $data['phone'],
                     'password'               => $data['password'], // hashé via cast 'hashed' sur le model
                     'type'                   => User::TYPE_DRIVER,
+                    'phone_verified_at'      => now(), // prouvé par OTP (Firebase web ou SMS mobile)
                     'accepted_terms_at'      => now(),
                     'accepted_terms_version' => User::TERMS_VERSION,
                 ]);
@@ -293,6 +316,41 @@ class AuthController extends Controller
             'user'    => $driver->user->load('driver'),
             'token'   => $token,
         ], 201);
+    }
+
+    /**
+     * Vérifie les jetons Firebase d'une inscription :
+     * - `firebase_id_token` (obligatoire) : le claim phone_number (E.164) doit
+     *   correspondre au téléphone normalisé soumis — preuve de possession du numéro ;
+     * - `firebase_google_id_token` (optionnel) : jeton d'une connexion Google dont
+     *   l'email vérifié doit correspondre à l'email soumis.
+     *
+     * Retourne l'horodatage à stocker dans email_verified_at (now() si Google
+     * a validé l'email, null sinon). Lève une ValidationException sinon.
+     */
+    private function assertRegistrationTokens(
+        \App\Services\FirebaseTokenVerifier $verifier,
+        array $data,
+    ): ?\Illuminate\Support\Carbon {
+        $verifiedPhone = $verifier->verifyPhoneToken($data['firebase_id_token']);
+        if ($verifiedPhone === null || $verifiedPhone !== $data['phone']) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'phone' => ['Numéro non vérifié. Refaites la vérification par SMS.'],
+            ]);
+        }
+
+        if (empty($data['firebase_google_id_token'])) {
+            return null;
+        }
+
+        $googleEmail = $verifier->verifyGoogleEmail($data['firebase_google_id_token']);
+        if ($googleEmail === null || $googleEmail !== mb_strtolower($data['email'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email' => ['Connexion Google invalide ou email différent. Réessayez.'],
+            ]);
+        }
+
+        return now();
     }
 
     /**

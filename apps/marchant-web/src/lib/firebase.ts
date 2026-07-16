@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth'
 
 /**
  * Firebase — uniquement Phone Auth (vérification OTP du numéro à
@@ -21,6 +21,32 @@ const app = initializeApp(firebaseConfig)
 export const firebaseAuth = getAuth(app)
 // Localise le widget reCAPTCHA et le SMS envoyé.
 firebaseAuth.languageCode = 'fr'
+
+export interface GoogleSignInResult {
+  /** ID token Firebase à joindre au register (vérifié côté API). */
+  idToken: string
+  email: string
+  displayName: string
+  firstName: string
+  lastName: string
+}
+
+/**
+ * Connexion Google via popup — utilisée à l'inscription pour pré-remplir et
+ * prouver l'email. On se déconnecte aussitôt : seul l'ID token sert de preuve,
+ * aucune session Firebase n'est conservée.
+ */
+export async function signInWithGoogle(): Promise<GoogleSignInResult> {
+  const provider = new GoogleAuthProvider()
+  provider.setCustomParameters({ prompt: 'select_account' })
+  const credential = await signInWithPopup(firebaseAuth, provider)
+  const idToken = await credential.user.getIdToken()
+  const email = credential.user.email ?? ''
+  const displayName = credential.user.displayName ?? ''
+  await signOut(firebaseAuth).catch(() => {})
+  const [firstName = '', ...rest] = displayName.split(' ')
+  return { idToken, email, displayName, firstName, lastName: rest.join(' ') }
+}
 
 /**
  * Normalise un numéro vers E.164 : "+229 01 90 12 34 56" → "+2290190123456".
