@@ -68,6 +68,13 @@
       ],
       "expo-image",
       "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "RMess accède à vos photos pour envoyer vos documents d'inscription.",
+          "cameraPermission": "RMess accède à l'appareil photo pour photographier vos documents d'inscription."
+        }
+      ],
       "./plugins/withFullScreenNotifications"
     ],
     "experiments": {

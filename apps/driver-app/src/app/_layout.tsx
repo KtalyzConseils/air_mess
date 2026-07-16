@@ -145,10 +145,11 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!hydrated) return
-    const inLogin = segments[0] === 'login'
-    if (!user && !inLogin) {
+    // Routes publiques accessibles sans être connecté : login + inscription.
+    const inAuthRoute = segments[0] === 'login' || segments[0] === 'register'
+    if (!user && !inAuthRoute) {
       router.replace('/login')
-    } else if (user && inLogin) {
+    } else if (user && inAuthRoute) {
       router.replace('/')
     }
   }, [hydrated, user, segments, router])

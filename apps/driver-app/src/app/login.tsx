@@ -5,12 +5,12 @@ import {
   TextInput,
   Pressable,
   Image,
-  Linking,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 import { AxiosError } from 'axios'
 import { useAuthStore } from '../stores/authStore'
@@ -30,9 +30,8 @@ import Button from '../components/ui/Button'
  *
  *   v1.0.0
  */
-const REGISTER_URL = 'https://app.airmess-logistics.com/register/driver'
-
 export default function LoginScreen() {
+  const router = useRouter()
   const login = useAuthStore((s) => s.login)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -169,9 +168,9 @@ export default function LoginScreen() {
             </Button>
           </View>
 
-          {/* Lien inscription — onboarding nouveau livreur via le web */}
+          {/* Lien inscription — écran natif d'inscription livreur */}
           <Pressable
-            onPress={() => Linking.openURL(REGISTER_URL)}
+            onPress={() => router.push('/register')}
             className="items-center mt-6"
             hitSlop={8}
             accessibilityRole="link"
