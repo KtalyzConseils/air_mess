@@ -81,10 +81,12 @@ export default function RegisterPage() {
       if (result.lastName && !watch('last_name')) setValue('last_name', result.lastName)
       if (result.displayName && !watch('name')) setValue('name', result.displayName)
     } catch (err) {
-      // Popup fermée par l'utilisateur = pas une erreur à afficher.
       const code = (err as { code?: string })?.code ?? ''
+      // Trace complète pour diagnostiquer (popup bloquée, cookies tiers, domaine…).
+      console.error('[RegisterPage] Google sign-in error:', code, err)
+      // Popup fermée par l'utilisateur = pas une erreur à afficher.
       if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
-        setError(t('auth.register.googleError'))
+        setError(`${t('auth.register.googleError')}${code ? ` (${code})` : ''}`)
       }
     } finally {
       setGoogleBusy(false)
