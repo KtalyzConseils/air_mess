@@ -25,6 +25,9 @@ Route::prefix('auth')->group(function () {
     Route::post('/register/marchant', [AuthController::class, 'registerMarchant']);
     Route::post('/register/individual', [AuthController::class, 'registerIndividual']);
     Route::post('/register/driver', [AuthController::class, 'registerDriver']);
+    // Vérification du numéro par SMS (OTP) — inscription livreur depuis l'app mobile.
+    Route::post('/phone/otp/send',   [\App\Http\Controllers\Api\PhoneOtpController::class, 'send']);
+    Route::post('/phone/otp/verify', [\App\Http\Controllers\Api\PhoneOtpController::class, 'verify']);
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);   
     Route::post('/password/reset',  [AuthController::class, 'resetPassword']);

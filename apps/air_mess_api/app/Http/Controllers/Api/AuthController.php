@@ -146,6 +146,7 @@ class AuthController extends Controller
         Request $request,
         NotificationService $notifier,
         \App\Services\FirebaseTokenVerifier $firebaseVerifier,
+        \App\Services\PhoneVerificationToken $phoneTokens,
     ): JsonResponse {
         // Le numéro est normalisé en E.164 AVANT validation pour que l'unicité
         // users.phone porte sur un format canonique (+2290190123456) et que la
@@ -164,9 +165,11 @@ class AuthController extends Controller
             'phone'    => ['required', 'string', 'max:20', 'unique:users,phone'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
 
-            // Preuve de possession du numéro : ID token Firebase Phone Auth
-            // obtenu côté web après confirmation du code SMS.
-            'firebase_id_token' => ['required', 'string'],
+            // Preuve de possession du numéro. Web : ID token Firebase Phone Auth.
+            // App mobile : jeton OTP maison (POST /auth/phone/otp/verify). Exactement
+            // l'un des deux est requis.
+            'firebase_id_token'        => ['required_without:phone_verification_token', 'string'],
+            'phone_verification_token' => ['required_without:firebase_id_token', 'string'],
 
             // Véhicule
             'vehicle_type'  => ['required', Rule::in(['scooter', 'moto', 'voiture', 'velo'])],
@@ -201,9 +204,14 @@ class AuthController extends Controller
             'accepted_terms' => ['required', 'accepted'],
         ]);
 
-        // Le jeton Firebase doit prouver la possession du numéro soumis :
-        // claim phone_number (E.164) === phone normalisé du formulaire.
-        $verifiedPhone = $firebaseVerifier->verifyPhoneToken($data['firebase_id_token']);
+        // Le numéro soumis doit être prouvé par l'un des deux jetons :
+        //  - app mobile : jeton OTP maison (phone_verification_token) ;
+        //  - web        : ID token Firebase Phone Auth (firebase_id_token).
+        // Dans les deux cas le numéro prouvé (E.164) doit === phone normalisé du formulaire.
+        $verifiedPhone = ! empty($data['phone_verification_token'])
+            ? $phoneTokens->verify($data['phone_verification_token'])
+            : $firebaseVerifier->verifyPhoneToken($data['firebase_id_token']);
+
         if ($verifiedPhone === null || $verifiedPhone !== $data['phone']) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'phone' => ['Numéro non vérifié. Refaites la vérification par SMS.'],
