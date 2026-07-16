@@ -8,7 +8,7 @@ import {
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import Constants from 'expo-constants'
@@ -32,6 +32,7 @@ import Button from '../components/ui/Button'
  */
 export default function LoginScreen() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const login = useAuthStore((s) => s.login)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -80,7 +81,7 @@ export default function LoginScreen() {
       <StatusBar style="light" />
       <KeyboardAwareScrollView
         bottomOffset={24}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
