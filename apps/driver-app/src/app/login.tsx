@@ -85,14 +85,15 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-          {/* Bloc marque — signature du splash prolongée */}
-          <View className="items-center pt-10 pb-8 px-6">
+          {/* Bloc marque — signature du splash prolongée (compact : tout doit tenir
+              sans scroll, et laisser la place au clavier). */}
+          <View className="items-center pt-6 pb-4 px-6">
             <Image
               source={require('../../assets/images/splash-icon.png')}
-              style={{ width: 220, height: 330 }}
+              style={{ width: 150, height: 225 }}
               resizeMode="contain"
             />
-            <Text className="text-warm-400 text-sm font-semibold tracking-widest uppercase -mt-4">
+            <Text className="text-warm-400 text-sm font-semibold tracking-widest uppercase -mt-3">
               Espace livreur
             </Text>
           </View>
