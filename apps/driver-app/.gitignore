@@ -34,6 +34,12 @@ yarn-error.*
 .env
 .env*.local
 
+# Secrets / clés natives Firebase et Apple. Récupérer une copie locale depuis
+# Firebase Console (Android) / App Store Connect (iOS) ou via EAS Secrets au
+# build. Un template avec placeholders est versionné dans google-services.json.example.
+google-services.json
+GoogleService-Info.plist
+
 # build logs
 build-android.log
 *.log
