@@ -253,13 +253,19 @@ export default function NewCoursePage() {
     if (addr.street || addr.landmark || addr.instructions) setShowDestExtra(true)
   }
 
-  /** Lien discret « + précisions » / « − masquer » (progressive disclosure). */
+  /** Bouton-puce « + précisions » / « − masquer » (progressive disclosure).
+      Assez visible pour ne pas être raté, sans concurrencer le CTA principal. */
   function MoreToggle({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
     return (
       <button
         type="button"
         onClick={onToggle}
-        className="text-caption font-medium text-warm-600 hover:text-ink transition-colors underline decoration-warm-300 underline-offset-2"
+        className={[
+          'inline-flex items-center rounded-full border px-4 py-2 text-body-s font-semibold transition-all duration-200',
+          open
+            ? 'border-warm-300 bg-warm-100 text-warm-600 hover:text-ink'
+            : 'border-airmess-yellow/60 bg-airmess-yellow/10 text-ink hover:bg-airmess-yellow/20 hover:border-airmess-yellow',
+        ].join(' ')}
       >
         {open ? t('courses.new.hideDetails') : label}
       </button>
