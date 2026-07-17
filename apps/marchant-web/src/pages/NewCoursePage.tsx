@@ -107,6 +107,22 @@ export default function NewCoursePage() {
   const [quotaError, setQuotaError] = useState<string | null>(null)
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'success' | 'denied'>('idle')
 
+  // Progressive disclosure : les champs optionnels (poids, rue, repère,
+  // instructions, valeur déclarée) sont repliés derrière un lien discret —
+  // la majorité des utilisateurs ne les remplit jamais, autant qu'ils ne
+  // pèsent pas dans la perception de longueur du formulaire.
+  const [showWeight, setShowWeight] = useState(false)
+  const [showOriginExtra, setShowOriginExtra] = useState(false)
+  const [showDestExtra, setShowDestExtra] = useState(false)
+  const [showDeclared, setShowDeclared] = useState(false)
+
+  // Encaissement élevé sans valeur déclarée : on déplie automatiquement le
+  // champ pour préserver l'incitation à déclarer (indemnisation vol/perte).
+  useEffect(() => {
+    if (shouldSuggestDeclared) setShowDeclared(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldSuggestDeclared])
+
   // Onboarding — coach-marks du formulaire. S'affichent la 1ère fois puis
   // sont rejouables via le bouton "Aide" du header (qui reset le flag).
   const formTipsSeen = useOnboardingStore((s) => s.formTipsSeen)
@@ -232,6 +248,22 @@ export default function NewCoursePage() {
     if (addr.lat) setValue('destination_lat', addr.lat)
     if (addr.lng) setValue('destination_lng', addr.lng)
     setValue('destination_instructions', addr.instructions ?? '')
+    // Si l'adresse du carnet apporte des précisions, on déplie le bloc pour
+    // que l'utilisateur voie ce qui a été pré-rempli.
+    if (addr.street || addr.landmark || addr.instructions) setShowDestExtra(true)
+  }
+
+  /** Lien discret « + précisions » / « − masquer » (progressive disclosure). */
+  function MoreToggle({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        className="text-caption font-medium text-warm-600 hover:text-ink transition-colors underline decoration-warm-300 underline-offset-2"
+      >
+        {open ? t('courses.new.hideDetails') : label}
+      </button>
+    )
   }
 
   // Calcul du fee courant pour les bandeaux wallet/quota
@@ -347,16 +379,6 @@ export default function NewCoursePage() {
                 </select>
               </Field>
 
-              <Field label={t('courses.new.packageWeight')}>
-                <input
-                  type="number"
-                  step="0.1"
-                  {...register('package_weight_kg')}
-                  className={inputClass}
-                  placeholder={t('courses.new.packageWeightPlaceholder')}
-                />
-              </Field>
-
               <Field label={t('courses.new.packageDescription')} required error={errors.package_description?.message} className="md:col-span-2">
                 <input
                   {...register('package_description', { required: t('courses.new.required') })}
@@ -374,6 +396,24 @@ export default function NewCoursePage() {
                 </Field>
               </div>
             </div>
+
+            {/* Optionnel replié : poids */}
+            <div className="mt-3">
+              <MoreToggle open={showWeight} onToggle={() => setShowWeight((v) => !v)} label={t('courses.new.moreWeight')} />
+              {showWeight && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                  <Field label={t('courses.new.packageWeight')}>
+                    <input
+                      type="number"
+                      step="0.1"
+                      {...register('package_weight_kg')}
+                      className={inputClass}
+                      placeholder={t('courses.new.packageWeightPlaceholder')}
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
           </FormSection>
 
           {/* ORIGINE */}
@@ -386,9 +426,6 @@ export default function NewCoursePage() {
               </div>
               <Field label={t('courses.new.phoneLabel')} required error={errors.origin_phone?.message}>
                 <input {...register('origin_phone', { required: t('courses.new.required') })} className={inputClass} />
-              </Field>
-              <Field label={t('courses.new.streetLabel')}>
-                <input {...register('origin_street')} className={inputClass} />
               </Field>
               <Field label={t('courses.new.originQuartier')} required>
                 <input {...register('origin_quartier', { required: t('courses.new.required') })} className={inputClass} placeholder={t('courses.new.quartierPlaceholder')} />
@@ -416,6 +453,18 @@ export default function NewCoursePage() {
                 )}
               </div>
             </div>
+
+            {/* Optionnel replié : rue / adresse détaillée du retrait */}
+            <div className="mt-3">
+              <MoreToggle open={showOriginExtra} onToggle={() => setShowOriginExtra((v) => !v)} label={t('courses.new.moreOrigin')} />
+              {showOriginExtra && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                  <Field label={t('courses.new.streetLabel')}>
+                    <input {...register('origin_street')} className={inputClass} />
+                  </Field>
+                </div>
+              )}
+            </div>
           </FormSection>
 
           {/* DESTINATION */}
@@ -426,12 +475,6 @@ export default function NewCoursePage() {
               </Field>
               <Field label={t('courses.new.recipientPhoneLabel')} required>
                 <input {...register('destination_phone', { required: t('courses.new.required') })} className={inputClass} />
-              </Field>
-              <Field label={t('courses.new.streetLabel')}>
-                <input {...register('destination_street')} className={inputClass} />
-              </Field>
-              <Field label={t('courses.new.landmarkLabel')}>
-                <input {...register('destination_landmark')} className={inputClass} placeholder={t('courses.new.landmarkPlaceholder')} />
               </Field>
               <Field label={t('courses.new.destinationQuartier')} required>
                 <input {...register('destination_quartier', { required: t('courses.new.required') })} className={inputClass} />
@@ -453,9 +496,24 @@ export default function NewCoursePage() {
                 <input type="hidden" {...register('destination_lng', { required: true })} />
                 <p className="text-caption text-warm-400 mt-1.5">{t('courses.new.mapClickHint')}</p>
               </div>
-              <Field label={t('courses.new.driverInstructions')} className="md:col-span-2">
-                <textarea {...register('destination_instructions')} className={inputClass} rows={2} placeholder={t('courses.new.driverInstructionsPlaceholder')} />
-              </Field>
+            </div>
+
+            {/* Optionnel replié : rue, point de repère, instructions au livreur */}
+            <div className="mt-3">
+              <MoreToggle open={showDestExtra} onToggle={() => setShowDestExtra((v) => !v)} label={t('courses.new.moreDestination')} />
+              {showDestExtra && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                  <Field label={t('courses.new.streetLabel')}>
+                    <input {...register('destination_street')} className={inputClass} />
+                  </Field>
+                  <Field label={t('courses.new.landmarkLabel')}>
+                    <input {...register('destination_landmark')} className={inputClass} placeholder={t('courses.new.landmarkPlaceholder')} />
+                  </Field>
+                  <Field label={t('courses.new.driverInstructions')} className="md:col-span-2">
+                    <textarea {...register('destination_instructions')} className={inputClass} rows={2} placeholder={t('courses.new.driverInstructionsPlaceholder')} />
+                  </Field>
+                </div>
+              )}
             </div>
           </FormSection>
 
@@ -549,32 +607,39 @@ export default function NewCoursePage() {
               </div>
             )}
 
-            {/* Valeur déclarée du colis — importante pour l'indemnisation en cas de vol/perte */}
+            {/* Valeur déclarée du colis — repliée par défaut, dépliée automatiquement
+                quand l'encaissement est élevé (incitation indemnisation vol/perte).
+                Le conteneur data-onboarding-id reste toujours monté pour le coachmark. */}
             <div data-onboarding-id="declared" className="mt-4">
-              <Field label={t('courses.new.declaredValueLabel')}>
-                <input
-                  type="number"
-                  min={0}
-                  placeholder="0"
-                  {...register('package_declared_value')}
-                  className={inputClass}
-                />
-              </Field>
-              <p className="mt-1.5 text-caption text-warm-500">
-                {t('courses.new.declaredValueHelper')}
-              </p>
+              <MoreToggle open={showDeclared} onToggle={() => setShowDeclared((v) => !v)} label={t('courses.new.moreDeclared')} />
+              {showDeclared && (
+                <div className="mt-3">
+                  <Field label={t('courses.new.declaredValueLabel')}>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      {...register('package_declared_value')}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <p className="mt-1.5 text-caption text-warm-500">
+                    {t('courses.new.declaredValueHelper')}
+                  </p>
 
-              {shouldSuggestDeclared && (
-                <p className="mt-2 text-caption text-warning bg-warning-bg border border-warning/30 rounded-md px-3 py-2">
-                  {t('courses.new.declaredValueSuggestion')}
-                </p>
-              )}
-              {willBePremium && (
-                <p className="mt-2 text-caption text-ink bg-airmess-yellow/10 border border-airmess-yellow/40 rounded-md px-3 py-2">
-                  {t('courses.new.premiumHint', {
-                    threshold: HIGH_VALUE_UI_THRESHOLD.toLocaleString('fr-FR'),
-                  })}
-                </p>
+                  {shouldSuggestDeclared && (
+                    <p className="mt-2 text-caption text-warning bg-warning-bg border border-warning/30 rounded-md px-3 py-2">
+                      {t('courses.new.declaredValueSuggestion')}
+                    </p>
+                  )}
+                  {willBePremium && (
+                    <p className="mt-2 text-caption text-ink bg-airmess-yellow/10 border border-airmess-yellow/40 rounded-md px-3 py-2">
+                      {t('courses.new.premiumHint', {
+                        threshold: HIGH_VALUE_UI_THRESHOLD.toLocaleString('fr-FR'),
+                      })}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </FormSection>
