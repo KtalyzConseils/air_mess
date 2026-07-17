@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -23,9 +24,6 @@ import {
 } from '../../api/wallet'
 import BottomSheet from '../../components/ui/BottomSheet'
 import Button from '../../components/ui/Button'
-import FedapayCheckoutSheet, {
-  type FedapayCheckoutOutcome,
-} from '../../components/FedapayCheckoutSheet'
 
 /**
  * Wallet driver — caution + gains + retraits.
@@ -103,35 +101,12 @@ export default function WalletScreen() {
   const queryClient = useQueryClient()
   const [topUpVisible, setTopUpVisible] = useState(false)
   const [withdrawVisible, setWithdrawVisible] = useState(false)
-  // URL Fedapay à afficher dans la WebView plein écran. Non nulle → la sheet est ouverte.
-  // Portée par le parent car TopUpModal se ferme AVANT d'ouvrir le checkout, et il faut
-  // survivre à cette transition.
-  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null)
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['wallet'],
     queryFn: fetchWallet,
     refetchInterval: 15_000,
   })
-
-  function handleCheckoutDone(outcome: FedapayCheckoutOutcome) {
-    setCheckoutUrl(null)
-    // Refetch immédiat + un rappel à +4s pour laisser le webhook Fedapay atterrir
-    // (typiquement 1-3s en sandbox, jusqu'à 30s en prod). L'utilisateur voit son solde
-    // se mettre à jour de lui-même sans avoir à pull-to-refresh.
-    queryClient.invalidateQueries({ queryKey: ['wallet'] })
-    setTimeout(() => queryClient.invalidateQueries({ queryKey: ['wallet'] }), 4_000)
-
-    if (outcome === 'approved') {
-      Alert.alert('Paiement reçu', 'Ton solde va être mis à jour dans quelques secondes.')
-    } else if (outcome === 'declined') {
-      Alert.alert('Paiement refusé', "Fedapay a refusé la transaction. Essaie avec un autre moyen.")
-    } else if (outcome === 'canceled') {
-      Alert.alert('Paiement annulé', 'Aucun débit effectué.')
-    }
-    // outcome === 'closed' → silencieux : l'user a peut-être fermé alors que le paiement passe
-    // en tâche de fond ; le refetch suffit à afficher la vérité côté serveur.
-  }
 
   const cancelMutation = useMutation({
     mutationFn: cancelWithdrawRequest,
@@ -331,13 +306,6 @@ export default function WalletScreen() {
         visible={topUpVisible}
         onClose={() => setTopUpVisible(false)}
         minAmount={data.min_withdraw_fcfa}
-        onCheckoutReady={(url) => setCheckoutUrl(url)}
-      />
-
-      <FedapayCheckoutSheet
-        visible={checkoutUrl !== null}
-        checkoutUrl={checkoutUrl}
-        onDone={handleCheckoutDone}
       />
 
       <WithdrawModal
@@ -411,22 +379,25 @@ function TopUpModal({
   visible,
   onClose,
   minAmount,
-  onCheckoutReady,
 }: {
   visible: boolean
   onClose: () => void
   minAmount: number
-  onCheckoutReady: (checkoutUrl: string) => void
 }) {
   const [amount, setAmount] = useState('')
+  const queryClient = useQueryClient()
 
   const mutation = useMutation({
     mutationFn: (n: number) => requestTopUp(n),
-    onSuccess: (data) => {
-      // On ferme d'abord notre bottom-sheet, puis le parent ouvre la WebView Fedapay
-      // plein écran. L'utilisateur reste dans l'app tout du long.
+    onSuccess: async (data) => {
       handleClose()
-      onCheckoutReady(data.checkout_url)
+      const supported = await Linking.canOpenURL(data.checkout_url)
+      if (supported) {
+        Linking.openURL(data.checkout_url)
+      } else {
+        Alert.alert('Erreur', "Impossible d'ouvrir la page de paiement.")
+      }
+      queryClient.invalidateQueries({ queryKey: ['wallet'] })
     },
     onError: (err) => {
       const msg =

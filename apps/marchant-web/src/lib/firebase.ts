@@ -3,35 +3,17 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/
 
 /**
  * Firebase — uniquement Phone Auth (vérification OTP du numéro à
- * l'inscription driver) et Google Sign-In.
- *
- * Config chargée depuis les env vars Vite (préfixe VITE_). Ce n'est pas
- * un secret technique (l'apiKey Firebase est publique par design — la
- * sécurité repose sur les Authorized domains + SMS region policy +
- * App Check en console), mais on les sort du code pour taire les scanners
- * de secrets côté Git et garder toute config sensible hors du repo.
- *
- * En dev : les valeurs viennent de apps/marchant-web/.env
- * En prod : configuré côté Railway dans les env vars du service.
- * Documenté dans .env.example.
- *
+ * l'inscription driver). Config web publique (pas un secret) ; la sécurité
+ * repose sur les Authorized domains + SMS region policy de la console.
  * Ne pas importer firebase/analytics ici.
  */
 const firebaseConfig = {
-  apiKey:             import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain:         import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId:          import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket:      import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId:  import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId:              import.meta.env.VITE_FIREBASE_APP_ID,
-}
-
-// Défense boot : si une var manque, Firebase donne une erreur cryptique
-// (`auth/invalid-api-key`). On préfère un message clair.
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-  throw new Error(
-    'Firebase config manquante — copiez .env.example vers .env et renseignez les valeurs VITE_FIREBASE_*.',
-  )
+  apiKey: 'AIzaSyCdjmZvpmbB3KQc6S9nf1mGMBjSjMwiG7o',
+  authDomain: 'airmess-a3ff7.firebaseapp.com',
+  projectId: 'airmess-a3ff7',
+  storageBucket: 'airmess-a3ff7.firebasestorage.app',
+  messagingSenderId: '52708255287',
+  appId: '1:52708255287:web:e6fb9705bdf3d38a9141b2',
 }
 
 const app = initializeApp(firebaseConfig)
