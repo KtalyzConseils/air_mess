@@ -1,6 +1,7 @@
 const {
   withAndroidManifest,
   withProjectBuildGradle,
+  withAndroidStyles,
   AndroidConfig,
 } = require('@expo/config-plugins')
 
@@ -57,8 +58,31 @@ function withNotifeeMavenRepo(config) {
   })
 }
 
+/**
+ * Force les icônes de la barre de statut en SOMBRE par défaut (heure/batterie/réseau
+ * lisibles sur nos fonds clairs crème). Chemin NATIF (thème) — plus fort que l'API JS
+ * setAppearanceLightStatusBars, que certains OEM (Transsion/TECNO/itel) ignorent.
+ * Les écrans sombres (login, appel entrant, splash) repassent en icônes claires via
+ * expo-status-bar style="light" au runtime.
+ */
+function withLightStatusBar(config) {
+  return withAndroidStyles(config, (config) => {
+    const styles = config.modResults
+    if (!styles.resources.style) return config
+    const appTheme = styles.resources.style.find((s) => s.$.name === 'AppTheme')
+    if (!appTheme) return config
+    if (!Array.isArray(appTheme.item)) appTheme.item = []
+    appTheme.item = appTheme.item.filter(
+      (i) => i.$.name !== 'android:windowLightStatusBar',
+    )
+    appTheme.item.push({ _: 'true', $: { name: 'android:windowLightStatusBar' } })
+    return config
+  })
+}
+
 module.exports = function withFullScreenNotifications(config) {
   config = withFullScreenManifest(config)
   config = withNotifeeMavenRepo(config)
+  config = withLightStatusBar(config)
   return config
 }

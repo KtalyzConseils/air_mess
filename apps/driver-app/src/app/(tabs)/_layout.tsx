@@ -1,10 +1,19 @@
 import { Tabs } from 'expo-router'
 import { View } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
+import * as Device from 'expo-device'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery } from '@tanstack/react-query'
 import { fetchUnreadCount } from '../../api/notifications'
+
+// Les ROM Transsion (TECNO / itel / Infinix) IGNORENT la demande d'icônes de statut
+// SOMBRES (ni l'API JS ni le flag natif windowLightStatusBar ne fonctionnent) : les
+// icônes restent BLANCHES → invisibles sur nos fonds clairs. Sur ces appareils on met
+// un bandeau sombre derrière la barre. Ailleurs (Samsung, Pixel, Xiaomi…), le flag
+// natif marche → barre claire + icônes noires, pas de bandeau.
+const OEM = `${Device.manufacturer ?? ''} ${Device.brand ?? ''}`.toLowerCase()
+const FORCE_DARK_BANDEAU = /tecno|itel|infinix|transsion/.test(OEM)
 
 const INK = '#1A1614'
 const WARM_400 = '#B8AF9F'
@@ -56,25 +65,24 @@ export default function TabsLayout() {
 
   return (
     <>
-      {/* Barre de statut : les écrans à onglets ont un fond CLAIR (crème/blanc).
-          L'OEM Transsion/TECNO ignore setAppearanceLightStatusBars : les icônes
-          système restent BLANCHES quoi qu'on demande → invisibles sur fond clair.
-          Fallback : un bandeau sombre derrière la barre de statut, sur lequel les
-          icônes blanches restent lisibles. (Les écrans sombres — login, splash,
-          course entrante — gardent StatusBar style="light" sans bandeau.) */}
-      <StatusBar style="light" />
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: insets.top,
-          backgroundColor: INK,
-          zIndex: 100,
-        }}
-      />
+      {/* Barre claire → icônes sombres (heure/batterie en noir) partout où l'OEM le
+          permet. Sur Transsion (icônes forcées blanches), on repasse les icônes en
+          blanc + un bandeau sombre derrière pour rester lisible. */}
+      <StatusBar style={FORCE_DARK_BANDEAU ? 'light' : 'dark'} />
+      {FORCE_DARK_BANDEAU && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: insets.top,
+            backgroundColor: INK,
+            zIndex: 100,
+          }}
+        />
+      )}
       <Tabs
       screenOptions={{
         headerShown: false,
