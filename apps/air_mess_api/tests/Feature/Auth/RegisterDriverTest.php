@@ -30,6 +30,7 @@ class RegisterDriverTest extends TestCase
             'firebase_id_token'     => 'fake-firebase-token',
             'vehicle_type'  => 'moto',
             'vehicle_plate' => 'AB-1234',
+            'vehicle_brand' => 'Bajaj',
             'emergency_contact_name'   => 'Afi Agbodjan',
             'emergency_contact_phone'  => '+229 01 91 00 00 01',
             'emergency_contact2_name'  => 'Yao Agbodjan',
@@ -108,11 +109,28 @@ class RegisterDriverTest extends TestCase
         $this->assertSame('+2290190123456', $user->phone);
 
         $driver = Driver::where('user_id', $user->id)->firstOrFail();
+        $this->assertSame('Bajaj', $driver->vehicle_brand);
         $this->assertSame('Afi Agbodjan', $driver->emergency_contact_name);
         $this->assertSame('Yao Agbodjan', $driver->emergency_contact2_name);
         $this->assertSame('+229 01 91 00 00 02', $driver->emergency_contact2_phone);
         $this->assertSame('pending', $driver->activation_status);
         $this->assertNull($driver->preferred_response_channel);
+    }
+
+    public function test_legacy_vehicle_color_field_is_accepted_as_brand(): void
+    {
+        Storage::fake('local');
+        Http::fake();
+        $this->mockVerifier('+2290190123456');
+
+        // Les APK mobiles déjà distribués envoient encore vehicle_color :
+        // l'API doit l'accepter comme alias de vehicle_brand.
+        $payload = $this->payload();
+        unset($payload['vehicle_brand']);
+        $payload['vehicle_color'] = 'TVS';
+
+        $this->postJson('/api/auth/register/driver', $payload)->assertStatus(201);
+        $this->assertSame('TVS', Driver::firstOrFail()->vehicle_brand);
     }
 
     public function test_cnib_requires_back_side(): void

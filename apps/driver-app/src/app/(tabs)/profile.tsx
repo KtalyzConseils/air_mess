@@ -146,12 +146,12 @@ export default function ProfileScreen() {
             <View className="flex-1">
               <Text className="text-lg font-extrabold text-ink">{vehicle.label}</Text>
               <View className="flex-row items-center mt-0.5">
-                {driver?.vehicle_color && (
+                {driver?.vehicle_brand && (
                   <Text className="text-sm text-warm-600 font-semibold">
-                    {driver.vehicle_color}
+                    {driver.vehicle_brand}
                   </Text>
                 )}
-                {driver?.vehicle_color && driver?.vehicle_plate && (
+                {driver?.vehicle_brand && driver?.vehicle_plate && (
                   <Text className="text-warm-400 mx-1.5">·</Text>
                 )}
                 {driver?.vehicle_plate && (

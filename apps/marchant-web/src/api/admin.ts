@@ -85,7 +85,7 @@ export interface DriverDetail {
   birth_date: string | null
   vehicle_type: string
   vehicle_plate: string | null
-  vehicle_color: string | null
+  vehicle_brand: string | null
   availability_status: string
   activation_status: string
   acceptance_rate: number

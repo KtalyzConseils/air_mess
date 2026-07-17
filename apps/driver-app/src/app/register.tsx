@@ -30,11 +30,12 @@ import {
   type CniType,
 } from '../api/register'
 
+// Ordre croissant "taille de véhicule", aligné sur le formulaire web.
 const VEHICLES: { value: VehicleType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { value: 'moto', label: 'Moto', icon: 'bicycle' },
-  { value: 'scooter', label: 'Scooter', icon: 'bicycle' },
-  { value: 'voiture', label: 'Voiture', icon: 'car-sport' },
   { value: 'velo', label: 'Vélo', icon: 'bicycle-outline' },
+  { value: 'scooter', label: 'Scooter', icon: 'bicycle' },
+  { value: 'moto', label: 'Moto', icon: 'bicycle' },
+  { value: 'voiture', label: 'Voiture', icon: 'car-sport' },
 ]
 
 const CNI_TYPES: { value: CniType; label: string }[] = [
@@ -74,7 +75,7 @@ export default function RegisterScreen() {
   // Véhicule
   const [vehicleType, setVehicleType] = useState<VehicleType | ''>('')
   const [vehiclePlate, setVehiclePlate] = useState('')
-  const [vehicleColor, setVehicleColor] = useState('')
+  const [vehicleBrand, setVehicleBrand] = useState('')
   // Documents
   const [cniType, setCniType] = useState<CniType | ''>('')
   const [cni, setCni] = useState<LocalFile | null>(null)
@@ -185,7 +186,7 @@ export default function RegisterScreen() {
         phone_verification_token: phoneToken!,
         vehicle_type: vehicleType as VehicleType,
         vehicle_plate: vehiclePlate.trim(),
-        vehicle_color: vehicleColor.trim() || undefined,
+        vehicle_brand: vehicleBrand.trim() || undefined,
         photo,
         cni_type: cniType as CniType,
         cni: cni!,
@@ -382,7 +383,7 @@ export default function RegisterScreen() {
           </View>
           <View className="h-3" />
           <LabeledInput label="Plaque d'immatriculation" value={vehiclePlate} onChangeText={setVehiclePlate} autoCapitalize="characters" />
-          <LabeledInput label="Couleur (optionnel)" value={vehicleColor} onChangeText={setVehicleColor} placeholder="ex : Rouge" />
+          <LabeledInput label="Marque (optionnel)" value={vehicleBrand} onChangeText={setVehicleBrand} placeholder="ex : Bajaj, TVS, Haojue…" />
 
           {/* Documents */}
           <SectionTitle icon="document-text-outline">Vos documents</SectionTitle>

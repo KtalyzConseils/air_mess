@@ -19,7 +19,7 @@ export interface Driver {
   activation_status: 'pending' | 'validated' | 'active' | 'suspended' | 'banned'
   vehicle_type: string
   vehicle_plate: string | null
-  vehicle_color: string | null
+  vehicle_brand: string | null
   acceptance_rate: number | null
   current_lat: number | null
   current_lng: number | null

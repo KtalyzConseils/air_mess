@@ -34,7 +34,7 @@ class DriverFactory extends Factory
             'photo_url' => null,
             'vehicle_type' => fake()->randomElement(['scooter', 'moto', 'voiture']),
             'vehicle_plate' => 'BJ-' . fake()->numerify('####') . '-' . fake()->randomLetter() . fake()->randomLetter(),
-            'vehicle_color' => fake()->safeColorName(),
+            'vehicle_brand' => fake()->randomElement(['Bajaj', 'TVS', 'Haojue', 'Apsonic', 'Honda', 'Yamaha']),
             'equipment' => [
                 'isothermal_bag' => fake()->boolean(70),
                 'top_case' => fake()->boolean(50),

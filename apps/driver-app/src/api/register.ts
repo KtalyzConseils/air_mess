@@ -34,7 +34,8 @@ export interface DriverRegisterForm {
   // Véhicule
   vehicle_type: VehicleType
   vehicle_plate: string
-  vehicle_color?: string
+  /** Marque du véhicule (Bajaj, TVS…) — saisie libre, suggestions côté UI. */
+  vehicle_brand?: string
   // Documents
   photo: LocalFile | null
   cni_type: CniType
@@ -103,7 +104,7 @@ export async function registerDriver(form: DriverRegisterForm): Promise<{ token:
   fd.append('phone_verification_token', form.phone_verification_token)
   fd.append('vehicle_type', form.vehicle_type)
   fd.append('vehicle_plate', form.vehicle_plate)
-  if (form.vehicle_color) fd.append('vehicle_color', form.vehicle_color)
+  if (form.vehicle_brand) fd.append('vehicle_brand', form.vehicle_brand)
   fd.append('emergency_contact_name', form.emergency_contact_name)
   fd.append('emergency_contact_phone', form.emergency_contact_phone)
   fd.append('emergency_contact2_name', form.emergency_contact2_name)

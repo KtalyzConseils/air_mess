@@ -52,7 +52,7 @@ export interface RegisterDriverPayload {
   // Véhicule
   vehicle_type: 'scooter' | 'moto' | 'voiture' | 'velo'
   vehicle_plate: string
-  vehicle_color?: string
+  vehicle_brand?: string
   // Documents
   photo: File | null // optionnel
   /** Type de pièce : cnib = recto+verso, cip/passeport = 1 seule face. */
@@ -134,7 +134,7 @@ export const useAuthStore = create<AuthState>()(
         form.append('firebase_id_token', payload.firebase_id_token)
         form.append('vehicle_type', payload.vehicle_type)
         form.append('vehicle_plate', payload.vehicle_plate)
-        if (payload.vehicle_color) form.append('vehicle_color', payload.vehicle_color)
+        if (payload.vehicle_brand) form.append('vehicle_brand', payload.vehicle_brand)
         form.append('emergency_contact_name', payload.emergency_contact_name)
         form.append('emergency_contact_phone', payload.emergency_contact_phone)
         form.append('emergency_contact2_name', payload.emergency_contact2_name)

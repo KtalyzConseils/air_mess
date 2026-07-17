@@ -31,7 +31,7 @@ class Driver extends Model
         'driving_license_url',
         'vehicle_type',
         'vehicle_plate',
-        'vehicle_color',
+        'vehicle_brand',
         'equipment',
         'emergency_contact_name',
         'emergency_contact_phone',

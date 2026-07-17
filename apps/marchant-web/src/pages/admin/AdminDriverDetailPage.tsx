@@ -321,7 +321,7 @@ export default function AdminDriverDetailPage() {
               <Section title={t('admin.drivers.sectionVehicle')}>
                 <Row label={t('admin.drivers.fieldType')}>{data.driver.vehicle_type}</Row>
                 <Row label={t('admin.drivers.fieldPlate')}>{data.driver.vehicle_plate ?? '—'}</Row>
-                <Row label={t('admin.drivers.fieldColor')}>{data.driver.vehicle_color ?? '—'}</Row>
+                <Row label={t('admin.drivers.fieldBrand')}>{data.driver.vehicle_brand ?? '—'}</Row>
               </Section>
 
               <Section title={t('admin.drivers.sectionEmergency')}>

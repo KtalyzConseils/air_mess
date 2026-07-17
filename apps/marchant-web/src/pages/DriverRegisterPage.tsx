@@ -21,6 +21,7 @@ import AppDownloadBanner from '../components/driver/AppDownloadBanner'
 import DocumentCapture from '../components/driver/DocumentCapture'
 import PhoneOtpField from '../components/PhoneOtpField'
 import { cn } from '../lib/cn'
+import { VEHICLE_BRANDS } from '../lib/constants'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 
@@ -339,10 +340,11 @@ export default function DriverRegisterPage() {
                 registration={register('vehicle_type', { required: t('driverRegister.typeRequired') })}
                 error={errors.vehicle_type?.message ?? serverErr('vehicle_type')}
                 options={[
-                  { value: 'moto',    label: t('driverRegister.vehicleTypeMotoLong'),    icon: <MotorcycleIcon size={28} /> },
-                  { value: 'scooter', label: t('driverRegister.vehicleTypeScooterLong'), icon: <ScooterIcon size={28} /> },
-                  { value: 'voiture', label: t('driverRegister.vehicleTypeCarLong'),     icon: <CarIcon size={28} /> },
+                  // Ordre croissant "taille de véhicule" : vélo → scooter → moto → voiture.
                   { value: 'velo',    label: t('driverRegister.vehicleTypeBikeLong'),    icon: <BikeIcon size={28} /> },
+                  { value: 'scooter', label: t('driverRegister.vehicleTypeScooterLong'), icon: <ScooterIcon size={28} /> },
+                  { value: 'moto',    label: t('driverRegister.vehicleTypeMotoLong'),    icon: <MotorcycleIcon size={28} /> },
+                  { value: 'voiture', label: t('driverRegister.vehicleTypeCarLong'),     icon: <CarIcon size={28} /> },
                 ]}
               />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -351,12 +353,23 @@ export default function DriverRegisterPage() {
                   {...register('vehicle_plate', { required: t('driverRegister.plateRequired') })}
                   error={errors.vehicle_plate?.message ?? serverErr('vehicle_plate')}
                 />
-                <Input
-                  label={t('driverRegister.vehicleColor')}
-                  helper={t('driverRegister.colorOptional')}
-                  placeholder={t('driverRegister.colorPlaceholder')}
-                  {...register('vehicle_color')}
-                />
+                <div>
+                  {/* Marque : suggestions selon le type (datalist), saisie libre possible */}
+                  <Input
+                    label={t('driverRegister.vehicleBrand')}
+                    helper={t('driverRegister.brandHelper')}
+                    placeholder={t('driverRegister.brandPlaceholder')}
+                    list="vehicle-brand-suggestions"
+                    autoComplete="off"
+                    {...register('vehicle_brand')}
+                    error={serverErr('vehicle_brand')}
+                  />
+                  <datalist id="vehicle-brand-suggestions">
+                    {(VEHICLE_BRANDS[watch('vehicle_type') ?? 'moto'] ?? []).map((brand) => (
+                      <option key={brand} value={brand} />
+                    ))}
+                  </datalist>
+                </div>
               </div>
             </FormSection>
 

@@ -175,6 +175,12 @@ class AuthController extends Controller
         // comparaison avec le claim phone_number du jeton Firebase soit fiable.
         $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
 
+        // Rétro-compat : les APK driver déjà distribués envoient encore
+        // `vehicle_color` — on l'accepte comme alias de `vehicle_brand`.
+        if (! $request->filled('vehicle_brand') && $request->filled('vehicle_color')) {
+            $request->merge(['vehicle_brand' => $request->input('vehicle_color')]);
+        }
+
         $data = $request->validate([
             // Identité
             'first_name' => ['required', 'string', 'max:100'],
@@ -193,10 +199,10 @@ class AuthController extends Controller
             'firebase_id_token'        => ['required_without:phone_verification_token', 'string'],
             'phone_verification_token' => ['required_without:firebase_id_token', 'string'],
 
-            // Véhicule
+            // Véhicule (marque : liste suggérée côté front + saisie libre)
             'vehicle_type'  => ['required', Rule::in(['scooter', 'moto', 'voiture', 'velo'])],
             'vehicle_plate' => ['required', 'string', 'max:20'],
-            'vehicle_color' => ['nullable', 'string', 'max:30'],
+            'vehicle_brand' => ['nullable', 'string', 'max:50'],
 
             // Documents (photo nullable, CNI + permis obligatoires)
             // max photo 4096 : filet de sécurité — la compression canvas côté
@@ -271,7 +277,7 @@ class AuthController extends Controller
                     'driving_license_url'      => $paths['driving_license_url'],
                     'vehicle_type'             => $data['vehicle_type'],
                     'vehicle_plate'            => $data['vehicle_plate'],
-                    'vehicle_color'            => $data['vehicle_color'] ?? null,
+                    'vehicle_brand'            => $data['vehicle_brand'] ?? null,
                     'emergency_contact_name'   => $data['emergency_contact_name'],
                     'emergency_contact_phone'  => $data['emergency_contact_phone'],
                     'emergency_contact2_name'  => $data['emergency_contact2_name'],
