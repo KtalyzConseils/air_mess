@@ -41,28 +41,60 @@ import Button from '../../components/ui/Button'
 
 const TX_META: Record<
   WalletTransactionType,
-  { label: string; icon: keyof typeof Ionicons.glyphMap; positive: boolean }
+  { icon: keyof typeof Ionicons.glyphMap }
 > = {
-  deposit:           { label: 'Dépôt',              icon: 'arrow-down-outline',    positive: true },
-  earning:           { label: 'Gain de course',     icon: 'trophy-outline',        positive: true },
-  withdraw:          { label: 'Retrait',            icon: 'arrow-up-outline',      positive: false },
-  pickup_debit:      { label: 'Encaissement',       icon: 'cube-outline',          positive: false },
-  refund:            { label: 'Remboursement',      icon: 'refresh-outline',       positive: true },
-  adjustment_credit: { label: 'Ajustement crédit',  icon: 'add-circle-outline',    positive: true },
-  adjustment_debit:  { label: 'Ajustement débit',   icon: 'remove-circle-outline', positive: false },
+  deposit:           { icon: 'add-outline' },
+  earning:           { icon: 'cube-outline' },
+  withdraw:          { icon: 'arrow-down-outline' },
+  pickup_debit:      { icon: 'shield-outline' },
+  refund:            { icon: 'refresh-outline' },
+  adjustment_credit: { icon: 'add-circle-outline' },
+  adjustment_debit:  { icon: 'remove-circle-outline' },
+}
+
+/** Titre riche d'une opération, façon mockup (type + course quand pertinent). */
+function txTitle(tx: WalletTransactionItem): string {
+  switch (tx.type) {
+    case 'deposit':
+      return 'Recharge caution'
+    case 'earning':
+      return tx.course_id ? `Course #${tx.course_id} — Livrée` : 'Gain de course'
+    case 'withdraw':
+      return 'Retrait'
+    case 'pickup_debit':
+      return tx.course_id ? `Caution bloquée · course #${tx.course_id}` : 'Caution bloquée'
+    case 'refund':
+      return 'Remboursement'
+    case 'adjustment_credit':
+      return 'Ajustement crédit'
+    case 'adjustment_debit':
+      return 'Ajustement débit'
+    default:
+      return 'Opération'
+  }
 }
 
 function fcfa(n: number): string {
   return n.toLocaleString('fr-FR') + ' FCFA'
 }
 
+/** 120 000 → "120k" ; 900 → "900". */
+function formatK(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  return String(n)
+}
+
+/** Montant signé sans suffixe FCFA : +25 000 / -2 000. */
+function signedAmount(n: number): string {
+  const sign = n > 0 ? '+' : n < 0 ? '-' : ''
+  return sign + Math.abs(n).toLocaleString('fr-FR')
+}
+
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+  const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  return `${date}, ${time}`
 }
 
 export default function WalletScreen() {
@@ -133,60 +165,62 @@ export default function WalletScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Text className="text-3xl font-extrabold text-ink">Ma caution</Text>
-        <Text className="text-sm text-warm-500 mt-1">
-          Garantit tes courses avec encaissement client.
-        </Text>
-
-        {/* Hero balance — dark card + stripe jaune signature */}
-        <View className="bg-airmess-dark mt-5 rounded-3xl overflow-hidden flex-row">
-          <View className="w-1.5 bg-airmess-yellow" />
-          <View className="flex-1 p-5">
-            <View className="flex-row items-center">
-              <Text className="text-[10px] uppercase text-airmess-yellow tracking-widest font-extrabold">
-                Caution disponible
-              </Text>
-            </View>
-            <Text className="text-white text-4xl font-extrabold mt-2">{fcfa(data.balance)}</Text>
-            <View className="flex-row mt-5 pt-4 border-t border-white/10">
-              <View className="flex-1">
-                <Text className="text-warm-400 text-[10px] uppercase tracking-widest font-bold">
-                  Cumul déposé
-                </Text>
-                <Text className="text-white font-bold mt-1">{fcfa(data.total_deposited)}</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-warm-400 text-[10px] uppercase tracking-widest font-bold">
-                  Cumul retiré
-                </Text>
-                <Text className="text-white font-bold mt-1">{fcfa(data.total_withdrawn)}</Text>
-              </View>
-            </View>
-          </View>
+        <View className="flex-row items-center mb-4">
+          <Ionicons name="wallet" size={20} color="#1A1614" />
+          <Text className="text-2xl font-jk-extrabold text-ink ml-2">Wallet & Caution</Text>
         </View>
 
-        {/* Actions Recharger / Retirer */}
-        <View className="flex-row gap-3 mt-4">
-          <View className="flex-1">
-            <Button
-              variant="primary"
-              size="lg"
-              onPress={() => setTopUpVisible(true)}
-              leftIcon={<Ionicons name="add-circle-outline" size={18} color="#1A1614" />}
-            >
-              Recharger
-            </Button>
+        {/* Carte caution (hero sombre) — solde + cumuls + actions */}
+        <View className="bg-airmess-dark rounded-3xl p-5">
+          <View className="flex-row items-center">
+            <Ionicons name="shield-checkmark" size={14} color="#FFCC00" />
+            <Text className="text-airmess-yellow text-[11px] font-jk-extrabold uppercase tracking-[2px] ml-1.5">
+              Caution disponible
+            </Text>
           </View>
-          <View className="flex-1">
-            <Button
-              variant="outline"
-              size="lg"
+          <Text className="text-white text-[40px] leading-[46px] font-jk-extrabold mt-2">
+            {data.balance.toLocaleString('fr-FR')}
+          </Text>
+          <Text className="text-warm-400 text-xs font-jk-bold">FCFA</Text>
+
+          {/* Tuiles cumul */}
+          <View className="flex-row gap-2 mt-4">
+            <CautionTile
+              icon="trending-up"
+              iconColor="#16A34A"
+              label="Cumul déposé"
+              value={formatK(data.total_deposited)}
+            />
+            <CautionTile
+              icon="trending-down"
+              iconColor="#D40511"
+              label="Cumul retiré"
+              value={formatK(data.total_withdrawn)}
+            />
+          </View>
+
+          {/* Actions */}
+          <View className="flex-row gap-2 mt-4">
+            <Pressable
+              onPress={() => setTopUpVisible(true)}
+              className="flex-1 h-12 rounded-2xl bg-airmess-yellow items-center justify-center flex-row"
+              style={({ pressed }) => (pressed ? { opacity: 0.9 } : undefined)}
+            >
+              <Ionicons name="add" size={18} color="#1A1614" />
+              <Text className="text-ink font-jk-extrabold ml-1.5">Recharger</Text>
+            </Pressable>
+            <Pressable
               onPress={() => setWithdrawVisible(true)}
               disabled={!canWithdraw}
-              leftIcon={<Ionicons name="arrow-up-outline" size={18} color="#1A1614" />}
+              className="flex-1 h-12 rounded-2xl bg-white/10 items-center justify-center flex-row"
+              style={({ pressed }) => [
+                !canWithdraw ? { opacity: 0.4 } : undefined,
+                pressed ? { opacity: 0.8 } : undefined,
+              ]}
             >
-              Retirer
-            </Button>
+              <Ionicons name="arrow-down-outline" size={17} color="#FDFCF9" />
+              <Text className="text-off-white font-jk-bold ml-1.5">Retirer</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -198,13 +232,13 @@ export default function WalletScreen() {
                 <Ionicons name="hourglass-outline" size={16} color="#ffffff" />
               </View>
               <View className="flex-1">
-                <Text className="text-[10px] uppercase text-warm-600 tracking-widest font-extrabold">
+                <Text className="text-[10px] uppercase text-warm-600 tracking-widest font-jk-extrabold">
                   Retrait en attente
                 </Text>
-                <Text className="text-lg font-extrabold text-ink mt-0.5">
+                <Text className="text-lg font-jk-extrabold text-ink mt-0.5">
                   {fcfa(data.pending_withdraw_request.amount_fcfa)}
                 </Text>
-                <Text className="text-xs text-warm-600 mt-0.5">
+                <Text className="text-xs text-warm-600 mt-0.5 font-jk-medium">
                   vers{' '}
                   {data.pending_withdraw_request.target_method === 'momo' ? 'MoMo' : 'Banque'}
                   {' · '}
@@ -216,7 +250,7 @@ export default function WalletScreen() {
                 className="px-3 py-2 bg-off-white border border-warm-300 rounded-xl"
                 hitSlop={6}
               >
-                <Text className="text-xs font-bold text-ink">Annuler</Text>
+                <Text className="text-xs font-jk-bold text-ink">Annuler</Text>
               </Pressable>
             </View>
           </View>
@@ -226,7 +260,7 @@ export default function WalletScreen() {
         {data.balance < data.min_withdraw_fcfa && !data.pending_withdraw_request && (
           <View className="mt-3 flex-row items-center bg-info-bg border border-info/30 rounded-xl px-3 py-2.5">
             <Ionicons name="information-circle" size={16} color="#0284C7" />
-            <Text className="text-xs text-info ml-2 flex-1 font-semibold">
+            <Text className="text-xs text-info ml-2 flex-1 font-jk-semibold">
               Retrait possible dès {fcfa(data.min_withdraw_fcfa)} de caution.
             </Text>
           </View>
@@ -236,7 +270,7 @@ export default function WalletScreen() {
         {cooldownActive && data.next_withdraw_allowed_at && (
           <View className="mt-3 flex-row items-center bg-warning-bg border border-warning/30 rounded-xl px-3 py-2.5">
             <Ionicons name="time-outline" size={16} color="#B45309" />
-            <Text className="text-xs text-warm-700 ml-2 flex-1 font-semibold">
+            <Text className="text-xs text-warm-700 ml-2 flex-1 font-jk-semibold">
               Prochain retrait autorisé le{' '}
               {new Date(data.next_withdraw_allowed_at).toLocaleString('fr-FR', {
                 day: '2-digit',
@@ -250,24 +284,21 @@ export default function WalletScreen() {
         )}
 
         {/* Historique */}
-        <View className="mt-7 mb-2 flex-row items-center">
-          <Ionicons name="time-outline" size={14} color="#8A7E68" />
-          <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold ml-1.5">
-            Dernières opérations
-          </Text>
-        </View>
+        <Text className="text-base font-jk-extrabold text-ink mt-6 mb-3">
+          Historique des opérations
+        </Text>
 
         {data.recent_transactions.length === 0 ? (
           <View className="bg-off-white border border-warm-200 rounded-2xl p-8 items-center">
             <Ionicons name="receipt-outline" size={32} color="#B8AF9F" />
-            <Text className="text-warm-500 mt-2 text-sm">Aucune opération pour l'instant.</Text>
+            <Text className="text-warm-500 mt-2 text-sm font-jk">
+              Aucune opération pour l'instant.
+            </Text>
           </View>
         ) : (
-          <View className="bg-off-white border border-warm-200 rounded-2xl overflow-hidden">
-            {data.recent_transactions.map((t: WalletTransactionItem, idx: number) => (
-              <TxRow key={t.id} tx={t} isFirst={idx === 0} />
-            ))}
-          </View>
+          data.recent_transactions.map((t: WalletTransactionItem) => (
+            <TxRow key={t.id} tx={t} />
+          ))
         )}
       </ScrollView>
 
@@ -288,44 +319,56 @@ export default function WalletScreen() {
   )
 }
 
-function TxRow({ tx, isFirst }: { tx: WalletTransactionItem; isFirst: boolean }) {
-  const meta = TX_META[tx.type] ?? {
-    label: tx.type,
-    icon: 'help-circle-outline' as const,
-    positive: false,
-  }
+function CautionTile({
+  icon,
+  iconColor,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  iconColor: string
+  label: string
+  value: string
+}) {
+  return (
+    <View className="flex-1 bg-white/5 rounded-2xl px-3 py-3">
+      <View className="flex-row items-center">
+        <Ionicons name={icon} size={12} color={iconColor} />
+        <Text className="text-warm-400 text-[9px] font-jk-bold uppercase tracking-wide ml-1">
+          {label}
+        </Text>
+      </View>
+      <Text className="text-white text-lg font-jk-extrabold mt-1">{value}</Text>
+      <Text className="text-warm-500 text-[10px] font-jk-medium">FCFA</Text>
+    </View>
+  )
+}
+
+function TxRow({ tx }: { tx: WalletTransactionItem }) {
+  const icon = TX_META[tx.type]?.icon ?? 'help-circle-outline'
   const isPositive = tx.amount_fcfa > 0
   return (
-    <View
-      className={[
-        'flex-row items-center px-4 py-3.5',
-        isFirst ? '' : 'border-t border-warm-200',
-      ].join(' ')}
-    >
+    <View className="bg-off-white border border-warm-200 rounded-2xl px-4 py-3 mb-2 flex-row items-center">
       <View
-        className={[
-          'w-10 h-10 rounded-full items-center justify-center mr-3',
-          meta.positive ? 'bg-success-bg' : 'bg-warm-100',
-        ].join(' ')}
+        className="w-10 h-10 rounded-full items-center justify-center mr-3"
+        style={{ backgroundColor: isPositive ? '#DCFCE7' : '#FEE2E2' }}
       >
-        <Ionicons name={meta.icon} size={18} color={meta.positive ? '#16A34A' : '#6B6250'} />
+        <Ionicons name={icon} size={18} color={isPositive ? '#16A34A' : '#D40511'} />
       </View>
-      <View className="flex-1">
-        <Text className="font-bold text-ink">{meta.label}</Text>
-        <Text className="text-xs text-warm-500 mt-0.5">{formatDate(tx.created_at)}</Text>
-      </View>
-      <View className="items-end">
-        <Text
-          className={[
-            'font-extrabold',
-            isPositive ? 'text-success' : 'text-airmess-red',
-          ].join(' ')}
-        >
-          {isPositive ? '+' : ''}
-          {fcfa(tx.amount_fcfa)}
+      <View className="flex-1 pr-2">
+        <Text className="text-ink font-jk-bold text-[13px]" numberOfLines={1}>
+          {txTitle(tx)}
         </Text>
-        <Text className="text-[10px] text-warm-400 mt-0.5">Solde {fcfa(tx.balance_after)}</Text>
+        <Text className="text-warm-500 text-xs font-jk-medium mt-0.5">
+          {formatDate(tx.created_at)}
+        </Text>
       </View>
+      <Text
+        className="font-jk-extrabold text-[15px]"
+        style={{ color: isPositive ? '#16A34A' : '#D40511' }}
+      >
+        {signedAmount(tx.amount_fcfa)}
+      </Text>
     </View>
   )
 }

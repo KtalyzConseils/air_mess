@@ -134,10 +134,12 @@ export interface CourseHistoryItem {
   id: number
   reference: string
   status: string
+  origin_name?: string
   origin_quartier: string
   destination_quartier: string
   destination_city: string
   driver_earnings: number
+  urgency?: 'standard' | 'express'
   delivered_at: string | null
   created_at: string
 }
@@ -149,7 +151,7 @@ export async function fetchDriverHistory(page = 1): Promise<{
   total: number
 }> {
   const { data } = await api.get('/courses', {
-    params: { status: 'delivered,failed', per_page: 20, page },
+    params: { status: 'delivered,failed,cancelled', per_page: 20, page },
   })
   return data
 }

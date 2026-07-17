@@ -1,15 +1,32 @@
 import { View, Text } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
+import { Ionicons } from '@expo/vector-icons'
 import { fetchDriverStats } from '../api/driver'
 
 /**
- * Bandeau dark avec les stats du jour + rappel semaine.
- *
- * Design signature : le seul bloc sombre de la home = attire l'œil sur
- * l'argent gagné. Le jaune brand souligne le label "Aujourd'hui".
+ * Carte "Aujourd'hui" (hero sombre) : 3 tuiles — gains du jour, courses livrées,
+ * gains de la semaine. Le seul bloc où l'argent gagné est mis en avant.
  */
-function formatFCFA(n: number): string {
-  return n.toLocaleString('fr-FR') + ' FCFA'
+
+/** 14 800 → "14.8k" ; 900 → "900". */
+function formatK(n: number): string {
+  if (n >= 1000) {
+    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  }
+  return String(n)
+}
+
+function todayLabel(): string {
+  try {
+    const s = new Date().toLocaleDateString('fr-FR', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    })
+    return s.charAt(0).toLowerCase() + s.slice(1)
+  } catch {
+    return ''
+  }
 }
 
 export default function TodayKpiBanner() {
@@ -19,52 +36,70 @@ export default function TodayKpiBanner() {
     refetchInterval: 60_000,
   })
 
-  if (isLoading || !data) {
-    return (
-      <View className="bg-airmess-dark rounded-2xl p-4 opacity-70">
-        <Text className="text-warm-400 text-xs">Chargement de vos stats…</Text>
-      </View>
-    )
-  }
-
-  const today = data.today
-  const week = data.last_7
+  const today = data?.today
+  const week = data?.last_7
 
   return (
-    <View className="bg-airmess-dark rounded-2xl p-4">
-      <View className="flex-row items-center mb-3">
-        <View className="w-1 h-4 bg-airmess-yellow rounded-full mr-2" />
-        <Text className="text-airmess-yellow text-xs font-extrabold uppercase tracking-widest">
-          Aujourd'hui
+    <View className="bg-airmess-dark rounded-3xl p-5">
+      {/* En-tête : AUJOURD'HUI + date */}
+      <View className="flex-row items-center justify-between mb-4">
+        <View className="flex-row items-center">
+          <View className="w-1 h-4 bg-airmess-yellow rounded-full mr-2" />
+          <Text className="text-airmess-yellow text-[11px] font-jk-extrabold uppercase tracking-[2px]">
+            Aujourd'hui
+          </Text>
+        </View>
+        <Text className="text-warm-400 text-xs font-jk-medium">{todayLabel()}</Text>
+      </View>
+
+      {/* Tuiles */}
+      <View className="flex-row gap-2">
+        <Tile
+          icon="cash-outline"
+          label="Gains"
+          value={isLoading || !today ? '—' : formatK(today.earnings)}
+          unit="FCFA"
+        />
+        <Tile
+          icon="cube-outline"
+          label="Courses"
+          value={isLoading || !today ? '—' : String(today.courses)}
+          unit="livrées"
+        />
+        <Tile
+          icon="trending-up-outline"
+          label="Semaine"
+          value={isLoading || !week ? '—' : formatK(week.earnings)}
+          unit="FCFA"
+        />
+      </View>
+    </View>
+  )
+}
+
+function Tile({
+  icon,
+  label,
+  value,
+  unit,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  label: string
+  value: string
+  unit: string
+}) {
+  return (
+    <View className="flex-1 bg-white/5 rounded-2xl px-3 py-3">
+      <View className="flex-row items-center mb-2">
+        <Ionicons name={icon} size={13} color="#FFCC00" />
+        <Text className="text-warm-400 text-[10px] font-jk-bold uppercase tracking-wide ml-1.5">
+          {label}
         </Text>
       </View>
-
-      <View className="flex-row justify-between items-end">
-        <View>
-          <Text className="text-white text-3xl font-extrabold">
-            {today.earnings.toLocaleString('fr-FR')}
-            <Text className="text-warm-400 text-base font-normal"> FCFA</Text>
-          </Text>
-          <Text className="text-warm-400 text-xs mt-1">Gains</Text>
-        </View>
-
-        <View className="items-end">
-          <Text className="text-white text-2xl font-bold">
-            {today.courses}
-            <Text className="text-warm-400 text-sm font-normal">
-              {' '}course{today.courses > 1 ? 's' : ''}
-            </Text>
-          </Text>
-          <Text className="text-warm-400 text-xs mt-1">Livrées</Text>
-        </View>
-      </View>
-
-      <View className="border-t border-white/10 mt-3 pt-2 flex-row items-center justify-between">
-        <Text className="text-warm-400 text-xs">Cette semaine</Text>
-        <Text className="text-warm-300 text-xs font-semibold">
-          {formatFCFA(week.earnings)} · {week.courses} course{week.courses > 1 ? 's' : ''}
-        </Text>
-      </View>
+      <Text className="text-white text-xl font-jk-extrabold" numberOfLines={1}>
+        {value}
+      </Text>
+      <Text className="text-warm-500 text-[11px] font-jk-medium mt-0.5">{unit}</Text>
     </View>
   )
 }

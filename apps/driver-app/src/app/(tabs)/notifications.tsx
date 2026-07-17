@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -9,22 +9,15 @@ import {
   type NotificationItem,
 } from '../../api/notifications'
 
-type FilterKey = 'all' | 'unread'
-
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all',    label: 'Toutes' },
-  { key: 'unread', label: 'Non lues' },
-]
-
 /**
  * Notifications driver.
  *
- *   Header : titre + total + chips "Toutes / Non lues"
- *   Item lu     : bg off-white, icône neutre warm-100
- *   Item non lu : bg cream + **stripe jaune 4px à gauche** + pastille rouge + icône colorée
+ *   Header : titre + nb non lues + "Tout lire"
+ *   Carte non lue : liseré jaune à gauche + pastille jaune + icône colorée (selon le sens)
+ *   Carte lue     : sobre, icône grise
  */
 export default function NotificationsScreen() {
-  const [filter, setFilter] = useState<FilterKey>('all')
+  const queryClient = useQueryClient()
 
   const {
     data,
@@ -47,88 +40,65 @@ export default function NotificationsScreen() {
     () => (data?.pages.flatMap((p) => p?.data ?? []) ?? []).filter(Boolean),
     [data],
   )
-  const filteredItems = useMemo(
-    () => (filter === 'unread' ? items.filter((n) => n.read_at === null) : items),
-    [items, filter],
-  )
   const unreadCount = useMemo(() => items.filter((n) => n.read_at === null).length, [items])
-  const total = data?.pages[0]?.total ?? 0
+
+  // "Tout lire" : marque toutes les notifs non lues déjà chargées.
+  const markAll = useMutation({
+    mutationFn: async () => {
+      const unread = items.filter((n) => n.read_at === null)
+      await Promise.all(unread.map((n) => markNotificationRead(n.id)))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread'] })
+    },
+  })
+
+  const header = (
+    <View className="pt-3 pb-1">
+      <View className="flex-row items-center justify-between">
+        <View className="flex-1">
+          <Text className="text-3xl font-jk-extrabold text-ink">Notifications</Text>
+          <Text className="text-sm mt-0.5 font-jk" style={{ color: unreadCount > 0 ? '#B45309' : '#8A7E68' }}>
+            {unreadCount > 0
+              ? `${unreadCount} non lue${unreadCount > 1 ? 's' : ''}`
+              : 'Tu es à jour ✨'}
+          </Text>
+        </View>
+        {unreadCount > 0 && (
+          <Pressable
+            onPress={() => markAll.mutate()}
+            disabled={markAll.isPending}
+            className="flex-row items-center bg-airmess-yellow/15 px-3.5 py-2 rounded-full"
+            style={({ pressed }) => (pressed ? { opacity: 0.8 } : undefined)}
+          >
+            {markAll.isPending ? (
+              <ActivityIndicator size="small" color="#1A1614" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-done" size={15} color="#1A1614" />
+                <Text className="text-ink text-xs font-jk-bold ml-1.5">Tout lire</Text>
+              </>
+            )}
+          </Pressable>
+        )}
+      </View>
+    </View>
+  )
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View className="bg-off-white border-b border-warm-200 px-5 pt-3 pb-4">
-        <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-3xl font-extrabold text-ink">Notifications</Text>
-            <Text className="text-sm text-warm-500 mt-0.5">
-              {total} au total
-              {unreadCount > 0 ? (
-                <Text className="text-airmess-red font-bold"> · {unreadCount} non lue{unreadCount > 1 ? 's' : ''}</Text>
-              ) : null}
-            </Text>
-          </View>
-          <View className="w-12 h-12 rounded-2xl bg-airmess-yellow/15 items-center justify-center">
-            <Ionicons name="notifications-outline" size={22} color="#1A1614" />
-          </View>
-        </View>
-
-        {/* Chips filtre */}
-        <View className="flex-row gap-2 mt-4">
-          {FILTERS.map((f) => {
-            const active = f.key === filter
-            const showUnreadBadge = f.key === 'unread' && unreadCount > 0
-            return (
-              <Pressable
-                key={f.key}
-                onPress={() => setFilter(f.key)}
-                className={[
-                  'flex-row items-center px-3.5 py-1.5 rounded-full border-2',
-                  active ? 'bg-ink border-ink' : 'bg-off-white border-warm-200',
-                ].join(' ')}
-                style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
-              >
-                <Text
-                  className={[
-                    'text-xs',
-                    active ? 'text-airmess-yellow font-extrabold' : 'text-ink font-semibold',
-                  ].join(' ')}
-                >
-                  {f.label}
-                </Text>
-                {showUnreadBadge && (
-                  <View
-                    className={[
-                      'ml-2 min-w-[18px] h-[18px] rounded-full items-center justify-center px-1',
-                      active ? 'bg-airmess-yellow' : 'bg-airmess-red',
-                    ].join(' ')}
-                  >
-                    <Text
-                      className={[
-                        'text-[10px] font-extrabold',
-                        active ? 'text-ink' : 'text-white',
-                      ].join(' ')}
-                    >
-                      {unreadCount}
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
-            )
-          })}
-        </View>
-      </View>
-
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color="#1A1614" size="large" />
         </View>
       ) : (
         <FlatList
-          data={filteredItems}
+          data={items}
           keyExtractor={(n) => n.id.toString()}
           renderItem={({ item }) => <NotificationRow item={item} />}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24 }}
+          ListHeaderComponent={header}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
           refreshControl={
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#1A1614" />
           }
@@ -137,12 +107,13 @@ export default function NotificationsScreen() {
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           ListEmptyComponent={
-            <View className="bg-off-white border border-warm-200 rounded-2xl p-8 items-center mt-6">
-              <Ionicons name="notifications-off-outline" size={32} color="#B8AF9F" />
-              <Text className="text-warm-500 text-sm mt-2 text-center">
-                {filter === 'unread'
-                  ? 'Tu as tout lu. Beau travail.'
-                  : 'Aucune notification pour le moment.'}
+            <View className="items-center mt-16 px-8">
+              <View className="w-16 h-16 rounded-full bg-warm-100 items-center justify-center mb-3">
+                <Ionicons name="notifications-off-outline" size={30} color="#B8AF9F" />
+              </View>
+              <Text className="text-ink font-jk-bold text-center">Rien de neuf</Text>
+              <Text className="text-warm-500 text-sm mt-1 text-center font-jk">
+                On te préviendra dès qu'une course ou un bonus arrive. Bonne route 🛵
               </Text>
             </View>
           }
@@ -168,57 +139,46 @@ function NotificationRow({ item }: { item: NotificationItem }) {
   })
 
   const isRead = item.read_at !== null
-  const meta = iconMetaFor(item.type)
+  const meta = iconMetaFor(item.type, item.title, item.body)
 
   return (
     <Pressable
       onPress={() => !isRead && mut.mutate()}
       style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
-      className={[
-        'rounded-2xl overflow-hidden flex-row',
-        isRead
-          ? 'bg-off-white border border-warm-200'
-          : 'bg-airmess-yellow/10 border-2 border-airmess-yellow/40',
-      ].join(' ')}
+      className="rounded-2xl overflow-hidden flex-row bg-off-white border border-warm-200"
     >
-      {/* Stripe jaune signature à gauche quand non lu */}
+      {/* Liseré jaune signature à gauche quand non lu */}
       {!isRead && <View className="w-1 bg-airmess-yellow" />}
 
       <View className="flex-1 flex-row items-start p-4">
-        {/* Icône dans pastille */}
+        {/* Icône (colorée selon le sens si non lu, grise si lu) */}
         <View
-          className={[
-            'w-10 h-10 rounded-xl items-center justify-center mr-3',
-            isRead ? 'bg-warm-100' : meta.bgClass,
-          ].join(' ')}
+          className="w-10 h-10 rounded-full items-center justify-center mr-3"
+          style={{ backgroundColor: isRead ? '#F4EFE4' : meta.bg }}
         >
-          <Ionicons
-            name={meta.icon}
-            size={18}
-            color={isRead ? '#6B6250' : meta.iconColor}
-          />
+          <Ionicons name={meta.icon} size={18} color={isRead ? '#8A7E68' : meta.color} />
         </View>
 
         {/* Contenu */}
         <View className="flex-1">
           <View className="flex-row items-start justify-between">
             <Text
-              className={[
-                'flex-1 text-base',
-                isRead ? 'font-semibold text-ink' : 'font-extrabold text-ink',
-              ].join(' ')}
+              className="flex-1 text-[15px] text-ink"
+              style={{
+                fontFamily: isRead
+                  ? 'PlusJakartaSans_600SemiBold'
+                  : 'PlusJakartaSans_800ExtraBold',
+              }}
               numberOfLines={2}
             >
               {item.title}
             </Text>
-            {!isRead && (
-              <View className="w-2 h-2 rounded-full bg-airmess-red mt-2 ml-2" />
-            )}
+            {!isRead && <View className="w-2.5 h-2.5 rounded-full bg-airmess-yellow mt-1.5 ml-2" />}
           </View>
-          <Text className="text-sm text-warm-600 mt-1" numberOfLines={3}>
+          <Text className="text-[13px] text-warm-600 mt-1 font-jk leading-5" numberOfLines={3}>
             {item.body}
           </Text>
-          <Text className="text-[11px] text-warm-500 mt-2 font-semibold">
+          <Text className="text-[11px] text-warm-500 mt-2 font-jk-semibold">
             {formatRelative(item.created_at)}
           </Text>
         </View>
@@ -229,52 +189,62 @@ function NotificationRow({ item }: { item: NotificationItem }) {
 
 interface IconMeta {
   icon: keyof typeof Ionicons.glyphMap
-  iconColor: string
-  bgClass: string
+  color: string
+  bg: string
 }
 
 /**
- * Déduit l'icône + tone de la notification à partir de son type.
- * Fallback bell si le type est inconnu.
+ * Icône + couleur d'une notif — déduites du type ET du contenu (titre/corps),
+ * pour toujours coller au sens même quand le `type` back est générique.
  */
-function iconMetaFor(type: string): IconMeta {
-  if (type.includes('course')) {
-    if (type.includes('assigned') || type.includes('new')) {
-      return { icon: 'flash', iconColor: '#D40511', bgClass: 'bg-danger-bg' }
+function iconMetaFor(type: string, title = '', body = ''): IconMeta {
+  const t = `${type} ${title} ${body}`.toLowerCase()
+
+  if (t.includes('course') || t.includes('livraison') || t.includes('retrait colis')) {
+    if (t.includes('express') || t.includes('disponible') || t.includes('offered') || t.includes('nouvelle') || t.includes('assigned')) {
+      return { icon: 'flash', color: '#D40511', bg: '#FEE2E2' }
     }
-    if (type.includes('delivered')) {
-      return { icon: 'checkmark-circle', iconColor: '#16A34A', bgClass: 'bg-success-bg' }
+    if (t.includes('livr') || t.includes('delivered')) {
+      return { icon: 'checkmark-circle', color: '#16A34A', bg: '#DCFCE7' }
     }
-    if (type.includes('failed') || type.includes('cancelled')) {
-      return { icon: 'close-circle', iconColor: '#D40511', bgClass: 'bg-danger-bg' }
+    if (t.includes('annul') || t.includes('cancel') || t.includes('échou') || t.includes('fail')) {
+      return { icon: 'close-circle', color: '#D40511', bg: '#FEE2E2' }
     }
-    return { icon: 'cube-outline', iconColor: '#1A1614', bgClass: 'bg-airmess-yellow/20' }
+    return { icon: 'cube', color: '#1A1614', bg: 'rgba(255,204,0,0.2)' }
   }
-  if (type.includes('wallet') || type.includes('payment') || type.includes('withdraw')) {
-    return { icon: 'wallet', iconColor: '#1A1614', bgClass: 'bg-airmess-yellow/20' }
+  if (t.includes('caution') || t.includes('wallet') || t.includes('débloqu') || t.includes('restitu') || t.includes('dépôt') || t.includes('depot')) {
+    return { icon: 'shield-checkmark', color: '#16A34A', bg: '#DCFCE7' }
   }
-  if (type.includes('incident') || type.includes('alert')) {
-    return { icon: 'warning', iconColor: '#F59E0B', bgClass: 'bg-warning-bg' }
+  if (t.includes('prime') || t.includes('bonus') || t.includes('promo') || t.includes('pointe') || t.includes('offert') || t.includes('cadeau')) {
+    return { icon: 'gift', color: '#0284C7', bg: '#E0F2FE' }
   }
-  if (type.includes('account') || type.includes('profile') || type.includes('kyc')) {
-    return { icon: 'person-circle', iconColor: '#0284C7', bgClass: 'bg-info-bg' }
+  if (t.includes('paiement') || t.includes('payout') || t.includes('payment') || t.includes('hebdo') || t.includes('récap') || t.includes('recap') || t.includes('virement')) {
+    return { icon: 'cash', color: '#0284C7', bg: '#E0F2FE' }
   }
-  return { icon: 'notifications', iconColor: '#1A1614', bgClass: 'bg-warm-100' }
+  if (t.includes('sac') || t.includes('isotherme') || t.includes('équip') || t.includes('equip') || t.includes('matériel')) {
+    return { icon: 'pricetag', color: '#6B6250', bg: '#F4EFE4' }
+  }
+  if (t.includes('incident') || t.includes('alert') || t.includes('sos')) {
+    return { icon: 'warning', color: '#B45309', bg: '#FEF3C7' }
+  }
+  if (t.includes('compte') || t.includes('profil') || t.includes('valid') || t.includes('kyc') || t.includes('document')) {
+    return { icon: 'person-circle', color: '#0284C7', bg: '#E0F2FE' }
+  }
+  return { icon: 'notifications', color: '#1A1614', bg: '#F4EFE4' }
 }
 
 function formatRelative(iso: string): string {
-  const now = Date.now()
-  const then = new Date(iso).getTime()
-  const diffMs = now - then
+  const diffMs = Date.now() - new Date(iso).getTime()
   const min = Math.round(diffMs / 60_000)
-  if (min < 1) return "à l'instant"
-  if (min < 60) return `il y a ${min} min`
+  if (min < 1) return "À l'instant"
+  if (min < 60) return `Il y a ${min} min`
   const h = Math.round(min / 60)
-  if (h < 24) return `il y a ${h} h`
+  if (h < 24) return `Il y a ${h} h`
   const d = Math.round(h / 24)
-  if (d < 7) return `il y a ${d} j`
+  if (d === 1) return 'Hier'
+  if (d < 7) return `Il y a ${d} j`
   return new Date(iso).toLocaleDateString('fr-FR', {
-    day: '2-digit',
+    day: 'numeric',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
