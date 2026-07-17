@@ -463,7 +463,10 @@ export default function CourseDetailPage() {
             {/* Colis */}
             <Section title={t('courses.detail.package')}>
               <KV label={t('common.description')} value={course.package_description} />
-              <KV label={t('courses.detail.packageWeight')} value={course.package_size} />
+              <KV label={t('courses.new.sizeLabel')} value={course.package_size} />
+              {course.package_weight_kg != null && (
+                <KV label={t('courses.detail.packageWeight')} value={`${Number(course.package_weight_kg)} kg`} />
+              )}
               <KV label={t('courses.new.packageCategory')} value={course.package_category?.name ?? '—'} />
               <KV label={t('courses.new.urgencyLabel')} value={course.urgency === 'express' ? t('courses.express') : t('courses.detail.urgencyStandard')} />
             </Section>

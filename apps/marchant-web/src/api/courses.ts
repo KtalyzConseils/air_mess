@@ -31,6 +31,8 @@ export interface Course {
   destination_city: string
   package_description: string
   package_size: 'S' | 'M' | 'L' | 'XL'
+  /** Poids en kg — optionnel (decimal renvoyé en string par l'API). */
+  package_weight_kg?: string | number | null
   urgency: 'standard' | 'express'
   delivery_fee: number
   driver_earnings: number
