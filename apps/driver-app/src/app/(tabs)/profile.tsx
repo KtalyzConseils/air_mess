@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { View, Text, ScrollView, Pressable, Alert, Platform, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
+import { useRouter } from 'expo-router'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import Constants from 'expo-constants'
 import { useAuthStore } from '../../stores/authStore'
 import { fetchDriverStats } from '../../api/driver'
+import { fetchWallet } from '../../api/wallet'
 import { openFullScreenIntentSettings } from '../../lib/fullScreenPermission'
 import SupportContactSheet from '../../components/SupportContactSheet'
 
@@ -38,13 +40,12 @@ const VEHICLE_META: Record<
 }
 
 /**
- * Profile driver — identité + véhicule + coordonnées + actions compte.
- *
- * Hero dark (avatar + nom + statut + stats compactes) → focus sur qui est le driver
- * Puis cards cream pour véhicule / coordonnées / actions.
+ * Profile driver — carte hero (identité + stats) conservée telle quelle, puis
+ * plaque + Compte + Préférences + déconnexion.
  */
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore()
+  const router = useRouter()
   const driver = user?.driver
   const initials = `${driver?.first_name?.[0] ?? ''}${driver?.last_name?.[0] ?? ''}`.toUpperCase()
   const [supportOpen, setSupportOpen] = useState(false)
@@ -52,11 +53,13 @@ export default function ProfileScreen() {
 
   const activationKey = (driver?.activation_status ?? 'pending') as ActivationStatus
   const activation = ACTIVATION_META[activationKey] ?? ACTIVATION_META.pending
+  const isVerified = activationKey === 'active' || activationKey === 'validated'
 
   const vehicle = VEHICLE_META[driver?.vehicle_type ?? ''] ?? {
     label: driver?.vehicle_type ?? '—',
     icon: 'help-circle-outline' as const,
   }
+  const vehicleSubtitle = driver?.vehicle_brand || vehicle.label
 
   const acceptanceRate = driver?.acceptance_rate
     ? Math.round(Number(driver.acceptance_rate))
@@ -66,6 +69,8 @@ export default function ProfileScreen() {
     queryKey: ['driver-stats'],
     queryFn: fetchDriverStats,
   })
+  const { data: wallet } = useQuery({ queryKey: ['wallet'], queryFn: fetchWallet })
+  const cautionLabel = wallet ? `${wallet.balance.toLocaleString('fr-FR')} FCFA` : '—'
 
   const totalCourses = stats?.all_time.courses ?? 0
   const totalEarnings = stats?.all_time.earnings ?? 0
@@ -97,7 +102,7 @@ export default function ProfileScreen() {
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero identité + stats */}
+        {/* Hero identité + stats — conservée telle quelle */}
         <View className="mx-5 mt-3 bg-airmess-dark rounded-3xl p-6">
           <View className="items-center">
             <View className="w-24 h-24 rounded-full bg-airmess-yellow items-center justify-center">
@@ -136,87 +141,73 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Véhicule */}
-        <View className="mx-5 mt-5">
-          <SectionLabel icon="car-sport-outline">Mon véhicule</SectionLabel>
-          <View className="bg-off-white border border-warm-200 rounded-2xl p-5 flex-row items-center">
-            <View className="w-14 h-14 rounded-2xl bg-airmess-yellow/15 items-center justify-center mr-4">
-              <MaterialCommunityIcons name={vehicle.icon} size={28} color="#1A1614" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-lg font-extrabold text-ink">{vehicle.label}</Text>
-              <View className="flex-row items-center mt-0.5">
-                {driver?.vehicle_brand && (
-                  <Text className="text-sm text-warm-600 font-semibold">
-                    {driver.vehicle_brand}
-                  </Text>
-                )}
-                {driver?.vehicle_brand && driver?.vehicle_plate && (
-                  <Text className="text-warm-400 mx-1.5">·</Text>
-                )}
-                {driver?.vehicle_plate && (
-                  <View className="bg-cream border border-warm-300 px-2 py-0.5 rounded-md">
-                    <Text className="text-xs font-mono font-bold text-ink">
-                      {driver.vehicle_plate}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
+        {/* Plaque d'immatriculation + statut vérifié */}
+        <View className="mx-5 mt-5 bg-off-white border border-warm-200 rounded-2xl p-4 flex-row items-center justify-between">
+          <View>
+            <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-jk-bold">
+              Plaque d'immatriculation
+            </Text>
+            <Text className="text-xl font-jk-extrabold text-ink mt-0.5">
+              {driver?.vehicle_plate || '—'}
+            </Text>
           </View>
-        </View>
-
-        {/* Coordonnées */}
-        <View className="mx-5 mt-5">
-          <SectionLabel icon="person-outline">Mes coordonnées</SectionLabel>
-          <View className="bg-off-white border border-warm-200 rounded-2xl overflow-hidden">
-            <InfoRow icon="mail-outline" label="Email" value={user?.email} />
-            <InfoRow icon="call-outline" label="Téléphone" value={user?.phone} isLast />
-          </View>
+          {isVerified && (
+            <View className="flex-row items-center bg-success-bg px-2.5 py-1.5 rounded-full">
+              <Ionicons name="shield-checkmark" size={13} color="#16A34A" />
+              <Text className="text-success text-[11px] font-jk-bold ml-1">Vérifié</Text>
+            </View>
+          )}
         </View>
 
         {/* Compte */}
         <View className="mx-5 mt-5">
-          <SectionLabel icon="settings-outline">Compte</SectionLabel>
+          <SectionLabel>Compte</SectionLabel>
           <View className="bg-off-white border border-warm-200 rounded-2xl overflow-hidden">
             {IS_ANDROID_14_PLUS && (
-              <ActionRow
+              <ProfileRow
                 icon="notifications-outline"
-                label="Alertes plein écran"
+                title="Alertes plein écran"
+                subtitle="Réveil de l'écran pour les appels"
                 onPress={() => { void openFullScreenIntentSettings() }}
               />
             )}
-            <ActionRow icon="create-outline" label="Modifier mon profil" comingSoon />
-            <ActionRow icon="shield-checkmark-outline" label="Mes documents" comingSoon />
-            <ActionRow
-              icon="help-circle-outline"
-              label="Aide & support"
-              onPress={() => setSupportOpen(true)}
+            <ProfileRow icon="card-outline" title="Moyen de paiement" subtitle="Mobile Money" />
+            <ProfileRow
+              icon="shield-checkmark-outline"
+              title="Sécurité & caution"
+              subtitle={cautionLabel}
+              onPress={() => router.push('/(tabs)/wallet')}
             />
-            <ActionRow
-              icon="document-text-outline"
-              label="Conditions générales"
-              comingSoon
+            <ProfileRow
+              icon="headset-outline"
+              title="Contacter le support"
+              onPress={() => setSupportOpen(true)}
               isLast
             />
           </View>
         </View>
 
-        {/* Déconnexion */}
+        {/* Préférences */}
         <View className="mx-5 mt-5">
+          <SectionLabel>Préférences</SectionLabel>
           <View className="bg-off-white border border-warm-200 rounded-2xl overflow-hidden">
-            <ActionRow
-              icon="log-out-outline"
-              label="Déconnexion"
-              onPress={confirmLogout}
-              danger
-              isLast
-            />
+            <ProfileRow icon="bicycle-outline" title="Mon véhicule" subtitle={vehicleSubtitle} />
+            <ProfileRow icon="star-outline" title="Avis & note" comingSoon isLast />
           </View>
         </View>
+
+        {/* Se déconnecter */}
+        <Pressable
+          onPress={confirmLogout}
+          className="mx-5 mt-6 bg-danger-bg border border-airmess-red/20 rounded-2xl py-4 flex-row items-center justify-center"
+          style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+        >
+          <Ionicons name="log-out-outline" size={18} color="#D40511" />
+          <Text className="text-airmess-red font-jk-extrabold ml-2">Se déconnecter</Text>
+        </Pressable>
 
         {/* Footer */}
-        <Text className="text-center text-[11px] text-warm-500 mt-6 font-mono">
+        <Text className="text-center text-[11px] text-warm-500 mt-6 font-jk-medium">
           Air Mess Driver{version ? ` · v${version}` : ''}
         </Text>
       </ScrollView>
@@ -235,7 +226,7 @@ export default function ProfileScreen() {
         >
           <View className="bg-off-white rounded-2xl px-8 py-6 items-center">
             <ActivityIndicator size="large" color="#1A1614" />
-            <Text className="text-ink font-bold mt-3">Déconnexion…</Text>
+            <Text className="text-ink font-jk-bold mt-3">Déconnexion…</Text>
           </View>
         </View>
       )}
@@ -263,105 +254,58 @@ function StatBox({
   )
 }
 
-function SectionLabel({
-  icon,
-  children,
-}: {
-  icon: keyof typeof Ionicons.glyphMap
-  children: React.ReactNode
-}) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <View className="flex-row items-center mb-2 ml-1">
-      <Ionicons name={icon} size={12} color="#8A7E68" />
-      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold ml-1.5">
-        {children}
-      </Text>
-    </View>
+    <Text className="text-[11px] uppercase text-warm-500 tracking-widest font-jk-bold mb-2 ml-1">
+      {children}
+    </Text>
   )
 }
 
-function InfoRow({
+function ProfileRow({
   icon,
-  label,
-  value,
-  isLast,
-}: {
-  icon: keyof typeof Ionicons.glyphMap
-  label: string
-  value?: string | null
-  isLast?: boolean
-}) {
-  return (
-    <View
-      className={[
-        'flex-row items-center px-4 py-3.5',
-        isLast ? '' : 'border-b border-warm-200',
-      ].join(' ')}
-    >
-      <View className="w-9 h-9 rounded-xl bg-warm-100 items-center justify-center mr-3">
-        <Ionicons name={icon} size={16} color="#1A1614" />
-      </View>
-      <View className="flex-1">
-        <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-bold">
-          {label}
-        </Text>
-        <Text className="text-sm text-ink font-semibold mt-0.5">{value || '—'}</Text>
-      </View>
-    </View>
-  )
-}
-
-function ActionRow({
-  icon,
-  label,
+  title,
+  subtitle,
   onPress,
-  danger,
   comingSoon,
   isLast,
 }: {
   icon: keyof typeof Ionicons.glyphMap
-  label: string
+  title: string
+  subtitle?: string
   onPress?: () => void
-  danger?: boolean
   comingSoon?: boolean
   isLast?: boolean
 }) {
   return (
     <Pressable
       onPress={onPress}
-      disabled={comingSoon}
+      disabled={!onPress || comingSoon}
       className={[
-        'flex-row items-center px-4 py-4',
+        'flex-row items-center px-4 py-3.5',
         isLast ? '' : 'border-b border-warm-200',
-        comingSoon ? 'opacity-50' : '',
+        comingSoon ? 'opacity-60' : '',
       ].join(' ')}
-      style={({ pressed }) => (pressed && !comingSoon ? { opacity: 0.7 } : undefined)}
+      style={({ pressed }) => (pressed && onPress ? { opacity: 0.7 } : undefined)}
     >
-      <View
-        className={[
-          'w-9 h-9 rounded-xl items-center justify-center mr-3',
-          danger ? 'bg-danger-bg' : 'bg-warm-100',
-        ].join(' ')}
-      >
-        <Ionicons name={icon} size={16} color={danger ? '#D40511' : '#1A1614'} />
+      <View className="w-10 h-10 rounded-xl bg-warm-100 items-center justify-center mr-3">
+        <Ionicons name={icon} size={18} color="#1A1614" />
       </View>
-      <Text
-        className={[
-          'flex-1 text-sm font-semibold',
-          danger ? 'text-airmess-red' : 'text-ink',
-        ].join(' ')}
-      >
-        {label}
-      </Text>
+      <View className="flex-1">
+        <Text className="text-[15px] text-ink font-jk-bold">{title}</Text>
+        {subtitle ? (
+          <Text className="text-xs text-warm-500 font-jk-medium mt-0.5">{subtitle}</Text>
+        ) : null}
+      </View>
       {comingSoon ? (
         <View className="bg-warm-100 px-2 py-1 rounded-full">
-          <Text className="text-[10px] text-warm-600 font-extrabold uppercase tracking-widest">
+          <Text className="text-[9px] uppercase text-warm-500 font-jk-bold tracking-wide">
             Bientôt
           </Text>
         </View>
-      ) : (
-        <Ionicons name="chevron-forward" size={16} color="#B8AF9F" />
-      )}
+      ) : onPress ? (
+        <Ionicons name="chevron-forward" size={18} color="#B8AF9F" />
+      ) : null}
     </Pressable>
   )
 }
