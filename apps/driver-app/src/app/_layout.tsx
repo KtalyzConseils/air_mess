@@ -14,6 +14,14 @@ import {
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import BrandSplash from '../components/BrandSplash'
+import {
+  useFonts,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans'
 
 const queryClient = new QueryClient()
 
@@ -30,6 +38,15 @@ export default function RootLayout() {
   const [minElapsed, setMinElapsed] = useState(false)
   // course_id d'une "course entrante" à ouvrir dès que l'app est prête + connectée.
   const [pendingCourseId, setPendingCourseId] = useState<number | null>(null)
+
+  // Police de marque (Plus Jakarta Sans) — on garde le splash tant qu'elle charge.
+  const [fontsLoaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  })
 
   // Setup du handler (lazy : noop en Expo Go)
   useEffect(() => { initNotifications() }, [])
@@ -154,8 +171,8 @@ export default function RootLayout() {
     }
   }, [hydrated, user, segments, router])
 
-  // Splash React tant que : store pas hydraté OU durée minimum pas écoulée
-  if (!hydrated || !minElapsed) {
+  // Splash React tant que : store pas hydraté OU durée minimum pas écoulée OU police pas prête
+  if (!hydrated || !minElapsed || !fontsLoaded) {
     return <BrandSplash />
   }
 

@@ -40,6 +40,18 @@ module.exports = {
         info: '#0284C7',
         'info-bg': '#E0F2FE',
       },
+      // Police de marque : Plus Jakarta Sans (moderne, chaleureuse, compacte —
+      // lisible sur données denses). Une famille par graisse pour un rendu net sur
+      // Android (pas de faux-bold). Noms `jk-*` distincts des utilitaires de poids
+      // Tailwind (font-bold, etc.) pour éviter toute collision.
+      fontFamily: {
+        sans: ['PlusJakartaSans_400Regular'],
+        jk: ['PlusJakartaSans_400Regular'],
+        'jk-medium': ['PlusJakartaSans_500Medium'],
+        'jk-semibold': ['PlusJakartaSans_600SemiBold'],
+        'jk-bold': ['PlusJakartaSans_700Bold'],
+        'jk-extrabold': ['PlusJakartaSans_800ExtraBold'],
+      },
       borderRadius: {
         // Les cards de l'app driver ont des angles plus généreux que web —
         // ambiance plus tactile / friendly.
