@@ -473,7 +473,59 @@
       "declaredValueLabel": "Valeur déclarée du colis (FCFA)",
       "declaredValueHelper": "Sert d'indemnisation en cas de vol ou de perte. Facultatif pour les colis peu coûteux (documents, petits objets).",
       "declaredValueSuggestion": "Vous encaissez un montant important. Renseignez la valeur du colis pour être indemnisé si le livreur le vole ou le perd — sans valeur déclarée, vous ne pourrez récupérer que l'encaissement.",
-      "premiumHint": "Cette course dépasse le seuil grand public ({{threshold}} FCFA). Elle sera prise en charge par notre équipe qui vous rappellera pour assigner un livreur dédié."
+      "premiumHint": "Cette course dépasse le seuil grand public ({{threshold}} FCFA). Elle sera prise en charge par notre équipe qui vous rappellera pour assigner un livreur dédié.",
+      "originBanner": {
+        "label": "Retrait",
+        "edit": "Modifier",
+        "placeholder": "Point de retrait à définir"
+      },
+      "originDrawer": {
+        "title": "Point de retrait",
+        "subtitle": "Où le livreur récupère le colis",
+        "done": "Enregistrer",
+        "pinSet": "Position A définie sur la carte",
+        "pinSetHint": "Tu peux l'ajuster depuis la carte du bloc Trajet (bascule sur « A retrait »).",
+        "pinMissing": "Position A à définir",
+        "pinMissingHint": "Ferme ce drawer et bascule sur « A retrait » dans la carte du bloc Trajet pour la positionner."
+      },
+      "dualMap": {
+        "blockTitle": "Positions sur la carte (A retrait, B livraison)",
+        "aLabel": "A retrait",
+        "bLabel": "B livraison",
+        "geoCta": "Ma position actuelle → {{pin}}",
+        "geoLoading": "Localisation…",
+        "geoUnsupported": "Votre navigateur ne supporte pas la géolocalisation.",
+        "geoDenied": "Permission refusée. Active la localisation dans ton navigateur.",
+        "geoFailed": "Impossible de récupérer ta position.",
+        "linkPlaceholder": "Colle un lien Google Maps ici…",
+        "linkApply": "Appliquer",
+        "linkInvalid": "Lien non reconnu. Copie l'URL complète depuis Google Maps (format @lat,lng).",
+        "hint": "Clic sur la carte, géoloc ou lien Maps : tout s'applique au pin {{pin}}."
+      },
+      "blocks": {
+        "trip": { "title": "Où va le colis ?" },
+        "package": { "title": "Que livre-t-on ?" },
+        "options": {
+          "title": "Options avancées",
+          "hint": "Encaissement, qui paie, valeur déclarée"
+        }
+      },
+      "recap": {
+        "title": "Récapitulatif",
+        "from": "De",
+        "to": "À",
+        "originPending": "Point de retrait",
+        "destinationPending": "Destination à définir",
+        "feeStandard": "Frais standard",
+        "feeExpress": "Frais express",
+        "walletCovered": "Couvert par ton wallet",
+        "walletShort": "Wallet insuffisant",
+        "walletShortMobile": "Wallet insuffisant — recharge d'abord",
+        "mobileFeeLabel": "Total",
+        "showMap": "Voir la carte du trajet",
+        "hideMap": "Masquer la carte",
+        "showMapHint": "Clic sur le prix pour voir la carte"
+      }
     }
   },
   "courseStatus": {

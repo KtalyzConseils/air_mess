@@ -473,7 +473,59 @@
       "declaredValueLabel": "Declared package value (FCFA)",
       "declaredValueHelper": "Used as reimbursement in case of theft or loss. Optional for low-cost items (documents, small objects).",
       "declaredValueSuggestion": "You're collecting a significant amount. Declare the package value to be reimbursed if the courier steals or loses it — without a declared value, you can only recover the collection amount.",
-      "premiumHint": "This delivery exceeds the retail threshold ({{threshold}} FCFA). Our team will take charge and call you back to assign a dedicated courier."
+      "premiumHint": "This delivery exceeds the retail threshold ({{threshold}} FCFA). Our team will take charge and call you back to assign a dedicated courier.",
+      "originBanner": {
+        "label": "Pickup",
+        "edit": "Edit",
+        "placeholder": "Pickup point to set"
+      },
+      "originDrawer": {
+        "title": "Pickup point",
+        "subtitle": "Where the courier picks up the package",
+        "done": "Save",
+        "pinSet": "Pin A is set on the map",
+        "pinSetHint": "Adjust it from the Trip map (switch to “A pickup”).",
+        "pinMissing": "Pin A not set yet",
+        "pinMissingHint": "Close this drawer and switch to “A pickup” on the Trip map to set it."
+      },
+      "dualMap": {
+        "blockTitle": "Map positions (A pickup, B dropoff)",
+        "aLabel": "A pickup",
+        "bLabel": "B dropoff",
+        "geoCta": "Use my location → {{pin}}",
+        "geoLoading": "Locating…",
+        "geoUnsupported": "Your browser does not support geolocation.",
+        "geoDenied": "Permission denied. Enable location in your browser.",
+        "geoFailed": "Could not get your position.",
+        "linkPlaceholder": "Paste a Google Maps link here…",
+        "linkApply": "Apply",
+        "linkInvalid": "Link not recognized. Copy the full Google Maps URL (@lat,lng format).",
+        "hint": "Map click, geolocation and Maps links all apply to pin {{pin}}."
+      },
+      "blocks": {
+        "trip": { "title": "Where is it going?" },
+        "package": { "title": "What are we delivering?" },
+        "options": {
+          "title": "Advanced options",
+          "hint": "Cash on delivery, who pays, declared value"
+        }
+      },
+      "recap": {
+        "title": "Summary",
+        "from": "From",
+        "to": "To",
+        "originPending": "Pickup point",
+        "destinationPending": "Destination to set",
+        "feeStandard": "Standard fee",
+        "feeExpress": "Express fee",
+        "walletCovered": "Covered by your wallet",
+        "walletShort": "Insufficient wallet",
+        "walletShortMobile": "Wallet too low — top up first",
+        "mobileFeeLabel": "Total",
+        "showMap": "View trip map",
+        "hideMap": "Hide map",
+        "showMapHint": "Click the price to see the map"
+      }
     }
   },
   "courseStatus": {
