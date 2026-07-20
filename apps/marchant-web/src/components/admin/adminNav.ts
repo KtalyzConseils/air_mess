@@ -74,6 +74,7 @@ export function useAdminNav() {
       title: t('admin.nav.finance'),
       items: filterItems([
         { to: '/admin/withdraw-requests', label: t('admin.nav.withdraws'), Icon: BankIcon, visible: isSuperAdmin },
+        { to: '/admin/reporting/wallets', label: t('admin.nav.walletReporting'), Icon: BarChartIcon, visible: isSuperAdmin },
         { to: '/admin/reconciliation', label: t('admin.nav.reconciliation'), Icon: BarChartIcon, visible: isSuperAdmin },
       ]),
     },

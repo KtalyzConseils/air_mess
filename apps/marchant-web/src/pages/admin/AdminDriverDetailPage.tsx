@@ -9,7 +9,19 @@ import { AdminButton } from '../../components/admin/AdminToolbar'
 import { ArrowLeftIcon, SettingsIcon, CheckIcon, AlertTriangleIcon, WhatsappIcon } from '../../components/ui/icons'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
 import SupportNotesPanel from '../../components/SupportNotesPanel'
-import { fetchDriver, validateDriver, openDriverDocument, updateDriverKind, type DriverKind } from '../../api/admin'
+import {
+  fetchDriver,
+  validateDriver,
+  openDriverDocument,
+  updateDriverKind,
+  updateDriverWithdrawLimits,
+  updateDriverKyc,
+  type DriverKind,
+  type DriverDetail,
+  type WithdrawLimitsPayload,
+  type KycPayload,
+  type KycStatus,
+} from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 
@@ -304,6 +316,21 @@ export default function AdminDriverDetailPage() {
               )}
             </section>
 
+            {/* Plafonds retrait per-driver (override du global — super-admin only) */}
+            {isSuperAdmin && (
+              <WithdrawLimitsSection
+                driverId={Number(id)}
+                driver={data.driver}
+              />
+            )}
+
+            {/* KYC — vérification d'identité tierce (super-admin only pour modifier) */}
+            <KycSection
+              driverId={Number(id)}
+              driver={data.driver}
+              canEdit={isSuperAdmin}
+            />
+
             {/* Grille identité / véhicule / urgence / performance */}
             <div className="grid gap-4 md:grid-cols-2">
               <Section title={t('admin.drivers.sectionIdentity')}>
@@ -552,5 +579,310 @@ function Section({
       </div>
       <div className="px-5 py-3">{children}</div>
     </section>
+  )
+}
+
+/**
+ * Section KYC — vérification d'identité tierce, indépendante de activation_status.
+ * Ops peut consulter, super-admin peut modifier (statut + provider + réf + notes).
+ * Provider libre : 'manual' pour recoupement admin, sinon nom du service tiers.
+ */
+const KYC_STATUS_LABEL_KEYS: Record<KycStatus, string> = {
+  unverified: 'admin.drivers.kycStatusUnverified',
+  verified:   'admin.drivers.kycStatusVerified',
+  rejected:   'admin.drivers.kycStatusRejected',
+}
+const KYC_STATUS_CLASSES: Record<KycStatus, string> = {
+  unverified: 'bg-warm-100 text-warm-600 border border-warm-200',
+  verified:   'bg-success-bg text-success border border-success/20',
+  rejected:   'bg-danger-bg text-airmess-red border border-airmess-red/30',
+}
+
+function KycSection({
+  driverId,
+  driver,
+  canEdit,
+}: {
+  driverId: number
+  driver: DriverDetail
+  canEdit: boolean
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+
+  const [status, setStatus]       = useState<KycStatus>(driver.kyc_status)
+  const [provider, setProvider]   = useState(driver.kyc_provider ?? '')
+  const [reference, setReference] = useState(driver.kyc_reference ?? '')
+  const [notes, setNotes]         = useState(driver.kyc_notes ?? '')
+
+  const mutation = useMutation({
+    mutationFn: (payload: KycPayload) => updateDriverKyc(driverId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'driver', String(driverId)] })
+    },
+  })
+
+  function handleSubmit() {
+    mutation.mutate({
+      status,
+      provider:  provider.trim()  || null,
+      reference: reference.trim() || null,
+      notes:     notes.trim()     || null,
+    })
+  }
+
+  const isDirty =
+    status !== driver.kyc_status ||
+    provider.trim()  !== (driver.kyc_provider  ?? '') ||
+    reference.trim() !== (driver.kyc_reference ?? '') ||
+    notes.trim()     !== (driver.kyc_notes     ?? '')
+
+  const error =
+    mutation.error instanceof AxiosError
+      ? (mutation.error.response?.data as { message?: string })?.message ??
+        t('admin.drivers.kycErrorGeneric')
+      : null
+
+  return (
+    <Section
+      title={t('admin.drivers.kycSectionTitle')}
+      action={
+        <span
+          className={`inline-block px-2 py-0.5 rounded text-caption font-semibold ${KYC_STATUS_CLASSES[driver.kyc_status]}`}
+        >
+          {t(KYC_STATUS_LABEL_KEYS[driver.kyc_status])}
+        </span>
+      }
+    >
+      <p className="text-caption text-warm-500 mb-3">{t('admin.drivers.kycSectionHelp')}</p>
+
+      {/* Bandeau info : dernière vérification + provider */}
+      {driver.kyc_verified_at && (
+        <div className="mb-3 flex items-center gap-2 text-caption text-warm-600 bg-cream border border-warm-200 rounded px-3 py-2">
+          <CheckIcon size={14} />
+          <span>
+            {t('admin.drivers.kycLastVerifiedAt', { date: formatDate(driver.kyc_verified_at) })}
+            {driver.kyc_provider ? ` — ${driver.kyc_provider}` : ''}
+            {driver.kyc_reference ? ` (${driver.kyc_reference})` : ''}
+          </span>
+        </div>
+      )}
+
+      {canEdit ? (
+        <div className="space-y-3">
+          <div>
+            <label className="text-caption font-bold text-ink block mb-1">
+              {t('admin.drivers.kycFieldStatus')}
+            </label>
+            <div className="flex gap-2">
+              {(['unverified', 'verified', 'rejected'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  className={`flex-1 h-9 px-2 rounded border text-body-s font-semibold transition-colors ${
+                    status === s
+                      ? KYC_STATUS_CLASSES[s]
+                      : 'bg-cream border-warm-200 text-warm-500 hover:border-warm-400'
+                  }`}
+                >
+                  {t(KYC_STATUS_LABEL_KEYS[s])}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">
+                {t('admin.drivers.kycFieldProvider')}
+              </label>
+              <input
+                type="text"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value)}
+                placeholder={t('admin.drivers.kycProviderPlaceholder')}
+                className="w-full h-9 px-2 border border-warm-300 rounded text-body-s bg-cream focus:outline-none focus:border-airmess-yellow"
+              />
+            </div>
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">
+                {t('admin.drivers.kycFieldReference')}
+              </label>
+              <input
+                type="text"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder={t('admin.drivers.kycReferencePlaceholder')}
+                className="w-full h-9 px-2 border border-warm-300 rounded text-body-s bg-cream focus:outline-none focus:border-airmess-yellow"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-caption font-bold text-ink block mb-1">
+              {t('admin.drivers.kycFieldNotes')}
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder={t('admin.drivers.kycNotesPlaceholder')}
+              className="w-full px-2 py-1.5 border border-warm-300 rounded text-body-s bg-cream focus:outline-none focus:border-airmess-yellow"
+            />
+          </div>
+          <div className="flex justify-end">
+            <AdminButton
+              variant="primary"
+              size="sm"
+              onClick={handleSubmit}
+              disabled={!isDirty || mutation.isPending}
+            >
+              {mutation.isPending ? t('common.loading') : t('common.save')}
+            </AdminButton>
+          </div>
+          {error && (
+            <p className="text-body-s text-airmess-red flex items-center gap-1.5">
+              <AlertTriangleIcon size={14} /> {error}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2 text-body-s">
+          <Row label={t('admin.drivers.kycFieldProvider')}>{driver.kyc_provider ?? '—'}</Row>
+          <Row label={t('admin.drivers.kycFieldReference')}>{driver.kyc_reference ?? '—'}</Row>
+          <Row label={t('admin.drivers.kycFieldNotes')}>{driver.kyc_notes ?? '—'}</Row>
+          <p className="text-caption text-warm-500 italic mt-2">
+            {t('admin.drivers.kycSuperOnly')}
+          </p>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+/**
+ * Section "Plafonds retrait personnalisés" — laisse le super-admin surcharger
+ * les 4 plafonds globaux (AppSetting) pour ce driver seulement. Vide = utilise
+ * le global. Trace auto dans support_notes via l'endpoint côté API.
+ */
+type LimitFieldKey = keyof WithdrawLimitsPayload
+const LIMIT_FIELDS: Array<{ key: LimitFieldKey; labelKey: string; unit: 'count' | 'fcfa' }> = [
+  { key: 'max_per_day_count',  labelKey: 'admin.drivers.limitDayCount',  unit: 'count' },
+  { key: 'max_per_week_count', labelKey: 'admin.drivers.limitWeekCount', unit: 'count' },
+  { key: 'max_per_day_fcfa',   labelKey: 'admin.drivers.limitDayFcfa',   unit: 'fcfa'  },
+  { key: 'max_per_week_fcfa',  labelKey: 'admin.drivers.limitWeekFcfa',  unit: 'fcfa'  },
+]
+
+function WithdrawLimitsSection({
+  driverId,
+  driver,
+}: {
+  driverId: number
+  driver: DriverDetail
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+
+  // Le state du formulaire = chaîne saisie par l'admin. '' = pas d'override.
+  // Initialise depuis les valeurs actuelles côté serveur.
+  const initial: Record<LimitFieldKey, string> = {
+    max_per_day_count:  driver.withdraw_max_per_day_count_override?.toString()  ?? '',
+    max_per_week_count: driver.withdraw_max_per_week_count_override?.toString() ?? '',
+    max_per_day_fcfa:   driver.withdraw_max_per_day_fcfa_override?.toString()   ?? '',
+    max_per_week_fcfa:  driver.withdraw_max_per_week_fcfa_override?.toString()  ?? '',
+  }
+  const [form, setForm] = useState(initial)
+
+  const mutation = useMutation({
+    mutationFn: (payload: WithdrawLimitsPayload) =>
+      updateDriverWithdrawLimits(driverId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'driver', String(driverId)] })
+    },
+  })
+
+  // Compare l'état actuel du form aux valeurs serveur pour envoyer UNIQUEMENT les diffs.
+  // Sémantique côté back : clé absente = pas de changement, null = suppression, entier = override.
+  function buildPayload(): WithdrawLimitsPayload {
+    const payload: WithdrawLimitsPayload = {}
+    for (const { key } of LIMIT_FIELDS) {
+      const current = driver[
+        `withdraw_${key}_override` as keyof DriverDetail
+      ] as number | null | undefined
+      const raw = form[key].trim()
+      const next = raw === '' ? null : Number(raw)
+      // Skip si identique à l'existant côté serveur.
+      if ((current ?? null) === next) continue
+      payload[key] = next
+    }
+    return payload
+  }
+
+  function handleSubmit() {
+    const payload = buildPayload()
+    if (Object.keys(payload).length === 0) return // rien à changer
+    mutation.mutate(payload)
+  }
+
+  const isDirty = Object.keys(buildPayload()).length > 0
+  const error =
+    mutation.error instanceof AxiosError
+      ? (mutation.error.response?.data as { message?: string })?.message ??
+        t('admin.drivers.limitsErrorGeneric')
+      : null
+
+  return (
+    <Section
+      title={t('admin.drivers.limitsSectionTitle')}
+      action={
+        <AdminButton
+          variant="primary"
+          size="sm"
+          onClick={handleSubmit}
+          disabled={!isDirty || mutation.isPending}
+        >
+          {mutation.isPending ? t('common.loading') : t('common.save')}
+        </AdminButton>
+      }
+    >
+      <p className="text-caption text-warm-500 mb-3">
+        {t('admin.drivers.limitsSectionHelp')}
+      </p>
+      <div className="grid gap-2 md:grid-cols-2">
+        {LIMIT_FIELDS.map((field) => {
+          const value    = form[field.key]
+          const isCustom = value !== ''
+          return (
+            <div key={field.key} className="border border-warm-200 rounded-lg px-3 py-2">
+              <label className="flex items-center justify-between mb-1.5">
+                <span className="text-caption font-bold text-ink">{t(field.labelKey)}</span>
+                {isCustom ? (
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-airmess-yellow bg-airmess-yellow/15 px-1.5 py-0.5 rounded">
+                    {t('admin.drivers.limitBadgeOverride')}
+                  </span>
+                ) : (
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-warm-500">
+                    {t('admin.drivers.limitBadgeGlobal')}
+                  </span>
+                )}
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={field.unit === 'fcfa' ? 100 : 1}
+                value={value}
+                onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
+                placeholder={t('admin.drivers.limitPlaceholder')}
+                className="w-full h-9 px-2 border border-warm-300 rounded text-body-s bg-cream focus:outline-none focus:border-airmess-yellow"
+              />
+            </div>
+          )
+        })}
+      </div>
+      {error && (
+        <p className="text-body-s text-airmess-red mt-3 flex items-center gap-1.5">
+          <AlertTriangleIcon size={14} /> {error}
+        </p>
+      )}
+    </Section>
   )
 }

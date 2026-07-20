@@ -871,6 +871,160 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ]);
     }
 
+    // ===== 7ter-bis. PLAFONDS RETRAIT PER-DRIVER (override du global) =====
+    /**
+     * Surcharge les plafonds retrait d'un driver spécifique. Chaque champ est
+     * optionnel : absent = pas de changement, `null` = supprime l'override
+     * (retour au global AppSetting), entier = nouvel override.
+     *
+     * Cas d'usage : promouvoir un driver "de confiance" (haut volume, ancien)
+     * sans changer les plafonds pour tout le monde. Réservé super-admin.
+     * Traçabilité automatique via SupportNote par champ modifié.
+     */
+    public function updateDriverWithdrawLimits(Request $request, Driver $driver): JsonResponse
+    {
+        // `sometimes` + `nullable` : présent absent → pas de changement,
+        // présent null → suppression override, présent int → override actif.
+        $data = $request->validate([
+            'max_per_day_count'  => ['sometimes', 'nullable', 'integer', 'min:1', 'max:1000'],
+            'max_per_week_count' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:1000'],
+            'max_per_day_fcfa'   => ['sometimes', 'nullable', 'integer', 'min:100', 'max:10000000'],
+            'max_per_week_fcfa'  => ['sometimes', 'nullable', 'integer', 'min:100', 'max:100000000'],
+        ]);
+
+        // Mapping payload → colonnes DB. Une clé absente du payload = pas dans $updates.
+        $columnMap = [
+            'max_per_day_count'  => 'withdraw_max_per_day_count_override',
+            'max_per_week_count' => 'withdraw_max_per_week_count_override',
+            'max_per_day_fcfa'   => 'withdraw_max_per_day_fcfa_override',
+            'max_per_week_fcfa'  => 'withdraw_max_per_week_fcfa_override',
+        ];
+        $updates    = [];
+        $auditLines = [];
+        foreach ($columnMap as $payloadKey => $column) {
+            if (! array_key_exists($payloadKey, $data)) {
+                continue;
+            }
+            $newValue = $data[$payloadKey];
+            $oldValue = $driver->{$column};
+            if ($newValue === $oldValue) {
+                continue; // idempotent : pas de note d'audit pour un no-op
+            }
+            $updates[$column]    = $newValue;
+            $oldLabel            = $oldValue === null ? 'global' : (string) $oldValue;
+            $newLabel            = $newValue === null ? 'global' : (string) $newValue;
+            $auditLines[]        = "{$payloadKey}: {$oldLabel} → {$newLabel}";
+        }
+
+        if (empty($updates)) {
+            return response()->json([
+                'message' => 'Aucun changement.',
+                'driver'  => $driver->fresh()->load('user'),
+                'limits'  => $driver->fresh()->withdrawLimits(),
+            ]);
+        }
+
+        $adminUser = $request->user();
+
+        DB::transaction(function () use ($driver, $updates, $auditLines, $adminUser) {
+            $driver->update($updates);
+
+            SupportNote::create([
+                'admin_id'     => $adminUser->admin?->id,
+                'notable_type' => SupportNote::NOTABLE_USER,
+                'notable_id'   => $driver->user_id,
+                'body'         => "Plafonds retrait mis à jour par "
+                    . ($adminUser->name ?? $adminUser->email)
+                    . " — " . implode(' | ', $auditLines),
+                'escalated_to' => null,
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Plafonds mis à jour.',
+            'driver'  => $driver->fresh()->load('user'),
+            'limits'  => $driver->fresh()->withdrawLimits(),
+        ]);
+    }
+
+    // ===== 7ter-ter. STATUT KYC D'UN LIVREUR =====
+    /**
+     * Marque un driver comme KYC vérifié / rejeté / non-vérifié après contrôle
+     * de son identité (source officielle, provider tiers type Smile Identity,
+     * ou recoupement manuel par un admin).
+     *
+     * Distinct de la validation activation_status : ici on prouve l'identité,
+     * pas l'aptitude à travailler. Un driver peut être `active` + KYC `unverified`
+     * (fonctionnel mais plafonné). Le passage `verified` permet ensuite d'étendre
+     * les plafonds retrait (via `updateDriverWithdrawLimits`) ou de promouvoir
+     * en Airmess en confiance.
+     *
+     * Réservé super-admin (ops peut consulter mais pas modifier).
+     * Traçable via SupportNote automatique.
+     */
+    public function updateDriverKyc(Request $request, Driver $driver): JsonResponse
+    {
+        $data = $request->validate([
+            'status'    => ['required', Rule::in([
+                Driver::KYC_UNVERIFIED,
+                Driver::KYC_VERIFIED,
+                Driver::KYC_REJECTED,
+            ])],
+            // provider libre : 'manual' pour recoupement admin, ou nom du service
+            // tiers ('smile_identity', 'youverify', ...) quand on intégrera l'API.
+            'provider'  => ['nullable', 'string', 'max:40'],
+            'reference' => ['nullable', 'string', 'max:191'],
+            'notes'     => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        // Idempotence sur le status uniquement — les autres champs peuvent
+        // légitimement être mis à jour même sans changement de status
+        // (ex: ajouter une note, corriger la reference du provider).
+        $previousStatus = $driver->kyc_status;
+        $newStatus      = $data['status'];
+        $adminUser      = $request->user();
+
+        DB::transaction(function () use ($driver, $data, $newStatus, $adminUser) {
+            $driver->update([
+                'kyc_status'      => $newStatus,
+                'kyc_provider'    => $data['provider']  ?? 'manual',
+                'kyc_reference'   => $data['reference'] ?? null,
+                'kyc_notes'       => $data['notes']     ?? null,
+                // verified_at n'est rempli QUE quand on passe à verified.
+                // Sur transition vers unverified/rejected → NULL (on efface la date).
+                'kyc_verified_at' => $newStatus === Driver::KYC_VERIFIED ? now() : null,
+            ]);
+
+            SupportNote::create([
+                'admin_id'     => $adminUser->admin?->id,
+                'notable_type' => SupportNote::NOTABLE_USER,
+                'notable_id'   => $driver->user_id,
+                'body'         => sprintf(
+                    "KYC : %s → %s (provider: %s%s%s) par %s",
+                    $driver->getOriginal('kyc_status') ?? 'unverified', // valeur pré-update
+                    $newStatus,
+                    $data['provider'] ?? 'manual',
+                    ! empty($data['reference']) ? ", ref: {$data['reference']}" : '',
+                    ! empty($data['notes'])     ? " — {$data['notes']}"         : '',
+                    $adminUser->name ?? $adminUser->email
+                ),
+                'escalated_to' => null,
+            ]);
+        });
+
+        $label = match ($newStatus) {
+            Driver::KYC_VERIFIED   => 'vérifié',
+            Driver::KYC_REJECTED   => 'rejeté',
+            default                => 'non vérifié',
+        };
+
+        return response()->json([
+            'message' => "Statut KYC : {$label}.",
+            'driver'  => $driver->fresh()->load('user'),
+            'changed' => $previousStatus !== $newStatus,
+        ]);
+    }
+
     // ===== 7quater. VALIDER UN LIVREUR (premier passage pending → active) =====
     /**
      * Différent de toggleDriverActive : ce endpoint est dédié à la VALIDATION INITIALE

@@ -104,8 +104,58 @@ export interface DriverDetail {
   emergency_contact2_phone: string | null
   preferred_response_channel: 'email' | 'sms' | 'whatsapp' | null
   kind: DriverKind
+  /** Overrides per-driver des plafonds retrait ; null = utilise le global AppSetting. */
+  withdraw_max_per_day_count_override: number | null
+  withdraw_max_per_week_count_override: number | null
+  withdraw_max_per_day_fcfa_override: number | null
+  withdraw_max_per_week_fcfa_override: number | null
+  /** KYC — vérification d'identité tierce (indépendant de activation_status). */
+  kyc_status: KycStatus
+  kyc_verified_at: string | null
+  kyc_provider: string | null
+  kyc_reference: string | null
+  kyc_notes: string | null
   user: { id: number; name: string; email: string; phone: string | null }
   wallet: DriverWallet | null
+}
+
+export type KycStatus = 'unverified' | 'verified' | 'rejected'
+
+export interface KycPayload {
+  status: KycStatus
+  provider?: string | null
+  reference?: string | null
+  notes?: string | null
+}
+
+/**
+ * Structure retournée par Driver::withdrawLimits() côté API.
+ * Chaque plafond : `value` effective, `source` d'où elle vient, `global` de référence, `override` optionnel.
+ */
+export interface WithdrawLimitField {
+  value: number
+  source: 'global' | 'override'
+  global: number
+  override: number | null
+}
+export interface DriverWithdrawLimits {
+  max_per_day_count: WithdrawLimitField
+  max_per_week_count: WithdrawLimitField
+  max_per_day_fcfa: WithdrawLimitField
+  max_per_week_fcfa: WithdrawLimitField
+}
+
+/**
+ * Payload pour updateDriverWithdrawLimits : chaque champ est optionnel.
+ * - clé absente : pas de changement
+ * - clé = null  : supprime l'override (retour au global)
+ * - clé = entier : override actif
+ */
+export interface WithdrawLimitsPayload {
+  max_per_day_count?: number | null
+  max_per_week_count?: number | null
+  max_per_day_fcfa?: number | null
+  max_per_week_fcfa?: number | null
 }
 
 export type DeclineReason =
@@ -153,6 +203,83 @@ export async function updateDriverKind(
   kind: DriverKind,
 ): Promise<{ driver: DriverDetail; message: string }> {
   const { data } = await api.patch(`/admin/drivers/${id}/kind`, { kind })
+  return data
+}
+
+/**
+ * Surcharge les plafonds retrait d'un driver. Réservé au super-admin.
+ * Trace automatique dans support_notes.
+ * @see WithdrawLimitsPayload pour la sémantique (absent / null / entier).
+ */
+export async function updateDriverWithdrawLimits(
+  id: number | string,
+  payload: WithdrawLimitsPayload,
+): Promise<{ driver: DriverDetail; limits: DriverWithdrawLimits; message: string }> {
+  const { data } = await api.patch(`/admin/drivers/${id}/withdraw-limits`, payload)
+  return data
+}
+
+/**
+ * Met à jour le statut KYC d'un driver (verified / rejected / unverified).
+ * Réservé super-admin. Provider libre — 'manual' par défaut côté API si absent.
+ */
+export async function updateDriverKyc(
+  id: number | string,
+  payload: KycPayload,
+): Promise<{ driver: DriverDetail; changed: boolean; message: string }> {
+  const { data } = await api.patch(`/admin/drivers/${id}/kyc`, payload)
+  return data
+}
+
+// ─── Reporting compta wallet ────────────────────────────────────────────
+
+export interface WalletReportingKpis {
+  total_balance_fcfa: number
+  driver_balance_fcfa: number
+  user_balance_fcfa: number
+  user_reserved_fcfa: number
+  cash_in_period_fcfa: number
+  cash_out_period_fcfa: number
+  platform_revenue_period_fcfa: number
+}
+
+export interface WalletReportingDay {
+  date: string
+  cash_in: number
+  cash_out: number
+  revenue: number
+}
+
+export interface WalletReportingTypeRow {
+  type: string
+  wallet: 'driver' | 'user'
+  count: number
+  total: number
+}
+
+export interface WalletReportingMover {
+  kind: 'driver' | 'user'
+  id: number
+  name: string
+  total: number
+  tx_count: number
+}
+
+export interface WalletReportingResponse {
+  period: { from: string; to: string; days: number }
+  kpis: WalletReportingKpis
+  daily_series: WalletReportingDay[]
+  type_breakdown: WalletReportingTypeRow[]
+  top_movers: WalletReportingMover[]
+  pending_withdrawals: { count: number; total: number }
+}
+
+export async function fetchWalletReporting(params: {
+  from?: string
+  to?: string
+  days?: number
+}): Promise<WalletReportingResponse> {
+  const { data } = await api.get('/admin/reporting/wallets', { params })
   return data
 }
 

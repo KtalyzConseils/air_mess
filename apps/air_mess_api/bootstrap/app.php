@@ -27,5 +27,26 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Rate limiting : renvoyer un JSON français propre avec Retry-After.
+        // Sans ce handler, Laravel renvoie une page HTML "Too Many Attempts" pas
+        // exploitable par les 3 clients (marchant-web, driver-app, integration).
+        $exceptions->render(function (\Illuminate\Http\Exceptions\ThrottleRequestsException $e) {
+            $retryAfter = (int) ($e->getHeaders()['Retry-After'] ?? 60);
+            $minutes    = (int) max(1, ceil($retryAfter / 60));
+            $suffix     = $minutes > 1 ? 's' : '';
+
+            \Illuminate\Support\Facades\Log::warning('Rate limit hit', [
+                'ip'          => request()->ip(),
+                'path'        => request()->path(),
+                'user_id'     => optional(request()->user())->id,
+                'retry_after' => $retryAfter,
+            ]);
+
+            return response()->json([
+                'message'             => "Trop de tentatives. Réessayez dans {$minutes} minute{$suffix}.",
+                'retry_after_seconds' => $retryAfter,
+            ], 429, [
+                'Retry-After' => $retryAfter,
+            ]);
+        });
     })->create();

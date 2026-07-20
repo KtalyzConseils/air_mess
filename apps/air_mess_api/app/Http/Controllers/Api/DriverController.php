@@ -560,13 +560,16 @@ class DriverController extends Controller
             ->latest()
             ->first();
 
-        // Plafonds anti-abus : usage actuel + limites pour que le driver sache où il en est
-        $usage = \App\Models\WalletWithdrawRequest::usageForDriver($driver->id);
+        // Plafonds anti-abus : usage actuel + limites pour que le driver sache où il en est.
+        // Les limites peuvent être overridées per-driver (cf. Driver::withdrawLimits) —
+        // on n'envoie ici que les valeurs EFFECTIVES (sans révéler l'override côté driver).
+        $usage        = \App\Models\WalletWithdrawRequest::usageForDriver($driver->id);
+        $driverLimits = $driver->withdrawLimits();
         $withdrawLimits = [
-            'max_per_day_count'  => (int) \App\Models\AppSetting::get('driver_withdraw_max_per_day_count', 2),
-            'max_per_week_count' => (int) \App\Models\AppSetting::get('driver_withdraw_max_per_week_count', 5),
-            'max_per_day_fcfa'   => (int) \App\Models\AppSetting::get('driver_withdraw_max_per_day_fcfa', 30000),
-            'max_per_week_fcfa'  => (int) \App\Models\AppSetting::get('driver_withdraw_max_per_week_fcfa', 100000),
+            'max_per_day_count'  => (int) $driverLimits['max_per_day_count']['value'],
+            'max_per_week_count' => (int) $driverLimits['max_per_week_count']['value'],
+            'max_per_day_fcfa'   => (int) $driverLimits['max_per_day_fcfa']['value'],
+            'max_per_week_fcfa'  => (int) $driverLimits['max_per_week_fcfa']['value'],
             'used'               => $usage,
         ];
 
@@ -707,12 +710,14 @@ class DriverController extends Controller
         }
 
         // ===== Plafonds anti-abus (cf. project_wallet_driver_todo #3) =====
-        // count_* compte tous statuts (anti-spam), amount_* compte pending+approved (argent décaissé)
+        // count_* compte tous statuts (anti-spam), amount_* compte pending+approved (argent décaissé).
+        // Depuis 2026-07-17 : les plafonds peuvent être overridés per-driver (Driver::withdrawLimits).
         $usage    = \App\Models\WalletWithdrawRequest::usageForDriver($driver->id);
-        $maxDayN  = (int) \App\Models\AppSetting::get('driver_withdraw_max_per_day_count', 2);
-        $maxWeekN = (int) \App\Models\AppSetting::get('driver_withdraw_max_per_week_count', 5);
-        $maxDayA  = (int) \App\Models\AppSetting::get('driver_withdraw_max_per_day_fcfa', 30000);
-        $maxWeekA = (int) \App\Models\AppSetting::get('driver_withdraw_max_per_week_fcfa', 100000);
+        $limits   = $driver->withdrawLimits();
+        $maxDayN  = (int) $limits['max_per_day_count']['value'];
+        $maxWeekN = (int) $limits['max_per_week_count']['value'];
+        $maxDayA  = (int) $limits['max_per_day_fcfa']['value'];
+        $maxWeekA = (int) $limits['max_per_week_fcfa']['value'];
 
         if ($usage['count_24h'] >= $maxDayN) {
             return response()->json([

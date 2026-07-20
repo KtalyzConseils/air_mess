@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AdminReportingController;
 use App\Http\Controllers\Api\AddressController;
 use App\Http\Controllers\Api\TrackingController;
 use App\Http\Controllers\Api\NotificationController;
@@ -20,24 +21,27 @@ use App\Http\Controllers\Api\UserWalletController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Routes publiques d'authentification
+// Routes publiques d'authentification — chaque endpoint sensible est rate-limité
+// (voir AppServiceProvider::registerRateLimiters pour les clés et les seuils).
+// Objectif : empêcher brute-force, énumération, spam SMS et pollution Fedapay.
 Route::prefix('auth')->group(function () {
-    Route::post('/register/marchant', [AuthController::class, 'registerMarchant']);
-    Route::post('/register/individual', [AuthController::class, 'registerIndividual']);
-    Route::post('/register/driver', [AuthController::class, 'registerDriver']);
+    Route::post('/register/marchant',  [AuthController::class, 'registerMarchant'])->middleware('throttle:auth-register');
+    Route::post('/register/individual',[AuthController::class, 'registerIndividual'])->middleware('throttle:auth-register');
+    Route::post('/register/driver',    [AuthController::class, 'registerDriver'])->middleware('throttle:auth-register');
     // Vérification du numéro par SMS (OTP) — inscription livreur depuis l'app mobile.
-    Route::post('/phone/otp/send',   [\App\Http\Controllers\Api\PhoneOtpController::class, 'send']);
-    Route::post('/phone/otp/verify', [\App\Http\Controllers\Api\PhoneOtpController::class, 'verify']);
-    Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);   
-    Route::post('/password/reset',  [AuthController::class, 'resetPassword']);
+    Route::post('/phone/otp/send',   [\App\Http\Controllers\Api\PhoneOtpController::class, 'send'])->middleware('throttle:auth-otp-send');
+    Route::post('/phone/otp/verify', [\App\Http\Controllers\Api\PhoneOtpController::class, 'verify'])->middleware('throttle:auth-otp-verify');
+    Route::post('/login',            [AuthController::class, 'login'])->middleware('throttle:auth-login');
+    Route::post('/password/forgot',  [AuthController::class, 'forgotPassword'])->middleware('throttle:auth-password-forgot');
+    Route::post('/password/reset',   [AuthController::class, 'resetPassword'])->middleware('throttle:auth-password-forgot');
 });
 
 
 // routes de tracking de la commande pour destinataire
 Route::get('/tracking/{token}', [TrackingController::class, 'show']);
 // Cas 8 — Contestation destinataire depuis le lien tracking (public, anti-abus applicatif)
-Route::post('/tracking/{token}/dispute', [TrackingController::class, 'dispute']);
+// Rate limit strict (3/jour/IP) car endpoint public et à fort impact (crée un incident + notif ops).
+Route::post('/tracking/{token}/dispute', [TrackingController::class, 'dispute'])->middleware('throttle:tracking-dispute');
 
 // Contacts support publics — utilisés par les modales "Contacter le support"
 // des 3 apps (marchant-web, driver-app, tracking public). Values vides = option
@@ -83,9 +87,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/stats', [DriverController::class, 'stats']);
 
         // Wallet driver (unique source de vérité pour la caution + gains + retraits)
+        // top-up + withdraw-request : rate limit court terme en plus des plafonds
+        // métier (count_24h, count_7d) déjà appliqués côté controller.
         Route::get('/wallet',                    [DriverController::class, 'wallet']);
-        Route::post('/wallet/top-up',            [DriverController::class, 'topUpWallet']);
-        Route::post('/wallet/withdraw-request',  [DriverController::class, 'requestWithdraw']);
+        Route::post('/wallet/top-up',            [DriverController::class, 'topUpWallet'])->middleware('throttle:wallet-topup');
+        Route::post('/wallet/withdraw-request',  [DriverController::class, 'requestWithdraw'])->middleware('throttle:wallet-withdraw');
         Route::post('/wallet/withdraw-requests/{withdraw}/cancel', [DriverController::class, 'cancelWithdraw']);
 
         Route::post('/courses/{course}/accept',    [DriverController::class, 'acceptCourse']);
@@ -153,10 +159,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Wallet payeur (marchand + particulier) — source de vérité pour les paiements de courses
     Route::prefix('me/wallet')->group(function () {
         Route::get('/',        [UserWalletController::class, 'show']);
-        Route::post('/top-up', [UserWalletController::class, 'topUp']);
+        Route::post('/top-up', [UserWalletController::class, 'topUp'])->middleware('throttle:wallet-topup');
 
         // Payout marchand/particulier : demande + annulation avant décision admin
-        Route::post('/withdraw-request',                        [UserWalletController::class, 'requestWithdraw']);
+        Route::post('/withdraw-request',                        [UserWalletController::class, 'requestWithdraw'])->middleware('throttle:wallet-withdraw');
         Route::post('/withdraw-requests/{withdraw}/cancel',     [UserWalletController::class, 'cancelWithdraw']);
     });
 
@@ -303,6 +309,17 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         // courses (paid_by_recipient + is_high_value) et bypass caution. Traçable via
         // support_notes automatique.
         Route::patch('/drivers/{driver}/kind', [AdminController::class, 'updateDriverKind']);
+
+        // Plafonds retrait per-driver — override optionnel des plafonds globaux
+        // (pass `null` pour supprimer un override, ou entier pour override actif).
+        Route::patch('/drivers/{driver}/withdraw-limits', [AdminController::class, 'updateDriverWithdrawLimits']);
+
+        // Statut KYC — vérification d'identité tierce (manual, smile_identity, ...).
+        Route::patch('/drivers/{driver}/kyc', [AdminController::class, 'updateDriverKyc']);
+
+        // Reporting compta — dashboard mouvements wallet (KPI + graphs).
+        // Accessible ops+ (lecture seule, pas d'action sensible).
+        Route::get('/reporting/wallets', [AdminReportingController::class, 'wallets']);
 
         // Cas 7 — Signaler une course frauduleuse (vol livreur).
         // Bannit le driver + saisit la caution + rembourse le marchand. Irréversible.

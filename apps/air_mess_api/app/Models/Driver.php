@@ -18,6 +18,12 @@ class Driver extends Model
     public const KIND_INDEPENDENT = 'independent';
     public const KIND_AIRMESS     = 'airmess';
 
+    // KYC — vérification d'identité tierce (indépendante de activation_status).
+    // Cf. migration 2026_07_17_110000_add_kyc_to_drivers.
+    public const KYC_UNVERIFIED = 'unverified';
+    public const KYC_VERIFIED   = 'verified';
+    public const KYC_REJECTED   = 'rejected';
+
     protected $fillable = [
         'user_id',
         'first_name',
@@ -47,6 +53,15 @@ class Driver extends Model
         'last_position_at',
         'acceptance_rate',
         'incidents_count',
+        'withdraw_max_per_day_count_override',
+        'withdraw_max_per_week_count_override',
+        'withdraw_max_per_day_fcfa_override',
+        'withdraw_max_per_week_fcfa_override',
+        'kyc_status',
+        'kyc_verified_at',
+        'kyc_provider',
+        'kyc_reference',
+        'kyc_notes',
     ];
 
     protected function casts(): array
@@ -59,6 +74,7 @@ class Driver extends Model
             'current_lat' => 'float',
             'current_lng' => 'float',
             'acceptance_rate' => 'float',
+            'kyc_verified_at' => 'datetime',
         ];
     }
 
@@ -78,6 +94,15 @@ class Driver extends Model
     public function isAirmess(): bool
     {
         return $this->kind === self::KIND_AIRMESS;
+    }
+
+    /**
+     * Identité vérifiée par un tiers (ou validation manuelle admin).
+     * Indépendant de activation_status : un driver peut être actif mais non KYC.
+     */
+    public function isKycVerified(): bool
+    {
+        return $this->kyc_status === self::KYC_VERIFIED;
     }
 
     public function earnings()
@@ -145,6 +170,52 @@ class Driver extends Model
         $this->update(['acceptance_rate' => $rate]);
 
         return $rate;
+    }
+
+    /**
+     * Plafonds retrait effectifs pour ce driver : override si défini, sinon
+     * fallback sur les valeurs globales de AppSetting.
+     *
+     * Retourne un tableau structuré consommable par `requestWithdraw` et par
+     * l'endpoint /driver/wallet (le driver voit ses vraies limites, pas les
+     * globales — évite les surprises).
+     *
+     * `source` indique d'où vient chaque valeur (`override` | `global`) — utile
+     * pour l'UI admin (affichage "surchargé" vs "hérité").
+     */
+    public function withdrawLimits(): array
+    {
+        $globalDayCount  = (int) AppSetting::get('driver_withdraw_max_per_day_count',  2);
+        $globalWeekCount = (int) AppSetting::get('driver_withdraw_max_per_week_count', 5);
+        $globalDayFcfa   = (int) AppSetting::get('driver_withdraw_max_per_day_fcfa',   30000);
+        $globalWeekFcfa  = (int) AppSetting::get('driver_withdraw_max_per_week_fcfa',  100000);
+
+        return [
+            'max_per_day_count' => [
+                'value'    => $this->withdraw_max_per_day_count_override ?? $globalDayCount,
+                'source'   => $this->withdraw_max_per_day_count_override !== null ? 'override' : 'global',
+                'global'   => $globalDayCount,
+                'override' => $this->withdraw_max_per_day_count_override,
+            ],
+            'max_per_week_count' => [
+                'value'    => $this->withdraw_max_per_week_count_override ?? $globalWeekCount,
+                'source'   => $this->withdraw_max_per_week_count_override !== null ? 'override' : 'global',
+                'global'   => $globalWeekCount,
+                'override' => $this->withdraw_max_per_week_count_override,
+            ],
+            'max_per_day_fcfa' => [
+                'value'    => $this->withdraw_max_per_day_fcfa_override ?? $globalDayFcfa,
+                'source'   => $this->withdraw_max_per_day_fcfa_override !== null ? 'override' : 'global',
+                'global'   => $globalDayFcfa,
+                'override' => $this->withdraw_max_per_day_fcfa_override,
+            ],
+            'max_per_week_fcfa' => [
+                'value'    => $this->withdraw_max_per_week_fcfa_override ?? $globalWeekFcfa,
+                'source'   => $this->withdraw_max_per_week_fcfa_override !== null ? 'override' : 'global',
+                'global'   => $globalWeekFcfa,
+                'override' => $this->withdraw_max_per_week_fcfa_override,
+            ],
+        ];
     }
 
     /**

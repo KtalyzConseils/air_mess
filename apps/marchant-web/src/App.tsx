@@ -30,6 +30,7 @@ import DevPage from './pages/DevPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
 import AdminWithdrawRequestsPage from './pages/admin/AdminWithdrawRequestsPage'
 import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDetailPage'
+import AdminWalletReportingPage from './pages/admin/AdminWalletReportingPage'
 import AdminReconciliationPage from './pages/admin/AdminReconciliationPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
@@ -93,6 +94,7 @@ function App() {
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/withdraw-requests" element={<AdminWithdrawRequestsPage />} />
             <Route path="/admin/withdraw-requests/:id" element={<AdminWithdrawRequestDetailPage />} />
+            <Route path="/admin/reporting/wallets" element={<AdminWalletReportingPage />} />
             <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />
           </Route>
 
