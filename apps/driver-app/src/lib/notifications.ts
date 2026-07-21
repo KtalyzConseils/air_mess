@@ -42,12 +42,26 @@ export async function initNotifications(): Promise<void> {
   }
   const Notifications = await import('expo-notifications')
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList:   true,
-      shouldPlaySound:  true,
-      shouldSetBadge:   true,
-    }),
+    handleNotification: async (notification) => {
+      const data = (notification?.request?.content?.data ?? {}) as Record<string, any>
+      // Course entrante : l'ÉCRAN D'APPEL in-app prend entièrement le relais
+      // (affichage + sonnerie). On supprime donc la bannière/son système, sinon le
+      // livreur voit une notification ET l'appel en même temps, avec double son.
+      if (data.type === 'course.offered') {
+        return {
+          shouldShowBanner: false,
+          shouldShowList:   false,
+          shouldPlaySound:  false,
+          shouldSetBadge:   false,
+        }
+      }
+      return {
+        shouldShowBanner: true,
+        shouldShowList:   true,
+        shouldPlaySound:  true,
+        shouldSetBadge:   true,
+      }
+    },
   })
 
   // Sur Android, le son d'une notif provient du CANAL, pas du champ `sound` du push.

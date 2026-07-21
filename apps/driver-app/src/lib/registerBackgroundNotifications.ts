@@ -211,9 +211,10 @@ async function displayRingNotification(item: RingItem): Promise<void> {
       visibility: AndroidVisibility.PUBLIC,
       fullScreenAction: { id: 'incoming-course', launchActivity: 'default' },
       pressAction: { id: 'default', launchActivity: 'default' },
+      // Persiste JUSQU'À la réponse du livreur (Accepter / Refuser) : pas de
+      // `timeoutAfter`, sinon la notif d'appel disparaît toute seule au bout de 30s.
       ongoing: true,
       autoCancel: false,
-      timeoutAfter: RING_ACTIVE_MS, // se retire seul (> timer 30s)
       actions: [
         { title: '✖ Refuser', pressAction: { id: 'decline' } },
         { title: '✔ Accepter', pressAction: { id: 'accept', launchActivity: 'default' } },
