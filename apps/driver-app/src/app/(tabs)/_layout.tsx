@@ -7,13 +7,20 @@ import { Ionicons } from '@expo/vector-icons'
 import { useQuery } from '@tanstack/react-query'
 import { fetchUnreadCount } from '../../api/notifications'
 
-// Les ROM Transsion (TECNO / itel / Infinix) IGNORENT la demande d'icônes de statut
-// SOMBRES (ni l'API JS ni le flag natif windowLightStatusBar ne fonctionnent) : les
-// icônes restent BLANCHES → invisibles sur nos fonds clairs. Sur ces appareils on met
-// un bandeau sombre derrière la barre. Ailleurs (Samsung, Pixel, Xiaomi…), le flag
-// natif marche → barre claire + icônes noires, pas de bandeau.
+// Beaucoup de ROM d'entrée de gamme (Transsion : TECNO / itel / Infinix, MobiWire…)
+// IGNORENT la demande d'icônes de statut SOMBRES — ni l'API JS ni le flag natif
+// windowLightStatusBar n'ont d'effet. Les icônes restent BLANCHES, donc invisibles sur
+// nos fonds clairs. Sur ces appareils on pose un bandeau sombre derrière la barre.
+//
+// La liste ci-dessous énumère les constructeurs qui HONORENT la demande, et non ceux qui
+// l'ignorent : une liste noire laisse tout appareil inconnu tomber dans le cas illisible,
+// alors qu'une liste blanche lui donne le bandeau sombre — moins joli, mais toujours
+// lisible. Sur ce parc (téléphones d'entrée de gamme majoritaires), c'est le bon défaut.
+// Vérifié en conditions réelles : Samsung ✅ (barre claire), itel ❌, MobiWire ❌.
 const OEM = `${Device.manufacturer ?? ''} ${Device.brand ?? ''}`.toLowerCase()
-const FORCE_DARK_BANDEAU = /tecno|itel|infinix|transsion/.test(OEM)
+const LIGHT_BAR_HONORED =
+  /samsung|google|pixel|xiaomi|redmi|poco|oneplus|oppo|vivo|realme|motorola|nokia|hmd|sony|asus/
+const FORCE_DARK_BANDEAU = !LIGHT_BAR_HONORED.test(OEM)
 
 const INK = '#1A1614'
 const WARM_400 = '#B8AF9F'
