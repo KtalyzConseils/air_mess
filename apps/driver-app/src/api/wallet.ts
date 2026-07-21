@@ -68,6 +68,21 @@ export async function requestTopUp(
   return data
 }
 
+/**
+ * Demande au serveur de vérifier auprès de Fedapay si le paiement est approuvé, et de
+ * créditer si c'est le cas.
+ *
+ * Appelé au retour de l'écran de paiement. Le webhook Fedapay reste la voie normale ;
+ * ceci évite qu'un webhook en retard ou mal configuré laisse le livreur devant 0 F
+ * juste après avoir payé. L'opération est idempotente côté serveur.
+ */
+export async function confirmTopUp(
+  paymentId: number,
+): Promise<{ status: string; credited: boolean }> {
+  const { data } = await api.post(`/driver/wallet/top-up/${paymentId}/confirm`)
+  return data
+}
+
 export async function requestWithdraw(payload: {
   amount: number
   target_method: 'momo' | 'bank'

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,6 +10,7 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import { AxiosError } from 'axios'
@@ -385,26 +385,47 @@ function TopUpModal({
   minAmount: number
 }) {
   const [amount, setAmount] = useState('')
-  const queryClient = useQueryClient()
+  const router = useRouter()
 
   const mutation = useMutation({
-    mutationFn: (n: number) => requestTopUp(n),
-    onSuccess: async (data) => {
+    mutationFn: (n: number) => {
+      // URL de retour donnée à Fedapay. L'écran de paiement l'INTERCEPTE avant qu'elle
+      // ne se charge (cf. src/app/payment.tsx) : elle sert de signal de fin de parcours,
+      // elle n'a donc pas besoin d'exister côté serveur. Si un jour le paiement sort
+      // quand même de l'app, la route API du même nom prend le relais et rebondit.
+      const base = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '')
+      return requestTopUp(n, base ? `${base}/payments/return-to-app` : undefined)
+    },
+    onSuccess: (checkout) => {
+      const n = Number(amount)
       handleClose()
-      const supported = await Linking.canOpenURL(data.checkout_url)
-      if (supported) {
-        Linking.openURL(data.checkout_url)
-      } else {
-        Alert.alert('Erreur', "Impossible d'ouvrir la page de paiement.")
-      }
-      queryClient.invalidateQueries({ queryKey: ['wallet'] })
+      // Paiement DANS l'app : contrairement à un onglet Chrome, cet écran peut être
+      // refermé par programme dès que le paiement est terminé.
+      router.push({
+        pathname: '/payment',
+        params: {
+          url: checkout.checkout_url,
+          amount: String(n),
+          // Sert à confirmer le paiement au retour sans attendre le webhook.
+          payment_id: String(checkout.payment_id),
+        },
+      })
     },
     onError: (err) => {
-      const msg =
-        err instanceof AxiosError
-          ? (err.response?.data as { message?: string })?.message ??
-            'Erreur lors de la création du paiement.'
-          : 'Erreur inattendue.'
+      let msg = 'Erreur inattendue.'
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          // Aucune réponse HTTP : réseau ou délai dépassé, PAS un refus du serveur.
+          msg =
+            err.code === 'ECONNABORTED'
+              ? "Le serveur met trop de temps à répondre (création du paiement). Réessaie dans un instant."
+              : 'Impossible de joindre le serveur. Vérifie ta connexion internet.'
+        } else {
+          msg =
+            (err.response.data as { message?: string })?.message ??
+            `Erreur serveur (${err.response.status}) lors de la création du paiement.`
+        }
+      }
       Alert.alert('Recharge impossible', msg)
     },
   })

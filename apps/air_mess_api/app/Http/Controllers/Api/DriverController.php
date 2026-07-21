@@ -664,6 +664,90 @@ class DriverController extends Controller
     }
 
     /**
+     * Confirme un top-up au retour du paiement, sans dépendre du webhook.
+     *
+     * Le webhook Fedapay reste la voie principale, mais il peut arriver en retard, être
+     * mal configuré côté dashboard, ou être rejeté (secret désaligné). Le livreur voyait
+     * alors 0 F juste après avoir payé — le pire scénario de confiance possible.
+     * Ici l'app demande explicitement : « ce paiement est-il approuvé ? » On interroge
+     * Fedapay, source de vérité, et on crédite.
+     *
+     * Idempotent par construction : si le webhook a déjà crédité, `isPaid()` court-circuite.
+     * Le crédit passe par le MÊME service que le webhook, donc pas de double comptabilité.
+     */
+    public function confirmTopUp(
+        \App\Models\Payment $payment,
+        Request $request,
+        \App\Services\FedapayService $fedapay,
+        DriverWalletService $walletService,
+        NotificationService $notifier,
+    ): JsonResponse {
+        $driver = $request->user()->driver;
+        if (! $driver) {
+            return response()->json(['message' => 'Profil livreur introuvable.'], 403);
+        }
+
+        // Un livreur ne peut confirmer QUE son propre dépôt.
+        if ($payment->user_id !== $request->user()->id
+            || $payment->type !== \App\Models\Payment::TYPE_WALLET_DEPOSIT) {
+            return response()->json(['message' => 'Paiement introuvable.'], 404);
+        }
+
+        // Déjà crédité (webhook plus rapide que nous) : rien à faire.
+        if ($payment->isPaid()) {
+            return response()->json(['status' => 'paid', 'credited' => false]);
+        }
+
+        if (! $payment->provider_ref) {
+            return response()->json(['status' => $payment->status, 'credited' => false]);
+        }
+
+        try {
+            $tx = $fedapay->fetchTransaction((string) $payment->provider_ref);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('confirmTopUp: fetchTransaction failed', [
+                'payment_id' => $payment->id,
+                'err'        => $e->getMessage(),
+            ]);
+            // On ne bloque pas le livreur : le webhook fera le travail de son côté.
+            return response()->json(['status' => $payment->status, 'credited' => false], 202);
+        }
+
+        if (($tx['status'] ?? null) !== 'approved') {
+            return response()->json(['status' => $tx['status'] ?? 'unknown', 'credited' => false]);
+        }
+
+        // Verrou pessimiste : le webhook peut traiter le même paiement au même instant.
+        // On relit la ligne sous verrou et on re-teste isPaid() pour ne créditer qu'une fois.
+        $credited = DB::transaction(function () use ($payment, $tx, $driver, $walletService) {
+            $fresh = \App\Models\Payment::whereKey($payment->id)->lockForUpdate()->first();
+            if (! $fresh || $fresh->isPaid()) {
+                return false;
+            }
+            $fresh->update([
+                'status'       => \App\Models\Payment::STATUS_PAID,
+                'paid_at'      => now(),
+                'raw_response' => $tx,
+            ]);
+            $walletService->deposit($driver, (int) $fresh->amount_fcfa, $fresh);
+            return true;
+        });
+
+        if ($credited) {
+            $notifier->sendToUser(
+                $payment->user_id,
+                'wallet.deposited',
+                '💰 Caution rechargée',
+                number_format((int) $payment->amount_fcfa, 0, ',', ' ') . ' FCFA ont été ajoutés à ta caution.',
+                ['payment_id' => $payment->id],
+                null,
+            );
+        }
+
+        return response()->json(['status' => 'paid', 'credited' => $credited]);
+    }
+
+    /**
      * Création d'une demande de retrait.
      *
      * Bifurque selon le setting `driver_payout_mode` :

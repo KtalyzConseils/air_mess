@@ -37,6 +37,35 @@ Route::prefix('auth')->group(function () {
 });
 
 
+// Retour de paiement vers l'APPLICATION MOBILE.
+// Fedapay n'accepte que des URL http(s) comme callback : on lui donne donc cette page,
+// qui rebondit aussitôt vers le schéma de l'app (airmess://wallet). Sur Android, ouvrir
+// ce lien ramène l'app au premier plan et referme l'onglet de paiement — c'est la seule
+// façon de refermer un Custom Tab par programme.
+Route::get('/payments/return-to-app', function () {
+    $deepLink = 'airmess://wallet';
+    $safe = htmlspecialchars($deepLink, ENT_QUOTES, 'UTF-8');
+    $js   = json_encode($deepLink); // pour location.replace(...)
+
+    $html = <<<HTML
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="0;url={$safe}">
+<title>Retour à Air Mess</title>
+<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#1A1614;color:#FAF7F0;font-family:system-ui,sans-serif;text-align:center">
+  <div>
+    <p style="font-size:18px;font-weight:700">Paiement terminé</p>
+    <p style="opacity:.8">Retour à l'application…</p>
+    <p><a href="{$safe}" style="color:#FFCC00;font-weight:700;text-decoration:none">Revenir dans Air Mess</a></p>
+  </div>
+  <script>location.replace({$js});</script>
+</body>
+HTML;
+
+    return response($html)->header('Content-Type', 'text/html; charset=UTF-8');
+});
+
 // routes de tracking de la commande pour destinataire
 Route::get('/tracking/{token}', [TrackingController::class, 'show']);
 // Cas 8 — Contestation destinataire depuis le lien tracking (public, anti-abus applicatif)
@@ -91,6 +120,16 @@ Route::middleware('auth:sanctum')->group(function () {
         // métier (count_24h, count_7d) déjà appliqués côté controller.
         Route::get('/wallet',                    [DriverController::class, 'wallet']);
         Route::post('/wallet/top-up',            [DriverController::class, 'topUpWallet'])->middleware('throttle:wallet-topup');
+        // Filet de sécurité : l'app appelle ceci au retour du paiement. On interroge
+        // Fedapay sur le statut réel plutôt que d'attendre le webhook, qui peut arriver
+        // en retard, être mal configuré, ou ne jamais arriver — le livreur verrait alors
+        // 0 F après avoir payé. Idempotent : sans effet si le webhook a déjà crédité.
+        //
+        // Plafond propre et large : l'app réessaie jusqu'à 3 fois par paiement (une
+        // transaction mobile money reste quelques secondes en `pending`). Le limiteur
+        // `wallet-topup` (5/h) bloquerait le livreur dès sa deuxième recharge.
+        Route::post('/wallet/top-up/{payment}/confirm', [DriverController::class, 'confirmTopUp'])
+            ->middleware('throttle:30,60');
         Route::post('/wallet/withdraw-request',  [DriverController::class, 'requestWithdraw'])->middleware('throttle:wallet-withdraw');
         Route::post('/wallet/withdraw-requests/{withdraw}/cancel', [DriverController::class, 'cancelWithdraw']);
 
