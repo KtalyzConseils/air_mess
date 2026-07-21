@@ -307,6 +307,7 @@
     "activeDeliveries": "Vos livraisons actives",
     "noActive": "Aucune course en cours.",
     "createFirst": "Créer ma première course",
+    "createNew": "Créer une course",
     "copyTracking": "Copier le lien de suivi"
   },
   "courses": {

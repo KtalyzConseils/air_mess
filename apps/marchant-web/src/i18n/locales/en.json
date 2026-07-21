@@ -307,6 +307,7 @@
     "activeDeliveries": "Your active deliveries",
     "noActive": "No delivery in progress.",
     "createFirst": "Create my first delivery",
+    "createNew": "Create a delivery",
     "copyTracking": "Copy tracking link"
   },
   "courses": {

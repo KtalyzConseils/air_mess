@@ -17,7 +17,10 @@ import OnboardingModal from '../components/onboarding/OnboardingModal'
 import AcceptTermsModal from '../components/AcceptTermsModal'
 import { fetchTermsStatus } from '../api/terms'
 
-const IN_PROGRESS_STATUSES = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff']
+// Une course en attente d'attribution est bien "active" du point de vue du
+// marchand : elle doit apparaître dans la liste dès sa création (sinon le
+// dashboard paraît vide juste après avoir créé une course).
+const IN_PROGRESS_STATUSES = ['awaiting_assignment', 'assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff']
 
 export default function DashboardPage() {
   const { t } = useTranslation()
@@ -213,7 +216,8 @@ export default function DashboardPage() {
             {!isPendingMarchant && (
               <Link to="/courses/new">
                 <Button variant="primary" size="md" pill>
-                  {t('dashboard.createFirst')}
+                  {/* "Ma première course" seulement si l'historique est vraiment vide */}
+                  {t(courses.length === 0 ? 'dashboard.createFirst' : 'dashboard.createNew')}
                 </Button>
               </Link>
             )}
