@@ -37,6 +37,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage'
 import TermsPage from './pages/legal/TermsPage'
 import PrivacyPage from './pages/legal/PrivacyPage'
 import ClientQuickNav from './components/ClientQuickNav'
+import PwaReloadPrompt from './components/PwaReloadPrompt'
 
 
 const queryClient = new QueryClient({
@@ -124,6 +125,9 @@ function App() {
         {/* FAB global pour marchand/particulier — se rend null si user=admin
             ou si la préférence est 'horizontal' (cf. ClientQuickNav). */}
         <ClientQuickNav />
+
+        {/* PWA : toast "nouvelle version disponible → Recharger" */}
+        <PwaReloadPrompt />
       </BrowserRouter>
     </QueryClientProvider>
   )

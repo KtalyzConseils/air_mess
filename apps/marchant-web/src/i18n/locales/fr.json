@@ -1061,6 +1061,12 @@
       "copyright": "© 2026 KTALYZ — Air Mess"
     }
   },
+  "pwa": {
+    "install": "Installer l'app",
+    "updateAvailable": "Une nouvelle version d'Air Mess est disponible.",
+    "reload": "Recharger",
+    "later": "Plus tard"
+  },
   "admin": {
     "nav": {
       "overview": "Vue d'ensemble",

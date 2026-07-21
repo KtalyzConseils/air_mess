@@ -6,6 +6,7 @@ import { fetchUnreadCount } from '../api/notifications'
 import UserMenu from './UserMenu'
 import { useDesktopNotifications } from '../hooks/useDesktopNotifications'
 import EnableNotificationsButton from './EnableNotificationsButton'
+import InstallPwaButton from './InstallPwaButton'
 import SupportContactModal from './SupportContactModal'
 import markWhite from '../assets/logo/airmess-mark-white.svg'
 import mark from '../assets/logo/airmess-mark.svg'
@@ -111,6 +112,9 @@ export default function AppHeader() {
 
       {/* ============ DROITE ============ */}
       <div className="flex items-center gap-2 md:gap-3">
+        <div className="hidden md:block">
+          <InstallPwaButton />
+        </div>
         <div className="hidden md:block">
           <EnableNotificationsButton />
         </div>
@@ -284,7 +288,8 @@ export default function AppHeader() {
                 <PhoneIcon size={18} />
                 {t('header.helpMenu.contactSupport')}
               </button>
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col gap-2">
+                <InstallPwaButton />
                 <EnableNotificationsButton />
               </div>
             </div>
