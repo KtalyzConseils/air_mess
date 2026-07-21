@@ -17,6 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // (reset mot de passe, tracking public).
         $middleware->trustProxies(at: '*');
 
+        // Bascule la locale selon Accept-Language (FR/EN) — sert notamment aux
+        // messages de validation renvoyés au front (marchant-web / driver-app).
+        $middleware->api(prepend: [\App\Http\Middleware\SetLocale::class]);
+
         $middleware->alias([
             'admin'     => \App\Http\Middleware\EnsureUserIsAdmin::class,
             // Vérification des abilities Sanctum (clés d'intégration scoping).

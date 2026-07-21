@@ -7,7 +7,11 @@ use Illuminate\Support\Facades\Cache;
 
 class AppSetting extends Model
 {
-    protected $fillable = ['key', 'value', 'type', 'label', 'description', 'group', 'updated_by'];
+    protected $fillable = ['key', 'value', 'type', 'label', 'description', 'choices', 'group', 'updated_by'];
+
+    protected $casts = [
+        'choices' => 'array',
+    ];
 
     private const CACHE_KEY_PREFIX = 'app_setting:';
     private const CACHE_TTL = 3600; // 1h

@@ -145,6 +145,20 @@ class WalletWithdrawRequest extends Model
         return $last ? \Illuminate\Support\Carbon::parse($last) : null;
     }
 
+    /**
+     * Miroir de lastRequestAt() pour les wallets user (marchant/particulier)
+     * — sert au cooldown en mode `user_payout_mode = instant`.
+     */
+    public static function lastRequestAtForUser(int $userId): ?\Illuminate\Support\Carbon
+    {
+        $last = static::query()
+            ->where('user_id', $userId)
+            ->latest('created_at')
+            ->value('created_at');
+
+        return $last ? \Illuminate\Support\Carbon::parse($last) : null;
+    }
+
     private static function usageForColumn(string $column, int $id): array
     {
         $day  = now()->subDay();

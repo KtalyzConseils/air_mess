@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\AppSetting;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Cache;
 
 class AppSettingSeeder extends Seeder
 {
@@ -95,7 +96,19 @@ class AppSettingSeeder extends Seeder
                 'value'       => 'admin_approval',
                 'type'        => 'string',
                 'label'       => 'Mode de retrait driver',
-                'description' => 'admin_approval : chaque retrait passe par la validation manuelle d\'un admin (défaut MVP). instant : le driver retire depuis l\'app, débit immédiat + appel Fedapay Payout API automatique.',
+                'description' => 'Bascule entre validation admin manuelle et retrait automatique. Passer en "instant" quand la clé Fedapay Payout est active et que l\'ops est confortable avec l\'automatisation.',
+                'choices'     => [
+                    [
+                        'value'       => 'admin_approval',
+                        'label'       => 'Validation admin',
+                        'description' => 'Chaque demande de retrait apparaît en attente d\'approbation. Un admin la valide et déclenche le virement manuellement.',
+                    ],
+                    [
+                        'value'       => 'instant',
+                        'label'       => 'Retrait instantané',
+                        'description' => 'Le driver retire depuis son app sans intervention admin. Débit wallet immédiat + appel Fedapay Payout automatique (webhook confirme ou refund).',
+                    ],
+                ],
                 'group'       => 'wallet',
             ],
             [
@@ -104,6 +117,39 @@ class AppSettingSeeder extends Seeder
                 'type'        => 'number',
                 'label'       => 'Cooldown entre retraits (heures)',
                 'description' => 'Délai minimal en heures entre deux demandes de retrait par un même driver (compte à partir de la dernière demande, quel que soit son statut). Ignore les demandes cancelled/rejected pour ne pas pénaliser un driver qui s\'est trompé de numéro.',
+                'group'       => 'wallet',
+            ],
+            // ===== Mode de payout wallet marchand/particulier =====
+            // Miroir de driver_payout_mode pour les utilisateurs (marchant + individual).
+            // Le wallet user peut accumuler du solde via des remboursements, des refunds
+            // de courses annulées, ou d'anciens top-ups non consommés — d'où le besoin
+            // d'un retrait, avec les mêmes 2 modes qu'un driver.
+            [
+                'key'         => 'user_payout_mode',
+                'value'       => 'admin_approval',
+                'type'        => 'string',
+                'label'       => 'Mode de retrait marchand/particulier',
+                'description' => 'Bascule entre validation admin manuelle et retrait automatique. Passer en "instant" quand la clé Fedapay Payout est active et que l\'ops est confortable avec l\'automatisation.',
+                'choices'     => [
+                    [
+                        'value'       => 'admin_approval',
+                        'label'       => 'Validation admin',
+                        'description' => 'Chaque demande de retrait apparaît en attente d\'approbation. Un admin la valide et déclenche le virement manuellement.',
+                    ],
+                    [
+                        'value'       => 'instant',
+                        'label'       => 'Retrait instantané',
+                        'description' => 'Le marchand/particulier retire depuis son wallet sans intervention admin. Débit immédiat + appel Fedapay Payout automatique (webhook confirme ou refund).',
+                    ],
+                ],
+                'group'       => 'wallet',
+            ],
+            [
+                'key'         => 'user_payout_cooldown_hours',
+                'value'       => '24',
+                'type'        => 'number',
+                'label'       => 'Cooldown retrait marchand/particulier (heures)',
+                'description' => 'Délai minimal en heures entre deux demandes de retrait par un même marchand/particulier (anti double-clic en mode instant). Miroir de driver_payout_cooldown_hours.',
                 'group'       => 'wallet',
             ],
 
@@ -265,6 +311,9 @@ class AppSettingSeeder extends Seeder
 
         foreach ($settings as $s) {
             AppSetting::updateOrCreate(['key' => $s['key']], $s);
+            // Invalide le cache — sinon un AppSetting::get() antérieur au seeder
+            // (ex. default retourné avant que la ligne n'existe) reste en cache 1h.
+            Cache::forget('app_setting:' . $s['key']);
         }
     }
 }

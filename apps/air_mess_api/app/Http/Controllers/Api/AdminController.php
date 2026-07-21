@@ -624,6 +624,11 @@ class AdminController extends Controller
             'amount_fcfa',
         );
 
+        // Charge le wallet caution (balance uniquement) — utilisé par l'UI admin
+        // pour vérifier l'éligibilité au réassignement : un driver indépendant
+        // ne peut prendre une course à encaissement que si sa caution couvre le montant.
+        $query->with(['wallet:id,driver_id,balance']);
+
         return response()->json([
             'drivers' => $query->get(),
         ]);
@@ -1981,6 +1986,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 'type'        => $s->type,
                 'label'       => $s->label,
                 'description' => $s->description,
+                'choices'     => $s->choices, // null si le setting est libre, sinon [{value,label,description}]
                 'group'       => $s->group,
                 'updated_at'  => $s->updated_at,
                 'updated_by'  => $s->updated_by ? [
@@ -1997,12 +2003,19 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     {
         $setting = \App\Models\AppSetting::where('key', $key)->firstOrFail();
 
-        $rules = match ($setting->type) {
-            'number'  => ['value' => ['required', 'numeric', 'min:0']],
-            'boolean' => ['value' => ['required', 'boolean']],
-            'json'    => ['value' => ['required', 'array']],
-            default   => ['value' => ['required', 'string', 'max:1000']],
-        };
+        // Si le setting a un `choices`, la valeur doit être dans la liste
+        // (garde-fou contre les payloads bricolés à la main).
+        if (is_array($setting->choices) && count($setting->choices) > 0) {
+            $allowed = array_map(fn($c) => (string) ($c['value'] ?? ''), $setting->choices);
+            $rules   = ['value' => ['required', 'string', 'in:' . implode(',', $allowed)]];
+        } else {
+            $rules = match ($setting->type) {
+                'number'  => ['value' => ['required', 'numeric', 'min:0']],
+                'boolean' => ['value' => ['required', 'boolean']],
+                'json'    => ['value' => ['required', 'array']],
+                default   => ['value' => ['required', 'string', 'max:1000']],
+            };
+        }
         $data = $request->validate($rules);
 
         \App\Models\AppSetting::set($key, $data['value'], $request->user()->id);

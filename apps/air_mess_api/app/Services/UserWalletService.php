@@ -382,20 +382,19 @@ class UserWalletService
     }
 
     /**
-     * Retrait approuvé par un admin : débite le wallet et journalise.
+     * Retrait wallet — débite le wallet et journalise.
      *
      * On considère le retrait comme un *paiement sortant* — il ampute la balance
      * réelle et **compte le total_spent** (comme un course_charge) : c'est de
      * l'argent qui quitte définitivement notre garde.
      *
-     * Comme le driver equivalent (DriverWalletService::withdraw), cette méthode
-     * est appelée UNIQUEMENT depuis l'action admin "approuver" — pas au moment
-     * de la demande. Une demande pending ne bloque pas de solde (mais le
-     * contrôleur vérifie `existingPending` pour empêcher les demandes concurrentes).
+     * Deux origines possibles :
+     *  - depuis AdminController quand user_payout_mode=admin_approval (validation) — adminId défini
+     *  - depuis UserWalletController quand user_payout_mode=instant (self-service) — adminId=null
      *
      * @throws \DomainException si le disponible ne couvre pas le retrait
      */
-    public function withdraw(User $user, int $amount, int $adminId, string $reason): UserWalletTransaction
+    public function withdraw(User $user, int $amount, ?int $adminId, string $reason): UserWalletTransaction
     {
         if ($amount <= 0) {
             throw new \InvalidArgumentException("Withdraw amount must be > 0, got {$amount}.");

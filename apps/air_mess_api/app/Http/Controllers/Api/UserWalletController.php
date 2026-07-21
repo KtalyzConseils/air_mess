@@ -9,8 +9,11 @@ use App\Models\UserWallet;
 use App\Models\UserWalletTransaction;
 use App\Models\WalletWithdrawRequest;
 use App\Services\FedapayService;
+use App\Services\UserWalletService;
+use App\Services\WalletWithdrawPayoutInitiator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
@@ -80,7 +83,11 @@ class UserWalletController extends Controller
      * Le débit n'a lieu QU'au moment de l'approbation admin (cf. UserWalletService::withdraw).
      * Une seule demande pending à la fois par user (garde-fou anti double-décaissement).
      */
-    public function requestWithdraw(Request $request): JsonResponse
+    public function requestWithdraw(
+        Request $request,
+        UserWalletService $userWalletService,
+        WalletWithdrawPayoutInitiator $payoutInitiator,
+    ): JsonResponse
     {
         $user = $request->user();
 
@@ -151,6 +158,51 @@ class UserWalletController extends Controller
             ], 422);
         }
 
+        // Bifurcation selon le mode de retrait wallet user (miroir driver_payout_mode).
+        $payoutMode = (string) AppSetting::get('user_payout_mode', 'admin_approval');
+
+        Log::info('User withdraw request — payout mode resolved', [
+            'user_id'     => $user->id,
+            'payout_mode' => $payoutMode,
+            'amount'      => $data['amount'],
+        ]);
+
+        if ($payoutMode === 'instant') {
+            // Cooldown anti double-clic (mode instant uniquement).
+            $cooldownH = (int) AppSetting::get('user_payout_cooldown_hours', 24);
+            $last = WalletWithdrawRequest::lastRequestAtForUser($user->id);
+            if ($last && $last->diffInHours(now()) < $cooldownH) {
+                $wait = $cooldownH - (int) $last->diffInHours(now());
+                return response()->json([
+                    'message' => "Vous devez attendre encore {$wait}h avant votre prochaine demande.",
+                ], 422);
+            }
+
+            // Crée la demande + débite le wallet DANS UNE TRANSACTION.
+            // L'appel Fedapay est FAIT HORS transaction (peut prendre plusieurs sec).
+            $req = DB::transaction(function () use ($user, $data, $userWalletService) {
+                $r = WalletWithdrawRequest::create([
+                    'user_id'        => $user->id,
+                    'amount_fcfa'    => $data['amount'],
+                    'target_method'  => $data['target_method'],
+                    'target_account' => $data['target_account'],
+                    'status'         => WalletWithdrawRequest::STATUS_APPROVED, // débit immédiat
+                    'decided_at'     => now(),
+                ]);
+                $userWalletService->withdraw($user, (int) $data['amount'], null, "Retrait wallet instant #{$r->id}");
+                return $r;
+            });
+
+            // Initie le payout Fedapay HORS transaction (le webhook confirmera ou refund).
+            $payoutInitiator->initiate($req->fresh());
+
+            return response()->json([
+                'message' => 'Retrait initié. Le paiement sera confirmé sous quelques minutes.',
+                'request' => $req->fresh(),
+            ], 201);
+        }
+
+        // Mode admin_approval — comportement historique : pending sans débit.
         $req = WalletWithdrawRequest::create([
             'user_id'        => $user->id,
             'amount_fcfa'    => $data['amount'],
