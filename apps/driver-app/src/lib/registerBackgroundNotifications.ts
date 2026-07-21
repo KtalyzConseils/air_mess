@@ -6,7 +6,7 @@ import notifee, {
   EventType,
 } from './notifeeSafe'
 import { IS_EXPO_GO } from './notifications'
-import { acceptCourse, declineCourse } from '../api/driver'
+import { acceptCourse, declineCourse, declineReassignment } from '../api/driver'
 
 // expo-notifications et expo-task-manager NE DOIVENT PAS être importés en Expo Go :
 // depuis SDK 53, expo-notifications a des side-effects de module (auto push register)
@@ -71,9 +71,28 @@ export function extractCoursePayload(data: any): Record<string, any> | null {
     data,
   ]
   for (const c of candidates) {
-    if (c && (c.type === 'course.offered' || c.course_id != null)) return c
+    if (c && (isCallType(c.type) || c.course_id != null)) return c
   }
   return null
+}
+
+/**
+ * Types de push qui doivent SONNER comme un appel entrant.
+ *
+ * - `course.offered`         : course proposée, le livreur l'accepte ou la refuse.
+ * - `course.assigned_to_you` : réaffectation admin. La course lui est déjà attribuée ;
+ *   il peut encore la refuser, mais via un endpoint distinct qui la détache réellement
+ *   (cf. `declineReassignment`) — d'où la distinction portée jusque dans l'UI.
+ */
+const CALL_TYPES = ['course.offered', 'course.assigned_to_you'] as const
+
+export function isCallType(t: unknown): boolean {
+  return typeof t === 'string' && (CALL_TYPES as readonly string[]).includes(t)
+}
+
+/** Vrai si ce payload est une réaffectation (et non une simple offre). */
+export function isReassignment(payload: Record<string, any> | null | undefined): boolean {
+  return payload?.type === 'course.assigned_to_you'
 }
 
 // ── File d'attente (SecureStore) ─────────────────────────────────────────────
@@ -196,10 +215,14 @@ async function displayRingNotification(item: RingItem): Promise<void> {
   // Nombre de courses en attente derrière celle-ci (pour le sous-titre).
   const waiting = Math.max(0, (await readQueueRaw()).length - 1)
 
+  const reassigned = isReassignment(payload)
+
   await ensureIncomingChannel()
   await notifee.displayNotification({
     id: INCOMING_NOTIF_ID,
-    title: '📦 Nouvelle course',
+    // Le livreur doit comprendre AVANT de décrocher qu'on lui impose une course
+    // reprise à un collègue, et non qu'on lui en propose une nouvelle.
+    title: reassigned ? '🔄 Course réaffectée' : '📦 Nouvelle course',
     body:
       notifBody(payload) +
       (waiting > 0 ? `  ·  +${waiting} en attente` : ''),
@@ -255,7 +278,7 @@ export async function showIncomingCourseNotification(
  */
 export async function enqueueCourseFromPush(rawData: any): Promise<number | null> {
   const payload = extractCoursePayload(rawData)
-  if (!payload || payload.type !== 'course.offered') return null
+  if (!payload || !isCallType(payload.type)) return null
   const items = await enqueue(payload)
   return items[0]?.course_id ?? null
 }
@@ -277,21 +300,32 @@ export async function ringNextInQueue(): Promise<number | null> {
 /** Traite l'appui sur un bouton de la notif (accept/decline) — commun bg/fg. */
 export async function handleNotifeeEvent({ type, detail }: any): Promise<void> {
   const id = detail?.pressAction?.id
-  const courseId = Number(detail?.notification?.data?.course_id)
+  const data = detail?.notification?.data
+  const courseId = Number(data?.course_id)
   if (type !== EventType.ACTION_PRESS || !courseId) return
 
+  // Une réaffectation est DÉJÀ attribuée : `acceptCourse` la refuserait (409, il exige
+  // une course encore offerte) et son refus doit passer par l'endpoint qui la détache.
+  const reassigned = isReassignment(data)
+
   if (id === 'accept') {
-    try {
-      await acceptCourse(courseId)
-    } catch {
-      /* déjà prise / erreur : l'app gérera à l'ouverture */
+    if (!reassigned) {
+      try {
+        await acceptCourse(courseId)
+      } catch {
+        /* déjà prise / erreur : l'app gérera à l'ouverture */
+      }
     }
     // Course prise → livreur occupé : plus aucune course ne doit sonner.
     await clearRingQueue()
     await notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
   } else if (id === 'decline') {
     try {
-      await declineCourse(courseId, 'personal')
+      if (reassigned) {
+        await declineReassignment(courseId, 'personal')
+      } else {
+        await declineCourse(courseId, 'personal')
+      }
     } catch {
       /* ignore */
     }
@@ -323,7 +357,7 @@ if (!IS_EXPO_GO) {
       if (!authToken) return
 
       const payload = extractCoursePayload(data)
-      if (payload?.type === 'course.offered') {
+      if (payload && isCallType(payload.type)) {
         await showIncomingCourseNotification(payload)
       }
     } catch (e) {

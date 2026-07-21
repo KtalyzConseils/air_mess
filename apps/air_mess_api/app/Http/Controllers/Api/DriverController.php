@@ -231,6 +231,105 @@ class DriverController extends Controller
      *
      * Cf. project_wallet_driver_todo #7.
      */
+    /**
+     * Refus d'une RÉAFFECTATION admin (course déjà attribuée à ce livreur).
+     *
+     * `declineCourse` ne convient pas ici : il ne sait refuser qu'une course encore
+     * offerte (`awaiting` + sans driver_id) et se contente d'enregistrer un refus. Une
+     * réaffectation, elle, est déjà posée en base — la refuser doit la DÉTACHER et la
+     * remettre dans le circuit, sinon elle resterait au nom d'un livreur qui l'a
+     * déclinée et personne ne la prendrait.
+     *
+     * Fenêtre volontairement étroite : seulement tant que le colis n'a pas bougé
+     * (`assigned`). Une fois le livreur en route ou le colis récupéré, le refus passe
+     * par un incident — c'est l'ops qui organise le transfert physique.
+     */
+    public function declineReassignment(
+        Request $request,
+        Course $course,
+        NotificationService $notifier,
+    ): JsonResponse {
+        $driver = $this->currentDriver($request, requireActive: true);
+
+        $data = $request->validate([
+            'reason'        => ['required', Rule::in(\App\Models\CourseDeclineRecord::REASONS)],
+            'custom_reason' => [
+                'required_if:reason,other', 'nullable', 'string', 'min:5', 'max:500',
+            ],
+        ]);
+
+        if ($course->driver_id !== $driver->id) {
+            return response()->json(['message' => "Cette course ne vous est pas attribuée."], 404);
+        }
+
+        if ($course->status !== Course::STATUS_ASSIGNED) {
+            return response()->json([
+                'message' => "Trop tard pour refuser cette course (statut: {$course->status}). "
+                           . "Signalez un incident pour que l'ops organise le transfert.",
+            ], 409);
+        }
+
+        $customReason = $data['reason'] === \App\Models\CourseDeclineRecord::REASON_OTHER
+            ? trim($data['custom_reason'])
+            : null;
+
+        DB::transaction(function () use ($driver, $course, $data, $customReason) {
+            // Trace du refus : évite aussi que le matching la lui repropose aussitôt.
+            \App\Models\CourseDeclineRecord::firstOrCreate(
+                ['driver_id' => $driver->id, 'course_id' => $course->id],
+                ['reason' => $data['reason'], 'custom_reason' => $customReason],
+            );
+
+            $course->update([
+                'driver_id'   => null,
+                'status'      => Course::STATUS_AWAITING,
+                'assigned_at' => null,
+            ]);
+
+            CourseStatusHistory::create([
+                'course_id'       => $course->id,
+                'from_status'     => Course::STATUS_ASSIGNED,
+                'to_status'       => Course::STATUS_AWAITING,
+                'changed_by_id'   => $driver->user_id,
+                'changed_by_type' => 'user',
+                'reason'          => 'Réaffectation refusée par le livreur : ' . $data['reason'],
+                'metadata'        => ['declined_by_driver_id' => $driver->id],
+            ]);
+
+            // Il redevient disponible — sauf s'il a une autre course en cours.
+            $hasActive = Course::where('driver_id', $driver->id)
+                ->whereNotIn('status', Course::TERMINAL_STATUSES)
+                ->whereNotIn('status', [Course::STATUS_AWAITING])
+                ->exists();
+            if (! $hasActive && $driver->availability_status === 'busy') {
+                $driver->update(['availability_status' => 'available']);
+            }
+        });
+
+        $driver->refresh()->recalcAcceptanceRate();
+
+        // L'ops DOIT savoir : c'est elle qui avait forcé l'attribution, la course
+        // retombe sans livreur et personne ne surveille cette file en continu.
+        $opsUserIds = Admin::whereIn('sub_role', [Admin::ROLE_OPS, Admin::ROLE_SUPER])
+            ->pluck('user_id')
+            ->toArray();
+
+        $notifier->sendToUsers(
+            $opsUserIds,
+            'course.reassignment_declined',
+            '↩️ Réaffectation refusée',
+            "{$driver->first_name} {$driver->last_name} a refusé la course {$course->reference}. "
+            . "Elle est de nouveau sans livreur.",
+            ['reference' => $course->reference, 'reason' => $data['reason']],
+            $course->id,
+        );
+
+        return response()->json([
+            'message' => 'Réaffectation refusée. La course a été remise en attente.',
+            'course'  => $course->fresh(),
+        ]);
+    }
+
     public function declineCourse(Request $request, Course $course): JsonResponse
     {
         $driver = $this->currentDriver($request, requireActive: true);

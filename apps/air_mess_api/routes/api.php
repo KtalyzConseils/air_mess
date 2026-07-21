@@ -135,6 +135,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/courses/{course}/accept',    [DriverController::class, 'acceptCourse']);
         Route::post('/courses/{course}/decline',   [DriverController::class, 'declineCourse']);
+        // Refus d'une réaffectation admin : la course lui est DÉJÀ attribuée, la refuser
+        // la détache et la remet en attente (cf. declineReassignment).
+        Route::post('/courses/{course}/decline-reassignment', [DriverController::class, 'declineReassignment']);
         Route::post('/courses/{course}/transition', [DriverController::class, 'transition']);
         Route::post('/courses/{course}/incident', [DriverController::class, 'reportIncident']);
 

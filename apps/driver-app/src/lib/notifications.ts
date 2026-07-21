@@ -44,10 +44,11 @@ export async function initNotifications(): Promise<void> {
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
       const data = (notification?.request?.content?.data ?? {}) as Record<string, any>
-      // Course entrante : l'ÉCRAN D'APPEL in-app prend entièrement le relais
-      // (affichage + sonnerie). On supprime donc la bannière/son système, sinon le
-      // livreur voit une notification ET l'appel en même temps, avec double son.
-      if (data.type === 'course.offered') {
+      // Course entrante (offre OU réaffectation admin) : l'ÉCRAN D'APPEL in-app prend
+      // entièrement le relais (affichage + sonnerie). On supprime donc la bannière/son
+      // système, sinon le livreur voit une notification ET l'appel en même temps, avec
+      // double son.
+      if (data.type === 'course.offered' || data.type === 'course.assigned_to_you') {
         return {
           shouldShowBanner: false,
           shouldShowList:   false,

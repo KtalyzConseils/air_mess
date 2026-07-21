@@ -7,8 +7,18 @@ use App\Models\Notification;
 
 class NotificationService
 {
-    /** Type de notif « nouvelle course proposée » : reçoit le son/canal personnalisés. */
-    private const TYPE_NEW_COURSE = 'course.offered';
+    /**
+     * Types de notif traités comme un APPEL ENTRANT côté livreur : push data-only,
+     * sonnerie longue, écran plein, boutons Accepter/Refuser.
+     *
+     * `course.assigned_to_you` en fait partie : une réaffectation admin tombe sans
+     * prévenir sur un livreur qui n'a rien demandé, et il peut la refuser — une
+     * notification silencieuse passait inaperçue et la course restait en plan.
+     */
+    private const CALL_TYPES = [
+        'course.offered',
+        'course.assigned_to_you',
+    ];
 
     /** Doit correspondre au canal créé côté app (lib/notifications.ts > NEW_COURSE_CHANNEL). */
     private const NEW_COURSE_CHANNEL = 'new-course';
@@ -55,8 +65,8 @@ class NotificationService
             'course_id'       => $courseId,
         ]);
 
-        if ($type === self::TYPE_NEW_COURSE) {
-            // Nouvelle course = alerte "appel entrant". On envoie un push DATA-ONLY :
+        if (in_array($type, self::CALL_TYPES, true)) {
+            // Alerte "appel entrant". On envoie un push DATA-ONLY :
             // aucune notif système, c'est la tâche de fond du client + Notifee qui
             // affichent la notif "appel" (sonnerie longue, boutons) + l'écran plein.
             // On joint trajet + gains pour afficher directement l'offre sur la notif.

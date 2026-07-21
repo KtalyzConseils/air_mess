@@ -97,6 +97,24 @@ export async function declineCourse(
   })
 }
 
+/**
+ * Refuse une RÉAFFECTATION admin (course déjà attribuée à ce livreur).
+ *
+ * Endpoint distinct de `declineCourse` : celui-ci détache réellement la course et la
+ * remet en attente, alors que le refus classique ne fait qu'enregistrer une trace sur
+ * une course encore offerte. Le serveur alerte l'ops dans la foulée.
+ */
+export async function declineReassignment(
+  courseId: number,
+  reason: DeclineReason,
+  customReason?: string,
+): Promise<void> {
+  await api.post(`/driver/courses/${courseId}/decline-reassignment`, {
+    reason,
+    custom_reason: customReason ?? null,
+  })
+}
+
 export async function transition(
   courseId: number,
   action: TransitionAction,

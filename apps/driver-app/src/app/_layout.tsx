@@ -10,6 +10,7 @@ import {
   handleNotifeeEvent,
   getRingQueue,
   enqueueCourseFromPush,
+  isCallType,
 } from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
@@ -75,7 +76,7 @@ export default function RootLayout() {
     if (IS_EXPO_GO) return
     notifee.getInitialNotification().then((initial) => {
       const data = initial?.notification?.data as any
-      if (data?.type === 'course.offered' && data?.course_id != null) {
+      if (isCallType(data?.type) && data?.course_id != null) {
         setPendingCourseId(Number(data.course_id))
       }
     })
@@ -112,7 +113,7 @@ export default function RootLayout() {
       const data = detail.notification?.data as any
       if (
         type !== EventType.DISMISSED &&
-        data?.type === 'course.offered' &&
+        isCallType(data?.type) &&
         data?.course_id != null
       ) {
         const head = await enqueueCourseFromPush(data)
@@ -121,14 +122,14 @@ export default function RootLayout() {
     })
   }, [])
 
-  // 3. App au premier plan : un push data "course.offered" arrive.
+  // 3. App au premier plan : un push data d'appel arrive (offre ou réaffectation).
   useEffect(() => {
     if (IS_EXPO_GO) return
     let sub: { remove: () => void } | null = null
     import('expo-notifications').then((Notifications) => {
       sub = Notifications.addNotificationReceivedListener(async (notif) => {
         const data = notif.request.content.data as any
-        if (data?.type === 'course.offered' && data?.course_id != null) {
+        if (isCallType(data?.type) && data?.course_id != null) {
           const head = await enqueueCourseFromPush(data)
           setPendingCourseId(head ?? Number(data.course_id))
         }

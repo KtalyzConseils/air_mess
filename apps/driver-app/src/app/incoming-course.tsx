@@ -9,8 +9,10 @@ import { createAudioPlayer, type AudioPlayer } from 'expo-audio'
 import notifee from '../lib/notifeeSafe'
 import {
   fetchOfferedCourses,
+  fetchMyActiveCourses,
   acceptCourse,
   declineCourse,
+  declineReassignment,
   type DriverCourseSummary,
 } from '../api/driver'
 import {
@@ -18,6 +20,7 @@ import {
   getRingQueue,
   dequeueRing,
   clearRingQueue,
+  isReassignment,
 } from '../lib/registerBackgroundNotifications'
 
 /**
@@ -44,10 +47,17 @@ export default function IncomingCourseScreen() {
 
   // Détail de la course (pool de propositions). Rafraîchi régulièrement pour détecter
   // si un autre livreur la prend pendant que ça sonne.
+  // Réaffectation admin : la course est DÉJÀ attribuée à ce livreur. Tout le reste de
+  // l'écran (source des données, actions, libellés) en découle.
+  const reassigned = isReassignment(pushInfo)
+
   const { data: course, isLoading } = useQuery({
-    queryKey: ['incoming-course', courseId],
+    queryKey: ['incoming-course', courseId, reassigned],
     queryFn: async (): Promise<DriverCourseSummary | null> => {
-      const list = await fetchOfferedCourses()
+      // Une course réaffectée n'est PAS dans le pool des offres — elle porte déjà son
+      // driver_id. La chercher là donnerait « course introuvable », donc un écran qui
+      // se ferme tout seul en croyant qu'un autre livreur l'a prise.
+      const list = reassigned ? await fetchMyActiveCourses() : await fetchOfferedCourses()
       return list.find((c) => c.id === courseId) ?? null
     },
     enabled: courseId != null,
@@ -135,7 +145,9 @@ export default function IncomingCourseScreen() {
     setActing('accept')
     stopAlert()
     try {
-      await acceptCourse(courseId)
+      // Réaffectation : rien à accepter côté serveur, la course lui appartient déjà.
+      // `acceptCourse` exige une course encore offerte et renverrait un 409.
+      if (!reassigned) await acceptCourse(courseId)
       dismissedRef.current = true
       await clearRingQueue() // livreur occupé → plus aucune course ne doit sonner
       router.replace('/(tabs)')
@@ -152,7 +164,13 @@ export default function IncomingCourseScreen() {
     setActing('decline')
     stopAlert()
     try {
-      await declineCourse(courseId, 'personal')
+      // Refuser une réaffectation la DÉTACHE et la remet en attente côté serveur ; le
+      // refus classique ne fait qu'enregistrer une trace sur une course encore offerte.
+      if (reassigned) {
+        await declineReassignment(courseId, 'personal')
+      } else {
+        await declineCourse(courseId, 'personal')
+      }
     } catch {
       /* ignore */
     }
@@ -189,14 +207,21 @@ export default function IncomingCourseScreen() {
         {/* En-tête pulsé */}
         <View className="items-center mb-6">
           <View className="w-16 h-16 rounded-full bg-airmess-yellow items-center justify-center mb-3">
-            <Ionicons name="cube" size={30} color="#1A1614" />
+            <Ionicons name={reassigned ? 'swap-horizontal' : 'cube'} size={30} color="#1A1614" />
           </View>
           <Text className="text-warm-400 text-xs uppercase tracking-widest font-extrabold">
-            Nouvelle course
+            {reassigned ? 'Course réaffectée' : 'Nouvelle course'}
           </Text>
           <Text className="text-white text-2xl font-extrabold mt-1">
-            {isExpress ? '⚡ Express' : 'Course entrante'}
+            {reassigned ? 'Reprise de course' : isExpress ? '⚡ Express' : 'Course entrante'}
           </Text>
+          {reassigned && (
+            // Le livreur doit comprendre d'où sort cette course : elle ne vient pas du
+            // pool, c'est l'ops qui la lui confie.
+            <Text className="text-warm-400 text-xs mt-1 text-center">
+              Attribuée par Air Mess
+            </Text>
+          )}
           {waiting > 0 && (
             <View className="mt-2 flex-row items-center bg-airmess-yellow/15 px-3 py-1 rounded-full">
               <Ionicons name="layers" size={12} color="#FFCC00" />
