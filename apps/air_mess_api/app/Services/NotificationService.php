@@ -14,10 +14,14 @@ class NotificationService
     private const NEW_COURSE_CHANNEL = 'new-course';
     private const NEW_COURSE_SOUND   = 'new_course.wav';
 
-    public function __construct(private ExpoPushClient $expo) {}
+    public function __construct(
+        private ExpoPushClient $expo,
+        private FcmClient $fcm,
+    ) {}
 
     /**
      * Crée une row notifications + push à tous les devices du user.
+     * Mobile (android/ios) → Expo ; web (PWA marchant-web) → FCM v1.
      */
     public function sendToUser(int $userId, string $type, string $title, string $body, array $data = [], ?int $courseId = null): Notification
     {
@@ -30,7 +34,20 @@ class NotificationService
             'course_id' => $courseId,
         ]);
 
-        $tokens = DeviceToken::where('user_id', $userId)->pluck('token')->toArray();
+        $allTokens = DeviceToken::where('user_id', $userId)->get(['token', 'platform']);
+        $tokens    = $allTokens->where('platform', '!=', 'web')->pluck('token')->toArray();
+        $webTokens = $allTokens->where('platform', 'web')->pluck('token')->toArray();
+
+        // Web push (PWA) : toujours une notif visible — le clic ouvre la course
+        // concernée ou la liste des notifications.
+        if (! empty($webTokens)) {
+            $frontendUrl = rtrim((string) config('services.firebase.frontend_url'), '/');
+            $link = $courseId ? "{$frontendUrl}/courses/{$courseId}" : "{$frontendUrl}/notifications";
+            $this->fcm->send($webTokens, $title !== '' ? $title : 'Air Mess', $body, array_merge($data, [
+                'notification_id' => $notif->id,
+                'type'            => $type,
+            ]), $link);
+        }
 
         $payload = array_merge($data, [
             'notification_id' => $notif->id,

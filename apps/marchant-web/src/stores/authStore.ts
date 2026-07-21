@@ -165,6 +165,14 @@ export const useAuthStore = create<AuthState>()(
 
 
       logout: async () => {
+        // Ce navigateur ne doit plus recevoir les web push du compte (best-effort,
+        // à faire AVANT de révoquer le token API).
+        try {
+          const { disableWebPush } = await import('../lib/fcm')
+          await disableWebPush()
+        } catch {
+          // ignore
+        }
         try {
           await api.post('/auth/logout')
         } catch {

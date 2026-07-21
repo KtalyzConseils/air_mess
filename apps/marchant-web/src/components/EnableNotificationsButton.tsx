@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getNotificationPermission, requestNotificationPermission } from '../hooks/useDesktopNotifications'
+import { enableWebPush } from '../lib/fcm'
 
 export default function EnableNotificationsButton() {
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(
@@ -20,6 +21,9 @@ export default function EnableNotificationsButton() {
     const result = await requestNotificationPermission()
     setPermission(result)
     if (result === 'granted') {
+      // Web push FCM : enregistre ce navigateur pour recevoir les notifs
+      // même app fermée (no-op si VAPID non configurée ou non supporté).
+      void enableWebPush()
       new Notification('🔔 Alertes activées', {
         body: 'Vous recevrez les nouvelles courses ici même.',
         tag: 'airmess-onboarding',

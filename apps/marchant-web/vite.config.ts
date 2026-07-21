@@ -35,6 +35,8 @@ export default defineConfig({
         // l'API : courses/wallet/auth sont du temps réel, les requêtes passent
         // toujours en direct (le SW ne matche pas → passthrough réseau).
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // Le SW FCM vit à part (scope push dédié) — jamais dans le precache.
+        globIgnores: ['**/firebase-messaging-sw.js'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: 'index.html',
       },

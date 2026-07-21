@@ -19,6 +19,16 @@ export function useDesktopNotifications() {
   const lastSeenRef = useRef<number>(getLastSeenId())
   const firstRunRef = useRef<boolean>(true)
 
+  // Web push FCM : si la permission est déjà accordée, on (re)enregistre le
+  // token de ce navigateur au chargement (idempotent — met à jour last_seen_at
+  // côté API et rattrape les rotations de token FCM).
+  useEffect(() => {
+    if (!user) return
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    if (Notification.permission !== 'granted') return
+    void import('../lib/fcm').then(({ enableWebPush }) => enableWebPush())
+  }, [user])
+
   // Récupère la liste (on partage la queryKey avec NotificationsPage → 1 seul fetch)
   const { data } = useQuery({
     queryKey: ['notifications'],

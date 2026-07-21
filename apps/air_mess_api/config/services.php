@@ -34,6 +34,11 @@ return [
     'firebase' => [
         // Project ID Firebase — sert à valider aud/iss des ID tokens Phone Auth.
         'project_id' => env('FIREBASE_PROJECT_ID'),
+        // Chemin du JSON de compte de service (console Firebase → Service accounts).
+        // Requis uniquement pour le web push FCM ; absent = envoi FCM ignoré.
+        'credentials' => env('FIREBASE_CREDENTIALS'),
+        // URL du front — cible des clics sur les notifications web push.
+        'frontend_url' => env('FRONTEND_URL', 'https://app.airmess-logistics.com'),
     ],
 
     'ses' => [
