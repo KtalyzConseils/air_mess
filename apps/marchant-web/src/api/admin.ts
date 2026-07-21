@@ -52,6 +52,8 @@ export interface DriverFull {
   current_lng: number | null
   user: { name: string; phone: string }
   pending_balance_fcfa: number | null
+  /** Wallet caution — utile pour vérifier l'éligibilité à une course avec encaissement. */
+  wallet: { id: number; balance: number } | null
 }
 export interface DriverStats {
   courses_total: number

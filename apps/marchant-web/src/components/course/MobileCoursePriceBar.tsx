@@ -8,17 +8,18 @@ import {
   CheckIcon,
   ChevronDownIcon,
   CloseIcon,
-  MapPinIcon,
 } from '../ui/icons'
 import TripMiniMap from './TripMiniMap'
+import CourseSummary, { type CourseSummaryData } from './CourseSummary'
+import CompletionStatus from './CompletionStatus'
 
 interface Props {
+  data: CourseSummaryData
   fee: number
   walletAvailable: number | null
   isSubmitting: boolean
   submitLabel: string
-  originLabel: string
-  destinationLabel: string
+  missingCount: number
   originLat?: number
   originLng?: number
   destinationLat?: number
@@ -27,17 +28,17 @@ interface Props {
 
 /**
  * Barre sticky bas d'écran (mobile uniquement).
- * Bloc prix cliquable → ouvre une bottom-sheet avec la mini-carte A→B
- * et le récap trajet + wallet. Bouton "Confirmer" séparé.
+ * Bloc prix cliquable → ouvre une bottom-sheet avec récap complet
+ * (expéditeur, destinataire, colis, encaissement) + mini-carte + wallet.
  * Contient un submit — le composant est monté à l'intérieur du <form> parent.
  */
 export default function MobileCoursePriceBar({
+  data,
   fee,
   walletAvailable,
   isSubmitting,
   submitLabel,
-  originLabel,
-  destinationLabel,
+  missingCount,
   originLat,
   originLng,
   destinationLat,
@@ -49,10 +50,6 @@ export default function MobileCoursePriceBar({
   const hasWallet = typeof walletAvailable === 'number'
   const short = hasWallet && walletAvailable! < fee
   const covered = hasWallet && walletAvailable! >= fee
-
-  const hasAnyCoord =
-    (typeof originLat === 'number' && originLat !== 0) ||
-    (typeof destinationLat === 'number' && destinationLat !== 0)
 
   useEffect(() => {
     if (!sheetOpen) return
@@ -67,13 +64,13 @@ export default function MobileCoursePriceBar({
     <>
       {sheetOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex items-end bg-ink/60 backdrop-blur-sm ams-anim-fade-in">
-          <div className="w-full bg-off-white rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col ams-anim-scale-in">
-            <div className="flex items-center justify-between border-b border-warm-100 px-5 py-4">
+          <div className="w-full bg-off-white rounded-t-2xl shadow-2xl max-h-[90vh] flex flex-col ams-anim-scale-in">
+            <div className="flex items-center justify-between border-b border-warm-100 px-5 py-4 shrink-0">
               <div>
                 <p className="text-caption text-warm-500 uppercase tracking-wide">
                   {t('courses.new.recap.title')}
                 </p>
-                <p className="text-body font-bold text-ink">
+                <p className="text-body font-bold text-ink tabular-nums">
                   {fee.toLocaleString('fr-FR')} FCFA
                 </p>
               </div>
@@ -87,46 +84,24 @@ export default function MobileCoursePriceBar({
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-              <TripMiniMap
-                originLat={originLat}
-                originLng={originLng}
-                destLat={destinationLat}
-                destLng={destinationLng}
-                height="220px"
-              />
-
-              <div className="space-y-3">
-                <div className="flex items-start gap-2.5">
-                  <span className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-warm-100 text-warm-600 shrink-0">
-                    <MapPinIcon size={14} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-caption text-warm-500">{t('courses.new.recap.from')}</p>
-                    <p className="text-body-s font-medium text-ink truncate">
-                      {originLabel || t('courses.new.recap.originPending')}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="ml-3 pl-3 border-l-2 border-dashed border-warm-200 h-3" />
-
-                <div className="flex items-start gap-2.5">
-                  <span className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-airmess-yellow/30 text-ink shrink-0">
-                    <ArrowRightIcon size={14} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-caption text-warm-500">{t('courses.new.recap.to')}</p>
-                    <p className="text-body-s font-medium text-ink truncate">
-                      {destinationLabel || t('courses.new.recap.destinationPending')}
-                    </p>
-                  </div>
-                </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-5 py-4 border-b border-warm-100">
+                <TripMiniMap
+                  originLat={originLat}
+                  originLng={originLng}
+                  destLat={destinationLat}
+                  destLng={destinationLng}
+                  height="200px"
+                />
               </div>
+
+              <CourseSummary data={data} />
+
+              <CompletionStatus missingCount={missingCount} />
 
               {hasWallet && (
                 <div
-                  className={`rounded-lg border px-4 py-3 flex items-start gap-2 ${
+                  className={`mx-5 my-4 rounded-lg border px-4 py-3 flex items-start gap-2 ${
                     covered
                       ? 'border-success/30 bg-success-bg text-success'
                       : 'border-warning/30 bg-warning-bg text-warning'
@@ -161,7 +136,7 @@ export default function MobileCoursePriceBar({
               )}
             </div>
 
-            <div className="border-t border-warm-100 px-5 py-3">
+            <div className="border-t border-warm-100 px-5 py-3 shrink-0">
               <Button
                 type="button"
                 variant="secondary"
@@ -181,20 +156,17 @@ export default function MobileCoursePriceBar({
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
-            disabled={!hasAnyCoord}
             aria-label={t('courses.new.recap.showMap')}
-            className="min-w-0 flex-1 text-left group enabled:cursor-pointer disabled:cursor-default"
+            className="min-w-0 flex-1 text-left group cursor-pointer"
           >
             <p className="text-caption text-warm-500 flex items-center gap-1">
               {t('courses.new.recap.mobileFeeLabel')}
-              {hasAnyCoord && (
-                <span
-                  className="text-warm-400 group-hover:text-ink transition-colors"
-                  aria-hidden
-                >
-                  <ChevronDownIcon size={12} />
-                </span>
-              )}
+              <span
+                className="text-warm-400 group-hover:text-ink transition-colors"
+                aria-hidden
+              >
+                <ChevronDownIcon size={12} />
+              </span>
             </p>
             <p className="text-body font-bold text-ink tabular-nums leading-tight">
               {fee.toLocaleString('fr-FR')} FCFA

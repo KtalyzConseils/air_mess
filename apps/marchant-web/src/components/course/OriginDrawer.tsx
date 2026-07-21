@@ -152,7 +152,7 @@ export default function OriginDrawer({
 
           {showStreet && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label={t('courses.new.streetLabel')}>
+              <Field label={t('courses.new.streetLabel')} optional>
                 <input {...register('origin_street')} className={inputClass} />
               </Field>
             </div>

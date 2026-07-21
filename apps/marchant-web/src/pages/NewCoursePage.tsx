@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
@@ -23,6 +23,9 @@ import OriginDrawer from '../components/course/OriginDrawer'
 import CoursePriceRecap from '../components/course/CoursePriceRecap'
 import MobileCoursePriceBar from '../components/course/MobileCoursePriceBar'
 import DualPinMap from '../components/course/DualPinMap'
+import MissingFieldsBanner, {
+  type MissingField,
+} from '../components/course/MissingFieldsBanner'
 import {
   AlertTriangleIcon,
   ChevronDownIcon,
@@ -32,6 +35,32 @@ import {
 } from '../components/ui/icons'
 
 type FormValues = CreateCoursePayload
+
+/**
+ * Métadonnées de chaque champ obligatoire pour piloter le bandeau d'erreurs :
+ * - labelKey : clé i18n du libellé humain
+ * - location : où trouver le champ dans l'UI (guide l'auto-ouverture drawer/accordion + scroll)
+ * - dedupKey  : plusieurs erreurs qui pointent le même problème (ex: lat & lng du même pin)
+ *               partagent une clé pour n'afficher qu'une seule entrée dans le bandeau
+ */
+type FieldLocation = 'drawer' | 'options' | 'main' | 'map_A' | 'map_B'
+
+const FIELD_META: Record<string, { labelKey: string; location: FieldLocation; dedupKey?: string }> = {
+  origin_name:          { labelKey: 'courses.new.senderName',       location: 'drawer' },
+  origin_phone:         { labelKey: 'courses.new.phoneLabel',       location: 'drawer' },
+  origin_quartier:      { labelKey: 'courses.new.originQuartier',   location: 'drawer' },
+  origin_city:          { labelKey: 'courses.new.originCity',       location: 'drawer' },
+  origin_lat:           { labelKey: 'courses.new.errors.mapA',      location: 'map_A', dedupKey: 'map_A' },
+  origin_lng:           { labelKey: 'courses.new.errors.mapA',      location: 'map_A', dedupKey: 'map_A' },
+  destination_name:     { labelKey: 'courses.new.recipientNameLabel', location: 'main' },
+  destination_phone:    { labelKey: 'courses.new.recipientPhoneLabel', location: 'main' },
+  destination_quartier: { labelKey: 'courses.new.destinationQuartier', location: 'main' },
+  destination_city:     { labelKey: 'courses.new.destinationCity',   location: 'main' },
+  destination_lat:      { labelKey: 'courses.new.errors.mapB',      location: 'map_B', dedupKey: 'map_B' },
+  destination_lng:      { labelKey: 'courses.new.errors.mapB',      location: 'map_B', dedupKey: 'map_B' },
+  package_category_id:  { labelKey: 'courses.new.categoryLabel',    location: 'main' },
+  package_description:  { labelKey: 'courses.new.packageDescription', location: 'main' },
+}
 
 const inputClass =
   'w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink ' +
@@ -83,7 +112,8 @@ export default function NewCoursePage() {
     handleSubmit,
     watch,
     setValue,
-    formState: { errors },
+    setFocus,
+    formState: { errors, isSubmitted },
   } = useForm<FormValues>({
     defaultValues: {
       urgency: 'standard',
@@ -209,6 +239,111 @@ export default function NewCoursePage() {
     performCreate(values)
   }
 
+  /**
+   * Extrait la liste dédupliquée des champs obligatoires manquants à partir
+   * d'un objet d'erreurs RHF. Sert à la fois au rendu du bandeau (via useMemo)
+   * et au callback onInvalid (qui reçoit `errs` avant le prochain rerender).
+   */
+  function extractMissingFields(errs: Record<string, unknown>): MissingField[] {
+    const list: MissingField[] = []
+    const seen = new Set<string>()
+    for (const key of Object.keys(errs)) {
+      const meta = FIELD_META[key]
+      if (!meta) continue
+      const dedup = meta.dedupKey ?? key
+      if (seen.has(dedup)) continue
+      seen.add(dedup)
+      list.push({ fieldName: key, label: t(meta.labelKey) })
+    }
+    return list
+  }
+
+  const missingFields: MissingField[] = useMemo(
+    () => extractMissingFields(errors as Record<string, unknown>),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [errors, t],
+  )
+
+  /**
+   * Navigue vers le champ manquant cliqué : ouvre le drawer / l'accordion si
+   * nécessaire, scroll vers la DualPinMap pour les positions, ou setFocus RHF
+   * pour les inputs "classiques".
+   */
+  function handleMissingFieldClick(fieldName: string) {
+    const meta = FIELD_META[fieldName]
+    if (!meta) return
+    if (meta.location === 'drawer') setOriginDrawerOpen(true)
+    if (meta.location === 'options') setOptionsOpen(true)
+
+    // Petit tick pour laisser le drawer/accordion se monter avant focus.
+    setTimeout(() => {
+      if (meta.location === 'map_A' || meta.location === 'map_B') {
+        document.getElementById('dual-pin-map')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
+        return
+      }
+      try {
+        setFocus(fieldName as keyof FormValues)
+      } catch {
+        /* champ pas monté (drawer/accordion pas encore ouvert) — silencieux */
+      }
+    }, 200)
+  }
+
+  // Au submit invalide, on cible automatiquement le 1er champ manquant.
+  function handleFirstMissing(fields: MissingField[]) {
+    const first = fields[0]
+    if (!first) return
+    handleMissingFieldClick(first.fieldName)
+  }
+
+  /**
+   * Compte réactif des champs obligatoires vides — se met à jour à chaque
+   * saisie (indépendamment des erreurs RHF, qui n'existent qu'après un submit).
+   * Alimente le badge CompletionStatus dans le récap.
+   */
+  const missingCount = useMemo(() => {
+    const required = [
+      originName,
+      watch('origin_phone'),
+      originQuartier,
+      originCity,
+      destinationName,
+      watch('destination_phone'),
+      destinationQuartier,
+      destinationCity,
+      watch('package_category_id'),
+      watch('package_description'),
+    ]
+    let count = required.filter((v) => !v || String(v).trim() === '').length
+    // + positions carte (comptées comme 1 chacune, pas 2 par pin)
+    const originPositioned =
+      Number(watch('origin_lat')) !== 0 && Number(watch('origin_lng')) !== 0
+    const destPositioned =
+      Number(watch('destination_lat')) !== 0 && Number(watch('destination_lng')) !== 0
+    if (!originPositioned) count += 1
+    if (!destPositioned) count += 1
+    return count
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    originName,
+    originQuartier,
+    originCity,
+    destinationName,
+    destinationQuartier,
+    destinationCity,
+    watch('origin_phone'),
+    watch('destination_phone'),
+    watch('package_category_id'),
+    watch('package_description'),
+    watch('origin_lat'),
+    watch('origin_lng'),
+    watch('destination_lat'),
+    watch('destination_lng'),
+  ])
+
   function performCreate(values: FormValues) {
     setQuotaError(null)
 
@@ -264,14 +399,44 @@ export default function NewCoursePage() {
   const currentFee = urgencyWatch === 'express' ? fees.express : fees.standard
   const walletAvailable = isPayerUser && wallet ? wallet.available : null
 
-  const originLabel = [originQuartier, originCity].filter(Boolean).join(', ') || originName
-  const destinationLabel =
-    destinationName ||
-    [destinationQuartier, destinationCity].filter(Boolean).join(', ')
-
   const submitLabel = mutation.isPending
     ? t('courses.new.creating')
     : t('courses.new.confirmCta')
+
+  const packageCategoryId = Number(watch('package_category_id')) || undefined
+  const packageCategoryLabel =
+    packageCategoryId != null
+      ? categories.find((c) => c.id === packageCategoryId)?.name
+      : undefined
+
+  const packageWeightWatch = Number(watch('package_weight_kg')) || undefined
+
+  const summaryData = {
+    originName,
+    originPhone: watch('origin_phone') ?? '',
+    originQuartier,
+    originCity,
+    originStreet: (watch('origin_street') ?? '') || undefined,
+    destName: destinationName,
+    destPhone: watch('destination_phone') ?? '',
+    destQuartier: destinationQuartier,
+    destCity: destinationCity,
+    destStreet: (watch('destination_street') ?? '') || undefined,
+    destLandmark: (watch('destination_landmark') ?? '') || undefined,
+    destInstructions: (watch('destination_instructions') ?? '') || undefined,
+    packageCategoryLabel,
+    packageDescription: (watch('package_description') ?? '') as string,
+    packageSize: (watch('package_size') ?? 'M') as 'S' | 'M' | 'L' | 'XL',
+    packageWeight: packageWeightWatch,
+    packageDeclaredValue: declaredValueWatch || undefined,
+    urgency: urgencyWatch,
+    paidBy: paidBy as 'sender' | 'recipient',
+    hasCollection: !!hasCollection,
+    collectionAmount: hasCollection && collectionAmountWatch ? collectionAmountWatch : undefined,
+    collectionMethod: hasCollection
+      ? ((watch('collection_method') ?? 'cash') as 'cash' | 'mobile_money' | 'prepaid')
+      : undefined,
+  }
 
   return (
     <div className="min-h-screen bg-cream">
@@ -316,10 +481,27 @@ export default function NewCoursePage() {
           </Card>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} id="new-course-form">
+        <form
+          onSubmit={handleSubmit(onSubmit, (errs) => {
+            // onInvalid : recalcule la liste depuis `errs` (state RHF pas encore rerender)
+            // pour cibler directement le 1er champ manquant. Le bandeau s'affichera
+            // ensuite via useMemo(errors) au prochain rerender.
+            const fields = extractMissingFields(errs as Record<string, unknown>)
+            handleFirstMissing(fields)
+          })}
+          id="new-course-form"
+        >
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
             {/* ===================== Colonne formulaire ===================== */}
             <div className="space-y-4">
+              {/* Bandeau des champs obligatoires manquants (après 1ʳᵉ tentative) */}
+              {isSubmitted && missingFields.length > 0 && (
+                <MissingFieldsBanner
+                  fields={missingFields}
+                  onFieldClick={handleMissingFieldClick}
+                />
+              )}
+
               {/* Bloc EXPÉDITEUR (bannière compacte) */}
               <div data-onboarding-id="origin">
                 <OriginBanner
@@ -370,7 +552,7 @@ export default function NewCoursePage() {
                       className={inputClass}
                     />
                   </Field>
-                  <div className="md:col-span-2">
+                  <div className="md:col-span-2" id="dual-pin-map">
                     <p className="text-caption text-warm-600 font-medium mb-1.5">
                       {t('courses.new.dualMap.blockTitle')}
                     </p>
@@ -414,17 +596,17 @@ export default function NewCoursePage() {
                   </button>
                   {showDestExtra && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                      <Field label={t('courses.new.streetLabel')}>
+                      <Field label={t('courses.new.streetLabel')} optional>
                         <input {...register('destination_street')} className={inputClass} />
                       </Field>
-                      <Field label={t('courses.new.landmarkLabel')}>
+                      <Field label={t('courses.new.landmarkLabel')} optional>
                         <input
                           {...register('destination_landmark')}
                           className={inputClass}
                           placeholder={t('courses.new.landmarkPlaceholder')}
                         />
                       </Field>
-                      <Field label={t('courses.new.driverInstructions')} className="md:col-span-2">
+                      <Field label={t('courses.new.driverInstructions')} optional className="md:col-span-2">
                         <textarea
                           {...register('destination_instructions')}
                           className={inputClass}
@@ -517,7 +699,7 @@ export default function NewCoursePage() {
                   </button>
                   {showWeight && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                      <Field label={t('courses.new.packageWeight')}>
+                      <Field label={t('courses.new.packageWeight')} optional>
                         <input
                           type="number"
                           step="0.1"
@@ -678,7 +860,7 @@ export default function NewCoursePage() {
 
                       {showDeclared && (
                         <div className="mt-3">
-                          <Field label={t('courses.new.declaredValueLabel')}>
+                          <Field label={t('courses.new.declaredValueLabel')} optional>
                             <input
                               type="number"
                               min={0}
@@ -722,28 +904,27 @@ export default function NewCoursePage() {
 
             {/* ===================== Colonne récap (desktop only) ===================== */}
             <CoursePriceRecap
-              originLabel={originLabel}
-              destinationLabel={destinationLabel}
+              data={summaryData}
               originLat={Number(watch('origin_lat')) || undefined}
               originLng={Number(watch('origin_lng')) || undefined}
               destinationLat={Number(watch('destination_lat')) || undefined}
               destinationLng={Number(watch('destination_lng')) || undefined}
               fee={currentFee}
-              urgency={urgencyWatch}
               walletAvailable={walletAvailable}
               isSubmitting={mutation.isPending}
               submitLabel={submitLabel}
+              missingCount={missingCount}
             />
           </div>
 
           {/* Barre sticky bas (mobile only) */}
           <MobileCoursePriceBar
+            data={summaryData}
             fee={currentFee}
             walletAvailable={walletAvailable}
             isSubmitting={mutation.isPending}
             submitLabel={submitLabel}
-            originLabel={originLabel}
-            destinationLabel={destinationLabel}
+            missingCount={missingCount}
             originLat={Number(watch('origin_lat')) || undefined}
             originLng={Number(watch('origin_lng')) || undefined}
             destinationLat={Number(watch('destination_lat')) || undefined}

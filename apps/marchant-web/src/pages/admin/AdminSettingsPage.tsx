@@ -15,7 +15,7 @@ import {
   MenuIcon,
   type IconProps,
 } from '../../components/ui/icons'
-import { fetchSettings, updateSetting, type AppSetting } from '../../api/admin/settings'
+import { fetchSettings, updateSetting, type AppSetting, type SettingChoice } from '../../api/admin/settings'
 import { fetchAdminPlans, updateAdminPlan, type AdminPlan } from '../../api/admin/plans'
 import { useUiPrefsStore, type NavMode } from '../../stores/uiPrefsStore'
 
@@ -271,6 +271,136 @@ function PlanRow({ plan }: { plan: AdminPlan }) {
    Ligne de paramètre individuel
    ============================================================ */
 function SettingRow({ setting }: { setting: AppSetting }) {
+  // Setting énuméré (choices) → segmented control avec save immédiat au clic.
+  // Setting libre → champ texte/nombre avec bouton Modifier/Enregistrer.
+  if (setting.choices && setting.choices.length > 0) {
+    return <ChoiceSettingRow setting={setting} choices={setting.choices} />
+  }
+  return <FreeSettingRow setting={setting} />
+}
+
+function ChoiceSettingRow({
+  setting,
+  choices,
+}: {
+  setting: AppSetting
+  choices: SettingChoice[]
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [error, setError] = useState<string | null>(null)
+  const [justSaved, setJustSaved] = useState(false)
+  const [pendingValue, setPendingValue] = useState<string | null>(null)
+
+  const currentValue = String(setting.value)
+
+  const mutation = useMutation({
+    mutationFn: (choiceValue: string) => updateSetting(setting.key, choiceValue),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      setError(null)
+      setPendingValue(null)
+      setJustSaved(true)
+      setTimeout(() => setJustSaved(false), 1500)
+    },
+    onError: (err) => {
+      const msg =
+        err instanceof AxiosError
+          ? err.response?.data?.message ?? t('admin.settings.updateError')
+          : t('admin.settings.updateError')
+      setError(msg)
+      setPendingValue(null)
+    },
+  })
+
+  function pick(choiceValue: string) {
+    if (choiceValue === currentValue || mutation.isPending) return
+    setPendingValue(choiceValue)
+    mutation.mutate(choiceValue)
+  }
+
+  return (
+    <li className="px-6 py-4 hover:bg-cream/30 transition-colors">
+      <div className="min-w-0 mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-body-s font-bold text-ink">
+            {setting.label ?? setting.key}
+          </p>
+          {setting.label && (
+            <span className="text-caption font-mono text-warm-400">{setting.key}</span>
+          )}
+          {justSaved && (
+            <span className="inline-flex items-center gap-1 text-caption font-semibold text-success">
+              <CheckIcon size={12} /> {t('admin.settings.savedBadge')}
+            </span>
+          )}
+        </div>
+        {setting.description && (
+          <p className="text-body-s text-warm-500 mt-1 max-w-prose">{setting.description}</p>
+        )}
+      </div>
+
+      {/* Segmented control — 1 bouton par choix, save immédiat au clic */}
+      <div
+        role="radiogroup"
+        aria-label={setting.label ?? setting.key}
+        className="grid grid-cols-1 md:grid-cols-2 gap-3"
+      >
+        {choices.map((c) => {
+          const selected = c.value === currentValue
+          const isPending = pendingValue === c.value && mutation.isPending
+          return (
+            <button
+              key={c.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              disabled={mutation.isPending && !isPending}
+              onClick={() => pick(c.value)}
+              className={[
+                'text-left rounded-xl border-2 px-4 py-3 transition-all',
+                selected
+                  ? 'border-airmess-yellow bg-airmess-yellow/10 shadow-sm'
+                  : 'border-warm-200 bg-off-white hover:border-warm-300',
+                mutation.isPending && !isPending ? 'opacity-50 cursor-not-allowed' : '',
+                isPending ? 'opacity-70' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-body font-bold text-ink">{c.label}</p>
+                {selected && (
+                  <span className="inline-flex items-center gap-1 text-caption font-semibold text-success shrink-0">
+                    <CheckIcon size={12} /> {t('admin.settings.choiceActiveBadge')}
+                  </span>
+                )}
+                {isPending && (
+                  <span className="text-caption text-warm-500 shrink-0">
+                    {t('admin.settings.savingLabel')}
+                  </span>
+                )}
+              </div>
+              {c.description && (
+                <p className="text-caption text-warm-600 mt-1">{c.description}</p>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {setting.updated_by && (
+        <p className="text-caption text-warm-400 mt-2">
+          {t('admin.settings.lastEditedByPrefix')} {setting.updated_by.name}
+        </p>
+      )}
+
+      {error && <InlineError text={error} />}
+    </li>
+  )
+}
+
+function FreeSettingRow({ setting }: { setting: AppSetting }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)

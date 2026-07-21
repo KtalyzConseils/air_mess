@@ -5,43 +5,43 @@ import Button from '../ui/Button'
 import {
   AlertTriangleIcon,
   CheckIcon,
-  MapPinIcon,
   ArrowRightIcon,
   ChevronDownIcon,
 } from '../ui/icons'
 import TripMiniMap from './TripMiniMap'
+import CourseSummary, { type CourseSummaryData } from './CourseSummary'
+import CompletionStatus from './CompletionStatus'
 
 interface Props {
-  originLabel: string
-  destinationLabel: string
+  data: CourseSummaryData
   originLat?: number
   originLng?: number
   destinationLat?: number
   destinationLng?: number
   fee: number
-  urgency: 'standard' | 'express'
   walletAvailable: number | null
   isSubmitting: boolean
   submitLabel: string
+  missingCount: number
 }
 
 /**
  * Panneau récap sticky (desktop uniquement).
- * Trajet + carte repliable (clic sur le prix) + couverture wallet + CTA.
- * Le CTA soumet le form parent grâce au type="submit" (le panneau est dans le form).
+ * Récap complet de la course (expéditeur, destinataire, colis, encaissement)
+ * + carte repliable (clic sur le prix) + couverture wallet + CTA.
+ * Le CTA soumet le form parent (type="submit").
  */
 export default function CoursePriceRecap({
-  originLabel,
-  destinationLabel,
+  data,
   originLat,
   originLng,
   destinationLat,
   destinationLng,
   fee,
-  urgency,
   walletAvailable,
   isSubmitting,
   submitLabel,
+  missingCount,
 }: Props) {
   const { t } = useTranslation()
   const [mapVisible, setMapVisible] = useState(false)
@@ -55,53 +55,28 @@ export default function CoursePriceRecap({
 
   return (
     <aside className="hidden lg:block">
-      <div className="sticky top-24 rounded-2xl border border-warm-200 bg-off-white shadow-md overflow-hidden">
-        <div className="px-5 py-4 border-b border-warm-100">
+      <div className="sticky top-24 rounded-2xl border border-warm-200 bg-off-white shadow-md overflow-hidden max-h-[calc(100vh-7rem)] flex flex-col">
+        <div className="px-5 py-4 border-b border-warm-100 shrink-0">
           <p className="text-caption text-warm-500 uppercase tracking-wide">
             {t('courses.new.recap.title')}
           </p>
         </div>
 
-        <div className="px-5 py-4 space-y-3">
-          <div className="flex items-start gap-2.5">
-            <span className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-warm-100 text-warm-600 shrink-0">
-              <MapPinIcon size={14} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-caption text-warm-500">{t('courses.new.recap.from')}</p>
-              <p className="text-body-s font-medium text-ink truncate">
-                {originLabel || t('courses.new.recap.originPending')}
-              </p>
-            </div>
-          </div>
+        <div className="flex-1 overflow-y-auto">
+          <CourseSummary data={data} />
 
-          <div className="ml-3 pl-3 border-l-2 border-dashed border-warm-200 h-3" />
-
-          <div className="flex items-start gap-2.5">
-            <span className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-airmess-yellow/30 text-ink shrink-0">
-              <ArrowRightIcon size={14} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-caption text-warm-500">{t('courses.new.recap.to')}</p>
-              <p className="text-body-s font-medium text-ink truncate">
-                {destinationLabel || t('courses.new.recap.destinationPending')}
-              </p>
+          {mapVisible && (
+            <div className="px-5 py-4 border-t border-warm-100">
+              <TripMiniMap
+                originLat={originLat}
+                originLng={originLng}
+                destLat={destinationLat}
+                destLng={destinationLng}
+                height="200px"
+              />
             </div>
-          </div>
+          )}
         </div>
-
-        {/* Mini-carte du trajet — déployable via le prix ci-dessous */}
-        {mapVisible && (
-          <div className="px-5 pb-4 border-t border-warm-100 pt-4">
-            <TripMiniMap
-              originLat={originLat}
-              originLng={originLng}
-              destLat={destinationLat}
-              destLng={destinationLng}
-              height="200px"
-            />
-          </div>
-        )}
 
         {/* Bloc frais — cliquable pour toggler la mini-carte */}
         <button
@@ -114,10 +89,10 @@ export default function CoursePriceRecap({
               ? t('courses.new.recap.hideMap')
               : t('courses.new.recap.showMap')
           }
-          className="w-full px-5 py-4 border-t border-warm-100 bg-cream text-left transition-colors enabled:hover:bg-warm-100 disabled:cursor-default flex items-baseline justify-between gap-3 group"
+          className="w-full px-5 py-4 border-t border-warm-100 bg-cream text-left transition-colors enabled:hover:bg-warm-100 disabled:cursor-default flex items-baseline justify-between gap-3 group shrink-0"
         >
           <span className="text-body-s text-warm-600 flex items-center gap-1.5">
-            {urgency === 'express'
+            {data.urgency === 'express'
               ? t('courses.new.recap.feeExpress')
               : t('courses.new.recap.feeStandard')}
             {hasAnyCoord && (
@@ -136,15 +111,9 @@ export default function CoursePriceRecap({
           </span>
         </button>
 
-        {hasAnyCoord && !mapVisible && (
-          <p className="px-5 pb-2 text-caption text-warm-400 -mt-1">
-            {t('courses.new.recap.showMapHint')}
-          </p>
-        )}
-
         {hasWallet && (
           <div
-            className={`px-5 py-3 border-t border-warm-100 flex items-start gap-2 ${
+            className={`px-5 py-3 border-t border-warm-100 flex items-start gap-2 shrink-0 ${
               covered ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'
             }`}
           >
@@ -172,7 +141,9 @@ export default function CoursePriceRecap({
           </div>
         )}
 
-        <div className="px-5 py-4 border-t border-warm-100">
+        <CompletionStatus missingCount={missingCount} />
+
+        <div className="px-5 py-4 border-t border-warm-100 shrink-0">
           <Button
             type="submit"
             variant="primary"

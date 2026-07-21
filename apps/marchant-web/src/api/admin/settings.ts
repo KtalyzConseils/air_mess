@@ -1,11 +1,22 @@
 import api from '../client'
 
+export interface SettingChoice {
+  value: string
+  label: string
+  description?: string | null
+}
+
 export interface AppSetting {
   key: string
   value: number | string | boolean | unknown[] | Record<string, unknown>
   type: 'number' | 'string' | 'boolean' | 'json'
   label: string | null
   description: string | null
+  /**
+   * Si défini, le setting est une énumération : l'UI rend un segmented control
+   * au lieu d'un champ libre. Le backend valide que la valeur est bien dans la liste.
+   */
+  choices: SettingChoice[] | null
   group: string
   updated_at: string | null
   updated_by: { id: number; name: string } | null
