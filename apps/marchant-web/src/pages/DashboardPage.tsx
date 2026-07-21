@@ -17,10 +17,9 @@ import OnboardingModal from '../components/onboarding/OnboardingModal'
 import AcceptTermsModal from '../components/AcceptTermsModal'
 import { fetchTermsStatus } from '../api/terms'
 
-// Une course en attente d'attribution est bien "active" du point de vue du
-// marchand : elle doit apparaître dans la liste dès sa création (sinon le
-// dashboard paraît vide juste après avoir créé une course).
-const IN_PROGRESS_STATUSES = ['awaiting_assignment', 'assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff']
+// Choix produit : les courses en attente d'attribution ne sont PAS dans les
+// "livraisons actives" (elles ont leur KPI dédié "En attribution").
+const IN_PROGRESS_STATUSES = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff']
 
 export default function DashboardPage() {
   const { t } = useTranslation()
