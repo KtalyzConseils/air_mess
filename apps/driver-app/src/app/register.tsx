@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Linking,
   Alert,
   ActivityIndicator,
+  BackHandler,
   type TextInputProps,
 } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -17,8 +18,16 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { AxiosError } from 'axios'
 import Button from '../components/ui/Button'
+import WizardHeader from '../components/register/WizardHeader'
+import WizardFooter from '../components/register/WizardFooter'
 import { pickImage } from '../lib/pickImage'
 import { TERMS_URL, PRIVACY_URL } from '../api/terms'
+import {
+  saveDraft,
+  loadDraft,
+  clearDraft,
+  type RegisterDraft,
+} from '../lib/registerDraft'
 import {
   normalizePhone,
   sendPhoneOtp,
@@ -29,6 +38,17 @@ import {
   type VehicleType,
   type CniType,
 } from '../api/register'
+
+const TOTAL_STEPS = 6
+
+const STEP_META: Record<number, { title: string; subtitle: string }> = {
+  1: { title: 'Votre identité', subtitle: 'On commence par se connaître.' },
+  2: { title: 'Votre compte', subtitle: 'Créez vos identifiants Air Mess.' },
+  3: { title: 'Votre numéro', subtitle: 'On vérifie votre téléphone par SMS.' },
+  4: { title: 'Votre véhicule', subtitle: 'Sur quoi allez-vous livrer ?' },
+  5: { title: 'Vos documents', subtitle: 'Prenez en photo vos pièces (recto/verso).' },
+  6: { title: 'Presque terminé', subtitle: 'Contacts d\'urgence et acceptation des CGU.' },
+}
 
 // Ordre croissant "taille de véhicule", aligné sur le formulaire web.
 const VEHICLES: { value: VehicleType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -54,6 +74,9 @@ function serverMessage(err: unknown, fallback: string): string {
 
 export default function RegisterScreen() {
   const router = useRouter()
+
+  // Wizard state — l'étape courante, restaurée depuis le brouillon si présent.
+  const [step, setStep] = useState(1)
 
   // Identité
   const [firstName, setFirstName] = useState('')
@@ -102,7 +125,117 @@ export default function RegisterScreen() {
   const isCnib = cniType === 'cnib'
   const phoneVerified = phoneToken !== null
 
-  // Le numéro change après vérification → on invalide la preuve.
+  /* ============================================================
+     BROUILLON — restauration au mount + sauvegarde continue
+     ============================================================ */
+
+  // Marque "premier render fait" pour éviter de sauvegarder pendant qu'on hydrate.
+  const hydratedRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const d = await loadDraft()
+      if (cancelled || !d) {
+        hydratedRef.current = true
+        return
+      }
+      // Applique le brouillon champ par champ (chaque valeur peut être undefined).
+      if (d.firstName) setFirstName(d.firstName)
+      if (d.lastName) setLastName(d.lastName)
+      if (d.gender) setGender(d.gender as Gender)
+      if (d.birthDate) setBirthDate(d.birthDate)
+      if (d.email) setEmail(d.email)
+      if (d.phone) setPhone(d.phone)
+      if (d.vehicleType) setVehicleType(d.vehicleType as VehicleType)
+      if (d.vehiclePlate) setVehiclePlate(d.vehiclePlate)
+      if (d.vehicleBrand) setVehicleBrand(d.vehicleBrand)
+      if (d.cniType) setCniType(d.cniType as CniType)
+      if (d.ec1Name) setEc1Name(d.ec1Name)
+      if (d.ec1Phone) setEc1Phone(d.ec1Phone)
+      if (d.ec2Name) setEc2Name(d.ec2Name)
+      if (d.ec2Phone) setEc2Phone(d.ec2Phone)
+      if (typeof d.eqIso === 'boolean') setEqIso(d.eqIso)
+      if (typeof d.eqTop === 'boolean') setEqTop(d.eqTop)
+      if (typeof d.eqFridge === 'boolean') setEqFridge(d.eqFridge)
+      // Reprend à l'étape sauvegardée si valide, sinon reste à 1.
+      // Étape 3 (OTP) : on ne peut pas restaurer la vérification → ramène à 3 max.
+      if (d.step && d.step >= 1 && d.step <= TOTAL_STEPS) {
+        setStep(Math.min(d.step, 3))
+      }
+      hydratedRef.current = true
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Sauvegarde à chaque changement de champ suivi — silencieusement, en arrière-plan.
+  useEffect(() => {
+    if (!hydratedRef.current) return
+    const draft: RegisterDraft = {
+      firstName,
+      lastName,
+      gender: gender || undefined,
+      birthDate,
+      email,
+      phone,
+      vehicleType: vehicleType || undefined,
+      vehiclePlate,
+      vehicleBrand,
+      cniType: cniType || undefined,
+      ec1Name,
+      ec1Phone,
+      ec2Name,
+      ec2Phone,
+      eqIso,
+      eqTop,
+      eqFridge,
+      step,
+    }
+    saveDraft(draft)
+  }, [
+    firstName,
+    lastName,
+    gender,
+    birthDate,
+    email,
+    phone,
+    vehicleType,
+    vehiclePlate,
+    vehicleBrand,
+    cniType,
+    ec1Name,
+    ec1Phone,
+    ec2Name,
+    ec2Phone,
+    eqIso,
+    eqTop,
+    eqFridge,
+    step,
+  ])
+
+  /* ============================================================
+     Retour physique Android — recule d'une étape au lieu de fermer
+     ============================================================ */
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (done) return false // écran succès : laisse le comportement par défaut
+      if (step > 1) {
+        setStep((s) => s - 1)
+        setFormError(null)
+        return true
+      }
+      return false
+    })
+    return () => sub.remove()
+  }, [step, done])
+
+  /* ============================================================
+     OTP
+     ============================================================ */
+
   function onPhoneChange(v: string) {
     setPhone(v)
     if (phoneToken) {
@@ -123,7 +256,6 @@ export default function RegisterScreen() {
     try {
       const res = await sendPhoneOtp(normalized)
       setOtpSent(true)
-      // Dev (SMS simulé) : pré-remplit le code pour tester sans SMS réel.
       if (res.debug_code) setOtpCode(res.debug_code)
     } catch (err) {
       setOtpError(serverMessage(err, "Échec de l'envoi du code."))
@@ -145,33 +277,72 @@ export default function RegisterScreen() {
     }
   }
 
-  function validate(): string | null {
-    if (!firstName.trim() || !lastName.trim()) return 'Renseignez vos nom et prénom.'
-    if (!gender) return 'Sélectionnez votre genre.'
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return 'Date de naissance au format AAAA-MM-JJ.'
-    if (!email.trim()) return 'Renseignez votre email.'
-    if (password.length < 8) return 'Mot de passe : 8 caractères minimum.'
-    if (password !== passwordConfirm) return 'Les mots de passe ne correspondent pas.'
-    if (!phoneVerified) return 'Vérifiez votre numéro par SMS.'
-    if (!vehicleType) return 'Choisissez un type de véhicule.'
-    if (!vehiclePlate.trim()) return "Renseignez la plaque d'immatriculation."
-    if (!cniType) return "Choisissez le type de pièce d'identité."
-    if (!cni) return "Ajoutez le recto de votre pièce d'identité."
-    if (isCnib && !cniBack) return 'Ajoutez le verso de votre CNIB.'
-    if (isCar && !drivingLicense) return 'Ajoutez votre permis de conduire (voiture).'
-    if (!ec1Name.trim() || !ec1Phone.trim()) return "Renseignez le 1er contact d'urgence."
-    if (!ec2Name.trim() || !ec2Phone.trim()) return "Renseignez le 2e contact d'urgence."
-    if (!acceptedTerms) return "Vous devez accepter les CGU."
-    return null
+  /* ============================================================
+     Validation par étape
+     ============================================================ */
+
+  function validateStep(n: number): string | null {
+    switch (n) {
+      case 1:
+        if (!firstName.trim() || !lastName.trim()) return 'Renseignez vos nom et prénom.'
+        if (!gender) return 'Sélectionnez votre genre.'
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return 'Date de naissance au format AAAA-MM-JJ.'
+        return null
+      case 2:
+        if (!email.trim()) return 'Renseignez votre email.'
+        if (password.length < 8) return 'Mot de passe : 8 caractères minimum.'
+        if (password !== passwordConfirm) return 'Les mots de passe ne correspondent pas.'
+        return null
+      case 3:
+        if (!phoneVerified) return 'Vérifiez votre numéro par SMS.'
+        return null
+      case 4:
+        if (!vehicleType) return 'Choisissez un type de véhicule.'
+        if (!vehiclePlate.trim()) return "Renseignez la plaque d'immatriculation."
+        return null
+      case 5:
+        if (!cniType) return "Choisissez le type de pièce d'identité."
+        if (!cni) return "Ajoutez le recto de votre pièce d'identité."
+        if (isCnib && !cniBack) return 'Ajoutez le verso de votre CNIB.'
+        if (isCar && !drivingLicense) return 'Ajoutez votre permis de conduire (voiture).'
+        return null
+      case 6:
+        if (!ec1Name.trim() || !ec1Phone.trim()) return "Renseignez le 1er contact d'urgence."
+        if (!ec2Name.trim() || !ec2Phone.trim()) return "Renseignez le 2e contact d'urgence."
+        if (!acceptedTerms) return 'Vous devez accepter les CGU.'
+        return null
+      default:
+        return null
+    }
   }
 
-  async function handleSubmit() {
-    setFormError(null)
-    const err = validate()
+  const currentStepValid = validateStep(step) === null
+
+  /* ============================================================
+     Navigation entre étapes
+     ============================================================ */
+
+  function goNext() {
+    const err = validateStep(step)
     if (err) {
       setFormError(err)
       return
     }
+    setFormError(null)
+    if (step === TOTAL_STEPS) {
+      handleSubmit()
+      return
+    }
+    setStep((s) => s + 1)
+  }
+
+  function goBack() {
+    setStep((s) => Math.max(1, s - 1))
+    setFormError(null)
+  }
+
+  async function handleSubmit() {
+    setFormError(null)
     setSubmitting(true)
     try {
       await registerDriver({
@@ -201,6 +372,9 @@ export default function RegisterScreen() {
         equipment_refrigerated_bag: eqFridge,
         accepted_terms: true,
       })
+      // Succès → on vide le brouillon local pour ne pas réafficher les vieux
+      // champs si l'utilisateur relance l'écran d'inscription un jour.
+      await clearDraft()
       setDone(true)
     } catch (e) {
       setFormError(serverMessage(e, "Erreur lors de l'inscription."))
@@ -209,7 +383,10 @@ export default function RegisterScreen() {
     }
   }
 
-  // ── Écran succès ──
+  /* ============================================================
+     Écran succès
+     ============================================================ */
+
   if (done) {
     return (
       <SafeAreaView className="flex-1 bg-airmess-dark items-center justify-center px-8">
@@ -217,7 +394,9 @@ export default function RegisterScreen() {
         <View className="w-20 h-20 rounded-full bg-airmess-yellow items-center justify-center mb-6">
           <Ionicons name="checkmark" size={44} color="#1A1614" />
         </View>
-        <Text className="text-cream text-2xl font-extrabold text-center mb-3">Candidature envoyée</Text>
+        <Text className="text-cream text-2xl font-extrabold text-center mb-3">
+          Candidature envoyée
+        </Text>
         <Text className="text-warm-300 text-base text-center mb-10">
           Un administrateur va vérifier vos documents sous 24-48h. Vous pourrez vous connecter dès
           l'activation de votre compte.
@@ -229,211 +408,124 @@ export default function RegisterScreen() {
     )
   }
 
+  /* ============================================================
+     Rendu principal (wizard)
+     ============================================================ */
+
+  const meta = STEP_META[step]
+
   return (
-    <SafeAreaView className="flex-1 bg-airmess-dark" edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      className="flex-1 bg-airmess-dark"
+      edges={['top', 'left', 'right', 'bottom']}
+    >
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      <WizardHeader
+        step={step}
+        totalSteps={TOTAL_STEPS}
+        title={meta.title}
+        subtitle={meta.subtitle}
+        onBack={goBack}
+        canGoBack={step > 1}
+      />
+
       <KeyboardAwareScrollView
         bottomOffset={24}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
       >
-        {/* En-tête */}
-        <View className="px-5 pt-6 pb-4 flex-row items-center">
-          <Pressable onPress={() => router.back()} hitSlop={10} className="mr-3" accessibilityLabel="Retour">
-            <Ionicons name="arrow-back" size={24} color="#F5EFE3" />
-          </Pressable>
-          <Text className="text-cream text-xl font-extrabold">Devenir livreur</Text>
-        </View>
-
         <View className="mx-5 bg-cream rounded-3xl p-5">
-          {/* Identité */}
-          <SectionTitle icon="person-outline">Votre identité</SectionTitle>
-          <LabeledInput label="Prénom" value={firstName} onChangeText={setFirstName} autoCapitalize="words" />
-          <LabeledInput label="Nom" value={lastName} onChangeText={setLastName} autoCapitalize="words" />
-          <FieldLabel>Genre</FieldLabel>
-          <Segmented
-            options={[
-              { value: 'M', label: 'Homme' },
-              { value: 'F', label: 'Femme' },
-              { value: 'autre', label: 'Autre' },
-            ]}
-            value={gender}
-            onChange={(v) => setGender(v as Gender)}
-          />
-          <LabeledInput
-            label="Date de naissance"
-            value={birthDate}
-            onChangeText={setBirthDate}
-            placeholder="AAAA-MM-JJ"
-            keyboardType="numbers-and-punctuation"
-            hint="16 ans minimum"
-          />
-
-          {/* Compte */}
-          <SectionTitle icon="lock-closed-outline">Votre compte</SectionTitle>
-          <LabeledInput
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-          />
-          <LabeledInput
-            label="Mot de passe"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            hint="8 caractères minimum"
-          />
-          <LabeledInput
-            label="Confirmer le mot de passe"
-            value={passwordConfirm}
-            onChangeText={setPasswordConfirm}
-            secureTextEntry
-          />
-
-          {/* Téléphone + OTP */}
-          <SectionTitle icon="phone-portrait-outline">Votre numéro</SectionTitle>
-          <FieldLabel>Téléphone</FieldLabel>
-          <View className="flex-row items-center gap-2">
-            <View className="flex-1">
-              <TextInput
-                value={phone}
-                onChangeText={onPhoneChange}
-                editable={!phoneVerified}
-                placeholder="+229 01 90 12 34 56"
-                placeholderTextColor="#B8AF9F"
-                keyboardType="phone-pad"
-                className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white"
-              />
-            </View>
-            {phoneVerified ? (
-              <View className="h-14 px-3 rounded-2xl bg-success/15 items-center justify-center flex-row">
-                <Ionicons name="checkmark-circle" size={20} color="#1E9E5A" />
-                <Text className="text-success font-bold ml-1">Vérifié</Text>
-              </View>
-            ) : (
-              <Pressable
-                onPress={handleSendOtp}
-                disabled={otpSending}
-                className="h-14 px-4 rounded-2xl bg-airmess-dark items-center justify-center"
-              >
-                {otpSending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text className="text-white font-bold">{otpSent ? 'Renvoyer' : 'Envoyer'}</Text>
-                )}
-              </Pressable>
-            )}
-          </View>
-
-          {otpSent && !phoneVerified && (
-            <View className="mt-3">
-              <FieldLabel>Code reçu par SMS</FieldLabel>
-              <View className="flex-row items-center gap-2">
-                <View className="flex-1">
-                  <TextInput
-                    value={otpCode}
-                    onChangeText={setOtpCode}
-                    placeholder="123456"
-                    placeholderTextColor="#B8AF9F"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white tracking-widest"
-                  />
-                </View>
-                <Pressable
-                  onPress={handleVerifyOtp}
-                  disabled={otpVerifying || otpCode.trim().length < 6}
-                  className="h-14 px-4 rounded-2xl bg-airmess-yellow items-center justify-center"
-                  style={otpCode.trim().length < 6 ? { opacity: 0.4 } : undefined}
-                >
-                  {otpVerifying ? (
-                    <ActivityIndicator color="#1A1614" />
-                  ) : (
-                    <Text className="text-ink font-extrabold">Vérifier</Text>
-                  )}
-                </Pressable>
-              </View>
-            </View>
+          {step === 1 && (
+            <StepIdentity
+              firstName={firstName}
+              setFirstName={setFirstName}
+              lastName={lastName}
+              setLastName={setLastName}
+              gender={gender}
+              setGender={setGender}
+              birthDate={birthDate}
+              setBirthDate={setBirthDate}
+            />
           )}
-          {otpError && <Text className="text-airmess-red text-sm mt-2 font-semibold">{otpError}</Text>}
 
-          {/* Véhicule */}
-          <SectionTitle icon="bicycle-outline">Votre véhicule</SectionTitle>
-          <FieldLabel>Type de véhicule</FieldLabel>
-          <View className="flex-row flex-wrap gap-2">
-            {VEHICLES.map((v) => {
-              const active = vehicleType === v.value
-              return (
-                <Pressable
-                  key={v.value}
-                  onPress={() => setVehicleType(v.value)}
-                  className={`flex-1 min-w-[45%] items-center rounded-2xl border-2 py-3 ${
-                    active ? 'border-airmess-yellow bg-airmess-yellow/10' : 'border-warm-200 bg-off-white'
-                  }`}
-                >
-                  <Ionicons name={v.icon} size={24} color={active ? '#1A1614' : '#8A7E68'} />
-                  <Text className={`mt-1 font-semibold ${active ? 'text-ink' : 'text-warm-600'}`}>{v.label}</Text>
-                </Pressable>
-              )
-            })}
-          </View>
-          <View className="h-3" />
-          <LabeledInput label="Plaque d'immatriculation" value={vehiclePlate} onChangeText={setVehiclePlate} autoCapitalize="characters" />
-          <LabeledInput label="Marque (optionnel)" value={vehicleBrand} onChangeText={setVehicleBrand} placeholder="ex : Bajaj, TVS, Haojue…" />
+          {step === 2 && (
+            <StepAccount
+              email={email}
+              setEmail={setEmail}
+              password={password}
+              setPassword={setPassword}
+              passwordConfirm={passwordConfirm}
+              setPasswordConfirm={setPasswordConfirm}
+            />
+          )}
 
-          {/* Documents */}
-          <SectionTitle icon="document-text-outline">Vos documents</SectionTitle>
-          <FieldLabel>Type de pièce d'identité</FieldLabel>
-          <Segmented options={CNI_TYPES} value={cniType} onChange={(v) => setCniType(v as CniType)} />
-          <DocField
-            label={isCnib ? "Pièce d'identité (recto)" : "Pièce d'identité"}
-            file={cni}
-            onPick={setCni}
-            required
-          />
-          {isCnib && <DocField label="CNIB (verso)" file={cniBack} onPick={setCniBack} required />}
-          {isCar && <DocField label="Permis de conduire" file={drivingLicense} onPick={setDrivingLicense} required />}
-          <DocField label="Photo de profil (optionnel)" file={photo} onPick={setPhoto} />
+          {step === 3 && (
+            <StepPhone
+              phone={phone}
+              onPhoneChange={onPhoneChange}
+              otpSent={otpSent}
+              otpCode={otpCode}
+              setOtpCode={setOtpCode}
+              phoneVerified={phoneVerified}
+              otpSending={otpSending}
+              otpVerifying={otpVerifying}
+              otpError={otpError}
+              handleSendOtp={handleSendOtp}
+              handleVerifyOtp={handleVerifyOtp}
+            />
+          )}
 
-          {/* Contacts d'urgence */}
-          <SectionTitle icon="alert-circle-outline">Contacts d'urgence</SectionTitle>
-          <LabeledInput label="Contact 1 — nom" value={ec1Name} onChangeText={setEc1Name} autoCapitalize="words" />
-          <LabeledInput label="Contact 1 — téléphone" value={ec1Phone} onChangeText={setEc1Phone} keyboardType="phone-pad" />
-          <LabeledInput label="Contact 2 — nom" value={ec2Name} onChangeText={setEc2Name} autoCapitalize="words" />
-          <LabeledInput label="Contact 2 — téléphone" value={ec2Phone} onChangeText={setEc2Phone} keyboardType="phone-pad" />
+          {step === 4 && (
+            <StepVehicle
+              vehicleType={vehicleType}
+              setVehicleType={setVehicleType}
+              vehiclePlate={vehiclePlate}
+              setVehiclePlate={setVehiclePlate}
+              vehicleBrand={vehicleBrand}
+              setVehicleBrand={setVehicleBrand}
+              eqIso={eqIso}
+              setEqIso={setEqIso}
+              eqTop={eqTop}
+              setEqTop={setEqTop}
+              eqFridge={eqFridge}
+              setEqFridge={setEqFridge}
+            />
+          )}
 
-          {/* Équipement */}
-          <SectionTitle icon="bag-handle-outline">Votre équipement</SectionTitle>
-          <CheckRow label="Sac isotherme" checked={eqIso} onToggle={() => setEqIso((v) => !v)} />
-          <CheckRow label="Top case" checked={eqTop} onToggle={() => setEqTop((v) => !v)} />
-          <CheckRow label="Sac réfrigéré" checked={eqFridge} onToggle={() => setEqFridge((v) => !v)} />
+          {step === 5 && (
+            <StepDocuments
+              cniType={cniType}
+              setCniType={setCniType}
+              cni={cni}
+              setCni={setCni}
+              cniBack={cniBack}
+              setCniBack={setCniBack}
+              isCnib={isCnib}
+              drivingLicense={drivingLicense}
+              setDrivingLicense={setDrivingLicense}
+              isCar={isCar}
+              photo={photo}
+              setPhoto={setPhoto}
+            />
+          )}
 
-          {/* CGU */}
-          <View className="h-4" />
-          <Pressable onPress={() => setAcceptedTerms((v) => !v)} className="flex-row items-start">
-            <View
-              className={`w-6 h-6 rounded-md border-2 items-center justify-center mr-3 mt-0.5 ${
-                acceptedTerms ? 'bg-airmess-yellow border-airmess-yellow' : 'border-warm-300 bg-off-white'
-              }`}
-            >
-              {acceptedTerms && <Ionicons name="checkmark" size={16} color="#1A1614" />}
-            </View>
-            <Text className="flex-1 text-ink text-sm">
-              J'accepte les{' '}
-              <Text className="text-airmess-red font-bold" onPress={() => Linking.openURL(TERMS_URL)}>
-                CGU
-              </Text>{' '}
-              et la{' '}
-              <Text className="text-airmess-red font-bold" onPress={() => Linking.openURL(PRIVACY_URL)}>
-                politique de confidentialité
-              </Text>
-              .
-            </Text>
-          </Pressable>
+          {step === 6 && (
+            <StepFinal
+              ec1Name={ec1Name}
+              setEc1Name={setEc1Name}
+              ec1Phone={ec1Phone}
+              setEc1Phone={setEc1Phone}
+              ec2Name={ec2Name}
+              setEc2Name={setEc2Name}
+              ec2Phone={ec2Phone}
+              setEc2Phone={setEc2Phone}
+              acceptedTerms={acceptedTerms}
+              setAcceptedTerms={setAcceptedTerms}
+            />
+          )}
 
           {formError && (
             <View className="bg-danger-bg border-2 border-airmess-red/30 rounded-2xl p-3 mt-4 flex-row items-start">
@@ -441,33 +533,395 @@ export default function RegisterScreen() {
               <Text className="text-airmess-red text-sm flex-1 font-semibold ml-2">{formError}</Text>
             </View>
           )}
-
-          <View className="h-5" />
-          <Button variant="primary" size="lg" onPress={handleSubmit} loading={submitting}>
-            Envoyer ma candidature
-          </Button>
         </View>
 
-        <Pressable onPress={() => router.replace('/login')} className="items-center mt-6" hitSlop={8}>
-          <Text className="text-warm-400 text-sm">
-            Déjà livreur ? <Text className="text-airmess-yellow font-bold">Se connecter</Text>
-          </Text>
-        </Pressable>
+        {step === 1 && (
+          <Pressable
+            onPress={() => router.replace('/login')}
+            className="items-center mt-5"
+            hitSlop={8}
+          >
+            <Text className="text-warm-400 text-sm">
+              Déjà livreur ?{' '}
+              <Text className="text-airmess-yellow font-bold">Se connecter</Text>
+            </Text>
+          </Pressable>
+        )}
       </KeyboardAwareScrollView>
+
+      <WizardFooter
+        step={step}
+        totalSteps={TOTAL_STEPS}
+        onNext={goNext}
+        onBack={goBack}
+        nextDisabled={!currentStepValid}
+        submitting={submitting}
+      />
     </SafeAreaView>
   )
 }
 
-/* ── Sous-composants ── */
+/* ============================================================
+   Étapes — chaque bloc est isolé pour rester lisible
+   ============================================================ */
 
-function SectionTitle({ icon, children }: { icon: keyof typeof Ionicons.glyphMap; children: string }) {
+function StepIdentity({
+  firstName,
+  setFirstName,
+  lastName,
+  setLastName,
+  gender,
+  setGender,
+  birthDate,
+  setBirthDate,
+}: {
+  firstName: string
+  setFirstName: (v: string) => void
+  lastName: string
+  setLastName: (v: string) => void
+  gender: Gender | ''
+  setGender: (v: Gender) => void
+  birthDate: string
+  setBirthDate: (v: string) => void
+}) {
   return (
-    <View className="flex-row items-center mt-6 mb-3">
-      <Ionicons name={icon} size={18} color="#8A7E68" />
-      <Text className="text-ink font-extrabold text-base ml-2">{children}</Text>
+    <View>
+      <LabeledInput label="Prénom" value={firstName} onChangeText={setFirstName} autoCapitalize="words" />
+      <LabeledInput label="Nom" value={lastName} onChangeText={setLastName} autoCapitalize="words" />
+      <FieldLabel>Genre</FieldLabel>
+      <Segmented
+        options={[
+          { value: 'M', label: 'Homme' },
+          { value: 'F', label: 'Femme' },
+          { value: 'autre', label: 'Autre' },
+        ]}
+        value={gender}
+        onChange={(v) => setGender(v as Gender)}
+      />
+      <LabeledInput
+        label="Date de naissance"
+        value={birthDate}
+        onChangeText={setBirthDate}
+        placeholder="AAAA-MM-JJ"
+        keyboardType="numbers-and-punctuation"
+        hint="16 ans minimum"
+      />
     </View>
   )
 }
+
+function StepAccount({
+  email,
+  setEmail,
+  password,
+  setPassword,
+  passwordConfirm,
+  setPasswordConfirm,
+}: {
+  email: string
+  setEmail: (v: string) => void
+  password: string
+  setPassword: (v: string) => void
+  passwordConfirm: string
+  setPasswordConfirm: (v: string) => void
+}) {
+  return (
+    <View>
+      <LabeledInput
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
+        autoComplete="email"
+      />
+      <LabeledInput
+        label="Mot de passe"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        hint="8 caractères minimum"
+      />
+      <LabeledInput
+        label="Confirmer le mot de passe"
+        value={passwordConfirm}
+        onChangeText={setPasswordConfirm}
+        secureTextEntry
+      />
+    </View>
+  )
+}
+
+function StepPhone({
+  phone,
+  onPhoneChange,
+  otpSent,
+  otpCode,
+  setOtpCode,
+  phoneVerified,
+  otpSending,
+  otpVerifying,
+  otpError,
+  handleSendOtp,
+  handleVerifyOtp,
+}: {
+  phone: string
+  onPhoneChange: (v: string) => void
+  otpSent: boolean
+  otpCode: string
+  setOtpCode: (v: string) => void
+  phoneVerified: boolean
+  otpSending: boolean
+  otpVerifying: boolean
+  otpError: string | null
+  handleSendOtp: () => void
+  handleVerifyOtp: () => void
+}) {
+  return (
+    <View>
+      <FieldLabel>Téléphone</FieldLabel>
+      <View className="flex-row items-center gap-2">
+        <View className="flex-1">
+          <TextInput
+            value={phone}
+            onChangeText={onPhoneChange}
+            editable={!phoneVerified}
+            placeholder="+229 01 90 12 34 56"
+            placeholderTextColor="#B8AF9F"
+            keyboardType="phone-pad"
+            className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white"
+          />
+        </View>
+        {phoneVerified ? (
+          <View className="h-14 px-3 rounded-2xl bg-success/15 items-center justify-center flex-row">
+            <Ionicons name="checkmark-circle" size={20} color="#1E9E5A" />
+            <Text className="text-success font-bold ml-1">Vérifié</Text>
+          </View>
+        ) : (
+          <Pressable
+            onPress={handleSendOtp}
+            disabled={otpSending}
+            className="h-14 px-4 rounded-2xl bg-airmess-dark items-center justify-center"
+          >
+            {otpSending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text className="text-white font-bold">{otpSent ? 'Renvoyer' : 'Envoyer'}</Text>
+            )}
+          </Pressable>
+        )}
+      </View>
+
+      {otpSent && !phoneVerified && (
+        <View className="mt-3">
+          <FieldLabel>Code reçu par SMS</FieldLabel>
+          <View className="flex-row items-center gap-2">
+            <View className="flex-1">
+              <TextInput
+                value={otpCode}
+                onChangeText={setOtpCode}
+                placeholder="123456"
+                placeholderTextColor="#B8AF9F"
+                keyboardType="number-pad"
+                maxLength={6}
+                className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white tracking-widest"
+              />
+            </View>
+            <Pressable
+              onPress={handleVerifyOtp}
+              disabled={otpVerifying || otpCode.trim().length < 6}
+              className="h-14 px-4 rounded-2xl bg-airmess-yellow items-center justify-center"
+              style={otpCode.trim().length < 6 ? { opacity: 0.4 } : undefined}
+            >
+              {otpVerifying ? (
+                <ActivityIndicator color="#1A1614" />
+              ) : (
+                <Text className="text-ink font-extrabold">Vérifier</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {otpError && <Text className="text-airmess-red text-sm mt-2 font-semibold">{otpError}</Text>}
+
+      {!phoneVerified && (
+        <View className="flex-row items-start mt-4 bg-warm-100 rounded-2xl p-3">
+          <Ionicons name="information-circle-outline" size={18} color="#8A7E68" />
+          <Text className="text-warm-600 text-xs flex-1 ml-2">
+            Vous devez vérifier votre numéro pour continuer. Vous recevrez un SMS avec un code à 6 chiffres.
+          </Text>
+        </View>
+      )}
+    </View>
+  )
+}
+
+function StepVehicle({
+  vehicleType,
+  setVehicleType,
+  vehiclePlate,
+  setVehiclePlate,
+  vehicleBrand,
+  setVehicleBrand,
+  eqIso,
+  setEqIso,
+  eqTop,
+  setEqTop,
+  eqFridge,
+  setEqFridge,
+}: {
+  vehicleType: VehicleType | ''
+  setVehicleType: (v: VehicleType) => void
+  vehiclePlate: string
+  setVehiclePlate: (v: string) => void
+  vehicleBrand: string
+  setVehicleBrand: (v: string) => void
+  eqIso: boolean
+  setEqIso: (v: boolean) => void
+  eqTop: boolean
+  setEqTop: (v: boolean) => void
+  eqFridge: boolean
+  setEqFridge: (v: boolean) => void
+}) {
+  return (
+    <View>
+      <FieldLabel>Type de véhicule</FieldLabel>
+      <View className="flex-row flex-wrap gap-2">
+        {VEHICLES.map((v) => {
+          const active = vehicleType === v.value
+          return (
+            <Pressable
+              key={v.value}
+              onPress={() => setVehicleType(v.value)}
+              className={`flex-1 min-w-[45%] items-center rounded-2xl border-2 py-3 ${
+                active ? 'border-airmess-yellow bg-airmess-yellow/10' : 'border-warm-200 bg-off-white'
+              }`}
+            >
+              <Ionicons name={v.icon} size={24} color={active ? '#1A1614' : '#8A7E68'} />
+              <Text className={`mt-1 font-semibold ${active ? 'text-ink' : 'text-warm-600'}`}>{v.label}</Text>
+            </Pressable>
+          )
+        })}
+      </View>
+      <View className="h-3" />
+      <LabeledInput label="Plaque d'immatriculation" value={vehiclePlate} onChangeText={setVehiclePlate} autoCapitalize="characters" />
+      <LabeledInput label="Marque (optionnel)" value={vehicleBrand} onChangeText={setVehicleBrand} placeholder="ex : Bajaj, TVS, Haojue…" />
+
+      <View className="h-3" />
+      <FieldLabel>Équipement (optionnel)</FieldLabel>
+      <CheckRow label="Sac isotherme" checked={eqIso} onToggle={() => setEqIso(!eqIso)} />
+      <CheckRow label="Top case" checked={eqTop} onToggle={() => setEqTop(!eqTop)} />
+      <CheckRow label="Sac réfrigéré" checked={eqFridge} onToggle={() => setEqFridge(!eqFridge)} />
+    </View>
+  )
+}
+
+function StepDocuments({
+  cniType,
+  setCniType,
+  cni,
+  setCni,
+  cniBack,
+  setCniBack,
+  isCnib,
+  drivingLicense,
+  setDrivingLicense,
+  isCar,
+  photo,
+  setPhoto,
+}: {
+  cniType: CniType | ''
+  setCniType: (v: CniType) => void
+  cni: LocalFile | null
+  setCni: (f: LocalFile | null) => void
+  cniBack: LocalFile | null
+  setCniBack: (f: LocalFile | null) => void
+  isCnib: boolean
+  drivingLicense: LocalFile | null
+  setDrivingLicense: (f: LocalFile | null) => void
+  isCar: boolean
+  photo: LocalFile | null
+  setPhoto: (f: LocalFile | null) => void
+}) {
+  return (
+    <View>
+      <FieldLabel>Type de pièce d'identité</FieldLabel>
+      <Segmented options={CNI_TYPES} value={cniType} onChange={(v) => setCniType(v as CniType)} />
+      <DocField
+        label={isCnib ? "Pièce d'identité (recto)" : "Pièce d'identité"}
+        file={cni}
+        onPick={setCni}
+        required
+      />
+      {isCnib && <DocField label="CNIB (verso)" file={cniBack} onPick={setCniBack} required />}
+      {isCar && <DocField label="Permis de conduire" file={drivingLicense} onPick={setDrivingLicense} required />}
+      <DocField label="Photo de profil (optionnel)" file={photo} onPick={setPhoto} />
+    </View>
+  )
+}
+
+function StepFinal({
+  ec1Name,
+  setEc1Name,
+  ec1Phone,
+  setEc1Phone,
+  ec2Name,
+  setEc2Name,
+  ec2Phone,
+  setEc2Phone,
+  acceptedTerms,
+  setAcceptedTerms,
+}: {
+  ec1Name: string
+  setEc1Name: (v: string) => void
+  ec1Phone: string
+  setEc1Phone: (v: string) => void
+  ec2Name: string
+  setEc2Name: (v: string) => void
+  ec2Phone: string
+  setEc2Phone: (v: string) => void
+  acceptedTerms: boolean
+  setAcceptedTerms: (v: boolean) => void
+}) {
+  return (
+    <View>
+      <FieldLabel>Contact d'urgence 1</FieldLabel>
+      <LabeledInput label="Nom" value={ec1Name} onChangeText={setEc1Name} autoCapitalize="words" />
+      <LabeledInput label="Téléphone" value={ec1Phone} onChangeText={setEc1Phone} keyboardType="phone-pad" />
+
+      <View className="h-3" />
+      <FieldLabel>Contact d'urgence 2</FieldLabel>
+      <LabeledInput label="Nom" value={ec2Name} onChangeText={setEc2Name} autoCapitalize="words" />
+      <LabeledInput label="Téléphone" value={ec2Phone} onChangeText={setEc2Phone} keyboardType="phone-pad" />
+
+      <View className="h-4" />
+      <Pressable onPress={() => setAcceptedTerms(!acceptedTerms)} className="flex-row items-start">
+        <View
+          className={`w-6 h-6 rounded-md border-2 items-center justify-center mr-3 mt-0.5 ${
+            acceptedTerms ? 'bg-airmess-yellow border-airmess-yellow' : 'border-warm-300 bg-off-white'
+          }`}
+        >
+          {acceptedTerms && <Ionicons name="checkmark" size={16} color="#1A1614" />}
+        </View>
+        <Text className="flex-1 text-ink text-sm">
+          J'accepte les{' '}
+          <Text className="text-airmess-red font-bold" onPress={() => Linking.openURL(TERMS_URL)}>
+            CGU
+          </Text>{' '}
+          et la{' '}
+          <Text className="text-airmess-red font-bold" onPress={() => Linking.openURL(PRIVACY_URL)}>
+            politique de confidentialité
+          </Text>
+          .
+        </Text>
+      </Pressable>
+    </View>
+  )
+}
+
+/* ============================================================
+   Sous-composants réutilisables (identiques à l'ancienne version)
+   ============================================================ */
 
 function FieldLabel({ children }: { children: string }) {
   return (
