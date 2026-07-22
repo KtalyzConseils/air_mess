@@ -12,6 +12,7 @@ import {
   type TransitionAction,
 } from '../api/driver'
 import { openGoogleMaps } from '../utils/navigation'
+import CourseMap from './CourseMap'
 import IncidentModal from './IncidentModal'
 import FailCourseModal from './FailCourseModal'
 import Button from './ui/Button'
@@ -275,6 +276,21 @@ export default function ActiveCourseCard({ course }: Props) {
 
       {/* ============ ACTIONS CONTEXTUELLES ============ */}
       <Card variant="default" padding="md" className="rounded-t-none border-t-0">
+        {/* Carte du trajet — A retrait, B livraison, ma position live.
+            La navigation routière reste déléguée au bouton "Naviguer" (Google Maps). */}
+        {typeof course.origin_lat === 'number' && typeof course.destination_lat === 'number' && (
+          <View className="mb-3">
+            <CourseMap
+              originLat={course.origin_lat}
+              originLng={course.origin_lng}
+              destLat={course.destination_lat}
+              destLng={course.destination_lng}
+              activeTarget={phase === 'dropoff' ? 'destination' : 'origin'}
+              height={220}
+            />
+          </View>
+        )}
+
         {/* Nav + call */}
         <View className="flex-row gap-2 mb-3">
           <Pressable
