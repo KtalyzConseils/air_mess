@@ -96,6 +96,40 @@ export async function fetchDeliveryFees(): Promise<DeliveryFees> {
   return data
 }
 
+/**
+ * Résultat du dry-run tarif — breakdown complet renvoyé par POST /courses/estimate.
+ * Permet à l'UI d'afficher "3.7 km × 400 + 800 = arrondi 2400 FCFA" en temps réel.
+ */
+export interface CourseFeeEstimate {
+  distance_km: number
+  raw_haversine_km: number
+  detour_factor: number
+  per_km: number
+  min: number
+  max: number
+  multiplier: number
+  urgency: 'standard' | 'express'
+  fee_before_round: number
+  fee: number
+  /** Vrai quand le plafond haut a écrasé le fee calculé. */
+  capped: boolean
+}
+
+export interface EstimateFeeParams {
+  origin_lat: number
+  origin_lng: number
+  destination_lat: number
+  destination_lng: number
+  urgency?: 'standard' | 'express'
+}
+
+export async function estimateCourseFee(
+  params: EstimateFeeParams,
+): Promise<CourseFeeEstimate> {
+  const { data } = await api.post('/courses/estimate', params)
+  return data
+}
+
 export interface CreateCoursePayload {
   package_category_id: number
   urgency: 'standard' | 'express'

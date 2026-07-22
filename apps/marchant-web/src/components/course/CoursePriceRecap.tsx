@@ -11,6 +11,7 @@ import {
 import TripMiniMap from './TripMiniMap'
 import CourseSummary, { type CourseSummaryData } from './CourseSummary'
 import CompletionStatus from './CompletionStatus'
+import type { CourseFeeEstimate } from '../../api/courses'
 
 interface Props {
   data: CourseSummaryData
@@ -19,6 +20,8 @@ interface Props {
   destinationLat?: number
   destinationLng?: number
   fee: number
+  /** Breakdown live du back — quand présent on affiche "3.7 km × 400 + 800 …". */
+  estimate?: CourseFeeEstimate
   walletAvailable: number | null
   isSubmitting: boolean
   submitLabel: string
@@ -38,6 +41,7 @@ export default function CoursePriceRecap({
   destinationLat,
   destinationLng,
   fee,
+  estimate,
   walletAvailable,
   isSubmitting,
   submitLabel,
@@ -78,38 +82,63 @@ export default function CoursePriceRecap({
           )}
         </div>
 
-        {/* Bloc frais — cliquable pour toggler la mini-carte */}
-        <button
-          type="button"
-          onClick={() => setMapVisible((v) => !v)}
-          disabled={!hasAnyCoord}
-          aria-expanded={mapVisible}
-          aria-label={
-            mapVisible
-              ? t('courses.new.recap.hideMap')
-              : t('courses.new.recap.showMap')
-          }
-          className="w-full px-5 py-4 border-t border-warm-100 bg-cream text-left transition-colors enabled:hover:bg-warm-100 disabled:cursor-default flex items-baseline justify-between gap-3 group shrink-0"
-        >
-          <span className="text-body-s text-warm-600 flex items-center gap-1.5">
-            {data.urgency === 'express'
-              ? t('courses.new.recap.feeExpress')
-              : t('courses.new.recap.feeStandard')}
-            {hasAnyCoord && (
-              <span
-                className={`text-warm-400 transition-transform duration-200 group-hover:text-ink ${
-                  mapVisible ? 'rotate-180' : ''
-                }`}
-                aria-hidden
-              >
-                <ChevronDownIcon size={14} />
-              </span>
-            )}
-          </span>
-          <span className="text-h3 font-bold text-ink tabular-nums">
-            {fee.toLocaleString('fr-FR')} FCFA
-          </span>
-        </button>
+        {/* Bloc frais — cliquable pour toggler la mini-carte + breakdown live */}
+        <div className="border-t border-warm-100 bg-cream shrink-0">
+          <button
+            type="button"
+            onClick={() => setMapVisible((v) => !v)}
+            disabled={!hasAnyCoord}
+            aria-expanded={mapVisible}
+            aria-label={
+              mapVisible
+                ? t('courses.new.recap.hideMap')
+                : t('courses.new.recap.showMap')
+            }
+            className="w-full px-5 pt-4 pb-2 text-left transition-colors enabled:hover:bg-warm-100 disabled:cursor-default flex items-baseline justify-between gap-3 group"
+          >
+            <span className="text-body-s text-warm-600 flex items-center gap-1.5">
+              {data.urgency === 'express'
+                ? t('courses.new.recap.feeExpress')
+                : t('courses.new.recap.feeStandard')}
+              {hasAnyCoord && (
+                <span
+                  className={`text-warm-400 transition-transform duration-200 group-hover:text-ink ${
+                    mapVisible ? 'rotate-180' : ''
+                  }`}
+                  aria-hidden
+                >
+                  <ChevronDownIcon size={14} />
+                </span>
+              )}
+            </span>
+            <span className="text-h3 font-bold text-ink tabular-nums">
+              {fee.toLocaleString('fr-FR')} FCFA
+            </span>
+          </button>
+
+          {estimate && (
+            <p className="px-5 pb-4 text-caption text-warm-500 tabular-nums">
+              {estimate.capped
+                ? t('courses.new.recap.breakdownCapped', {
+                    distance: estimate.distance_km.toFixed(1),
+                    max: estimate.max.toLocaleString('fr-FR'),
+                  })
+                : t('courses.new.recap.breakdown', {
+                    distance: estimate.distance_km.toFixed(1),
+                    perKm: estimate.per_km.toLocaleString('fr-FR'),
+                    min: estimate.min.toLocaleString('fr-FR'),
+                  })}
+              {estimate.urgency === 'express' && estimate.multiplier !== 1 && (
+                <>
+                  {' '}
+                  {t('courses.new.recap.breakdownExpress', {
+                    multiplier: estimate.multiplier,
+                  })}
+                </>
+              )}
+            </p>
+          )}
+        </div>
 
         {hasWallet && (
           <div

@@ -525,7 +525,10 @@
         "mobileFeeLabel": "Total",
         "showMap": "Voir la carte du trajet",
         "hideMap": "Masquer la carte",
-        "showMapHint": "Clic sur le prix pour voir la carte"
+        "showMapHint": "Clic sur le prix pour voir la carte",
+        "breakdown": "{{distance}} km × {{perKm}} + {{min}} FCFA (arrondi au 100 sup.)",
+        "breakdownExpress": "× {{multiplier}} pour l'express",
+        "breakdownCapped": "{{distance}} km — plafond {{max}} FCFA atteint"
       },
       "errors": {
         "title_one": "1 champ obligatoire à compléter",

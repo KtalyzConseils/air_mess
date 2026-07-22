@@ -525,7 +525,10 @@
         "mobileFeeLabel": "Total",
         "showMap": "View trip map",
         "hideMap": "Hide map",
-        "showMapHint": "Click the price to see the map"
+        "showMapHint": "Click the price to see the map",
+        "breakdown": "{{distance}} km × {{perKm}} + {{min}} FCFA (rounded up to 100)",
+        "breakdownExpress": "× {{multiplier}} for express",
+        "breakdownCapped": "{{distance}} km — {{max}} FCFA cap reached"
       },
       "errors": {
         "title_one": "1 required field to complete",

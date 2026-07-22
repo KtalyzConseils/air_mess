@@ -11,7 +11,13 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import PageEyebrow from '../components/ui/PageEyebrow'
 import { fetchPackageCategories } from '../api/packageCategories'
-import { createCourse, fetchDeliveryFees, type CreateCoursePayload } from '../api/courses'
+import {
+  createCourse,
+  fetchDeliveryFees,
+  estimateCourseFee,
+  type CreateCoursePayload,
+  type CourseFeeEstimate,
+} from '../api/courses'
 import AddressPicker from '../components/AddressPicker'
 import type { Address } from '../api/addresses'
 import { useAuthStore } from '../stores/authStore'
@@ -396,7 +402,36 @@ export default function NewCoursePage() {
     if (addr.street || addr.landmark || addr.instructions) setShowDestExtra(true)
   }
 
-  const currentFee = urgencyWatch === 'express' ? fees.express : fees.standard
+  // Coords utilisées à la fois pour la carte, le récap et l'estimation tarif.
+  // Reboxées explicitement pour être stables dans les deps du useQuery estimate.
+  const originLat = Number(watch('origin_lat')) || 0
+  const originLng = Number(watch('origin_lng')) || 0
+  const destinationLat = Number(watch('destination_lat')) || 0
+  const destinationLng = Number(watch('destination_lng')) || 0
+  const hasFullCoords =
+    originLat !== 0 && originLng !== 0 && destinationLat !== 0 && destinationLng !== 0
+
+  // Estimation tarif live — appelée dès que les 2 pins sont posés et à chaque
+  // changement d'urgence. React Query mémoïse par clé donc pas d'appel doublon
+  // si les valeurs ne changent pas.
+  const { data: estimate } = useQuery<CourseFeeEstimate>({
+    queryKey: ['course-estimate', originLat, originLng, destinationLat, destinationLng, urgencyWatch],
+    queryFn: () =>
+      estimateCourseFee({
+        origin_lat: originLat,
+        origin_lng: originLng,
+        destination_lat: destinationLat,
+        destination_lng: destinationLng,
+        urgency: urgencyWatch,
+      }),
+    enabled: hasFullCoords,
+    staleTime: 30_000,
+  })
+
+  // Fallback : tant que l'estimate n'est pas revenu (pas de coords, loading),
+  // on affiche l'ancienne valeur forfait comme approximation. Une fois l'estimate
+  // reçu, il prime toujours.
+  const currentFee = estimate?.fee ?? (urgencyWatch === 'express' ? fees.express : fees.standard)
   const walletAvailable = isPayerUser && wallet ? wallet.available : null
 
   const submitLabel = mutation.isPending
@@ -905,11 +940,12 @@ export default function NewCoursePage() {
             {/* ===================== Colonne récap (desktop only) ===================== */}
             <CoursePriceRecap
               data={summaryData}
-              originLat={Number(watch('origin_lat')) || undefined}
-              originLng={Number(watch('origin_lng')) || undefined}
-              destinationLat={Number(watch('destination_lat')) || undefined}
-              destinationLng={Number(watch('destination_lng')) || undefined}
+              originLat={originLat || undefined}
+              originLng={originLng || undefined}
+              destinationLat={destinationLat || undefined}
+              destinationLng={destinationLng || undefined}
               fee={currentFee}
+              estimate={estimate}
               walletAvailable={walletAvailable}
               isSubmitting={mutation.isPending}
               submitLabel={submitLabel}
@@ -921,14 +957,15 @@ export default function NewCoursePage() {
           <MobileCoursePriceBar
             data={summaryData}
             fee={currentFee}
+            estimate={estimate}
             walletAvailable={walletAvailable}
             isSubmitting={mutation.isPending}
             submitLabel={submitLabel}
             missingCount={missingCount}
-            originLat={Number(watch('origin_lat')) || undefined}
-            originLng={Number(watch('origin_lng')) || undefined}
-            destinationLat={Number(watch('destination_lat')) || undefined}
-            destinationLng={Number(watch('destination_lng')) || undefined}
+            originLat={originLat || undefined}
+            originLng={originLng || undefined}
+            destinationLat={destinationLat || undefined}
+            destinationLng={destinationLng || undefined}
           />
         </form>
       </main>

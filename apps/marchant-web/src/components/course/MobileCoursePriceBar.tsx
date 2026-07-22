@@ -12,10 +12,13 @@ import {
 import TripMiniMap from './TripMiniMap'
 import CourseSummary, { type CourseSummaryData } from './CourseSummary'
 import CompletionStatus from './CompletionStatus'
+import type { CourseFeeEstimate } from '../../api/courses'
 
 interface Props {
   data: CourseSummaryData
   fee: number
+  /** Breakdown live du back — quand présent on affiche "3.7 km × 400 + 800 …". */
+  estimate?: CourseFeeEstimate
   walletAvailable: number | null
   isSubmitting: boolean
   submitLabel: string
@@ -35,6 +38,7 @@ interface Props {
 export default function MobileCoursePriceBar({
   data,
   fee,
+  estimate,
   walletAvailable,
   isSubmitting,
   submitLabel,
@@ -66,13 +70,27 @@ export default function MobileCoursePriceBar({
         <div className="lg:hidden fixed inset-0 z-50 flex items-end bg-ink/60 backdrop-blur-sm ams-anim-fade-in">
           <div className="w-full bg-off-white rounded-t-2xl shadow-2xl max-h-[90vh] flex flex-col ams-anim-scale-in">
             <div className="flex items-center justify-between border-b border-warm-100 px-5 py-4 shrink-0">
-              <div>
+              <div className="min-w-0">
                 <p className="text-caption text-warm-500 uppercase tracking-wide">
                   {t('courses.new.recap.title')}
                 </p>
                 <p className="text-body font-bold text-ink tabular-nums">
                   {fee.toLocaleString('fr-FR')} FCFA
                 </p>
+                {estimate && (
+                  <p className="text-caption text-warm-500 tabular-nums mt-0.5">
+                    {estimate.capped
+                      ? t('courses.new.recap.breakdownCapped', {
+                          distance: estimate.distance_km.toFixed(1),
+                          max: estimate.max.toLocaleString('fr-FR'),
+                        })
+                      : t('courses.new.recap.breakdown', {
+                          distance: estimate.distance_km.toFixed(1),
+                          perKm: estimate.per_km.toLocaleString('fr-FR'),
+                          min: estimate.min.toLocaleString('fr-FR'),
+                        })}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
