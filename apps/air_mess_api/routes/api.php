@@ -99,6 +99,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('courses')->group(function () {
         Route::get('/', [CourseController::class, 'index']);
         Route::post('/', [CourseController::class, 'store']);
+        // Dry-run : calcule le tarif estimé sans créer de course.
+        // Utilisé par la page de création côté marchand pour afficher le prix live.
+        Route::post('/estimate', [CourseController::class, 'estimate']);
         Route::get('/{course}', [CourseController::class, 'show']);
         Route::get('/{course}/history', [CourseController::class, 'history']);
         Route::post('/{course}/cancel', [CourseController::class, 'cancel']);

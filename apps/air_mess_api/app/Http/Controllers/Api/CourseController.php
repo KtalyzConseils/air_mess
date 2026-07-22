@@ -24,16 +24,22 @@ class CourseController extends Controller
         NotificationService $notifier,
         \App\Services\CourseBillingService $billing,
         \App\Services\UserWalletService $walletService,
+        \App\Services\PriceCalculator $priceCalculator,
     ): JsonResponse {
         $data = $request->validated();
         $user = $request->user();
 
-        // Calcul tarif simple pour le MVP
-        $isExpress = ($data['urgency'] ?? 'standard') === 'express';
-        $deliveryFee = (int) \App\Models\AppSetting::get(
-            $isExpress ? 'express_delivery_fee_fcfa' : 'standard_delivery_fee_fcfa',
-            $isExpress ? 2500 : 1500, // fallback si la setting n'existe pas
+        // Tarif calculé via la formule linéaire y = a × x + b (cf. PriceCalculator).
+        // Les settings admin (price_per_km_fcfa, price_min_fcfa, …) pilotent chaque paramètre.
+        $urgency  = $data['urgency'] ?? 'standard';
+        $estimate = $priceCalculator->estimate(
+            (float) $data['origin_lat'],
+            (float) $data['origin_lng'],
+            (float) $data['destination_lat'],
+            (float) $data['destination_lng'],
+            $urgency,
         );
+        $deliveryFee    = $estimate['fee'];
         $driverPercent  = (int) \App\Models\AppSetting::get('driver_commission_percent', 75);
         $driverEarnings = (int) round($deliveryFee * $driverPercent / 100);
 
@@ -165,6 +171,35 @@ class CourseController extends Controller
             'course'        => $course->load(['sender', 'packageCategory']),
             'is_high_value' => (bool) $course->is_high_value,
         ], 201);
+    }
+
+    /**
+     * Dry-run — calcule le tarif estimé pour une course sans la créer.
+     * Appelé par la page de création marchande pour afficher le prix live
+     * quand les 2 pins et l'urgence changent. Renvoie le breakdown complet
+     * (distance, per_km, min, multiplier, capped) pour la transparence UI.
+     */
+    public function estimate(
+        \Illuminate\Http\Request $request,
+        \App\Services\PriceCalculator $priceCalculator,
+    ): JsonResponse {
+        $data = $request->validate([
+            'origin_lat'      => ['required', 'numeric', 'between:-90,90'],
+            'origin_lng'      => ['required', 'numeric', 'between:-180,180'],
+            'destination_lat' => ['required', 'numeric', 'between:-90,90'],
+            'destination_lng' => ['required', 'numeric', 'between:-180,180'],
+            'urgency'         => ['nullable', Rule::in(['standard', 'express'])],
+        ]);
+
+        $breakdown = $priceCalculator->estimate(
+            (float) $data['origin_lat'],
+            (float) $data['origin_lng'],
+            (float) $data['destination_lat'],
+            (float) $data['destination_lng'],
+            $data['urgency'] ?? 'standard',
+        );
+
+        return response()->json($breakdown);
     }
 
     /**

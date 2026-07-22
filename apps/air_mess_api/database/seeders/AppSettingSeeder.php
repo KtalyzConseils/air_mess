@@ -31,16 +31,65 @@ class AppSettingSeeder extends Seeder
                 'key'         => 'standard_delivery_fee_fcfa',
                 'value'       => '1500',
                 'type'        => 'number',
-                'label'       => 'Tarif course standard (FCFA)',
-                'description' => 'Prix d\'une course en livraison standard.',
+                'label'       => '[DEPRECATED] Tarif course standard (FCFA)',
+                'description' => 'Déprécié depuis le 2026-07-22 : remplacé par la formule linéaire ' .
+                                 'price_per_km × distance + price_min. Conservé pour compat rétro ' .
+                                 '(fallback si PriceCalculator échoue) — ne PAS utiliser dans un nouveau code.',
                 'group'       => 'pricing',
             ],
             [
                 'key'         => 'express_delivery_fee_fcfa',
                 'value'       => '2500',
                 'type'        => 'number',
-                'label'       => 'Tarif course express (FCFA)',
-                'description' => 'Prix d\'une course en livraison express.',
+                'label'       => '[DEPRECATED] Tarif course express (FCFA)',
+                'description' => 'Déprécié depuis le 2026-07-22 : remplacé par ' .
+                                 '(formule standard) × price_express_multiplier. Conservé pour compat.',
+                'group'       => 'pricing',
+            ],
+            // ===== Nouveau modèle : tarification linéaire y = a × x + b =====
+            // Formule appliquée par App\Services\PriceCalculator :
+            //   distance_km = haversine(origine, destination) × price_detour_factor
+            //   fee_raw    = price_per_km_fcfa × distance_km + price_min_fcfa
+            //   fee_urgent = fee_raw × price_express_multiplier (si urgency=express)
+            //   fee       = round_up(fee_urgent, 100), clamp entre price_min et price_max
+            [
+                'key'         => 'price_per_km_fcfa',
+                'value'       => '400',
+                'type'        => 'number',
+                'label'       => 'Tarif par km (FCFA)',
+                'description' => 'Coefficient "a" de la formule y = ax + b. Prix appliqué à chaque kilomètre parcouru par le livreur entre origine et destination (distance vol d\'oiseau × facteur détour).',
+                'group'       => 'pricing',
+            ],
+            [
+                'key'         => 'price_min_fcfa',
+                'value'       => '800',
+                'type'        => 'number',
+                'label'       => 'Prix minimum course (FCFA)',
+                'description' => 'Terme "b" de la formule y = ax + b. Plancher qui protège le livreur sur les micro-trajets (moins de 1 km). C\'est aussi le prix affiché quand la distance vaut 0.',
+                'group'       => 'pricing',
+            ],
+            [
+                'key'         => 'price_max_fcfa',
+                'value'       => '5000',
+                'type'        => 'number',
+                'label'       => 'Prix maximum course (FCFA)',
+                'description' => 'Plafond haut de la formule. Sur les longs trajets (>10 km), on plafonne pour rester compétitif face au taxi. Passer à 0 pour désactiver le plafond.',
+                'group'       => 'pricing',
+            ],
+            [
+                'key'         => 'price_express_multiplier',
+                'value'       => '1.5',
+                'type'        => 'number',
+                'label'       => 'Multiplicateur express (×)',
+                'description' => 'Coefficient appliqué au fee standard quand urgency=express. Par défaut 1.5 (course express = 50% plus chère que standard).',
+                'group'       => 'pricing',
+            ],
+            [
+                'key'         => 'price_detour_factor',
+                'value'       => '1.35',
+                'type'        => 'number',
+                'label'       => 'Facteur détour (×)',
+                'description' => 'Distance réelle routière ≈ vol d\'oiseau × ce facteur. 1.35 est une bonne moyenne pour Cotonou (rues en damier + pas d\'autoroute intra-muros). Ajuster à la hausse si les feedback drivers signalent des trajets sous-payés.',
                 'group'       => 'pricing',
             ],
             [
