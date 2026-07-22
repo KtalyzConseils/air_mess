@@ -13,6 +13,7 @@ import { signInWithGoogle } from '../lib/firebase'
 import { EyeIcon, EyeOffIcon, ArrowRightIcon, GoogleIcon, CheckIcon } from '../components/ui/icons'
 import LanguageToggle from '../components/ui/LanguageToggle'
 import AuthSupportFooter from '../components/AuthSupportFooter'
+import InstallPwaButton from '../components/InstallPwaButton'
 import TermsCheckbox from '../components/TermsCheckbox'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
@@ -169,9 +170,13 @@ export default function RegisterPage() {
           ============================================================ */}
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-md">
-          <Link to="/" className="inline-block mb-10">
-            <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
-          </Link>
+          {/* Logo + installation PWA (visible dès l'arrivée, avant inscription) */}
+          <div className="flex items-center justify-between mb-10">
+            <Link to="/" className="inline-block">
+              <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
+            </Link>
+            <InstallPwaButton variant="light" />
+          </div>
 
           <h1 className="text-h1 text-ink mb-2">{t('auth.register.title')}</h1>
           <p className="text-body-l text-warm-500 mb-8">
