@@ -19,7 +19,8 @@ interface Props {
   originLng?: number
   destinationLat?: number
   destinationLng?: number
-  fee: number
+  /** null = pas encore d'estimation (2 pins pas posés, ou requête en cours). */
+  fee: number | null
   /** Breakdown live du back — quand présent on affiche "3.7 km × 400 + 800 …". */
   estimate?: CourseFeeEstimate
   walletAvailable: number | null
@@ -50,8 +51,9 @@ export default function CoursePriceRecap({
   const { t } = useTranslation()
   const [mapVisible, setMapVisible] = useState(false)
 
+  const hasFee = fee != null
   const hasWallet = typeof walletAvailable === 'number'
-  const covered = hasWallet && walletAvailable! >= fee
+  const covered = hasWallet && hasFee && walletAvailable! >= fee!
 
   const hasAnyCoord =
     (originLat !== undefined && originLat !== 0) ||
@@ -111,12 +113,16 @@ export default function CoursePriceRecap({
                 </span>
               )}
             </span>
-            <span className="text-h3 font-bold text-ink tabular-nums">
-              {fee.toLocaleString('fr-FR')} FCFA
-            </span>
+            {hasFee ? (
+              <span className="text-h3 font-bold text-ink tabular-nums">
+                {fee!.toLocaleString('fr-FR')} FCFA
+              </span>
+            ) : (
+              <span className="text-h3 font-bold text-warm-400 tabular-nums">—</span>
+            )}
           </button>
 
-          {estimate && (
+          {hasFee && estimate && (
             <p className="px-5 pb-4 text-caption text-warm-500 tabular-nums">
               {estimate.capped
                 ? t('courses.new.recap.breakdownCapped', {
@@ -138,9 +144,14 @@ export default function CoursePriceRecap({
               )}
             </p>
           )}
+          {!hasFee && (
+            <p className="px-5 pb-4 text-caption text-warm-500">
+              {t('courses.new.recap.feePending')}
+            </p>
+          )}
         </div>
 
-        {hasWallet && (
+        {hasWallet && hasFee && (
           <div
             className={`px-5 py-3 border-t border-warm-100 flex items-start gap-2 shrink-0 ${
               covered ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'

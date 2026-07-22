@@ -13,7 +13,6 @@ import PageEyebrow from '../components/ui/PageEyebrow'
 import { fetchPackageCategories } from '../api/packageCategories'
 import {
   createCourse,
-  fetchDeliveryFees,
   estimateCourseFee,
   type CreateCoursePayload,
   type CourseFeeEstimate,
@@ -91,12 +90,6 @@ export default function NewCoursePage() {
   const { data: categories = [] } = useQuery({
     queryKey: ['package-categories'],
     queryFn: fetchPackageCategories,
-  })
-
-  const { data: fees = { standard: 1500, express: 2500 } } = useQuery({
-    queryKey: ['delivery-fees'],
-    queryFn: fetchDeliveryFees,
-    staleTime: 5 * 60 * 1000,
   })
 
   const isPayerUser = user?.type === 'marchant' || user?.type === 'individual'
@@ -428,10 +421,10 @@ export default function NewCoursePage() {
     staleTime: 30_000,
   })
 
-  // Fallback : tant que l'estimate n'est pas revenu (pas de coords, loading),
-  // on affiche l'ancienne valeur forfait comme approximation. Une fois l'estimate
-  // reçu, il prime toujours.
-  const currentFee = estimate?.fee ?? (urgencyWatch === 'express' ? fees.express : fees.standard)
+  // Prix uniquement lorsque l'estimate est revenu. Avant (pas de coords /
+  // loading), on n'affiche rien : les composants récap montreront un état
+  // "pose les repères pour voir le prix" à la place.
+  const currentFee: number | null = estimate?.fee ?? null
   const walletAvailable = isPayerUser && wallet ? wallet.available : null
 
   const submitLabel = mutation.isPending
@@ -665,48 +658,71 @@ export default function NewCoursePage() {
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Field
-                    label={t('courses.new.categoryLabel')}
-                    required
-                    error={errors.package_category_id?.message}
-                  >
-                    <select
-                      {...register('package_category_id', { required: t('courses.new.required') })}
-                      className={inputClass}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field
+                      label={t('courses.new.categoryLabel')}
+                      required
+                      error={errors.package_category_id?.message}
                     >
-                      <option value="">{t('courses.new.categoryChoose')}</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
+                      <select
+                        {...register('package_category_id', { required: t('courses.new.required') })}
+                        className={inputClass}
+                      >
+                        <option value="">{t('courses.new.categoryChoose')}</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
 
-                  <Field label={t('courses.new.sizeLabel')} required>
-                    <select {...register('package_size')} className={inputClass}>
-                      <option value="S">{t('courses.new.sizeSmall')}</option>
-                      <option value="M">{t('courses.new.sizeMedium')}</option>
-                      <option value="L">{t('courses.new.sizeLarge')}</option>
-                      <option value="XL">{t('courses.new.sizeXL')}</option>
-                    </select>
-                  </Field>
+                    <Field label={t('courses.new.sizeLabel')} required>
+                      <select {...register('package_size')} className={inputClass}>
+                        <option value="S">{t('courses.new.sizeSmall')}</option>
+                        <option value="M">{t('courses.new.sizeMedium')}</option>
+                        <option value="L">{t('courses.new.sizeLarge')}</option>
+                        <option value="XL">{t('courses.new.sizeXL')}</option>
+                      </select>
+                    </Field>
+                  </div>
 
                   <div data-onboarding-id="urgency">
                     <Field label={t('courses.new.urgencyLabel')}>
-                      <select {...register('urgency')} className={inputClass}>
-                        <option value="standard">
-                          {t('courses.new.urgencyStandardOption', {
-                            fee: fees.standard.toLocaleString('fr-FR'),
-                          })}
-                        </option>
-                        <option value="express">
-                          {t('courses.new.urgencyExpressOption', {
-                            fee: fees.express.toLocaleString('fr-FR'),
-                          })}
-                        </option>
-                      </select>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(['standard', 'express'] as const).map((opt) => {
+                          const selected = urgencyWatch === opt
+                          return (
+                            <label
+                              key={opt}
+                              className={[
+                                'block cursor-pointer rounded-xl border-2 px-4 py-3 transition-all',
+                                selected
+                                  ? 'border-airmess-yellow bg-airmess-yellow/10'
+                                  : 'border-warm-200 hover:border-warm-300 bg-off-white',
+                              ].join(' ')}
+                            >
+                              <input
+                                type="radio"
+                                value={opt}
+                                {...register('urgency')}
+                                className="sr-only"
+                              />
+                              <p className="text-body font-bold text-ink">
+                                {opt === 'standard'
+                                  ? t('courses.new.urgencyStandardTitle')
+                                  : t('courses.new.urgencyExpressTitle')}
+                              </p>
+                              <p className="text-caption text-warm-600 mt-0.5">
+                                {opt === 'standard'
+                                  ? t('courses.new.urgencyStandardHint')
+                                  : t('courses.new.urgencyExpressHint')}
+                              </p>
+                            </label>
+                          )
+                        })}
+                      </div>
                     </Field>
                   </div>
 
@@ -714,7 +730,6 @@ export default function NewCoursePage() {
                     label={t('courses.new.packageDescription')}
                     required
                     error={errors.package_description?.message}
-                    className="md:col-span-3"
                   >
                     <input
                       {...register('package_description', { required: t('courses.new.required') })}
@@ -857,7 +872,7 @@ export default function NewCoursePage() {
                         })}
                       </div>
 
-                      {isRecipientPaid && (() => {
+                      {isRecipientPaid && currentFee != null && (() => {
                         const feeToCollect = currentFee
                         const totalToCollect = (collectionAmountWatch || 0) + feeToCollect
                         return (

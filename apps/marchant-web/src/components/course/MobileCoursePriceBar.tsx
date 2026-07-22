@@ -16,7 +16,8 @@ import type { CourseFeeEstimate } from '../../api/courses'
 
 interface Props {
   data: CourseSummaryData
-  fee: number
+  /** null = pas encore d'estimation (2 pins pas posés, ou requête en cours). */
+  fee: number | null
   /** Breakdown live du back — quand présent on affiche "3.7 km × 400 + 800 …". */
   estimate?: CourseFeeEstimate
   walletAvailable: number | null
@@ -51,9 +52,10 @@ export default function MobileCoursePriceBar({
   const { t } = useTranslation()
   const [sheetOpen, setSheetOpen] = useState(false)
 
+  const hasFee = fee != null
   const hasWallet = typeof walletAvailable === 'number'
-  const short = hasWallet && walletAvailable! < fee
-  const covered = hasWallet && walletAvailable! >= fee
+  const short = hasWallet && hasFee && walletAvailable! < fee!
+  const covered = hasWallet && hasFee && walletAvailable! >= fee!
 
   useEffect(() => {
     if (!sheetOpen) return
@@ -74,10 +76,14 @@ export default function MobileCoursePriceBar({
                 <p className="text-caption text-warm-500 uppercase tracking-wide">
                   {t('courses.new.recap.title')}
                 </p>
-                <p className="text-body font-bold text-ink tabular-nums">
-                  {fee.toLocaleString('fr-FR')} FCFA
-                </p>
-                {estimate && (
+                {hasFee ? (
+                  <p className="text-body font-bold text-ink tabular-nums">
+                    {fee!.toLocaleString('fr-FR')} FCFA
+                  </p>
+                ) : (
+                  <p className="text-body font-bold text-warm-400 tabular-nums">—</p>
+                )}
+                {hasFee && estimate && (
                   <p className="text-caption text-warm-500 tabular-nums mt-0.5">
                     {estimate.capped
                       ? t('courses.new.recap.breakdownCapped', {
@@ -89,6 +95,11 @@ export default function MobileCoursePriceBar({
                           perKm: estimate.per_km.toLocaleString('fr-FR'),
                           min: estimate.min.toLocaleString('fr-FR'),
                         })}
+                  </p>
+                )}
+                {!hasFee && (
+                  <p className="text-caption text-warm-500 mt-0.5">
+                    {t('courses.new.recap.feePending')}
                   </p>
                 )}
               </div>
@@ -117,7 +128,7 @@ export default function MobileCoursePriceBar({
 
               <CompletionStatus missingCount={missingCount} />
 
-              {hasWallet && (
+              {hasWallet && hasFee && (
                 <div
                   className={`mx-5 my-4 rounded-lg border px-4 py-3 flex items-start gap-2 ${
                     covered
@@ -186,9 +197,15 @@ export default function MobileCoursePriceBar({
                 <ChevronDownIcon size={12} />
               </span>
             </p>
-            <p className="text-body font-bold text-ink tabular-nums leading-tight">
-              {fee.toLocaleString('fr-FR')} FCFA
-            </p>
+            {hasFee ? (
+              <p className="text-body font-bold text-ink tabular-nums leading-tight">
+                {fee!.toLocaleString('fr-FR')} FCFA
+              </p>
+            ) : (
+              <p className="text-body font-bold text-warm-400 tabular-nums leading-tight">
+                {t('courses.new.recap.feePendingShort')}
+              </p>
+            )}
             {short && (
               <p className="text-caption text-warning flex items-center gap-1 mt-0.5">
                 <AlertTriangleIcon size={12} />
