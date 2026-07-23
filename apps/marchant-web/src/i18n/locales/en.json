@@ -480,7 +480,13 @@
       "originBanner": {
         "label": "Pickup",
         "edit": "Edit",
-        "placeholder": "Pickup point to set"
+        "fix": "Complete",
+        "placeholder": "Pickup point to set",
+        "errorGeneric": "Pickup point details incomplete",
+        "errorMissingQuartier": "Pickup neighbourhood missing",
+        "errorMissingName": "Sender name missing",
+        "errorMissingPhone": "Sender phone missing",
+        "errorMissingCity": "Pickup city missing"
       },
       "originDrawer": {
         "title": "Pickup point",
@@ -500,10 +506,13 @@
         "geoUnsupported": "Your browser does not support geolocation.",
         "geoDenied": "Permission denied. Enable location in your browser.",
         "geoFailed": "Could not get your position.",
-        "linkPlaceholder": "Paste a Google Maps link here…",
-        "linkApply": "Apply",
-        "linkInvalid": "Link not recognized. Copy the full Google Maps URL (@lat,lng format).",
-        "hint": "Map click, geolocation and Maps links all apply to pin {{pin}}."
+        "hint": "Search a place, use your location or click on the map — everything applies to pin {{pin}}."
+      },
+      "placeSearch": {
+        "placeholder": "Search a place, market, shop…",
+        "searching": "Searching…",
+        "noResults": "No results. Refine your text or click on the map.",
+        "detailsError": "Could not fetch this place. Try again."
       },
       "blocks": {
         "trip": { "title": "Where is it going?" },

@@ -263,6 +263,66 @@ export default function NewCoursePage() {
     [errors, t],
   )
 
+  // Extrait la map { field → [messages] } d'une réponse Laravel 422. Fallback
+  // sur `message` (erreur simple sans champ) → mappé sur "form" pour être ignoré
+  // du calcul par champ.
+  const backendFieldErrors = useMemo<Record<string, string[]>>(() => {
+    if (!(mutation.error instanceof AxiosError)) return {}
+    const raw = mutation.error.response?.data?.errors
+    if (raw && typeof raw === 'object') {
+      const out: Record<string, string[]> = {}
+      for (const [k, v] of Object.entries(raw)) {
+        if (Array.isArray(v)) out[k] = v.map(String)
+        else if (typeof v === 'string') out[k] = [v]
+      }
+      return out
+    }
+    return {}
+  }, [mutation.error])
+
+  // Détection dédiée des erreurs sur les champs d'origine — sert à peindre en rouge
+  // la bannière "Retrait" (qui reste visible sur la page principale) même quand le
+  // drawer est fermé, avec un message ciblé sur le champ le plus fréquent.
+  // Prend en compte À LA FOIS les erreurs client (RHF) et backend (Laravel 422),
+  // car Laravel peut refuser un champ que RHF n'avait pas validé.
+  const originErrorKeys = [
+    'origin_name',
+    'origin_phone',
+    'origin_quartier',
+    'origin_city',
+  ] as const
+  const originErrorList = originErrorKeys.filter(
+    (k) =>
+      (errors as Record<string, unknown>)[k] !== undefined || backendFieldErrors[k],
+  )
+  const originHasError =
+    (isSubmitted && originErrorList.length > 0) ||
+    (Object.keys(backendFieldErrors).length > 0 && originErrorList.length > 0)
+  const originErrorMessage = (() => {
+    if (originErrorList.length !== 1) return undefined
+    switch (originErrorList[0]) {
+      case 'origin_quartier':
+        return t('courses.new.originBanner.errorMissingQuartier')
+      case 'origin_name':
+        return t('courses.new.originBanner.errorMissingName')
+      case 'origin_phone':
+        return t('courses.new.originBanner.errorMissingPhone')
+      case 'origin_city':
+        return t('courses.new.originBanner.errorMissingCity')
+      default:
+        return undefined
+    }
+  })()
+
+  // Au retour d'une erreur backend qui concerne l'origine, remonter en haut pour
+  // que la bannière rouge soit visible tout de suite (comme pour le submit client).
+  const hasBackendOriginError = originErrorKeys.some((k) => backendFieldErrors[k])
+  useEffect(() => {
+    if (hasBackendOriginError) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [hasBackendOriginError])
+
   /**
    * Navigue vers le champ manquant cliqué : ouvre le drawer / l'accordion si
    * nécessaire, scroll vers la DualPinMap pour les positions, ou setFocus RHF
@@ -515,6 +575,10 @@ export default function NewCoursePage() {
             // pour cibler directement le 1er champ manquant. Le bandeau s'affichera
             // ensuite via useMemo(errors) au prochain rerender.
             const fields = extractMissingFields(errs as Record<string, unknown>)
+            // Scroll haut de page : le bandeau erreurs + la bannière origine (rouge si concernée)
+            // sont là. Sans ça, un submit en bas de page laisse l'utilisateur devant "Confirmer"
+            // sans voir d'où vient le blocage.
+            window.scrollTo({ top: 0, behavior: 'smooth' })
             handleFirstMissing(fields)
           })}
           id="new-course-form"
@@ -530,12 +594,16 @@ export default function NewCoursePage() {
                 />
               )}
 
-              {/* Bloc EXPÉDITEUR (bannière compacte) */}
+              {/* Bloc EXPÉDITEUR (bannière compacte).
+                  Bordure rouge quand un champ origine est en erreur (le drawer est fermé
+                  par défaut → l'utilisateur ne voit sinon pas quel bloc corriger). */}
               <div data-onboarding-id="origin">
                 <OriginBanner
                   name={originName}
                   quartier={originQuartier}
                   city={originCity}
+                  hasError={originHasError}
+                  errorMessage={originErrorMessage}
                   onEdit={() => setOriginDrawerOpen(true)}
                 />
               </div>

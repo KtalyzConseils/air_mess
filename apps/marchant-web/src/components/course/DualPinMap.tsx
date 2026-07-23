@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Polyline, useMapEvents, useMap } from 'react-leaflet'
 import { useTranslation } from 'react-i18next'
 import { ORIGIN_ICON, DEST_ICON } from './tripPins'
+import PlaceSearchInput from './PlaceSearchInput'
 
 interface Props {
   originLat?: number
@@ -18,32 +19,9 @@ interface Props {
 const COTONOU_CENTER: [number, number] = [6.3703, 2.3912]
 
 /**
- * Extrait (lat, lng) d'un lien Google Maps ou d'un collage brut.
- * Formats supportés : @lat,lng, ?q=lat,lng, "lat,lng".
- */
-function parseMapsUrl(input: string): { lat: number; lng: number } | null {
-  if (!input) return null
-  const cleaned = input.trim()
-  const patterns = [
-    /@(-?\d+\.\d+),(-?\d+\.\d+)/,
-    /[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/,
-    /^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/,
-  ]
-  for (const re of patterns) {
-    const m = cleaned.match(re)
-    if (m) {
-      const lat = parseFloat(m[1])
-      const lng = parseFloat(m[2])
-      if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng }
-    }
-  }
-  return null
-}
-
-/**
  * Carte interactive unique pour positionner A (origine) et B (destination).
- * Toggle en haut pour choisir le pin actif — clic sur la carte, géoloc et
- * lien Maps s'appliquent au pin actif. Fit auto quand un nouveau pin
+ * Toggle en haut pour choisir le pin actif — recherche Google Places, géoloc et
+ * clic sur la carte s'appliquent au pin actif. Fit auto quand un nouveau pin
  * est ajouté (pas quand un pin existant est déplacé, pour éviter le jitter).
  */
 export default function DualPinMap({
@@ -58,7 +36,6 @@ export default function DualPinMap({
 }: Props) {
   const { t } = useTranslation()
   const [active, setActive] = useState<'A' | 'B'>(defaultActive)
-  const [linkInput, setLinkInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
 
@@ -106,17 +83,6 @@ export default function DualPinMap({
       },
       { enableHighAccuracy: true, timeout: 10_000 },
     )
-  }
-
-  function applyLink() {
-    setError(null)
-    const parsed = parseMapsUrl(linkInput)
-    if (!parsed) {
-      setError(t('courses.new.dualMap.linkInvalid'))
-      return
-    }
-    apply(parsed.lat, parsed.lng)
-    setLinkInput('')
   }
 
   const activeLabel =
@@ -174,7 +140,17 @@ export default function DualPinMap({
         </button>
       </div>
 
-      {/* Chemin #1 : position actuelle → applique au pin actif */}
+      {/* Chemin #1 : recherche Google Places → applique au pin actif */}
+      <PlaceSearchInput
+        resetKey={active}
+        activePinLabel={activeLabel}
+        onSelect={(place) => {
+          setError(null)
+          apply(place.lat, place.lng)
+        }}
+      />
+
+      {/* Chemin #2 : position actuelle → applique au pin actif */}
       <button
         type="button"
         onClick={useCurrentPosition}
@@ -185,25 +161,6 @@ export default function DualPinMap({
           ? t('courses.new.dualMap.geoLoading')
           : t('courses.new.dualMap.geoCta', { pin: activeLabel })}
       </button>
-
-      {/* Chemin #2 : lien Google Maps → applique au pin actif */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={linkInput}
-          onChange={(e) => setLinkInput(e.target.value)}
-          placeholder={t('courses.new.dualMap.linkPlaceholder')}
-          className="flex-1 px-3 py-2 text-body-s border border-warm-300 rounded-lg focus:ring-2 focus:ring-airmess-yellow outline-none"
-        />
-        <button
-          type="button"
-          onClick={applyLink}
-          disabled={!linkInput}
-          className="bg-airmess-yellow text-airmess-dark font-bold text-body-s px-3 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-        >
-          {t('courses.new.dualMap.linkApply')}
-        </button>
-      </div>
 
       {error && (
         <div className="bg-danger-bg border border-airmess-red/30 text-airmess-red px-3 py-2 rounded-md text-caption">
