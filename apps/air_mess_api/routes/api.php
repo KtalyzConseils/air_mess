@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\ApiApplicationWebhookController;
 use App\Http\Controllers\Api\AdminApiApplicationController;
 use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\UserWalletController;
+use App\Http\Controllers\Api\PlacesController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -167,6 +168,15 @@ Route::middleware('auth:sanctum')->group(function () {
             'standard' => (int) \App\Models\AppSetting::get('standard_delivery_fee_fcfa', 1500),
             'express'  => (int) \App\Models\AppSetting::get('express_delivery_fee_fcfa', 2500),
         ];
+    });
+
+    // Recherche de lieux (proxy Google Places).
+    // Throttle serré : 60 requêtes/minute par user = ~1 recherche par seconde,
+    // largement suffisant pour de l'autocomplete au clavier tout en cassant
+    // un éventuel script qui tenterait de siphonner nos quotas.
+    Route::prefix('places')->middleware('throttle:60,1')->group(function () {
+        Route::get('/search',           [PlacesController::class, 'search']);
+        Route::get('/details/{placeId}', [PlacesController::class, 'details']);
     });
 
     // Adresses

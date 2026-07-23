@@ -62,4 +62,22 @@ return [
         ],
     ],
 
+    // Google Places Autocomplete + Details.
+    // Le front n'appelle JAMAIS Google directement — tout passe par notre proxy
+    // (App\Http\Controllers\Api\PlacesController). La clé reste server-side.
+    // Restreindre la clé côté Google Cloud Console :
+    //   - Application restrictions : HTTP referrer / IP du serveur Laravel
+    //   - API restrictions : "Places API" UNIQUEMENT
+    'google' => [
+        'places_key'          => env('GOOGLE_PLACES_API_KEY'),
+        // Restreint les résultats à un pays ISO 3166-1 alpha-2 (bj = Bénin).
+        'places_country'      => env('GOOGLE_PLACES_COUNTRY', 'bj'),
+        // Biais géographique pour prioriser les résultats proches. Cotonou par défaut.
+        // Format "lat,lng". Radius en mètres.
+        'places_center'       => env('GOOGLE_PLACES_CENTER', '6.3703,2.3912'),
+        'places_radius_m'     => (int) env('GOOGLE_PLACES_RADIUS_M', 50000),
+        // Langue des résultats (fr par défaut). Le front peut override.
+        'places_language'     => env('GOOGLE_PLACES_LANGUAGE', 'fr'),
+    ],
+
 ];
