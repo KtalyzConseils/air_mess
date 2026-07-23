@@ -170,18 +170,19 @@ export default function RegisterPage() {
           ============================================================ */}
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-md">
-          {/* Logo + installation PWA (visible dès l'arrivée, avant inscription) */}
-          <div className="flex items-center justify-between mb-10">
-            <Link to="/" className="inline-block">
-              <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
-            </Link>
-            <InstallPwaButton variant="light" />
-          </div>
+          {/* Logo */}
+          <Link to="/" className="inline-block mb-10">
+            <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
+          </Link>
 
           <h1 className="text-h1 text-ink mb-2">{t('auth.register.title')}</h1>
-          <p className="text-body-l text-warm-500 mb-8">
+          <p className="text-body-l text-warm-500 mb-6">
             {t('auth.register.subtitle')}
           </p>
+
+          {/* Installation PWA — bloc autonome (pas de collision avec le sélecteur
+              de langue en absolute sur mobile). Rendu seulement si proposé. */}
+          <InstallPwaButton variant="light" className="mb-6" />
 
           {/* Toggle Particulier / Entreprise */}
           <div className="grid grid-cols-2 gap-2 mb-6 p-1 bg-warm-100 rounded-md">

@@ -61,19 +61,21 @@ export default function LoginPage() {
           ============================================================ */}
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-md">
-          {/* Logo + installation PWA (visible dès l'arrivée, avant connexion) */}
-          <div className="flex items-center justify-between mb-12">
-            <Link to="/" className="inline-block">
-              <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
-            </Link>
-            <InstallPwaButton variant="light" />
-          </div>
+          {/* Logo */}
+          <Link to="/" className="inline-block mb-12">
+            <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
+          </Link>
 
           {/* Headline */}
           <h1 className="text-h1 text-ink mb-2">{t('auth.login.title')}</h1>
-          <p className="text-body-l text-warm-500 mb-8">
+          <p className="text-body-l text-warm-500 mb-6">
             {t('auth.login.subtitle')}
           </p>
+
+          {/* Installation PWA — bloc autonome (jamais dans le coin, pas de collision
+              avec le sélecteur de langue en absolute sur mobile). Rendu seulement
+              si le navigateur propose l'installation. */}
+          <InstallPwaButton variant="light" className="mb-8" />
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">

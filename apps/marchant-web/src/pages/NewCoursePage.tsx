@@ -1072,7 +1072,7 @@ export default function NewCoursePage() {
             <p className="text-body-s text-warm-600 mt-2">
               {t('courses.new.collectionModalBody')}
             </p>
-            <div className="flex gap-3 mt-6">
+            <div className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
               <Button
                 variant="secondary"
                 size="md"
