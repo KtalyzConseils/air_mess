@@ -3,8 +3,7 @@
  * Utilisé par la bannière du formulaire d'inscription driver et la page succès.
  */
 export const DRIVER_APK_URL =
-  'https://expo.dev/artifacts/eas/-J0h5eO5eFk61ceZKmnCn9glmMhfNUhNjMiiMbPfb_U.apk'
-
+  'https://expo.dev/artifacts/eas/oJPb6g6nH13FGy08U2lQ893OL-I52H0yNJ8AQRMIsZs.apk'
 /**
  * Marques de véhicules les plus courantes au Bénin, par type — suggestions
  * du champ "Marque" (datalist) du formulaire driver. Saisie libre possible :
