@@ -10,7 +10,7 @@ export interface LocalFile {
   type: string
 }
 
-export type Gender = 'M' | 'F' | 'autre'
+export type Gender = 'M' | 'F'
 export type VehicleType = 'moto' | 'scooter' | 'voiture' | 'velo'
 export type CniType = 'cnib' | 'cip' | 'passeport'
 
@@ -64,6 +64,26 @@ export function normalizePhone(raw: string): string {
   if (phone.startsWith('00')) phone = '+' + phone.slice(2)
   if (phone !== '' && !phone.startsWith('+')) phone = '+229' + phone
   return phone
+}
+
+/** Indicatif Bénin, prérempli par défaut (modifiable pour un autre pays). */
+export const BENIN_DIAL_CODE = '+229'
+
+/**
+ * Valide un numéro béninois. Depuis la migration de 2021, tous les numéros du Bénin
+ * comptent 10 chiffres et commencent par « 01 » (ex. +229 01 90 12 34 56).
+ * On ne valide que les numéros en +229 : un autre indicatif (numéro étranger) passe.
+ *
+ * @param normalized numéro déjà normalisé en E.164 (cf. normalizePhone)
+ * @returns message d'erreur, ou null si valide
+ */
+export function validateBeninPhone(normalized: string): string | null {
+  if (!normalized.startsWith(BENIN_DIAL_CODE)) return null
+  const national = normalized.slice(BENIN_DIAL_CODE.length)
+  if (!/^01\d{8}$/.test(national)) {
+    return 'Numéro béninois invalide : 10 chiffres commençant par 01 (ex. +229 01 90 12 34 56).'
+  }
+  return null
 }
 
 export interface SendOtpResult {

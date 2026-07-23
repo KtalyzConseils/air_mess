@@ -10,8 +10,12 @@ import {
   Alert,
   ActivityIndicator,
   BackHandler,
+  Platform,
   type TextInputProps,
 } from 'react-native'
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -30,6 +34,8 @@ import {
 } from '../lib/registerDraft'
 import {
   normalizePhone,
+  validateBeninPhone,
+  BENIN_DIAL_CODE,
   sendPhoneOtp,
   verifyPhoneOtp,
   registerDriver,
@@ -87,8 +93,9 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
-  // Téléphone + OTP
-  const [phone, setPhone] = useState('')
+  // Téléphone + OTP. Prérempli avec l'indicatif Bénin, que le livreur peut remplacer
+  // par un autre indicatif si son numéro est étranger.
+  const [phone, setPhone] = useState(`${BENIN_DIAL_CODE} `)
   const [otpSent, setOtpSent] = useState(false)
   const [otpCode, setOtpCode] = useState('')
   const [phoneToken, setPhoneToken] = useState<string | null>(null)
@@ -250,6 +257,12 @@ export default function RegisterScreen() {
     const normalized = normalizePhone(phone)
     if (normalized.length < 8) {
       setOtpError('Entrez un numéro valide.')
+      return
+    }
+    // Un numéro béninois doit garder son « 01 » de tête (10 chiffres après +229).
+    const beninError = validateBeninPhone(normalized)
+    if (beninError) {
+      setOtpError(beninError)
       return
     }
     setOtpSending(true)
@@ -593,19 +606,90 @@ function StepIdentity({
         options={[
           { value: 'M', label: 'Homme' },
           { value: 'F', label: 'Femme' },
-          { value: 'autre', label: 'Autre' },
         ]}
         value={gender}
         onChange={(v) => setGender(v as Gender)}
       />
-      <LabeledInput
-        label="Date de naissance"
-        value={birthDate}
-        onChangeText={setBirthDate}
-        placeholder="AAAA-MM-JJ"
-        keyboardType="numbers-and-punctuation"
-        hint="16 ans minimum"
-      />
+      <BirthDateField value={birthDate} onChange={setBirthDate} />
+    </View>
+  )
+}
+
+/** Âge minimum requis pour s'inscrire comme livreur. */
+const MIN_AGE_YEARS = 16
+
+/** 'YYYY-MM-DD' → Date locale (midi, pour éviter tout décalage de fuseau). */
+function parseISODate(iso: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return null
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)
+}
+
+/** Date → 'YYYY-MM-DD' (format stocké + attendu par l'API). */
+function toISODate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/**
+ * Champ date de naissance : un sélecteur de date natif plutôt qu'une saisie libre.
+ * On stocke toujours 'YYYY-MM-DD' (inchangé côté validation + API), on n'affiche qu'un
+ * libellé lisible. Le sélecteur est borné à MIN_AGE_YEARS pour ne pas laisser choisir
+ * une date trop récente.
+ */
+function BirthDateField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const [show, setShow] = useState(false)
+  const selected = parseISODate(value)
+
+  // Date la plus récente autorisée : aujourd'hui - âge minimum.
+  const maxDate = new Date()
+  maxDate.setFullYear(maxDate.getFullYear() - MIN_AGE_YEARS)
+
+  function onPicked(event: DateTimePickerEvent, date?: Date) {
+    // Android : le dialogue se ferme seul, on le masque quel que soit le bouton.
+    if (Platform.OS === 'android') setShow(false)
+    if (event.type === 'set' && date) {
+      onChange(toISODate(date))
+      if (Platform.OS === 'ios') setShow(false)
+    } else if (event.type === 'dismissed') {
+      setShow(false)
+    }
+  }
+
+  const label = selected
+    ? selected.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : 'Sélectionner votre date de naissance'
+
+  return (
+    <View>
+      <FieldLabel>Date de naissance</FieldLabel>
+      <Pressable
+        onPress={() => setShow(true)}
+        className="border-2 border-warm-200 rounded-2xl px-4 h-14 bg-off-white flex-row items-center justify-between"
+      >
+        <Text className={selected ? 'text-base text-ink' : 'text-base text-warm-400'}>
+          {label}
+        </Text>
+        <Ionicons name="calendar-outline" size={20} color="#8A7E68" />
+      </Pressable>
+      <Text className="text-warm-500 text-xs mt-1 ml-1">16 ans minimum</Text>
+
+      {show && (
+        <DateTimePicker
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          value={selected ?? maxDate}
+          maximumDate={maxDate}
+          minimumDate={new Date(1940, 0, 1)}
+          onChange={onPicked}
+        />
+      )}
     </View>
   )
 }
@@ -635,18 +719,16 @@ function StepAccount({
         keyboardType="email-address"
         autoComplete="email"
       />
-      <LabeledInput
+      <PasswordField
         label="Mot de passe"
         value={password}
         onChangeText={setPassword}
-        secureTextEntry
         hint="8 caractères minimum"
       />
-      <LabeledInput
+      <PasswordField
         label="Confirmer le mot de passe"
         value={passwordConfirm}
         onChangeText={setPasswordConfirm}
-        secureTextEntry
       />
     </View>
   )
@@ -945,6 +1027,38 @@ function LabeledInput({ label, hint, ...props }: LabeledInputProps) {
         className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white"
         {...props}
       />
+      {hint && <Text className="text-warm-500 text-xs mt-1">{hint}</Text>}
+    </View>
+  )
+}
+
+/**
+ * Champ mot de passe avec bouton œil pour afficher/masquer la saisie. Chaque champ
+ * gère sa propre visibilité (même style que l'écran de connexion).
+ */
+function PasswordField({ label, hint, ...props }: LabeledInputProps) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <View className="mb-3">
+      <FieldLabel>{label}</FieldLabel>
+      <View className="relative">
+        <TextInput
+          placeholderTextColor="#B8AF9F"
+          secureTextEntry={!visible}
+          autoCapitalize="none"
+          autoCorrect={false}
+          className="border-2 border-warm-200 rounded-2xl pl-4 pr-14 h-14 text-base text-ink bg-off-white"
+          {...props}
+        />
+        <Pressable
+          onPress={() => setVisible((v) => !v)}
+          className="absolute right-3 top-0 h-14 w-11 items-center justify-center"
+          hitSlop={8}
+          accessibilityLabel={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+        >
+          <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color="#8A7E68" />
+        </Pressable>
+      </View>
       {hint && <Text className="text-warm-500 text-xs mt-1">{hint}</Text>}
     </View>
   )

@@ -16,6 +16,12 @@ import { updateAvailability, type Availability } from '../api/driver'
 
 interface Props {
   current: Availability | 'busy'
+  /**
+   * Compte pas encore activé par l'admin : le livreur peut se connecter mais ne peut
+   * PAS se rendre disponible (l'API refuse avec un 403). On désactive alors les boutons
+   * et on explique pourquoi, plutôt que de laisser le toggle échouer en silence.
+   */
+  pendingValidation?: boolean
 }
 
 const STATE: Record<
@@ -44,7 +50,7 @@ const STATE: Record<
   },
 }
 
-export default function AvailabilityToggle({ current }: Props) {
+export default function AvailabilityToggle({ current, pendingValidation = false }: Props) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
     mutationFn: updateAvailability,
@@ -93,7 +99,15 @@ export default function AvailabilityToggle({ current }: Props) {
       <Text className="text-warm-400 text-sm font-jk mt-1">{meta.tagline}</Text>
 
       {/* Actions */}
-      {locked ? (
+      {pendingValidation ? (
+        <View className="mt-4 bg-warning/10 rounded-2xl px-4 py-3 flex-row items-start">
+          <Ionicons name="time-outline" size={16} color="#F59E0B" />
+          <Text className="text-warm-300 text-xs font-jk-medium ml-2 flex-1">
+            Compte en attente de validation. Tu pourras te rendre disponible dès que notre
+            équipe aura activé ton compte — tu recevras un email.
+          </Text>
+        </View>
+      ) : locked ? (
         <View className="mt-4 bg-white/5 rounded-2xl px-4 py-3 flex-row items-center">
           <Ionicons name="lock-closed" size={15} color="#B8AF9F" />
           <Text className="text-warm-300 text-xs font-jk-medium ml-2 flex-1">

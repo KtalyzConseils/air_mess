@@ -39,6 +39,11 @@ export default function DriverDashboard() {
   const me = meQuery.data?.user ?? user
   const availability = (me?.driver?.availability_status ?? 'offline') as Availability | 'busy'
   const isBanned = me?.driver?.activation_status === 'banned'
+  // Compte pas encore activé par l'admin : connexion OK, mais impossible de se rendre
+  // disponible (l'API refuse). On l'indique clairement plutôt que de laisser le toggle
+  // échouer en silence. `banned` a son propre écran de blocage ci-dessous.
+  const pendingValidation =
+    !!me?.driver && me.driver.activation_status !== 'active' && !isBanned
   const needsTermsAcceptance = meQuery.data?.terms?.needs_acceptance ?? false
 
   const activeQuery = useQuery({
@@ -162,7 +167,7 @@ export default function DriverDashboard() {
 
         {/* ============ STATUT ============ */}
         <View className="mb-4">
-          <AvailabilityToggle current={availability} />
+          <AvailabilityToggle current={availability} pendingValidation={pendingValidation} />
         </View>
 
         {/* ============ AUJOURD'HUI ============ */}
