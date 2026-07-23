@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Institut Éclat — Réservation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --plum:#2b1720; --plum2:#43293a; --gold:#c69a48; --gold-soft:#e6d1a0;
+    --blush:#f5e6e0; --cream:#fbf7f3; --ink:#2a2126; --muted:#9b8b90; --line:#ece2dc;
+    --momo:#ffcc00; --moov:#0a5bd3;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Inter',sans-serif; color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 78% -10%, #5a3548 0%, transparent 55%),
+      radial-gradient(900px 500px at 10% 110%, #3a2130 0%, transparent 55%),
+      var(--plum);
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:48px 24px; gap:64px; flex-wrap:wrap;
+  }
+
+  /* ---- Pitch side (desktop) ---- */
+  .pitch{max-width:340px; color:#f3e7e4}
+  .pitch .eyebrow{font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:var(--gold-soft); font-weight:600}
+  .pitch h1{font-family:'Cormorant Garamond',serif; font-weight:600; font-size:46px; line-height:1.05; margin:14px 0 6px; color:#fff}
+  .pitch h1 em{font-style:italic; color:var(--gold-soft)}
+  .pitch p.lead{color:#d9c7cd; font-size:15px; line-height:1.6; margin-bottom:26px}
+  .ticks{list-style:none; display:flex; flex-direction:column; gap:14px}
+  .ticks li{display:flex; gap:12px; align-items:flex-start; font-size:14px; color:#efe2e6; line-height:1.45}
+  .ticks .dot{flex:none; width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--gold),#a87f34);
+    display:flex; align-items:center; justify-content:center; color:#2b1720; font-weight:700; font-size:13px; margin-top:1px}
+  .ticks b{color:#fff; font-weight:600}
+  .pitch .foot{margin-top:30px; font-size:12px; color:#b8a3aa; border-top:1px solid rgba(255,255,255,.14); padding-top:16px}
+
+  /* ---- Phone ---- */
+  .phone{
+    width:352px; flex:none; background:#120a0f; border-radius:46px; padding:12px;
+    box-shadow:0 40px 90px -30px rgba(0,0,0,.7), 0 0 0 2px rgba(255,255,255,.05);
+    position:relative;
+  }
+  .notch{position:absolute; top:20px; left:50%; transform:translateX(-50%); width:120px; height:26px; background:#120a0f; border-radius:0 0 16px 16px; z-index:5}
+  .screen{background:var(--cream); border-radius:36px; overflow:hidden; height:720px; overflow-y:auto; position:relative}
+  .screen::-webkit-scrollbar{width:0}
+
+  .status{display:flex; justify-content:space-between; align-items:center; padding:14px 22px 6px; font-size:12px; font-weight:600; color:var(--ink)}
+  .status .dots{display:flex; gap:4px; align-items:center}
+  .status .dots span{font-size:11px; letter-spacing:1px}
+
+  /* header */
+  .brand{padding:10px 22px 18px; text-align:center; border-bottom:1px solid var(--line)}
+  .brand .logo{width:56px; height:56px; margin:0 auto 10px; border-radius:50%;
+    background:linear-gradient(140deg,var(--plum2),var(--plum)); color:var(--gold-soft);
+    display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-size:30px; font-weight:700;
+    box-shadow:0 6px 18px -6px rgba(43,23,32,.6)}
+  .brand .kick{font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  .brand h2{font-family:'Cormorant Garamond',serif; font-size:34px; font-weight:600; letter-spacing:.5px; margin:2px 0}
+  .brand .tag{font-size:12.5px; color:var(--muted)}
+  .rating{display:inline-flex; gap:6px; align-items:center; margin-top:10px; background:var(--blush); padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; color:#7a5a2e}
+  .rating .stars{color:var(--gold); letter-spacing:1px}
+
+  .hero{padding:20px 22px 6px}
+  .hero h3{font-family:'Cormorant Garamond',serif; font-size:25px; font-weight:600; line-height:1.15}
+  .hero p{font-size:13px; color:var(--muted); margin-top:4px}
+
+  .sec-label{padding:18px 22px 8px; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); font-weight:700}
+
+  .svc{display:flex; align-items:center; gap:12px; padding:12px 22px; border-bottom:1px solid var(--line)}
+  .svc .thumb{width:46px; height:46px; border-radius:14px; flex:none;
+    background:linear-gradient(135deg,var(--blush),#ecd7cf); display:flex; align-items:center; justify-content:center; font-size:20px}
+  .svc .meta{flex:1; min-width:0}
+  .svc .meta .n{font-size:14px; font-weight:600}
+  .svc .meta .d{font-size:11.5px; color:var(--muted); margin-top:1px}
+  .svc .price{font-size:13px; font-weight:700; color:var(--ink); white-space:nowrap; margin-right:2px}
+  .book{background:var(--plum); color:#fff; border:none; font-family:inherit; font-size:11.5px; font-weight:600;
+    padding:8px 13px; border-radius:20px; white-space:nowrap; cursor:pointer}
+
+  /* formation highlight */
+  .formation{margin:16px 18px 6px; background:linear-gradient(140deg,var(--plum2),var(--plum)); color:#fff; border-radius:20px; padding:16px 18px; position:relative; overflow:hidden}
+  .formation::after{content:'✦'; position:absolute; right:14px; top:10px; color:var(--gold-soft); font-size:22px; opacity:.6}
+  .formation .fk{font-size:10px; letter-spacing:.24em; text-transform:uppercase; color:var(--gold-soft); font-weight:600}
+  .formation h4{font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:600; margin:4px 0 2px; max-width:80%}
+  .formation .fd{font-size:12px; color:#e5d3d9}
+  .formation .frow{display:flex; align-items:center; justify-content:space-between; margin-top:12px}
+  .formation .fp{font-size:15px; font-weight:700}
+  .formation .fbtn{background:var(--gold); color:#2b1720; border:none; font-family:inherit; font-weight:700; font-size:12px; padding:9px 15px; border-radius:20px; cursor:pointer}
+
+  /* payment confirm sheet */
+  .pay{margin:18px 18px 6px; background:#fff; border:1px solid var(--line); border-radius:20px; padding:16px 18px; box-shadow:0 12px 30px -20px rgba(43,23,32,.5)}
+  .pay .pt{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600}
+  .pay .pt .chk{width:20px; height:20px; border-radius:50%; background:#1f9d5b; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px}
+  .pay .sub{font-size:12px; color:var(--muted); margin:6px 0 12px}
+  .pay .sub b{color:var(--ink)}
+  .pm{display:flex; gap:10px}
+  .pm .opt{flex:1; border:1.5px solid var(--line); border-radius:14px; padding:10px; text-align:center; font-size:11px; font-weight:600; cursor:pointer}
+  .pm .opt.sel{border-color:var(--gold); background:#fdf6e8}
+  .pm .badge{display:block; margin:0 auto 6px; width:34px; height:22px; border-radius:5px; font-size:9px; font-weight:800; color:#111; display:flex; align-items:center; justify-content:center}
+  .pm .momo{background:var(--momo)} .pm .moov{background:var(--moov); color:#fff}
+  .paybtn{width:100%; margin-top:14px; background:var(--plum); color:#fff; border:none; font-family:inherit; font-weight:600; font-size:14px; padding:14px; border-radius:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px}
+  .paybtn small{font-weight:400; opacity:.75}
+
+  .safe{padding:14px 22px 26px; text-align:center; font-size:11px; color:var(--muted)}
+  .safe b{color:var(--ink)}
+
+  @media(max-width:820px){ body{flex-direction:column; gap:36px; padding:32px 16px} .pitch{text-align:center; max-width:360px} .ticks li{text-align:left} }
+</style>
+</head>
+<body>
+
+  <!-- Pitch panel (for the sales conversation) -->
+  <aside class="pitch">
+    <div class="eyebrow">Institut de beauté &amp; formation</div>
+    <h1>Vos abonnés réservent.<br><em>Vous encaissez.</em></h1>
+    <p class="lead">La page que vos abonnés ouvrent depuis votre bio Instagram, TikTok ou WhatsApp. Ils choisissent, paient un acompte, et le rendez-vous est confirmé — sans un seul message à traiter.</p>
+    <ul class="ticks">
+      <li><span class="dot">1</span><span><b>Réservation 24h/24</b> — même la nuit, même pendant un soin, aucun client perdu.</span></li>
+      <li><span class="dot">2</span><span><b>Acompte Mobile Money</b> — le créneau n'est bloqué qu'une fois payé : fini les no-shows.</span></li>
+      <li><span class="dot">3</span><span><b>Rappel automatique</b> — un message la veille, envoyé tout seul.</span></li>
+    </ul>
+    <div class="foot">Maquette de démonstration · à personnaliser aux couleurs et aux soins de l'institut.</div>
+  </aside>
+
+  <!-- Phone mockup -->
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="screen">
+      <div class="status"><span>9:41</span><div class="dots"><span>5G</span><span>100%</span></div></div>
+
+      <div class="brand">
+        <div class="logo">É</div>
+        <div class="kick">Cotonou</div>
+        <h2>Institut Éclat</h2>
+        <div class="tag">Beauté &amp; Formation professionnelle</div>
+        <div class="rating"><span class="stars">★★★★★</span> 4,9 · 320 avis</div>
+      </div>
+
+      <div class="hero">
+        <h3>Réservez votre soin<br>en 30 secondes</h3>
+        <p>Choisissez, réglez l'acompte, c'est confirmé.</p>
+      </div>
+
+      <div class="sec-label">Nos soins</div>
+
+      <div class="svc">
+        <div class="thumb">✨</div>
+        <div class="meta"><div class="n">Soin visage Éclat</div><div class="d">60 min · Nettoyage &amp; hydratation</div></div>
+        <div class="price">15 000 F</div>
+        <button class="book">Réserver</button>
+      </div>
+      <div class="svc">
+        <div class="thumb">💅</div>
+        <div class="meta"><div class="n">Pose d'ongles &amp; manucure</div><div class="d">45 min</div></div>
+        <div class="price">8 000 F</div>
+        <button class="book">Réserver</button>
+      </div>
+      <div class="svc">
+        <div class="thumb">💄</div>
+        <div class="meta"><div class="n">Maquillage professionnel</div><div class="d">Événement · mariage</div></div>
+        <div class="price">20 000 F</div>
+        <button class="book">Réserver</button>
+      </div>
+
+      <div class="sec-label">Formations</div>
+      <div class="formation">
+        <div class="fk">Nouvelle session</div>
+        <h4>Devenez maquilleuse pro</h4>
+        <div class="fd">Formation certifiante · 3 jours · places limitées</div>
+        <div class="frow">
+          <div class="fp">75 000 F</div>
+          <button class="fbtn">Réserver ma place</button>
+        </div>
+      </div>
+
+      <div class="sec-label">Confirmation</div>
+      <div class="pay">
+        <div class="pt"><span class="chk">✓</span> Soin visage Éclat · Sam. 14h00</div>
+        <div class="sub">Bloquez votre créneau avec un acompte de <b>3 000 F</b> (déduit du prix total).</div>
+        <div class="pm">
+          <div class="opt sel"><span class="badge momo">MoMo</span>MTN MoMo</div>
+          <div class="opt"><span class="badge moov">Moov</span>Moov Money</div>
+        </div>
+        <button class="paybtn">Payer l'acompte &amp; confirmer <small>· 3 000 F</small></button>
+      </div>
+
+      <div class="safe">🔒 Paiement sécurisé · Vous recevez un <b>rappel WhatsApp</b> la veille</div>
+    </div>
+  </div>
+
+</body>
+</html>
+https://fonts.googleapis.com
+Le code HTML 
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Institut Éclat — Réservation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --plum:#2b1720; --plum2:#43293a; --gold:#c69a48; --gold-soft:#e6d1a0;
+    --blush:#f5e6e0; --cream:#fbf7f3; --ink:#2a2126; --muted:#9b8b90; --line:#ece2dc;
+    --momo:#ffcc00; --moov:#0a5bd3;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Inter',sans-serif; color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 78% -10%, #5a3548 0%, transparent 55%),
+      radial-gradient(900px 500px at 10% 110%, #3a2130 0%, transparent 55%),
+      var(--plum);
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:48px 24px; gap:64px; flex-wrap:wrap;
+  }
+
+  /* ---- Pitch side (desktop) ---- */
+  .pitch{max-width:340px; color:#f3e7e4}
+  .pitch .eyebrow{font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:var(--gold-soft); font-weight:600}
+  .pitch h1{font-family:'Cormorant Garamond',serif; font-weight:600; font-size:46px; line-height:1.05; margin:14px 0 6px; color:#fff}
+  .pitch h1 em{font-style:italic; color:var(--gold-soft)}
+  .pitch p.lead{color:#d9c7cd; font-size:15px; line-height:1.6; margin-bottom:26px}
+  .ticks{list-style:none; display:flex; flex-direction:column; gap:14px}
+  .ticks li{display:flex; gap:12px; align-items:flex-start; font-size:14px; color:#efe2e6; line-height:1.45}
+  .ticks .dot{flex:none; width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--gold),#a87f34);
+    display:flex; align-items:center; justify-content:center; color:#2b1720; font-weight:700; font-size:13px; margin-top:1px}
+  .ticks b{color:#fff; font-weight:600}
+  .pitch .foot{margin-top:30px; font-size:12px; color:#b8a3aa; border-top:1px solid rgba(255,255,255,.14); padding-top:16px}
+
+  /* ---- Phone ---- */
+  .phone{
+    width:352px; flex:none; background:#120a0f; border-radius:46px; padding:12px;
+    box-shadow:0 40px 90px -30px rgba(0,0,0,.7), 0 0 0 2px rgba(255,255,255,.05);
+    position:relative;
+  }
+  .notch{position:absolute; top:20px; left:50%; transform:translateX(-50%); width:120px; height:26px; background:#120a0f; border-radius:0 0 16px 16px; z-index:5}
+  .screen{background:var(--cream); border-radius:36px; overflow:hidden; height:720px; overflow-y:auto; position:relative}
+  .screen::-webkit-scrollbar{width:0}
+
+  .status{display:flex; justify-content:space-between; align-items:center; padding:14px 22px 6px; font-size:12px; font-weight:600; color:var(--ink)}
+  .status .dots{display:flex; gap:4px; align-items:center}
+  .status .dots span{font-size:11px; letter-spacing:1px}
+
+  /* header */
+  .brand{padding:10px 22px 18px; text-align:center; border-bottom:1px solid var(--line)}
+  .brand .logo{width:56px; height:56px; margin:0 auto 10px; border-radius:50%;
+    background:linear-gradient(140deg,var(--plum2),var(--plum)); color:var(--gold-soft);
+    display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-size:30px; font-weight:700;
+    box-shadow:0 6px 18px -6px rgba(43,23,32,.6)}
+  .brand .kick{font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  .brand h2{font-family:'Cormorant Garamond',serif; font-size:34px; font-weight:600; letter-spacing:.5px; margin:2px 0}
+  .brand .tag{font-size:12.5px; color:var(--muted)}
+  .rating{display:inline-flex; gap:6px; align-items:center; margin-top:10px; background:var(--blush); padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; color:#7a5a2e}
+  .rating .stars{color:var(--gold); letter-spacing:1px}
+
+  .hero{padding:20px 22px 6px}
+  .hero h3{font-family:'Cormorant Garamond',serif; font-size:25px; font-weight:600; line-height:1.15}
+  .hero p{font-size:13px; color:var(--muted); margin-top:4px}
+
+  .sec-label{padding:18px 22px 8px; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); font-weight:700}
+
+  .svc{display:flex; align-items:center; gap:12px; padding:12px 22px; border-bottom:1px solid var(--line)}
+  .svc .thumb{width:46px; height:46px; border-radius:14px; flex:none;
+    background:linear-gradient(135deg,var(--blush),#ecd7cf); display:flex; align-items:center; justify-content:center; font-size:20px}
+  .svc .meta{flex:1; min-width:0}
+  .svc .meta .n{font-size:14px; font-weight:600}
+  .svc .meta .d{font-size:11.5px; color:var(--muted); margin-top:1px}
+  .svc .price{font-size:13px; font-weight:700; color:var(--ink); white-space:nowrap; margin-right:2px}
+  .book{background:var(--plum); color:#fff; border:none; font-family:inherit; font-size:11.5px; font-weight:600;
+    padding:8px 13px; border-radius:20px; white-space:nowrap; cursor:pointer}
+
+  /* formation highlight */
+  .formation{margin:16px 18px 6px; background:linear-gradient(140deg,var(--plum2),var(--plum)); color:#fff; border-radius:20px; padding:16px 18px; position:relative; overflow:hidden}
+  .formation::after{content:'✦'; position:absolute; right:14px; top:10px; color:var(--gold-soft); font-size:22px; opacity:.6}
+  .formation .fk{font-size:10px; letter-spacing:.24em; text-transform:uppercase; color:var(--gold-soft); font-weight:600}
+  .formation h4{font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:600; margin:4px 0 2px; max-width:80%}
+  .formation .fd{font-size:12px; color:#e5d3d9}
+  .formation .frow{display:flex; align-items:center; justify-content:space-between; margin-top:12px}
+  .formation .fp{font-size:15px; font-weight:700}
+  .formation .fbtn{background:var(--gold); color:#2b1720; border:none; font-family:inherit; font-weight:700; font-size:12px; padding:9px 15px; border-radius:20px; cursor:pointer}
+
+  /* payment confirm sheet */
+  .pay{margin:18px 18px 6px; background:#fff; border:1px solid var(--line); border-radius:20px; padding:16px 18px; box-shadow:0 12px 30px -20px rgba(43,23,32,.5)}
+  .pay .pt{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600}
+  .pay .pt .chk{width:20px; height:20px; border-radius:50%; background:#1f9d5b; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px}
+  .pay .sub{font-size:12px; color:var(--muted); margin:6px 0 12px}
+  .pay .sub b{color:var(--ink)}
+  .pm{display:flex; gap:10px}
+  .pm .opt{flex:1; border:1.5px solid var(--line); border-radius:14px; padding:10px; text-align:center; font-size:11px; font-weight:600; cursor:pointer}
+  .pm .opt.sel{border-color:var(--gold); background:#fdf6e8}
+  .pm .badge{display:block; margin:0 auto 6px; width:34px; height:22px; border-radius:5px; font-size:9px; font-weight:800; color:#111; display:flex; align-items:center; justify-content:center}
+  .pm .momo{background:var(--momo)} .pm .moov{background:var(--moov); color:#fff}
+  .paybtn{width:100%; margin-top:14px; background:var(--plum); color:#fff; border:none; font-family:inherit; font-weight:600; font-size:14px; padding:14px; border-radius:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px}
+  .paybtn small{font-weight:400; opacity:.75}
+
+  .safe{padding:14px 22px 26px; text-align:center; font-size:11px; color:var(--muted)}
+  .safe b{color:var(--ink)}
+
+  @media(max-width:820px){ body{flex-direction:column; gap:36px; padding:32px 16px} .pitch{text-align:center; max-width:360px} .ticks li{text-align:left} }
+</style>
+</head>
+<body>
+
+  <!-- Pitch panel (for the sales conversation) -->
+  <aside class="pitch">
+    <div class="eyebrow">Institut de beauté &amp; formation</div>
+    <h1>Vos abonnés réservent.<br><em>Vous encaissez.</em></h1>
+    <p class="lead">La page que vos abonnés ouvrent depuis votre bio Instagram, TikTok ou WhatsApp. Ils choisissent, paient un acompte, et le rendez-vous est confirmé — sans un seul message à traiter.</p>
+    <ul class="ticks">
+      <li><span class="dot">1</span><span><b>Réservation 24h/24</b> — même la nuit, même pendant un soin, aucun client perdu.</span></li>
+      <li><span class="dot">2</span><span><b>Acompte Mobile Money</b> — le créneau n'est bloqué qu'une fois payé : fini les no-shows.</span></li>
+      <li><span class="dot">3</span><span><b>Rappel automatique</b> — un message la veille, envoyé tout seul.</span></li>
+    </ul>
+    <div class="foot">Maquette de démonstration · à personnaliser aux couleurs et aux soins de l'institut.</div>
+  </aside>
+
+  <!-- Phone mockup -->
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="screen">
+      <div class="status"><span>9:41</span><div class="dots"><span>5G</span><span>100%</span></div></div>
+
+      <div class="brand">
+        <div class="logo">É</div>
+        <div class="kick">Cotonou</div>
+        <h2>Institut Éclat</h2>
+        <div class="tag">Beauté &amp; Formation professionnelle</div>
+        <div class="rating"><span class="stars">★★★★★</span> 4,9 · 320 avis</div>
+      </div>
+
+      <div class="hero">
+        <h3>Réservez votre soin<br>en 30 secondes</h3>
+        <p>Choisissez, réglez l'acompte, c'est confirmé.</p>
+      </div>
+
+      <div class="sec-label">Nos soins</div>
+
+      <div class="svc">
+        <div class="thumb">✨</div>
+        <div class="meta"><div class="n">Soin visage Éclat</div><div class="d">60 min · Nettoyage &amp; hydratation</div></div>
+        <div class="price">15 000 F</div>
+        <button class="book">Réserver</button>
+      </div>
+      <div class="svc">
+        <div class="thumb">💅</div>
+        <div class="meta"><div class="n">Pose d'ongles &amp; manucure</div><div class="d">45 min</div></div>
+        <div class="price">8 000 F</div>
+        <button class="book">Réserver</button>
+      </div>
+      <div class="svc">
+        <div class="thumb">💄</div>
+        <div class="meta"><div class="n">Maquillage professionnel</div><div class="d">Événement · mariage</div></div>
+        <div class="price">20 000 F</div>
+        <button class="book">Réserver</button>
+      </div>
+
+      <div class="sec-label">Formations</div>
+      <div class="formation">
+        <div class="fk">Nouvelle session</div>
+        <h4>Devenez maquilleuse pro</h4>
+        <div class="fd">Formation certifiante · 3 jours · places limitées</div>
+        <div class="frow">
+          <div class="fp">75 000 F</div>
+          <button class="fbtn">Réserver ma place</button>
+        </div>
+      </div>
+
+      <div class="sec-label">Confirmation</div>
+      <div class="pay">
+        <div class="pt"><span class="chk">✓</span> Soin visage Éclat · Sam. 14h00</div>
+        <div class="sub">Bloquez votre créneau avec un acompte de <b>3 000 F</b> (déduit du prix total).</div>
+        <div class="pm">
+          <div class="opt sel"><span class="badge momo">MoMo</span>MTN MoMo</div>
+          <div class="opt"><span class="badge moov">Moov</span>Moov Money</div>
+        </div>
+        <button class="paybtn">Payer l'acompte &amp; confirmer <small>· 3 000 F</small></button>
+      </div>
+
+      <div class="safe">🔒 Paiement sécurisé · Vous recevez un <b>rappel WhatsApp</b> la veille</div>
+    </div>
+  </div>
+
+</body>
+</html>
