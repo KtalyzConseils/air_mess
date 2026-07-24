@@ -11,6 +11,8 @@ interface Props {
   onClose: () => void
   /** Callback pour ouvrir le flow "Refuser" au niveau du parent. */
   onDecline?: () => void
+  /** true si le driver a déjà une course active — accept impossible. */
+  acceptBlocked?: boolean
 }
 
 /**
@@ -26,7 +28,13 @@ interface Props {
  *
  * Actions : Refuser (1/3) + Accepter (2/3) — même hiérarchie que la carte parent.
  */
-export default function CourseDetailModal({ course, visible, onClose, onDecline }: Props) {
+export default function CourseDetailModal({
+  course,
+  visible,
+  onClose,
+  onDecline,
+  acceptBlocked = false,
+}: Props) {
   const queryClient = useQueryClient()
   const isExpress = course.urgency === 'express'
 
@@ -49,38 +57,51 @@ export default function CourseDetailModal({ course, visible, onClose, onDecline 
       title={course.reference}
       subtitle={subtitle}
       footer={
-        <View className="flex-row gap-2">
-          <View className="flex-1">
-            <Button
-              variant="outline"
-              size="md"
-              onPress={() => {
-                onClose()
-                onDecline?.()
-              }}
-              disabled={mutation.isPending}
-            >
-              Refuser
-            </Button>
+        acceptBlocked ? (
+          <View className="bg-warm-100 rounded-2xl px-3 py-3">
+            <Text className="text-ink text-sm font-jk-bold text-center">
+              Termine ta course en cours pour en accepter une autre
+            </Text>
+            <View className="mt-3">
+              <Button variant="outline" size="md" onPress={onClose}>
+                Fermer
+              </Button>
+            </View>
           </View>
-          <View className="flex-[2]">
-            <Button
-              variant={isExpress ? 'danger' : 'primary'}
-              size="md"
-              onPress={() => mutation.mutate()}
-              loading={mutation.isPending}
-              leftIcon={
-                isExpress ? (
-                  <Ionicons name="flash" size={16} color="#ffffff" />
-                ) : (
-                  <Ionicons name="checkmark" size={16} color="#1A1614" />
-                )
-              }
-            >
-              Accepter
-            </Button>
+        ) : (
+          <View className="flex-row gap-2">
+            <View className="flex-1">
+              <Button
+                variant="outline"
+                size="md"
+                onPress={() => {
+                  onClose()
+                  onDecline?.()
+                }}
+                disabled={mutation.isPending}
+              >
+                Refuser
+              </Button>
+            </View>
+            <View className="flex-[2]">
+              <Button
+                variant={isExpress ? 'danger' : 'primary'}
+                size="md"
+                onPress={() => mutation.mutate()}
+                loading={mutation.isPending}
+                leftIcon={
+                  isExpress ? (
+                    <Ionicons name="flash" size={16} color="#ffffff" />
+                  ) : (
+                    <Ionicons name="checkmark" size={16} color="#1A1614" />
+                  )
+                }
+              >
+                Accepter
+              </Button>
+            </View>
           </View>
-        </View>
+        )
       }
     >
       {/* Bandeau express — signature */}

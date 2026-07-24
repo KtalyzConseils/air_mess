@@ -18,12 +18,14 @@ interface Props {
   fallbackDriverLat?: number | null
   fallbackDriverLng?: number | null
   height?: number
+  /** True pendant un toucher sur la carte — à brancher sur scrollEnabled du parent. */
+  onInteractionChange?: (active: boolean) => void
 }
 
 /**
  * Carte de la course — 3 markers (A retrait, B livraison, driver) + polyline A→B
  * pointillée à vol d'oiseau. Auto-fit sur les 3 points au 1er render + bouton
- * "Recentrer sur moi" en overlay.
+ * "Recentrer sur moi" en overlay + contrôles zoom +/-.
  *
  * Pas de routing Directions API : la navigation routière est déléguée à Google
  * Maps externe (bouton "Naviguer" du parent). La polyline sert juste à donner
@@ -41,7 +43,8 @@ export default function CourseMap({
   activeTarget,
   fallbackDriverLat,
   fallbackDriverLng,
-  height = 260,
+  height = 380,
+  onInteractionChange,
 }: Props) {
   const mapRef = useRef<MapView | null>(null)
   const live = useDriverLivePosition(true)
@@ -85,8 +88,20 @@ export default function CourseMap({
     )
   }
 
+  async function zoomBy(delta: number) {
+    const camera = await mapRef.current?.getCamera()
+    if (!camera) return
+    const nextZoom = Math.max(3, Math.min(20, (camera.zoom ?? 14) + delta))
+    mapRef.current?.animateCamera({ ...camera, zoom: nextZoom }, { duration: 200 })
+  }
+
   return (
-    <View style={{ height, borderRadius: 16, overflow: 'hidden' }}>
+    <View
+      style={{ height, borderRadius: 16, overflow: 'hidden' }}
+      onTouchStart={() => onInteractionChange?.(true)}
+      onTouchEnd={() => onInteractionChange?.(false)}
+      onTouchCancel={() => onInteractionChange?.(false)}
+    >
       <MapView
         ref={mapRef}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
@@ -97,6 +112,10 @@ export default function CourseMap({
         toolbarEnabled={false}
         rotateEnabled={false}
         pitchEnabled={false}
+        zoomEnabled
+        zoomTapEnabled
+        scrollEnabled
+        zoomControlEnabled={false}
       >
         {/* Ligne A→B pointillée : juste l'axe visuel, pas un vrai itinéraire routier. */}
         <Polyline
@@ -138,6 +157,57 @@ export default function CourseMap({
           </Marker>
         )}
       </MapView>
+
+      {/* Contrôles zoom +/- */}
+      <View
+        style={{
+          position: 'absolute',
+          right: 12,
+          top: 12,
+          borderRadius: 12,
+          overflow: 'hidden',
+          backgroundColor: '#FFFFFF',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 4,
+          elevation: 4,
+        }}
+      >
+        <Pressable
+          onPress={() => zoomBy(1)}
+          style={({ pressed }) => [
+            {
+              width: 40,
+              height: 40,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Zoomer"
+        >
+          <Ionicons name="add" size={22} color="#1A1614" />
+        </Pressable>
+        <View style={{ height: 1, backgroundColor: '#E8E2D9' }} />
+        <Pressable
+          onPress={() => zoomBy(-1)}
+          style={({ pressed }) => [
+            {
+              width: 40,
+              height: 40,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Dézoomer"
+        >
+          <Ionicons name="remove" size={22} color="#1A1614" />
+        </Pressable>
+      </View>
 
       {/* Bouton flottant : recentrer sur ma position */}
       <Pressable

@@ -99,7 +99,9 @@ class DriverController extends Controller
     {
         $driver = $this->currentDriver($request, requireActive: true);
 
-        if ($driver->availability_status !== 'available') {
+        // available + busy : un driver en course doit encore voir les propositions
+        // (lecture seule côté app — l'accept reste bloqué tant qu'il est busy).
+        if (! in_array($driver->availability_status, ['available', 'busy'], true)) {
             return response()->json(['courses' => []]);
         }
 
@@ -144,11 +146,22 @@ class DriverController extends Controller
                 ->where('driver_id', $driver->id);
         });
 
-        // Si on connaît la position du livreur → on trie et filtre par proximité
+        // Si on connaît la position du livreur → on trie et filtre par proximité.
+        // En environnement local (config app.env = 'local'), on skipte le filtre withinRadius
+        // pour faciliter le dev sans GPS réel (coordonnées Mountain View vs courses Cotonou).
+        // En prod et en test (config app.env = 'testing' / 'production'), le rayon reste appliqué.
+        // NB : on utilise config('app.env') et non app()->environment() pour que phpunit.xml
+        //      (qui surcharge APP_ENV=testing) soit bien pris en compte dans les tests.
+        $isLocalDev = config('app.env') === 'local';
+
         if ($driver->current_lat !== null && $driver->current_lng !== null) {
+            $query->selectDistanceFrom((float) $driver->current_lat, (float) $driver->current_lng);
+
+            if (! $isLocalDev) {
+                $query->withinRadius((float) $driver->current_lat, (float) $driver->current_lng, self::MATCHING_RADIUS_KM);
+            }
+
             $query
-                ->selectDistanceFrom((float) $driver->current_lat, (float) $driver->current_lng)
-                ->withinRadius((float) $driver->current_lat, (float) $driver->current_lng, self::MATCHING_RADIUS_KM)
                 ->orderByRaw("urgency = 'express' DESC")
                 ->orderBy('distance_km');
         } else {
@@ -156,6 +169,7 @@ class DriverController extends Controller
                 ->orderByRaw("urgency = 'express' DESC")
                 ->latest();
         }
+
 
         $courses = $query->limit(10)->get()->makeHidden(['pickup_code', 'delivery_code']);
 

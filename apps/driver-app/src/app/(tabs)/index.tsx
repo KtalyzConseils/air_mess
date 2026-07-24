@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, Text, Pressable, RefreshControl } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useQuery } from '@tanstack/react-query'
@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '../../stores/authStore'
 import AvailabilityToggle from '../../components/AvailabilityToggle'
-import ActiveCourseCard from '../../components/ActiveCourseCard'
+import ActiveCourseModal from '../../components/ActiveCourseModal'
 import OfferedCourseItem from '../../components/OfferedCourseItem'
 import SupportContactSheet from '../../components/SupportContactSheet'
 import AcceptTermsSheet from '../../components/AcceptTermsSheet'
@@ -53,15 +53,28 @@ export default function DriverDashboard() {
   })
 
   const activeCourse = activeQuery.data?.[0]
+  const canSeeOffers = availability === 'available' || availability === 'busy'
 
   const offeredQuery = useQuery({
     queryKey: ['offered-courses'],
     queryFn: fetchOfferedCourses,
-    enabled: availability === 'available' && !activeCourse,
+    enabled: canSeeOffers,
     refetchInterval: 8_000,
   })
 
   useNewCourseAlert(availability === 'available' ? (offeredQuery.data?.length ?? 0) : 0)
+
+  const [bannedSupportOpen, setBannedSupportOpen] = useState(false)
+  const [activeModalOpen, setActiveModalOpen] = useState(false)
+
+  // Ouvre la modal dès qu'une course active apparaît (accept / reprise session).
+  useEffect(() => {
+    if (activeCourse) {
+      setActiveModalOpen(true)
+    } else {
+      setActiveModalOpen(false)
+    }
+  }, [activeCourse?.id])
 
   function refreshAll() {
     meQuery.refetch()
@@ -73,8 +86,6 @@ export default function DriverDashboard() {
 
   const firstName = me?.driver?.first_name ?? me?.name ?? ''
   const avatar = initials(me?.driver?.first_name, me?.driver?.last_name, me?.name)
-
-  const [bannedSupportOpen, setBannedSupportOpen] = useState(false)
 
   // Cas 7 — Driver banni : écran de blocage complet.
   if (isBanned) {
@@ -121,13 +132,18 @@ export default function DriverDashboard() {
   const list = offeredQuery.data ?? []
   const express = list.filter((c) => c.urgency === 'express')
   const standard = list.filter((c) => c.urgency !== 'express')
+  const acceptBlocked = !!activeCourse
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
       <KeyboardAwareScrollView
         bottomOffset={16}
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28 }}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 12,
+          paddingBottom: activeCourse ? 96 : 28,
+        }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -175,16 +191,8 @@ export default function DriverDashboard() {
           <TodayKpiBanner />
         </View>
 
-        {/* ============ COURSE ACTIVE ============ */}
-        {activeCourse && (
-          <View className="mb-4">
-            <Text className="text-base font-jk-extrabold text-ink mb-2">Course active</Text>
-            <ActiveCourseCard course={activeCourse} />
-          </View>
-        )}
-
         {/* ============ PROPOSITIONS ============ */}
-        {!activeCourse && availability === 'available' && (
+        {canSeeOffers && (
           <View>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-base font-jk-extrabold text-ink">Courses proposées</Text>
@@ -193,6 +201,16 @@ export default function DriverDashboard() {
                 <Text className="text-warm-500 text-xs font-jk-medium">Scan zone · 8 s</Text>
               </View>
             </View>
+
+            {acceptBlocked && (
+              <View className="mb-3 bg-airmess-yellow/25 border border-airmess-yellow/60 rounded-2xl px-3 py-2.5 flex-row items-center">
+                <Ionicons name="bicycle" size={16} color="#1A1614" />
+                <Text className="text-ink text-xs font-jk-medium ml-2 flex-1">
+                  Course en cours — tu peux consulter les propositions, mais pas en accepter une
+                  autre pour l’instant.
+                </Text>
+              </View>
+            )}
 
             {offeredQuery.isLoading && (
               <Card variant="default" padding="lg">
@@ -216,7 +234,7 @@ export default function DriverDashboard() {
                   </Text>
                 </View>
                 {express.map((c) => (
-                  <OfferedCourseItem key={c.id} course={c} />
+                  <OfferedCourseItem key={c.id} course={c} acceptBlocked={acceptBlocked} />
                 ))}
               </View>
             )}
@@ -232,7 +250,7 @@ export default function DriverDashboard() {
                   </Text>
                 </View>
                 {standard.map((c) => (
-                  <OfferedCourseItem key={c.id} course={c} />
+                  <OfferedCourseItem key={c.id} course={c} acceptBlocked={acceptBlocked} />
                 ))}
               </View>
             )}
@@ -240,10 +258,38 @@ export default function DriverDashboard() {
         )}
 
         {/* ============ HORS-LIGNE ============ */}
-        {!activeCourse && availability !== 'available' && availability !== 'busy' && (
-          <EmptyStateOffline availability={availability} />
-        )}
+        {!canSeeOffers && <EmptyStateOffline availability={availability} />}
       </KeyboardAwareScrollView>
+
+      {/* Barre sticky : rouvrir la course active sans quitter l'accueil */}
+      {activeCourse && !activeModalOpen && (
+        <View className="absolute left-4 right-4 bottom-4">
+          <Pressable
+            onPress={() => setActiveModalOpen(true)}
+            className="h-14 rounded-2xl bg-airmess-dark flex-row items-center px-4"
+            style={({ pressed }) => (pressed ? { opacity: 0.9 } : undefined)}
+          >
+            <View className="w-9 h-9 rounded-full bg-airmess-yellow items-center justify-center">
+              <Ionicons name="navigate" size={18} color="#1A1614" />
+            </View>
+            <View className="ml-3 flex-1">
+              <Text className="text-white font-jk-extrabold text-sm">Course active</Text>
+              <Text className="text-warm-400 text-[11px] font-jk" numberOfLines={1}>
+                {activeCourse.reference} · Reprendre
+              </Text>
+            </View>
+            <Ionicons name="chevron-up" size={20} color="#FFCC00" />
+          </Pressable>
+        </View>
+      )}
+
+      {activeCourse && (
+        <ActiveCourseModal
+          course={activeCourse}
+          visible={activeModalOpen}
+          onClose={() => setActiveModalOpen(false)}
+        />
+      )}
 
       {/* CGU — modale plein écran bloquante si non accepté */}
       <AcceptTermsSheet visible={needsTermsAcceptance} onAccepted={() => meQuery.refetch()} />

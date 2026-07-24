@@ -4,6 +4,7 @@ namespace Tests\Feature\Driver;
 
 use App\Models\Course;
 use App\Models\Driver;
+use App\Models\DriverWallet;
 use App\Models\PackageCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,24 +19,37 @@ class OfferedCoursesTest extends TestCase
     {
         $user = User::factory()->create(['type' => 'driver']);
         $driver = Driver::factory()->create([
-            'user_id' => $user->id,
-            'activation_status' => 'active',
+            'user_id'             => $user->id,
+            'activation_status'   => 'active',
             'availability_status' => 'available',
-            'current_lat' => $lat,
-            'current_lng' => $lng,
+            'kind'                => Driver::KIND_INDEPENDENT,
+            'current_lat'         => $lat,
+            'current_lng'         => $lng,
         ]);
+        // Wallet nécessaire pour que le filtre caution (collection_amount <= balance)
+        // ne bloque pas les courses has_collection=false créées par les tests.
+        DriverWallet::factory()->create(['driver_id' => $driver->id, 'balance' => 0]);
         return [$user, $driver];
     }
 
+    /**
+     * Crée une course en attente fixée en coordonnées explicites.
+     * has_collection=false + delivery_fee_paid_by=sender + is_high_value=false
+     * → aucun filtre non-Airmess ne peut l'éliminer du flux du driver de test.
+     */
     private function makeAwaitingCourseAt(float $lat, float $lng, string $urgency = 'standard'): Course
     {
         return Course::factory()->create([
-            'driver_id' => null,
-            'status'    => Course::STATUS_AWAITING,
-            'urgency'   => $urgency,
-            'origin_lat' => $lat,
-            'origin_lng' => $lng,
-            'package_category_id' => PackageCategory::factory()->create()->id,
+            'driver_id'            => null,
+            'status'               => Course::STATUS_AWAITING,
+            'urgency'              => $urgency,
+            'origin_lat'           => $lat,
+            'origin_lng'           => $lng,
+            'has_collection'       => false,
+            'collection_amount'    => null,
+            'is_high_value'        => false,
+            'delivery_fee_paid_by' => Course::PAID_BY_SENDER,
+            'package_category_id'  => PackageCategory::factory()->create()->id,
         ]);
     }
 

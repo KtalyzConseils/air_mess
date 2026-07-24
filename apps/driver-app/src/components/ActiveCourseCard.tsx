@@ -20,6 +20,8 @@ import Card from './ui/Card'
 
 interface Props {
   course: DriverCourseSummary & { destination_phone?: string; origin_phone?: string }
+  /** True pendant un toucher sur la carte — pour désactiver le scroll parent. */
+  onMapInteractionChange?: (active: boolean) => void
 }
 
 /* ============================================================
@@ -51,7 +53,7 @@ const NEXT_ACTION: Record<
   returning_to_sender: { action: 'return_confirmed',  label: 'Colis rendu au marchand', needsCode: 'return' },
 }
 
-export default function ActiveCourseCard({ course }: Props) {
+export default function ActiveCourseCard({ course, onMapInteractionChange }: Props) {
   const queryClient = useQueryClient()
   const [code, setCode] = useState('')
   const [incidentOpen, setIncidentOpen] = useState(false)
@@ -286,7 +288,8 @@ export default function ActiveCourseCard({ course }: Props) {
               destLat={course.destination_lat}
               destLng={course.destination_lng}
               activeTarget={phase === 'dropoff' ? 'destination' : 'origin'}
-              height={220}
+              height={380}
+              onInteractionChange={onMapInteractionChange}
             />
           </View>
         )}

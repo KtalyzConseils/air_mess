@@ -22,7 +22,14 @@ function etaMin(km?: number): number | null {
   return Math.max(1, Math.round((km / 14) * 60))
 }
 
-export default function OfferedCourseItem({ course }: { course: DriverCourseSummary }) {
+export default function OfferedCourseItem({
+  course,
+  acceptBlocked = false,
+}: {
+  course: DriverCourseSummary
+  /** true si une course est déjà en cours — détail visible, accept désactivé. */
+  acceptBlocked?: boolean
+}) {
   const [detailOpen, setDetailOpen] = useState(false)
   const [declineOpen, setDeclineOpen] = useState(false)
   const isExpress = course.urgency === 'express'
@@ -111,6 +118,7 @@ export default function OfferedCourseItem({ course }: { course: DriverCourseSumm
         visible={detailOpen}
         onClose={() => setDetailOpen(false)}
         onDecline={() => setDeclineOpen(true)}
+        acceptBlocked={acceptBlocked}
       />
 
       <DeclineCourseModal

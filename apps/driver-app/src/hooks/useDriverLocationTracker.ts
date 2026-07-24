@@ -3,6 +3,7 @@ import { AppState } from 'react-native'
 import * as Location from 'expo-location'
 import { LOCATION_TASK } from '../lib/locationTask'
 import { IS_EXPO_GO } from '../lib/notifications'
+import { updatePosition } from '../api/driver'
 import type { Availability } from '../api/driver'
 
 interface Options {
@@ -29,12 +30,63 @@ const START_THROTTLE_MS = 2500
  *    faut (re)démarrer — on rappelle TOUJOURS `startLocationUpdatesAsync` quand on doit
  *    tracker : ça ranime le service mort, ou met juste à jour les options s'il tourne.
  *  - Auto-guérison : ré-assert périodique tant qu'on est en ligne + au retour au premier plan.
+ *
+ * Expo Go : pas de TaskManager → fallback foreground `watchPositionAsync`. La position
+ * est envoyée au serveur toutes les ~15s tant que l'app est au premier plan. Suffisant
+ * pour tester le matching en dev.
  */
 export function useDriverLocationTracker({ availability, intervalMs = 15_000, distanceM = 20 }: Options) {
   useEffect(() => {
-    if (IS_EXPO_GO) return
-
     const shouldTrack = availability === 'available' || availability === 'busy'
+
+    // ── Expo Go : fallback foreground seulement ──────────────────────────────
+    if (IS_EXPO_GO) {
+      if (!shouldTrack) return
+
+      let watchSub: Location.LocationSubscription | null = null
+      let cancelled = false
+      let lastSent = 0
+
+      async function startWatch() {
+        try {
+          let perm = await Location.getForegroundPermissionsAsync()
+          if (perm.status !== 'granted') {
+            perm = await Location.requestForegroundPermissionsAsync()
+          }
+          if (perm.status !== 'granted' || cancelled) return
+
+          watchSub = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: intervalMs,
+              distanceInterval: distanceM,
+            },
+            async (loc) => {
+              if (cancelled) return
+              const now = Date.now()
+              if (now - lastSent < intervalMs) return
+              lastSent = now
+              try {
+                await updatePosition(loc.coords.latitude, loc.coords.longitude)
+              } catch {
+                /* réseau indispo : on réessaiera au prochain point */
+              }
+            },
+          )
+        } catch (e) {
+          console.warn('[tracker/ExpoGo] watchPositionAsync échec:', String(e))
+        }
+      }
+
+      void startWatch()
+
+      return () => {
+        cancelled = true
+        watchSub?.remove()
+      }
+    }
+
+    // ── Build natif : FGS via TaskManager ────────────────────────────────────
     let cancelled = false
 
     async function ensureStarted() {
