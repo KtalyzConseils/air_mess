@@ -36,14 +36,13 @@ import {
   normalizePhone,
   validateBeninPhone,
   BENIN_DIAL_CODE,
-  sendPhoneOtp,
-  verifyPhoneOtp,
   registerDriver,
   type LocalFile,
   type Gender,
   type VehicleType,
   type CniType,
 } from '../api/register'
+import { useFirebasePhoneAuth } from '../hooks/useFirebasePhoneAuth'
 
 const TOTAL_STEPS = 6
 
@@ -96,12 +95,18 @@ export default function RegisterScreen() {
   // Téléphone + OTP. Prérempli avec l'indicatif Bénin, que le livreur peut remplacer
   // par un autre indicatif si son numéro est étranger.
   const [phone, setPhone] = useState(`${BENIN_DIAL_CODE} `)
-  const [otpSent, setOtpSent] = useState(false)
   const [otpCode, setOtpCode] = useState('')
-  const [phoneToken, setPhoneToken] = useState<string | null>(null)
-  const [otpSending, setOtpSending] = useState(false)
-  const [otpVerifying, setOtpVerifying] = useState(false)
-  const [otpError, setOtpError] = useState<string | null>(null)
+  // Vérification par Firebase Phone Auth (native RN). Le hook gère l'envoi du SMS,
+  // la confirmation, la récupération de l'idToken et le mapping des erreurs.
+  const firebasePhone = useFirebasePhoneAuth()
+  // États dérivés pour garder l'API de <StepPhone> inchangée.
+  const otpSent =
+    firebasePhone.status === 'code_sent' ||
+    firebasePhone.status === 'verifying' ||
+    firebasePhone.status === 'verified'
+  const otpSending = firebasePhone.status === 'sending'
+  const otpVerifying = firebasePhone.status === 'verifying'
+  const otpError = firebasePhone.error
   // Véhicule
   const [vehicleType, setVehicleType] = useState<VehicleType | ''>('')
   const [vehiclePlate, setVehiclePlate] = useState('')
@@ -130,7 +135,7 @@ export default function RegisterScreen() {
 
   const isCar = vehicleType === 'voiture'
   const isCnib = cniType === 'cnib'
-  const phoneVerified = phoneToken !== null
+  const phoneVerified = firebasePhone.status === 'verified' && firebasePhone.idToken !== null
 
   /* ============================================================
      BROUILLON — restauration au mount + sauvegarde continue
@@ -245,49 +250,32 @@ export default function RegisterScreen() {
 
   function onPhoneChange(v: string) {
     setPhone(v)
-    if (phoneToken) {
-      setPhoneToken(null)
-      setOtpSent(false)
+    // Si le numéro change après un envoi/vérif, on repart de zéro (le token émis
+    // pour l'ancien numéro ne serait plus valide vis-à-vis du claim phone_number).
+    if (firebasePhone.status !== 'idle') {
+      firebasePhone.reset()
       setOtpCode('')
     }
   }
 
   async function handleSendOtp() {
-    setOtpError(null)
     const normalized = normalizePhone(phone)
     if (normalized.length < 8) {
-      setOtpError('Entrez un numéro valide.')
+      // Firebase throw 'auth/invalid-phone-number' de toute façon, mais on court-circuite
+      // pour épargner un aller-retour et donner un message plus explicite.
+      Alert.alert('Numéro invalide', 'Entrez un numéro complet avec indicatif.')
       return
     }
-    // Un numéro béninois doit garder son « 01 » de tête (10 chiffres après +229).
     const beninError = validateBeninPhone(normalized)
     if (beninError) {
-      setOtpError(beninError)
+      Alert.alert('Numéro invalide', beninError)
       return
     }
-    setOtpSending(true)
-    try {
-      const res = await sendPhoneOtp(normalized)
-      setOtpSent(true)
-      if (res.debug_code) setOtpCode(res.debug_code)
-    } catch (err) {
-      setOtpError(serverMessage(err, "Échec de l'envoi du code."))
-    } finally {
-      setOtpSending(false)
-    }
+    await firebasePhone.sendCode(normalized)
   }
 
   async function handleVerifyOtp() {
-    setOtpError(null)
-    setOtpVerifying(true)
-    try {
-      const token = await verifyPhoneOtp(normalizePhone(phone), otpCode.trim())
-      setPhoneToken(token)
-    } catch (err) {
-      setOtpError(serverMessage(err, 'Code incorrect.'))
-    } finally {
-      setOtpVerifying(false)
-    }
+    await firebasePhone.confirmCode(otpCode.trim())
   }
 
   /* ============================================================
@@ -367,7 +355,7 @@ export default function RegisterScreen() {
         phone: normalizePhone(phone),
         password,
         password_confirmation: passwordConfirm,
-        phone_verification_token: phoneToken!,
+        firebase_id_token: firebasePhone.idToken!,
         vehicle_type: vehicleType as VehicleType,
         vehicle_plate: vehiclePlate.trim(),
         vehicle_brand: vehicleBrand.trim() || undefined,

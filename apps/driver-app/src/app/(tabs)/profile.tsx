@@ -70,10 +70,15 @@ export default function ProfileScreen() {
     queryFn: fetchDriverStats,
   })
   const { data: wallet } = useQuery({ queryKey: ['wallet'], queryFn: fetchWallet })
-  const cautionLabel = wallet ? `${wallet.balance.toLocaleString('fr-FR')} FCFA` : '—'
+  // Défense : balance peut être null pendant le tout premier fetch (race de types),
+  // ou si le back renvoie un wallet incomplet. Sans ça, toLocaleString crashe le render.
+  const cautionLabel =
+    wallet && typeof wallet.balance === 'number'
+      ? `${wallet.balance.toLocaleString('fr-FR')} FCFA`
+      : '—'
 
-  const totalCourses = stats?.all_time.courses ?? 0
-  const totalEarnings = stats?.all_time.earnings ?? 0
+  const totalCourses = stats?.all_time?.courses ?? 0
+  const totalEarnings = stats?.all_time?.earnings ?? 0
   const version = Constants.expoConfig?.version ?? ''
 
   function confirmLogout() {

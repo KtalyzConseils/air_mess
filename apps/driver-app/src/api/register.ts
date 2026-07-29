@@ -16,8 +16,11 @@ export type CniType = 'cnib' | 'cip' | 'passeport'
 
 /**
  * Données d'inscription livreur collectées par l'écran natif. Miroir du payload
- * web, avec des LocalFile à la place des File et un phone_verification_token
- * (OTP maison) à la place du firebase_id_token.
+ * web, avec des LocalFile à la place des File.
+ *
+ * Preuve du téléphone — exactement l'un des 2 (backend : required_without) :
+ *   - firebase_id_token : Firebase Phone Auth (ID token, natif via @react-native-firebase)
+ *   - phone_verification_token : OTP maison Brevo (legacy, gardé en fallback)
  */
 export interface DriverRegisterForm {
   // Identité
@@ -30,7 +33,8 @@ export interface DriverRegisterForm {
   phone: string
   password: string
   password_confirmation: string
-  phone_verification_token: string
+  firebase_id_token?: string
+  phone_verification_token?: string
   // Véhicule
   vehicle_type: VehicleType
   vehicle_plate: string
@@ -121,7 +125,13 @@ export async function registerDriver(form: DriverRegisterForm): Promise<{ token:
   fd.append('phone', form.phone)
   fd.append('password', form.password)
   fd.append('password_confirmation', form.password_confirmation)
-  fd.append('phone_verification_token', form.phone_verification_token)
+  // Preuve téléphone — on n'envoie QUE le jeton qu'on a. Le back valide
+  // required_without entre les 2, donc envoyer les deux ferait doublon.
+  if (form.firebase_id_token) {
+    fd.append('firebase_id_token', form.firebase_id_token)
+  } else if (form.phone_verification_token) {
+    fd.append('phone_verification_token', form.phone_verification_token)
+  }
   fd.append('vehicle_type', form.vehicle_type)
   fd.append('vehicle_plate', form.vehicle_plate)
   if (form.vehicle_brand) fd.append('vehicle_brand', form.vehicle_brand)

@@ -163,11 +163,20 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!hydrated) return
-    // Routes publiques accessibles sans être connecté : login + inscription.
-    const inAuthRoute = segments[0] === 'login' || segments[0] === 'register'
+    // Routes publiques accessibles sans être connecté : login, inscription, et
+    // le flow mot-de-passe-oublié (le driver ne peut pas se connecter pour y accéder,
+    // c'est justement le but). reset-password est ouvert via deep-link email.
+    const first = segments[0] as string | undefined
+    const inAuthRoute =
+      first === 'login' ||
+      first === 'register' ||
+      first === 'forgot-password' ||
+      first === 'reset-password'
     if (!user && !inAuthRoute) {
       router.replace('/login')
-    } else if (user && inAuthRoute) {
+    } else if (user && (first === 'login' || first === 'register')) {
+      // Un utilisateur connecté ne doit pas rester sur login/register, mais on
+      // le LAISSE sur forgot/reset s'il a suivi un lien mail (cas rare mais valide).
       router.replace('/')
     }
   }, [hydrated, user, segments, router])

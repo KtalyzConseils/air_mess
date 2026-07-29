@@ -149,6 +149,21 @@ export default function LoginScreen() {
               </Pressable>
             </View>
 
+            <Pressable
+              onPress={() => {
+                console.log('[login] tap forgot-password → navigate')
+                router.push('/forgot-password')
+              }}
+              hitSlop={8}
+              className="self-end mb-2 -mt-2"
+              accessibilityRole="link"
+              accessibilityLabel="Mot de passe oublié"
+            >
+              <Text className="text-warm-600 text-sm font-semibold underline">
+                Mot de passe oublié ?
+              </Text>
+            </Pressable>
+
             {error && (
               <View className="bg-danger-bg border-2 border-airmess-red/30 rounded-2xl p-3 mb-4 flex-row items-start">
                 <View className="w-6 h-6 rounded-full bg-airmess-red items-center justify-center mr-2 mt-0.5">

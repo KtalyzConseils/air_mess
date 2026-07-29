@@ -21,6 +21,9 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
+# Expo Router — sortie de typegen temporaire (routes typées), régénérée au build
+.tmp-typegen/
+
 # debug
 npm-debug.*
 yarn-debug.*
