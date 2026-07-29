@@ -30,21 +30,44 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // Personnalise le mail de reset password (sujet, contenu, URL).
+        //
+        // Deux cibles distinctes selon le type d'utilisateur :
+        //   - driver → deep-link `airmess://reset-password?…` qui ouvre directement
+        //     l'app native (expo-router route sur src/app/reset-password.tsx) ;
+        //   - marchand / particulier / admin → URL web classique vers marchant-web.
+        //
         // ATTENTION : quand toMailUsing est défini, Laravel ignore createUrlUsing
         // et passe directement le TOKEN (pas une URL) au callback. On reconstruit donc
-        // l'URL nous-mêmes ici à partir de config('app.frontend_url').
+        // l'URL nous-mêmes ici selon le contexte.
         \Illuminate\Auth\Notifications\ResetPassword::toMailUsing(function ($notifiable, string $token) {
-            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
-            $url = "{$frontendUrl}/reset-password?token={$token}&email=" . urlencode($notifiable->getEmailForPasswordReset());
+            $email = $notifiable->getEmailForPasswordReset();
+            $isDriver = method_exists($notifiable, 'isDriver') && $notifiable->isDriver();
+
+            if ($isDriver) {
+                // Deep-link natif — la plupart des clients mail Android (Gmail, Outlook,
+                // Yahoo Mail) rendent le href cliquable même sur scheme custom.
+                // Fallback si le driver ouvre l'email sur PC : il n'y a PAS de fallback web
+                // pour l'instant, il devra copier le lien à la main. Pattern classique et
+                // acceptable tant qu'on n'a pas configuré les Android App Links.
+                $scheme = config('app.driver_scheme', 'airmess');
+                $url = "{$scheme}://reset-password?token={$token}&email=" . urlencode($email);
+            } else {
+                $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+                $url = "{$frontendUrl}/reset-password?token={$token}&email=" . urlencode($email);
+            }
+
+            $intro = $isDriver
+                ? 'Vous avez demandé une réinitialisation de votre mot de passe livreur.'
+                : 'Vous avez demandé une réinitialisation de votre mot de passe.';
 
             return (new \Illuminate\Notifications\Messages\MailMessage)
-                ->subject('Réinitialisation de votre mot de passe — RMess')
+                ->subject('Réinitialisation de votre mot de passe — Air Mess')
                 ->greeting('Bonjour 👋')
-                ->line('Vous avez demandé une réinitialisation de votre mot de passe.')
+                ->line($intro)
                 ->action('Réinitialiser mon mot de passe', $url)
                 ->line('Ce lien expire dans 60 minutes.')
                 ->line("Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.")
-                ->salutation("— L'équipe RMess");
+                ->salutation("— L'équipe Air Mess");
         });
 
         // Les hooks Course (creating/created/updated) — logging + webhooks —

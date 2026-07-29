@@ -55,6 +55,12 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
 
+    // Scheme deep-link de l'app driver React Native (doit matcher
+    // `expo.scheme` dans apps/driver-app/app.json). Utilisé côté back pour
+    // générer les URLs des emails destinés aux drivers (reset password, etc.)
+    // qui doivent ouvrir directement l'app au lieu de la page web.
+    'driver_scheme' => env('DRIVER_APP_SCHEME', 'airmess'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
