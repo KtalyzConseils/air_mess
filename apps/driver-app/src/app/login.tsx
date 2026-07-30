@@ -5,6 +5,8 @@ import {
   TextInput,
   Pressable,
   Image,
+  Linking,
+  Alert,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -15,6 +17,7 @@ import Constants from 'expo-constants'
 import { AxiosError } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
+import { getSignupUrl } from '../lib/signupUrl'
 
 /**
  * Login driver — continuation directe du splash.
@@ -185,9 +188,23 @@ export default function LoginScreen() {
             </Button>
           </View>
 
-          {/* Lien inscription — écran natif d'inscription livreur */}
+          {/* Lien inscription — ouvre le formulaire web (prod ou dev selon l'API) dans
+              le navigateur. Le natif register.tsx existe encore mais n'est plus utilisé
+              depuis ici : on centralise le funnel d'inscription sur le web pour le moment. */}
           <Pressable
-            onPress={() => router.push('/register')}
+            onPress={async () => {
+              const url = getSignupUrl()
+              try {
+                const supported = await Linking.canOpenURL(url)
+                if (!supported) {
+                  Alert.alert('Erreur', "Aucun navigateur disponible pour ouvrir l'inscription.")
+                  return
+                }
+                await Linking.openURL(url)
+              } catch {
+                Alert.alert('Erreur', "Impossible d'ouvrir le formulaire d'inscription.")
+              }
+            }}
             className="items-center mt-6"
             hitSlop={8}
             accessibilityRole="link"
