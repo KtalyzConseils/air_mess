@@ -1040,11 +1040,10 @@
       "back": "Back"
     },
     "appBanner": {
-      "title": "Sign up directly in the app",
-      "body": "Download the Air Mess Courier app and apply from your phone — it's the fastest way.",
+      "title": "The Air Mess Courier app",
+      "body": "Once your file is approved, download the app to receive your deliveries on your phone in real time.",
       "cta": "Download the APK (Android)",
-      "note": "Android only for now · direct install (APK)",
-      "orWeb": "or continue on the web"
+      "note": "To install after approval · Android only for now"
     },
     "otp": {
       "verifyCta": "Verify this number",

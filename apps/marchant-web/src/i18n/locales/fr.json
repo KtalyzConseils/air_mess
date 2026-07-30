@@ -1040,11 +1040,10 @@
       "back": "Retour"
     },
     "appBanner": {
-      "title": "Inscris-toi directement sur l'application",
-      "body": "Télécharge l'app Air Mess Livreur et fais ta candidature depuis ton téléphone — c'est le moyen le plus rapide.",
+      "title": "L'app Air Mess Livreur",
+      "body": "Une fois ton dossier validé, télécharge l'application pour recevoir tes courses en temps réel sur ton téléphone.",
       "cta": "Télécharger l'APK (Android)",
-      "note": "Android uniquement pour le moment · installation directe (APK)",
-      "orWeb": "ou continue sur le web"
+      "note": "À installer après validation · Android uniquement pour le moment"
     },
     "otp": {
       "verifyCta": "Vérifier ce numéro",

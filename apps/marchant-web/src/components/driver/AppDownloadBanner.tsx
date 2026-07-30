@@ -3,9 +3,9 @@ import { DRIVER_APK_URL } from '../../lib/constants'
 import { SmartphoneIcon, ArrowRightIcon } from '../ui/icons'
 
 /**
- * Bannière "inscris-toi via l'app" affichée AVANT le formulaire web :
- * le canal privilégié est l'app livreur (Android), le formulaire web
- * reste disponible en dessous.
+ * Bannière "app livreur" affichée en haut du formulaire web :
+ * l'inscription se fait ici sur le web, et l'app est ce que le livreur
+ * installera APRÈS validation pour recevoir ses courses.
  */
 export default function AppDownloadBanner() {
   const { t } = useTranslation()
@@ -40,15 +40,6 @@ export default function AppDownloadBanner() {
         <p className="relative text-caption text-warm-400 mt-3">
           {t('driverRegister.appBanner.note')}
         </p>
-      </div>
-
-      {/* Divider "ou continue sur le web" */}
-      <div className="flex items-center gap-3 mt-6" role="separator">
-        <span className="h-px flex-1 bg-warm-300" aria-hidden />
-        <span className="text-caption text-warm-500 uppercase tracking-wide">
-          {t('driverRegister.appBanner.orWeb')}
-        </span>
-        <span className="h-px flex-1 bg-warm-300" aria-hidden />
       </div>
     </div>
   )
