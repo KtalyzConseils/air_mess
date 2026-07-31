@@ -8,6 +8,26 @@ export interface User {
   type: UserType
   is_active: boolean
   driver?: Driver
+  // Multi-rôles : un même User peut cumuler des profils. Rempli par /auth/me.
+  marchant?: Marchant
+  individual?: Individual
+}
+
+export interface Marchant {
+  id: number
+  user_id: number
+  raison_sociale: string
+  ifu_rccm: string | null
+  secteur_activite: 'supermarche' | 'restaurant' | 'boutique' | 'pharmacie' | 'ecommerce' | 'autre'
+  subscription_status: 'trial' | 'active' | 'suspended' | 'churned' | 'expired'
+  validated_at: string | null
+}
+
+export interface Individual {
+  id: number
+  user_id: number
+  first_name: string
+  last_name: string
 }
 
 export interface Driver {

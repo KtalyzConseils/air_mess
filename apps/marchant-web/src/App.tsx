@@ -19,6 +19,7 @@ import MarchantDetailPage from './pages/admin/MarchantDetailPage'
 import RegisterPage from './pages/RegisterPage'
 import DriverRegisterPage from './pages/DriverRegisterPage'
 import DriverRegisterSuccessPage from './pages/DriverRegisterSuccessPage'
+import MarchantFromDriverPage from './pages/MarchantFromDriverPage'
 import AdminDriversPage from './pages/admin/AdminDriversPage'
 import AdminDriverDetailPage from './pages/admin/AdminDriverDetailPage'
 import AdminIncidentsPage from './pages/admin/AdminIncidentsPage'
@@ -58,6 +59,10 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/register/driver" element={<DriverRegisterPage />} />
           <Route path="/register/driver/success" element={<DriverRegisterSuccessPage />} />
+          {/* Ajout d'un profil marchand à un compte existant. Ouverte via deep-link
+              depuis la driver-app (token Sanctum passé en fragment URL). La page
+              se protège elle-même — pas de ProtectedRoute car le user est un driver. */}
+          <Route path="/register/marchant/from-driver" element={<MarchantFromDriverPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/legal/terms" element={<TermsPage />} />

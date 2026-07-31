@@ -18,11 +18,26 @@
  * safe (jamais on ne renvoie un dev vers le formulaire prod par erreur).
  */
 
-const PROD_SIGNUP_URL = 'https://app.airmess-logistics.com/register/driver'
-const DEV_SIGNUP_URL = 'https://dev.app.airmess-logistics.com/register/driver'
+const PROD_WEB_BASE = 'https://app.airmess-logistics.com'
+const DEV_WEB_BASE = 'https://dev.app.airmess-logistics.com'
 
-export function getSignupUrl(): string {
+function getWebBase(): string {
   const apiUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? ''
   const isProdApi = /:\/\/api\.airmess-logistics\.com/i.test(apiUrl)
-  return isProdApi ? PROD_SIGNUP_URL : DEV_SIGNUP_URL
+  return isProdApi ? PROD_WEB_BASE : DEV_WEB_BASE
+}
+
+export function getSignupUrl(): string {
+  return `${getWebBase()}/register/driver`
+}
+
+/**
+ * URL de la page web d'ajout d'un profil marchand à un compte driver existant.
+ * Le token Sanctum du driver est passé en FRAGMENT (`#t=…`) : ni envoyé au
+ * serveur, ni loggué, ni transmis via Referer — seule la page JS le lit,
+ * elle l'installe dans son store puis efface le hash de la barre d'adresse.
+ */
+export function getAddMarchantRoleUrl(token: string): string {
+  const encoded = encodeURIComponent(token)
+  return `${getWebBase()}/register/marchant/from-driver#t=${encoded}`
 }

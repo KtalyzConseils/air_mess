@@ -505,8 +505,12 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
+        // Charge TOUS les profils métier existants (multi-rôles) — un même User
+        // peut avoir Driver + Marchant simultanément. Un profil non créé reste
+        // null côté client, sans effet sur les usages existants (chaque relation
+        // est already optionnelle dans les types front).
         return response()->json([
-            'user' => $user->load($user->type),
+            'user' => $user->load(['driver', 'marchant', 'individual', 'admin']),
             // Version courante des CGU + statut d'acceptation de l'utilisateur.
             // Le front s'en sert pour décider s'il affiche la modale bloquante.
             'terms' => [

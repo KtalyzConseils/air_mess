@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text, ScrollView, Pressable, Alert, Platform, ActivityIndicator } from 'react-native'
+import { View, Text, ScrollView, Pressable, Alert, Platform, ActivityIndicator, Linking } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
@@ -10,6 +10,7 @@ import { fetchDriverStats } from '../../api/driver'
 import { fetchWallet } from '../../api/wallet'
 import { openFullScreenIntentSettings } from '../../lib/fullScreenPermission'
 import SupportContactSheet from '../../components/SupportContactSheet'
+import { getAddMarchantRoleUrl } from '../../lib/signupUrl'
 
 // Android 14+ : la permission "notifications plein écran" doit être accordée par l'utilisateur.
 const IS_ANDROID_14_PLUS =
@@ -44,12 +45,37 @@ const VEHICLE_META: Record<
  * plaque + Compte + Préférences + déconnexion.
  */
 export default function ProfileScreen() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, token } = useAuthStore()
   const router = useRouter()
   const driver = user?.driver
   const initials = `${driver?.first_name?.[0] ?? ''}${driver?.last_name?.[0] ?? ''}`.toUpperCase()
   const [supportOpen, setSupportOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+
+  // Multi-rôles : proposer l'ouverture d'un commerce uniquement quand le
+  // livreur est ACTIF (validé + activé) ET qu'il n'a pas déjà un profil marchant.
+  // Le back appliquera la même règle (409 si déjà marchand) mais on évite d'exposer
+  // un CTA qui échouerait.
+  const canAddMarchant =
+    driver?.activation_status === 'active' && !user?.marchant
+
+  async function openAddMarchantRole() {
+    if (!token) {
+      Alert.alert('Session expirée', 'Reconnecte-toi pour continuer.')
+      return
+    }
+    const url = getAddMarchantRoleUrl(token)
+    try {
+      const supported = await Linking.canOpenURL(url)
+      if (!supported) {
+        Alert.alert('Erreur', "Aucun navigateur disponible pour ouvrir le formulaire.")
+        return
+      }
+      await Linking.openURL(url)
+    } catch {
+      Alert.alert('Erreur', "Impossible d'ouvrir le formulaire.")
+    }
+  }
 
   const activationKey = (driver?.activation_status ?? 'pending') as ActivationStatus
   const activation = ACTIVATION_META[activationKey] ?? ACTIVATION_META.pending
@@ -191,6 +217,23 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
+
+        {/* Autres profils — multi-rôles. La section entière disparaît si
+            aucun ajout n'est proposable, pour ne pas laisser un cadre vide. */}
+        {canAddMarchant && (
+          <View className="mx-5 mt-5">
+            <SectionLabel>Développe ton activité</SectionLabel>
+            <View className="bg-off-white border border-warm-200 rounded-2xl overflow-hidden">
+              <ProfileRow
+                icon="storefront-outline"
+                title="Ouvrir aussi un commerce"
+                subtitle="Vends tes produits sur Air Mess"
+                onPress={() => { void openAddMarchantRole() }}
+                isLast
+              />
+            </View>
+          </View>
+        )}
 
         {/* Préférences */}
         <View className="mx-5 mt-5">

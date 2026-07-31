@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\AdminApiApplicationController;
 use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\UserWalletController;
 use App\Http\Controllers\Api\PlacesController;
+use App\Http\Controllers\Api\ProfileRoleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -94,6 +95,14 @@ Route::middleware('auth:sanctum')->group(function () {
         // Requis pour les utilisateurs pré-existant à la mise en place (accepted_terms_at IS NULL)
         // ET pour tout bump de TERMS_VERSION.
         Route::post('/accept-terms', [AuthController::class, 'acceptTerms']);
+    });
+
+    // Ajout d'un rôle secondaire (multi-profil) à un compte existant.
+    // Un driver peut ouvrir aussi un commerce, un individual peut devenir driver, etc.
+    // Chaque rôle ajouté suit sa propre validation admin.
+    Route::prefix('profile/add-role')->group(function () {
+        Route::post('/marchant', [ProfileRoleController::class, 'addMarchantRole'])
+            ->middleware('throttle:auth-register');
     });
 
     // Courses
