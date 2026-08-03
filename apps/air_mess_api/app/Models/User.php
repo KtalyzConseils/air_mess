@@ -31,8 +31,12 @@ class User extends Authenticatable
      * Version courante des CGU + politique de confidentialité.
      * À bumper d'un cran quand tu modifies substantiellement l'un des 2 documents :
      * tous les utilisateurs revoient la modale d'acceptation au prochain accès.
+     *
+     * v2 (2026-08-01) : passage du contenu placeholder minimal à une V1 rédigée
+     * couvrant l'ensemble du produit (drivers, marchands, wallet, caution,
+     * incidents, RGPD-BJ). Projet à valider par avocat avant version définitive.
      */
-    public const TERMS_VERSION = 1;
+    public const TERMS_VERSION = 2;
 
     protected $fillable = [
         'name',

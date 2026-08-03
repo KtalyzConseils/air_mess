@@ -94,7 +94,7 @@
   },
   "legal": {
     "eyebrow": "Legal documents",
-    "placeholderNotice": "This text is a template to be validated by a lawyer before production. The structure below is provided as an example.",
+    "placeholderNotice": "This document has been prepared following Beninese law standards. It must be reviewed and approved by a lawyer before its final version. Items shown in [brackets] remain to be filled in by the publisher.",
     "readTermsInstead": "Read the terms of service instead",
     "readPrivacyInstead": "Read the privacy policy instead",
     "footerLinkTerms": "Terms",
@@ -103,13 +103,13 @@
       "title": "Terms of",
       "titleHighlight": "service",
       "subtitle": "The rules that frame your use of Air Mess.",
-      "lastUpdated": "Last updated: draft version."
+      "lastUpdated": "Last updated: August 1, 2026 — version 2 (draft)."
     },
     "privacy": {
       "title": "Privacy",
       "titleHighlight": "policy",
       "subtitle": "What we collect, why, and how we protect your data.",
-      "lastUpdated": "Last updated: draft version."
+      "lastUpdated": "Last updated: August 1, 2026 — version 2 (draft)."
     },
     "checkbox": {
       "label": "I have read and I accept the <terms>Terms of service</terms> and the <privacy>Privacy policy</privacy> of Air Mess.",
