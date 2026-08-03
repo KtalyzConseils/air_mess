@@ -16,7 +16,7 @@ const PROMPTED_KEY = 'airmess_fsi_prompted'
 const ANDROID_14 = 34
 
 function packageName(): string {
-  return Constants.expoConfig?.android?.package ?? 'com.anonymous.driverapp'
+  return Constants.expoConfig?.android?.package ?? 'com.anonymous.driver'
 }
 
 function isAndroid14Plus(): boolean {

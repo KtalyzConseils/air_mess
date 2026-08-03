@@ -8,7 +8,7 @@
 //      - En build EAS : secret projet GOOGLE_MAPS_ANDROID_KEY (type string).
 //      - En local : lue depuis un .env non versionné (via expo start / EAS local build).
 //      La clé DOIT être restreinte côté Google Cloud Console :
-//         · Application restrictions : Android app + package `com.anonymous.driverapp` + SHA-1
+//         · Application restrictions : Android app + package `com.anonymous.driver` + SHA-1
 //         · API restrictions : "Maps SDK for Android" uniquement
 //      → même extraite de l'APK par un tiers, elle n'est utilisable dans aucune autre app.
 //

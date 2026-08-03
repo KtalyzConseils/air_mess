@@ -10,7 +10,7 @@
       "client_info": {
         "mobilesdk_app_id": "REPLACE_ME_MOBILESDK_APP_ID",
         "android_client_info": {
-          "package_name": "com.anonymous.driverapp"
+          "package_name": "com.anonymous.driver"
         }
       },
       "oauth_client": [],
