@@ -1,3 +1,4 @@
+
 workflows:
   ios-test:
     name: AIRMESS Driver iOS Test
@@ -20,6 +21,7 @@ workflows:
           ls -la
           test -f package.json
           grep '"expo"' package.json
+          test -f GoogleService-Info.plist
 
       - name: Install dependencies
         script: |
@@ -33,7 +35,16 @@ workflows:
 
       - name: Generate iOS project
         script: |
+          export CI=1
+          export RNFirebaseAsStaticFramework=true
           npx expo prebuild --platform ios --clean
+
+      - name: Verify generated iOS project
+        script: |
+          ls -la ios
+          test -d ios/AirMessDriver.xcworkspace
+          xcodebuild -list \
+            -workspace ios/AirMessDriver.xcworkspace
 
       - name: Install CocoaPods
         script: |
@@ -42,18 +53,22 @@ workflows:
 
       - name: Build iOS simulator app
         script: |
-          SCHEME=$(xcode-project detect-schemes ios/*.xcworkspace | head -1)
-          echo "Detected scheme: $SCHEME"
+          WORKSPACE="ios/AirMessDriver.xcworkspace"
+          SCHEME="AirMessDriver"
+
+          echo "Workspace: $WORKSPACE"
+          echo "Scheme: $SCHEME"
 
           xcodebuild \
-            -workspace ios/*.xcworkspace \
+            -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios \
             CODE_SIGNING_ALLOWED=NO \
             build
 
     artifacts:
-      - "**/Build/Products/Debug-iphonesimulator/*.app"
+      - build/ios/Build/Products/Debug-iphonesimulator/*.app
       - /tmp/xcodebuild_logs/*.log
