@@ -1,14 +1,16 @@
 {
   "expo": {
-    "name": "Driver",
-    "slug": "driver-app",
+    "name": "AirMess Driver",
+    "slug": "airmess-driver",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "airmess",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.airmess.driver",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
