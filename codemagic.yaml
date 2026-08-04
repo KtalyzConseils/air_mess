@@ -1,45 +1,47 @@
 workflows:
   ios-test:
-    name: AIRMESS iOS Test
-
+    name: AIRMESS Driver iOS Test
     instance_type: mac_mini_m2
     max_build_duration: 60
 
+    working_directory: apps/driver-app
+
     environment:
       node: 22
-      xcode: 16.4
+      xcode: latest
       cocoapods: default
+      vars:
+        CI: "1"
 
     scripts:
-      - name: Locate Expo project
+      - name: Verify project directory
         script: |
-          PACKAGE_DIR=$(dirname "$(find . -name package.json -not -path '*/node_modules/*' | head -1)")
-          echo "PACKAGE_DIR=$PACKAGE_DIR"
-          echo "PACKAGE_DIR=$PACKAGE_DIR" >> "$CM_ENV"
+          pwd
+          ls -la
+          test -f package.json
+          grep '"expo"' package.json
 
       - name: Install dependencies
         script: |
-          cd "$PACKAGE_DIR"
           npm install
+          npm ls expo
+          test -d node_modules/expo
 
       - name: Check Expo configuration
         script: |
-          cd "$PACKAGE_DIR"
           npx expo config --type public
 
       - name: Generate iOS project
         script: |
-          cd "$PACKAGE_DIR"
-          npx expo prebuild --platform ios --clean --non-interactive
+          npx expo prebuild --platform ios --clean
 
       - name: Install CocoaPods
         script: |
-          cd "$PACKAGE_DIR/ios"
+          cd ios
           pod install --repo-update
 
-      - name: Build iOS simulator application
+      - name: Build iOS simulator app
         script: |
-          cd "$PACKAGE_DIR"
           SCHEME=$(xcode-project detect-schemes ios/*.xcworkspace | head -1)
           echo "Detected scheme: $SCHEME"
 
