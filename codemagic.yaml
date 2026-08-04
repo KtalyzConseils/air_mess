@@ -1,74 +1,94 @@
-
 workflows:
   ios-test:
-    name: AIRMESS Driver iOS Test
+    name: AIRMESS Driver iPhone Test
     instance_type: mac_mini_m2
-    max_build_duration: 60
+    max_build_duration: 120
 
     working_directory: apps/driver-app
+
+    integrations:
+      app_store_connect: AIRMESS_APP_STORE
 
     environment:
       node: 22
       xcode: latest
       cocoapods: default
+
+      ios_signing:
+        distribution_type: development
+        bundle_identifier: com.airmess.driver
+
       vars:
         CI: "1"
 
     scripts:
       - name: Verify project directory
         script: |
+          set -e
+
           pwd
           ls -la
+
           test -f package.json
-          grep '"expo"' package.json
+          test -f app.json
           test -f GoogleService-Info.plist
+          grep '"expo"' package.json
 
       - name: Install dependencies
         script: |
+          set -e
+
           npm install
           npm ls expo
           test -d node_modules/expo
 
       - name: Check Expo configuration
         script: |
+          set -e
+
           npx expo config --type public
 
       - name: Generate iOS project
         script: |
+          set -e
+
           export CI=1
           export RNFirebaseAsStaticFramework=true
-          npx expo prebuild --platform ios --clean
 
-      - name: Verify generated iOS project
-        script: |
-          ls -la ios
-          test -d ios/AirMessDriver.xcworkspace
-          xcodebuild -list \
-            -workspace ios/AirMessDriver.xcworkspace
+          npx expo prebuild --platform ios --clean
 
       - name: Install CocoaPods
         script: |
+          set -e
+
           cd ios
           pod install --repo-update
 
-      - name: Build iOS simulator app
+      - name: Verify generated iOS project
         script: |
-          WORKSPACE="ios/AirMessDriver.xcworkspace"
-          SCHEME="AirMessDriver"
+          set -e
 
-          echo "Workspace: $WORKSPACE"
-          echo "Scheme: $SCHEME"
+          ls -la ios
+          test -d ios/AirMessDriver.xcworkspace
 
-          xcodebuild \
-            -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build/ios \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+          xcodebuild -list \
+            -workspace ios/AirMessDriver.xcworkspace
+
+      - name: Set up iOS code signing
+        script: |
+          set -e
+
+          xcode-project use-profiles
+
+      - name: Build signed development IPA
+        script: |
+          set -e
+
+          xcode-project build-ipa \
+            --workspace ios/AirMessDriver.xcworkspace \
+            --scheme AirMessDriver
 
     artifacts:
-      - build/ios/Build/Products/Debug-iphonesimulator/*.app
+      - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+      - ios/**/*.xcarchive
