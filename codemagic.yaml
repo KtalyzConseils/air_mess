@@ -1,23 +1,15 @@
 workflows:
   ios-test:
-    name: AIRMESS Driver iPhone Test
+    name: AIRMESS Driver - Unsigned iPhone IPA
     instance_type: mac_mini_m2
     max_build_duration: 120
 
     working_directory: apps/driver-app
 
-    integrations:
-      app_store_connect: AIRMESS_APP_STORE
-
     environment:
       node: 22
       xcode: latest
       cocoapods: default
-
-      ios_signing:
-        distribution_type: development
-        bundle_identifier: com.airmess.driver
-
       vars:
         CI: "1"
 
@@ -25,19 +17,15 @@ workflows:
       - name: Verify project directory
         script: |
           set -e
-
           pwd
           ls -la
-
           test -f package.json
-          test -f app.json
           test -f GoogleService-Info.plist
           grep '"expo"' package.json
 
       - name: Install dependencies
         script: |
           set -e
-
           npm install
           npm ls expo
           test -d node_modules/expo
@@ -45,50 +33,73 @@ workflows:
       - name: Check Expo configuration
         script: |
           set -e
-
           npx expo config --type public
 
       - name: Generate iOS project
         script: |
           set -e
-
           export CI=1
           export RNFirebaseAsStaticFramework=true
-
           npx expo prebuild --platform ios --clean
 
       - name: Install CocoaPods
         script: |
           set -e
-
           cd ios
           pod install --repo-update
 
-      - name: Verify generated iOS project
+      - name: Verify Xcode workspace
         script: |
           set -e
-
-          ls -la ios
           test -d ios/AirMessDriver.xcworkspace
-
           xcodebuild -list \
             -workspace ios/AirMessDriver.xcworkspace
 
-      - name: Set up iOS code signing
+      - name: Build unsigned app for physical iPhone
         script: |
           set -e
 
-          xcode-project use-profiles
+          xcodebuild \
+            -workspace ios/AirMessDriver.xcworkspace \
+            -scheme AirMessDriver \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios-device \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
 
-      - name: Build signed development IPA
+      - name: Package unsigned IPA
         script: |
           set -e
 
-          xcode-project build-ipa \
-            --workspace ios/AirMessDriver.xcworkspace \
-            --scheme AirMessDriver
+          APP_PATH=$(find build/ios-device/Build/Products/Release-iphoneos \
+            -maxdepth 1 \
+            -name "*.app" \
+            -type d \
+            | head -1)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "No iPhone .app file found"
+            exit 1
+          fi
+
+          echo "Application found: $APP_PATH"
+
+          rm -rf build/unsigned-ipa
+          mkdir -p build/unsigned-ipa/Payload
+
+          cp -R "$APP_PATH" build/unsigned-ipa/Payload/
+
+          cd build/unsigned-ipa
+          zip -qry AirMessDriver-unsigned.ipa Payload
+
+          echo "IPA created:"
+          ls -lh AirMessDriver-unsigned.ipa
 
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/unsigned-ipa/AirMessDriver-unsigned.ipa
+      - build/ios-device/Build/Products/Release-iphoneos/*.app
       - /tmp/xcodebuild_logs/*.log
-      - ios/**/*.xcarchive
