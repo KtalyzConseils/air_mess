@@ -12,6 +12,7 @@ workflows:
       cocoapods: default
       vars:
         CI: "1"
+        EXPO_PUBLIC_API_BASE_URL: "https://api.airmess-logistics.com/api"
 
     scripts:
       - name: Verify project directory
@@ -22,6 +23,40 @@ workflows:
           test -f package.json
           test -f GoogleService-Info.plist
           grep '"expo"' package.json
+
+      - name: Verify API configuration
+        script: |
+          set -e
+
+          echo "API URL: $EXPO_PUBLIC_API_BASE_URL"
+
+          if [ -z "$EXPO_PUBLIC_API_BASE_URL" ]; then
+            echo "EXPO_PUBLIC_API_BASE_URL is missing"
+            exit 1
+          fi
+
+          node -e "
+            const url = process.env.EXPO_PUBLIC_API_BASE_URL;
+
+            if (!url || !url.startsWith('https://')) {
+              throw new Error('Invalid API URL: ' + url);
+            }
+
+            console.log('Valid API URL:', url);
+          "
+
+      - name: Test API accessibility
+        script: |
+          set -e
+
+          echo "Testing API connectivity..."
+          curl \
+            --fail-with-body \
+            --location \
+            --connect-timeout 15 \
+            --max-time 30 \
+            "$EXPO_PUBLIC_API_BASE_URL" \
+            || echo "The API root returned an error response, but the host may still be reachable."
 
       - name: Install dependencies
         script: |
@@ -59,6 +94,8 @@ workflows:
         script: |
           set -e
 
+          echo "Building with API URL: $EXPO_PUBLIC_API_BASE_URL"
+
           xcodebuild \
             -workspace ios/AirMessDriver.xcworkspace \
             -scheme AirMessDriver \
@@ -70,6 +107,21 @@ workflows:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
+
+      - name: Verify embedded API URL
+        script: |
+          set -e
+
+          BUNDLE_PATH="build/ios-device/Build/Products/Release-iphoneos/main.jsbundle"
+
+          test -f "$BUNDLE_PATH"
+
+          if grep -q "dev.api.airmess-logistics.com" "$BUNDLE_PATH"; then
+            echo "API URL found in the JavaScript bundle."
+          else
+            echo "API URL was not found in the JavaScript bundle."
+            exit 1
+          fi
 
       - name: Package unsigned IPA
         script: |
