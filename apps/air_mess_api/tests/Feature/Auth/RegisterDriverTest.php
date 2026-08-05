@@ -4,7 +4,6 @@ namespace Tests\Feature\Auth;
 
 use App\Models\Driver;
 use App\Models\User;
-use App\Services\FirebaseTokenVerifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -27,7 +26,6 @@ class RegisterDriverTest extends TestCase
             'phone'      => '+229 01 90 12 34 56',
             'password'              => 'secret123',
             'password_confirmation' => 'secret123',
-            'firebase_id_token'     => 'fake-firebase-token',
             'vehicle_type'  => 'moto',
             'vehicle_plate' => 'AB-1234',
             'vehicle_brand' => 'Bajaj',
@@ -41,49 +39,9 @@ class RegisterDriverTest extends TestCase
         ], $overrides);
     }
 
-    private function mockVerifier(?string $returnedPhone): void
-    {
-        $this->mock(FirebaseTokenVerifier::class)
-            ->shouldReceive('verifyPhoneToken')
-            ->andReturn($returnedPhone);
-    }
-
-    public function test_register_fails_without_firebase_token(): void
-    {
-        Storage::fake('local');
-
-        $payload = $this->payload();
-        unset($payload['firebase_id_token']);
-
-        $this->postJson('/api/auth/register/driver', $payload)
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['firebase_id_token']);
-    }
-
-    public function test_register_fails_when_token_is_invalid(): void
-    {
-        Storage::fake('local');
-        $this->mockVerifier(null);
-
-        $this->postJson('/api/auth/register/driver', $this->payload())
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['phone']);
-    }
-
-    public function test_register_fails_when_token_belongs_to_another_phone(): void
-    {
-        Storage::fake('local');
-        $this->mockVerifier('+2290199999999');
-
-        $this->postJson('/api/auth/register/driver', $this->payload())
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['phone']);
-    }
-
     public function test_register_requires_second_emergency_contact(): void
     {
         Storage::fake('local');
-        $this->mockVerifier('+2290190123456');
 
         $payload = $this->payload();
         unset($payload['emergency_contact2_name'], $payload['emergency_contact2_phone']);
@@ -97,8 +55,6 @@ class RegisterDriverTest extends TestCase
     {
         Storage::fake('local');
         Http::fake(); // aucun appel réseau réel (push Expo, etc.)
-        // Le claim Firebase correspond au numéro soumis une fois normalisé.
-        $this->mockVerifier('+2290190123456');
 
         $response = $this->postJson('/api/auth/register/driver', $this->payload());
 
@@ -121,7 +77,6 @@ class RegisterDriverTest extends TestCase
     {
         Storage::fake('local');
         Http::fake();
-        $this->mockVerifier('+2290190123456');
 
         // Les APK mobiles déjà distribués envoient encore vehicle_color :
         // l'API doit l'accepter comme alias de vehicle_brand.
@@ -136,7 +91,6 @@ class RegisterDriverTest extends TestCase
     public function test_cnib_requires_back_side(): void
     {
         Storage::fake('local');
-        $this->mockVerifier('+2290190123456');
 
         // CNIB sans verso → rejet (recto + verso obligatoires pour ce type).
         $this->postJson('/api/auth/register/driver', $this->payload(['cni_type' => 'cnib']))
@@ -148,7 +102,6 @@ class RegisterDriverTest extends TestCase
     {
         Storage::fake('local');
         Http::fake();
-        $this->mockVerifier('+2290190123456');
 
         $this->postJson('/api/auth/register/driver', $this->payload([
             'cni_type' => 'cnib',
@@ -164,7 +117,6 @@ class RegisterDriverTest extends TestCase
     public function test_register_rejects_unknown_cni_type(): void
     {
         Storage::fake('local');
-        $this->mockVerifier('+2290190123456');
 
         $this->postJson('/api/auth/register/driver', $this->payload(['cni_type' => 'permis']))
             ->assertStatus(422)
@@ -175,7 +127,6 @@ class RegisterDriverTest extends TestCase
     {
         Storage::fake('local');
         Http::fake();
-        $this->mockVerifier('+2290190123456');
 
         $token = $this->postJson('/api/auth/register/driver', $this->payload())
             ->assertStatus(201)
@@ -196,7 +147,6 @@ class RegisterDriverTest extends TestCase
     {
         Storage::fake('local');
         Http::fake();
-        $this->mockVerifier('+2290190123456');
 
         $token = $this->postJson('/api/auth/register/driver', $this->payload())->json('token');
 

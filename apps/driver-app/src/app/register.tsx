@@ -42,14 +42,14 @@ import {
   type VehicleType,
   type CniType,
 } from '../api/register'
-import { useFirebasePhoneAuth } from '../hooks/useFirebasePhoneAuth'
+} from '../api/register'
 
 const TOTAL_STEPS = 6
 
 const STEP_META: Record<number, { title: string; subtitle: string }> = {
   1: { title: 'Votre identité', subtitle: 'On commence par se connaître.' },
   2: { title: 'Votre compte', subtitle: 'Créez vos identifiants Air Mess.' },
-  3: { title: 'Votre numéro', subtitle: 'On vérifie votre téléphone par SMS.' },
+  3: { title: 'Votre numéro', subtitle: 'On a besoin de votre numéro.' },
   4: { title: 'Votre véhicule', subtitle: 'Sur quoi allez-vous livrer ?' },
   5: { title: 'Vos documents', subtitle: 'Prenez en photo vos pièces (recto/verso).' },
   6: { title: 'Presque terminé', subtitle: 'Contacts d\'urgence et acceptation des CGU.' },
@@ -92,21 +92,9 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
-  // Téléphone + OTP. Prérempli avec l'indicatif Bénin, que le livreur peut remplacer
+  // Téléphone. Prérempli avec l'indicatif Bénin, que le livreur peut remplacer
   // par un autre indicatif si son numéro est étranger.
   const [phone, setPhone] = useState(`${BENIN_DIAL_CODE} `)
-  const [otpCode, setOtpCode] = useState('')
-  // Vérification par Firebase Phone Auth (native RN). Le hook gère l'envoi du SMS,
-  // la confirmation, la récupération de l'idToken et le mapping des erreurs.
-  const firebasePhone = useFirebasePhoneAuth()
-  // États dérivés pour garder l'API de <StepPhone> inchangée.
-  const otpSent =
-    firebasePhone.status === 'code_sent' ||
-    firebasePhone.status === 'verifying' ||
-    firebasePhone.status === 'verified'
-  const otpSending = firebasePhone.status === 'sending'
-  const otpVerifying = firebasePhone.status === 'verifying'
-  const otpError = firebasePhone.error
   // Véhicule
   const [vehicleType, setVehicleType] = useState<VehicleType | ''>('')
   const [vehiclePlate, setVehiclePlate] = useState('')
@@ -135,7 +123,6 @@ export default function RegisterScreen() {
 
   const isCar = vehicleType === 'voiture'
   const isCnib = cniType === 'cnib'
-  const phoneVerified = firebasePhone.status === 'verified' && firebasePhone.idToken !== null
 
   /* ============================================================
      BROUILLON — restauration au mount + sauvegarde continue
@@ -244,38 +231,8 @@ export default function RegisterScreen() {
     return () => sub.remove()
   }, [step, done])
 
-  /* ============================================================
-     OTP
-     ============================================================ */
-
   function onPhoneChange(v: string) {
     setPhone(v)
-    // Si le numéro change après un envoi/vérif, on repart de zéro (le token émis
-    // pour l'ancien numéro ne serait plus valide vis-à-vis du claim phone_number).
-    if (firebasePhone.status !== 'idle') {
-      firebasePhone.reset()
-      setOtpCode('')
-    }
-  }
-
-  async function handleSendOtp() {
-    const normalized = normalizePhone(phone)
-    if (normalized.length < 8) {
-      // Firebase throw 'auth/invalid-phone-number' de toute façon, mais on court-circuite
-      // pour épargner un aller-retour et donner un message plus explicite.
-      Alert.alert('Numéro invalide', 'Entrez un numéro complet avec indicatif.')
-      return
-    }
-    const beninError = validateBeninPhone(normalized)
-    if (beninError) {
-      Alert.alert('Numéro invalide', beninError)
-      return
-    }
-    await firebasePhone.sendCode(normalized)
-  }
-
-  async function handleVerifyOtp() {
-    await firebasePhone.confirmCode(otpCode.trim())
   }
 
   /* ============================================================
@@ -295,7 +252,7 @@ export default function RegisterScreen() {
         if (password !== passwordConfirm) return 'Les mots de passe ne correspondent pas.'
         return null
       case 3:
-        if (!phoneVerified) return 'Vérifiez votre numéro par SMS.'
+        if (normalizePhone(phone).length < 8) return 'Numéro invalide.'
         return null
       case 4:
         if (!vehicleType) return 'Choisissez un type de véhicule.'
@@ -355,7 +312,6 @@ export default function RegisterScreen() {
         phone: normalizePhone(phone),
         password,
         password_confirmation: passwordConfirm,
-        firebase_id_token: firebasePhone.idToken!,
         vehicle_type: vehicleType as VehicleType,
         vehicle_plate: vehiclePlate.trim(),
         vehicle_brand: vehicleBrand.trim() || undefined,
@@ -467,15 +423,6 @@ export default function RegisterScreen() {
             <StepPhone
               phone={phone}
               onPhoneChange={onPhoneChange}
-              otpSent={otpSent}
-              otpCode={otpCode}
-              setOtpCode={setOtpCode}
-              phoneVerified={phoneVerified}
-              otpSending={otpSending}
-              otpVerifying={otpVerifying}
-              otpError={otpError}
-              handleSendOtp={handleSendOtp}
-              handleVerifyOtp={handleVerifyOtp}
             />
           )}
 
@@ -725,103 +672,21 @@ function StepAccount({
 function StepPhone({
   phone,
   onPhoneChange,
-  otpSent,
-  otpCode,
-  setOtpCode,
-  phoneVerified,
-  otpSending,
-  otpVerifying,
-  otpError,
-  handleSendOtp,
-  handleVerifyOtp,
 }: {
   phone: string
   onPhoneChange: (v: string) => void
-  otpSent: boolean
-  otpCode: string
-  setOtpCode: (v: string) => void
-  phoneVerified: boolean
-  otpSending: boolean
-  otpVerifying: boolean
-  otpError: string | null
-  handleSendOtp: () => void
-  handleVerifyOtp: () => void
 }) {
   return (
     <View>
       <FieldLabel>Téléphone</FieldLabel>
-      <View className="flex-row items-center gap-2">
-        <View className="flex-1">
-          <TextInput
-            value={phone}
-            onChangeText={onPhoneChange}
-            editable={!phoneVerified}
-            placeholder="+229 01 90 12 34 56"
-            placeholderTextColor="#B8AF9F"
-            keyboardType="phone-pad"
-            className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white"
-          />
-        </View>
-        {phoneVerified ? (
-          <View className="h-14 px-3 rounded-2xl bg-success/15 items-center justify-center flex-row">
-            <Ionicons name="checkmark-circle" size={20} color="#1E9E5A" />
-            <Text className="text-success font-bold ml-1">Vérifié</Text>
-          </View>
-        ) : (
-          <Pressable
-            onPress={handleSendOtp}
-            disabled={otpSending}
-            className="h-14 px-4 rounded-2xl bg-airmess-dark items-center justify-center"
-          >
-            {otpSending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text className="text-white font-bold">{otpSent ? 'Renvoyer' : 'Envoyer'}</Text>
-            )}
-          </Pressable>
-        )}
-      </View>
-
-      {otpSent && !phoneVerified && (
-        <View className="mt-3">
-          <FieldLabel>Code reçu par SMS</FieldLabel>
-          <View className="flex-row items-center gap-2">
-            <View className="flex-1">
-              <TextInput
-                value={otpCode}
-                onChangeText={setOtpCode}
-                placeholder="123456"
-                placeholderTextColor="#B8AF9F"
-                keyboardType="number-pad"
-                maxLength={6}
-                className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white tracking-widest"
-              />
-            </View>
-            <Pressable
-              onPress={handleVerifyOtp}
-              disabled={otpVerifying || otpCode.trim().length < 6}
-              className="h-14 px-4 rounded-2xl bg-airmess-yellow items-center justify-center"
-              style={otpCode.trim().length < 6 ? { opacity: 0.4 } : undefined}
-            >
-              {otpVerifying ? (
-                <ActivityIndicator color="#1A1614" />
-              ) : (
-                <Text className="text-ink font-extrabold">Vérifier</Text>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      )}
-      {otpError && <Text className="text-airmess-red text-sm mt-2 font-semibold">{otpError}</Text>}
-
-      {!phoneVerified && (
-        <View className="flex-row items-start mt-4 bg-warm-100 rounded-2xl p-3">
-          <Ionicons name="information-circle-outline" size={18} color="#8A7E68" />
-          <Text className="text-warm-600 text-xs flex-1 ml-2">
-            Vous devez vérifier votre numéro pour continuer. Vous recevrez un SMS avec un code à 6 chiffres.
-          </Text>
-        </View>
-      )}
+      <TextInput
+        value={phone}
+        onChangeText={onPhoneChange}
+        placeholder="+229 01 90 12 34 56"
+        placeholderTextColor="#B8AF9F"
+        keyboardType="phone-pad"
+        className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white"
+      />
     </View>
   )
 }

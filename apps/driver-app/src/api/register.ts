@@ -33,8 +33,6 @@ export interface DriverRegisterForm {
   phone: string
   password: string
   password_confirmation: string
-  firebase_id_token?: string
-  phone_verification_token?: string
   // Véhicule
   vehicle_type: VehicleType
   vehicle_plate: string
@@ -90,23 +88,6 @@ export function validateBeninPhone(normalized: string): string | null {
   return null
 }
 
-export interface SendOtpResult {
-  expires_in: number
-  /** Présent uniquement en mode SMS simulé (dev) : le code, pour tester sans SMS. */
-  debug_code?: string
-}
-
-/** Envoie un code SMS au numéro (normalisé E.164 côté serveur aussi). */
-export async function sendPhoneOtp(phone: string): Promise<SendOtpResult> {
-  const { data } = await api.post('/auth/phone/otp/send', { phone })
-  return data
-}
-
-/** Échange le code SMS contre un jeton de vérification signé. */
-export async function verifyPhoneOtp(phone: string, code: string): Promise<string> {
-  const { data } = await api.post('/auth/phone/otp/verify', { phone, code })
-  return data.phone_verification_token as string
-}
 
 /**
  * Inscription livreur : POST multipart. Retourne le token Sanctum du compte créé
@@ -125,13 +106,6 @@ export async function registerDriver(form: DriverRegisterForm): Promise<{ token:
   fd.append('phone', form.phone)
   fd.append('password', form.password)
   fd.append('password_confirmation', form.password_confirmation)
-  // Preuve téléphone — on n'envoie QUE le jeton qu'on a. Le back valide
-  // required_without entre les 2, donc envoyer les deux ferait doublon.
-  if (form.firebase_id_token) {
-    fd.append('firebase_id_token', form.firebase_id_token)
-  } else if (form.phone_verification_token) {
-    fd.append('phone_verification_token', form.phone_verification_token)
-  }
   fd.append('vehicle_type', form.vehicle_type)
   fd.append('vehicle_plate', form.vehicle_plate)
   if (form.vehicle_brand) fd.append('vehicle_brand', form.vehicle_brand)

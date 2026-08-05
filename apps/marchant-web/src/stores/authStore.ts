@@ -11,8 +11,6 @@ export interface RegisterIndividualPayload {
   password: string
   password_confirmation: string
   gender?: 'M' | 'F' | 'autre'
-  /** ID token Firebase (Phone Auth) prouvant la possession du numéro. */
-  firebase_id_token: string
   /** ID token Firebase d'une connexion Google (email vérifié) — optionnel. */
   firebase_google_id_token?: string
   /** Consentement CGU + politique confidentialité (checkbox obligatoire). */
@@ -28,8 +26,6 @@ export interface RegisterMarchantPayload {
   raison_sociale: string
   ifu_rccm?: string
   secteur_activite: 'supermarche' | 'restaurant' | 'boutique' | 'pharmacie' | 'ecommerce' | 'autre'
-  /** ID token Firebase (Phone Auth) prouvant la possession du numéro. */
-  firebase_id_token: string
   /** ID token Firebase d'une connexion Google (email vérifié) — optionnel. */
   firebase_google_id_token?: string
   /** Consentement CGU + politique confidentialité (checkbox obligatoire). */
@@ -47,8 +43,6 @@ export interface RegisterDriverPayload {
   phone: string
   password: string
   password_confirmation: string
-  /** ID token Firebase (Phone Auth) prouvant la possession du numéro. */
-  firebase_id_token: string
   // Véhicule
   vehicle_type: 'scooter' | 'moto' | 'voiture' | 'velo'
   vehicle_plate: string
@@ -131,7 +125,6 @@ export const useAuthStore = create<AuthState>()(
         form.append('phone', payload.phone)
         form.append('password', payload.password)
         form.append('password_confirmation', payload.password_confirmation)
-        form.append('firebase_id_token', payload.firebase_id_token)
         form.append('vehicle_type', payload.vehicle_type)
         form.append('vehicle_plate', payload.vehicle_plate)
         if (payload.vehicle_brand) form.append('vehicle_brand', payload.vehicle_brand)

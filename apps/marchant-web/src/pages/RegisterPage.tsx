@@ -7,7 +7,6 @@ import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Highlight from '../components/Highlight'
-import PhoneOtpField from '../components/PhoneOtpField'
 import { cn } from '../lib/cn'
 import { signInWithGoogle } from '../lib/firebase'
 import { EyeIcon, EyeOffIcon, ArrowRightIcon, GoogleIcon, CheckIcon } from '../components/ui/icons'
@@ -53,9 +52,6 @@ export default function RegisterPage() {
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showTermsError, setShowTermsError] = useState(false)
-  // ID token Firebase une fois le numéro vérifié par SMS (null = pas encore vérifié).
-  const [phoneToken, setPhoneToken] = useState<string | null>(null)
-  const [phoneTokenError, setPhoneTokenError] = useState<string | null>(null)
   // Connexion Google (optionnelle) : jeton + email prouvé, champ email verrouillé.
   const [googleToken, setGoogleToken] = useState<string | null>(null)
   const [googleEmail, setGoogleEmail] = useState<string | null>(null)
@@ -101,13 +97,7 @@ export default function RegisterPage() {
 
   async function onSubmit(values: RegisterFormValues) {
     setError(null)
-    setPhoneTokenError(null)
     setServerFieldErrors({})
-    // Le numéro doit avoir été vérifié par SMS (Firebase) avant soumission.
-    if (!phoneToken) {
-      setPhoneTokenError(t('driverRegister.otp.requiredBeforeSubmit'))
-      return
-    }
     if (!acceptedTerms) {
       setShowTermsError(true)
       return
@@ -124,7 +114,6 @@ export default function RegisterPage() {
           password: values.password,
           password_confirmation: values.password_confirmation,
           gender: values.gender || undefined,
-          firebase_id_token: phoneToken,
           firebase_google_id_token: googleStillValid ? googleToken : undefined,
           accepted_terms: true,
         })
@@ -138,7 +127,6 @@ export default function RegisterPage() {
           raison_sociale: values.raison_sociale!,
           secteur_activite: values.secteur_activite!,
           ifu_rccm: values.ifu_rccm || undefined,
-          firebase_id_token: phoneToken,
           firebase_google_id_token: googleStillValid ? googleToken : undefined,
           accepted_terms: true,
         })
@@ -314,15 +302,13 @@ export default function RegisterPage() {
                 ) : undefined
               }
             />
-            <PhoneOtpField
+            <Input
+              type="tel"
               label={t('common.phone')}
-              registration={register('phone', { required: t('auth.register.phoneRequired') })}
-              phoneValue={watch('phone') ?? ''}
-              error={errors.phone?.message ?? serverErr('phone') ?? phoneTokenError ?? undefined}
-              onTokenChange={(token) => {
-                setPhoneToken(token)
-                if (token) setPhoneTokenError(null)
-              }}
+              placeholder="+229 01 90 12 34 56"
+              {...register('phone', { required: t('auth.register.phoneRequired') })}
+              error={errors.phone?.message ?? serverErr('phone') ?? undefined}
+              autoComplete="tel"
             />
             <Input
               type={showPassword ? 'text' : 'password'}

@@ -19,7 +19,6 @@ import TermsCheckbox from '../components/TermsCheckbox'
 import VehicleTypeCards from '../components/driver/VehicleTypeCards'
 import AppDownloadBanner from '../components/driver/AppDownloadBanner'
 import DocumentCapture from '../components/driver/DocumentCapture'
-import PhoneOtpField from '../components/PhoneOtpField'
 import { cn } from '../lib/cn'
 import { VEHICLE_BRANDS } from '../lib/constants'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
@@ -55,9 +54,6 @@ export default function DriverRegisterPage() {
   const [cniBack, setCniBack] = useState<File | null>(null)
   const [drivingLicense, setDrivingLicense] = useState<File | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
-  // ID token Firebase une fois le numéro vérifié par SMS (null = pas encore vérifié).
-  const [phoneToken, setPhoneToken] = useState<string | null>(null)
-  const [phoneTokenError, setPhoneTokenError] = useState<string | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string[]>>({})
   const [acceptedTerms, setAcceptedTerms] = useState(false)
@@ -84,14 +80,10 @@ export default function DriverRegisterPage() {
     if (cniType !== 'cnib') setCniBack(null)
   }, [cniType])
 
-  /** Étape 1 → 2 : valide les champs de l'étape + exige le numéro vérifié par SMS. */
+  /** Étape 1 → 2 : valide les champs de l'étape. */
   async function goToStep2() {
-    setPhoneTokenError(null)
     const fieldsOk = await trigger([...STEP1_FIELDS])
-    if (!phoneToken) {
-      setPhoneTokenError(t('driverRegister.otp.requiredBeforeSubmit'))
-    }
-    if (!fieldsOk || !phoneToken) return
+    if (!fieldsOk) return
     setStep(2)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -104,17 +96,7 @@ export default function DriverRegisterPage() {
   async function onSubmit(values: FormValues) {
     setServerError(null)
     setFileError(null)
-    setPhoneTokenError(null)
     setServerFieldErrors({})
-
-    // Le numéro doit avoir été vérifié par SMS (Firebase) avant soumission.
-    // (déjà exigé au passage à l'étape 2 — filet si le numéro a changé entre-temps)
-    if (!phoneToken) {
-      setPhoneTokenError(t('driverRegister.otp.requiredBeforeSubmit'))
-      setStep(1)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      return
-    }
 
     const carSelected = values.vehicle_type === 'voiture'
     const cnibSelected = values.cni_type === 'cnib'
@@ -137,7 +119,6 @@ export default function DriverRegisterPage() {
     try {
       const { token } = await registerDriver({
         ...values,
-        firebase_id_token: phoneToken,
         photo,
         cni,
         // Verso pris en compte uniquement pour une CNIB.
@@ -302,15 +283,13 @@ export default function DriverRegisterPage() {
                   {...register('email', { required: t('driverRegister.emailRequired') })}
                   error={errors.email?.message ?? serverErr('email')}
                 />
-                <PhoneOtpField
+                <Input
+                  type="tel"
                   label={t('driverRegister.phone')}
-                  registration={register('phone', { required: t('driverRegister.phoneRequired') })}
-                  phoneValue={watch('phone') ?? ''}
-                  error={errors.phone?.message ?? serverErr('phone') ?? phoneTokenError ?? undefined}
-                  onTokenChange={(token) => {
-                    setPhoneToken(token)
-                    if (token) setPhoneTokenError(null)
-                  }}
+                  placeholder="+229 01 90 12 34 56"
+                  {...register('phone', { required: t('driverRegister.phoneRequired') })}
+                  error={errors.phone?.message ?? serverErr('phone') ?? undefined}
+                  autoComplete="tel"
                 />
                 <Input
                   type="password"
