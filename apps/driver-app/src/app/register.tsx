@@ -42,7 +42,6 @@ import {
   type VehicleType,
   type CniType,
 } from '../api/register'
-} from '../api/register'
 
 const TOTAL_STEPS = 6
 
