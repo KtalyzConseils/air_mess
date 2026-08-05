@@ -188,22 +188,11 @@ export default function LoginScreen() {
             </Button>
           </View>
 
-          {/* Lien inscription — ouvre le formulaire web (prod ou dev selon l'API) dans
-              le navigateur. Le natif register.tsx existe encore mais n'est plus utilisé
-              depuis ici : on centralise le funnel d'inscription sur le web pour le moment. */}
+          {/* Lien inscription — maintenant redirige vers la page d'enregistrement native */}
           <Pressable
-            onPress={async () => {
-              const url = getSignupUrl()
-              try {
-                const supported = await Linking.canOpenURL(url)
-                if (!supported) {
-                  Alert.alert('Erreur', "Aucun navigateur disponible pour ouvrir l'inscription.")
-                  return
-                }
-                await Linking.openURL(url)
-              } catch {
-                Alert.alert('Erreur', "Impossible d'ouvrir le formulaire d'inscription.")
-              }
+            onPress={() => {
+              // Redirection vers la page d'inscription native
+              router.push('/register')
             }}
             className="items-center mt-6"
             hitSlop={8}
