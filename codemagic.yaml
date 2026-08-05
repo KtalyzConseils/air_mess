@@ -12,7 +12,7 @@ workflows:
       cocoapods: default
       vars:
         CI: "1"
-        EXPO_PUBLIC_API_BASE_URL: "https://api.airmess-logistics.com/api"
+        EXPO_PUBLIC_API_BASE_URL: "https://dev.api.airmess-logistics.com/api"
 
     scripts:
       - name: Verify project directory
