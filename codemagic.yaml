@@ -16,13 +16,11 @@ workflows:
       node: 22
       xcode: latest
       cocoapods: default
-      # Signature automatique Codemagic : utilise le certificat de distribution stocké
-      # dans Code signing identities (avec sa clé privée) et crée/récupère le profil de
-      # provisioning via l'intégration App Store Connect `codemagic`. Le profil hérite
-      # des capacités de l'App ID, dont Push Notifications (requis pour VoIP).
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.airmess.driver
+      # Signature MANUELLE : le mode auto (ios_signing) ne crée pas le profil ici, et
+      # fetch-signing-files seul ne récupère pas la clé privée. On importe donc le
+      # certificat (.p12) via les variables réservées CM_CERTIFICATE (base64) +
+      # CM_CERTIFICATE_PASSWORD, puis on crée le profil. Ces deux variables sont à
+      # définir dans Codemagic (Environment variables, sécurisées).
       vars:
         CI: "1"
         # Build de prod : l'app parle à la prod, qui envoie le push VoIP.
@@ -47,6 +45,21 @@ workflows:
           set -e
           cd ios
           pod install --repo-update
+
+      - name: Set up code signing
+        script: |
+          set -e
+          keychain initialize
+          # Importe le certificat de distribution + sa clé privée depuis les variables
+          # réservées CM_CERTIFICATE (.p12 base64) et CM_CERTIFICATE_PASSWORD.
+          keychain add-certificates
+          # Crée le profil de provisioning app_store pour com.airmess.driver (hérite de
+          # la capacité Push de l'App ID). Le certificat étant déjà dans le keychain avec
+          # sa clé, plus d'erreur "without certificate private key".
+          app-store-connect fetch-signing-files "com.airmess.driver" \
+            --type IOS_APP_STORE \
+            --create
+          xcode-project use-profiles
 
       - name: Bump build number (unique pour TestFlight)
         script: |
