@@ -10,7 +10,7 @@ workflows:
     working_directory: apps/driver-app
 
     integrations:
-      app_store_connect: Codemagic
+      app_store_connect: codemagic
 
     environment:
       node: 22
