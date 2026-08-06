@@ -90,7 +90,8 @@
           "cameraPermission": "AirMess accède à l'appareil photo pour photographier vos documents d'inscription."
         }
       ],
-      "./plugins/withFullScreenNotifications"
+      "./plugins/withFullScreenNotifications",
+      "./plugins/withIosVoip"
     ],
 
     "experiments": {

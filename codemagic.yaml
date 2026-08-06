@@ -1,4 +1,75 @@
 workflows:
+  # Build SIGNÉ + envoi TestFlight. Utilisé pour tester l'appel VoIP (CallKit) sur un
+  # iPhone réel : la signature app_store donne l'environnement APNs PRODUCTION, aligné
+  # avec aps-environment=production (config plugin) et APNS_ENV=production (backend).
+  # Prérequis : fiche app créée dans App Store Connect pour com.airmess.driver.
+  ios-release:
+    name: AIRMESS Driver - Signed TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    working_directory: apps/driver-app
+
+    integrations:
+      app_store_connect: Codemagic
+
+    environment:
+      node: 22
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.airmess.driver
+      vars:
+        CI: "1"
+        # Build de prod : l'app parle à la prod, qui envoie le push VoIP.
+        EXPO_PUBLIC_API_BASE_URL: "https://api.airmess-logistics.com/api"
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          set -e
+          npm install
+          test -d node_modules/expo
+
+      - name: Generate iOS project
+        script: |
+          set -e
+          export CI=1
+          export RNFirebaseAsStaticFramework=true
+          npx expo prebuild --platform ios --clean
+
+      - name: Install CocoaPods
+        script: |
+          set -e
+          cd ios
+          pod install --repo-update
+
+      - name: Set up code signing
+        script: xcode-project use-profiles
+
+      - name: Bump build number (unique pour TestFlight)
+        script: |
+          set -e
+          cd ios
+          # $BUILD_NUMBER = compteur Codemagic monotone → évite le rejet "build already exists".
+          agvtool new-version -all "$BUILD_NUMBER"
+
+      - name: Build signed IPA
+        script: |
+          set -e
+          xcode-project build-ipa \
+            --workspace ios/AirMessDriver.xcworkspace \
+            --scheme AirMessDriver
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
   ios-test:
     name: AIRMESS Driver - Unsigned iPhone IPA
     instance_type: mac_mini_m2

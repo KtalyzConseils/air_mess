@@ -47,6 +47,23 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // APNs (Apple Push) — utilisé UNIQUEMENT pour les pushs VoIP (PushKit) iOS, qui
+    // réveillent l'app pour un « appel entrant » de course (CallKit). Les autres notifs
+    // iOS passent par Expo/FCM comme Android. Auth par clé .p8 (token-based) : la MÊME
+    // clé sert au sandbox et à la prod, seule l'URL diffère.
+    'apns' => [
+        'key_id'   => env('APNS_KEY_ID'),        // ID de la clé .p8 (Apple Developer → Keys)
+        'team_id'  => env('APNS_TEAM_ID'),       // Team ID (en haut à droite du compte)
+        // Contenu PEM de la clé .p8 (multi-lignes) OU chemin vers le fichier.
+        'key'      => env('APNS_KEY'),
+        'key_path' => env('APNS_KEY_PATH'),
+        // Topic VoIP = bundle id + ".voip" (imposé par Apple pour les pushs VoIP).
+        'bundle_id' => env('APNS_BUNDLE_ID', 'com.airmess.driver'),
+        // 'production' → api.push.apple.com ; sinon sandbox. Un build App Store = prod ;
+        // un build de dev/TestFlight peut nécessiter le sandbox.
+        'env'      => env('APNS_ENV', 'production'),
+    ],
+
     'fedapay' => [
         'env'            => env('FEDAPAY_ENV', 'sandbox'),
         'public_key'     => env('FEDAPAY_PUBLIC_KEY'),

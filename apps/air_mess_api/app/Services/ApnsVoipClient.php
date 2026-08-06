@@ -1,0 +1,144 @@
+<?php
+
+namespace App\Services;
+
+use Firebase\JWT\JWT;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Envoie des pushs VoIP (PushKit) à des appareils iOS via APNs, en HTTP/2.
+ *
+ * Pourquoi un client dédié plutôt qu'Expo/FCM : sur iOS, seul un push VoIP réveille une
+ * app fermée/verrouillée pour présenter un appel entrant (CallKit). Apple l'impose, et
+ * ces pushs ne passent QUE par APNs, pas par Expo/FCM. Android continue d'utiliser le
+ * push data-only via Expo (cf. ExpoPushClient).
+ *
+ * Auth token-based (.p8) : on signe un JWT ES256 (kid = key_id, iss = team_id) réutilisable
+ * ~1 h. La même clé fonctionne en sandbox et en production ; seul l'hôte change.
+ */
+class ApnsVoipClient
+{
+    private const HOST_PROD    = 'https://api.push.apple.com';
+    private const HOST_SANDBOX = 'https://api.sandbox.push.apple.com';
+
+    /** APNs refuse un JWT de plus de 60 min ; on le régénère bien avant. */
+    private const TOKEN_TTL = 3000; // 50 min
+
+    private ?string $cachedJwt = null;
+    private int $cachedJwtAt = 0;
+
+    /**
+     * Envoie un push VoIP à chaque token fourni.
+     *
+     * @param  string[]  $tokens  tokens VoIP (PushKit), hexadécimaux
+     * @param  array     $data    données livrées à l'app (trajet, gains, course_id…)
+     */
+    public function push(array $tokens, array $data = []): void
+    {
+        $tokens = array_values(array_unique(array_filter($tokens)));
+        if (empty($tokens)) {
+            return;
+        }
+
+        $jwt = $this->authToken();
+        if ($jwt === null) {
+            Log::warning('APNs VoIP: config incomplète (key/key_id/team_id), envoi ignoré.');
+            return;
+        }
+
+        $cfg     = config('services.apns');
+        $host    = ($cfg['env'] ?? 'production') === 'production' ? self::HOST_PROD : self::HOST_SANDBOX;
+        $topic   = rtrim((string) ($cfg['bundle_id'] ?? ''), '.') . '.voip';
+        // Payload VoIP : pas d'`alert` (c'est CallKit qui affiche l'appel côté app).
+        $payload = json_encode(['aps' => [], ...$data], JSON_UNESCAPED_UNICODE);
+
+        foreach ($tokens as $token) {
+            $this->sendOne($host, $token, $topic, $jwt, $payload);
+        }
+    }
+
+    /** Un envoi unitaire. Ne lève jamais : un push raté ne casse pas le flux métier. */
+    private function sendOne(string $host, string $token, string $topic, string $jwt, string $payload): void
+    {
+        $ch = curl_init("{$host}/3/device/{$token}");
+        curl_setopt_array($ch, [
+            CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_2_0, // APNs EXIGE HTTP/2
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER         => false,
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_HTTPHEADER     => [
+                "authorization: bearer {$jwt}",
+                "apns-topic: {$topic}",
+                'apns-push-type: voip',
+                'apns-priority: 10',
+                'apns-expiration: 0', // livraison immédiate, pas de mise en file
+                'content-type: application/json',
+            ],
+        ]);
+
+        $body   = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err    = curl_error($ch);
+        curl_close($ch);
+
+        if ($err !== '') {
+            Log::error('APNs VoIP: échec réseau', ['error' => $err]);
+            return;
+        }
+        if ($status !== 200) {
+            // APNs renvoie un JSON {"reason":"BadDeviceToken"|"Unregistered"|...}
+            Log::warning('APNs VoIP: rejet Apple', ['status' => $status, 'body' => $body]);
+        }
+    }
+
+    /** JWT ES256 signé avec la clé .p8, mis en cache ~50 min. */
+    private function authToken(): ?string
+    {
+        $cfg    = config('services.apns');
+        $keyId  = $cfg['key_id']  ?? null;
+        $teamId = $cfg['team_id'] ?? null;
+        $key    = $this->privateKey();
+
+        if (! $keyId || ! $teamId || ! $key) {
+            return null;
+        }
+
+        if ($this->cachedJwt !== null && (time() - $this->cachedJwtAt) < self::TOKEN_TTL) {
+            return $this->cachedJwt;
+        }
+
+        try {
+            $this->cachedJwt = JWT::encode(
+                ['iss' => $teamId, 'iat' => time()],
+                $key,
+                'ES256',
+                $keyId,
+            );
+            $this->cachedJwtAt = time();
+            return $this->cachedJwt;
+        } catch (\Throwable $e) {
+            Log::error('APNs VoIP: signature JWT impossible', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /** Contenu PEM de la clé .p8 : depuis APNS_KEY (inline) ou APNS_KEY_PATH (fichier). */
+    private function privateKey(): ?string
+    {
+        $cfg = config('services.apns');
+        $inline = $cfg['key'] ?? null;
+        if (is_string($inline) && trim($inline) !== '') {
+            // Les secrets multi-lignes sont souvent stockés avec des \n littéraux.
+            return str_contains($inline, '-----BEGIN')
+                ? str_replace('\n', "\n", $inline)
+                : $inline;
+        }
+        $path = $cfg['key_path'] ?? null;
+        if (is_string($path) && $path !== '' && is_readable($path)) {
+            return file_get_contents($path) ?: null;
+        }
+        return null;
+    }
+}

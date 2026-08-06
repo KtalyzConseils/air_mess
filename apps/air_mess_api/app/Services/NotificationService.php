@@ -27,6 +27,7 @@ class NotificationService
     public function __construct(
         private ExpoPushClient $expo,
         private FcmClient $fcm,
+        private ApnsVoipClient $apnsVoip,
     ) {}
 
     /**
@@ -45,8 +46,10 @@ class NotificationService
         ]);
 
         $allTokens = DeviceToken::where('user_id', $userId)->get(['token', 'platform']);
-        $tokens    = $allTokens->where('platform', '!=', 'web')->pluck('token')->toArray();
-        $webTokens = $allTokens->where('platform', 'web')->pluck('token')->toArray();
+        // Mobile Expo/FCM (android + ios), hors web ET hors token VoIP iOS (canal séparé).
+        $tokens     = $allTokens->whereNotIn('platform', ['web', 'ios-voip'])->pluck('token')->toArray();
+        $webTokens  = $allTokens->where('platform', 'web')->pluck('token')->toArray();
+        $voipTokens = $allTokens->where('platform', 'ios-voip')->pluck('token')->toArray();
 
         // Web push (PWA) : toujours une notif visible — le clic ouvre la course
         // concernée ou la liste des notifications.
@@ -75,7 +78,11 @@ class NotificationService
                 $payload['destination'] = $course->destination_quartier;
                 $payload['earnings']    = $course->driver_earnings;
             }
+            // Android : push data-only Expo (la tâche de fond affiche l'appel Notifee).
             $this->expo->push($tokens, '', '', $payload, 'default', null, dataOnly: true);
+            // iOS : push VoIP APNs (PushKit → CallKit). Seule voie pour réveiller un
+            // iPhone fermé/verrouillé et présenter un appel entrant.
+            $this->apnsVoip->push($voipTokens, $payload);
         } else {
             // Toute autre notif : notif système classique avec son par défaut.
             $this->expo->push($tokens, $title, $body, $payload, 'default', null);

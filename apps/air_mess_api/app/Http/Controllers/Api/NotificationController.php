@@ -18,7 +18,8 @@ class NotificationController extends Controller
     {
         $data = $request->validate([
             'token'    => ['required', 'string', 'max:255'],
-            'platform' => ['required', Rule::in(['android', 'ios', 'web'])],
+            // 'ios-voip' = token PushKit (VoIP) iOS, canal séparé pour l'appel entrant.
+            'platform' => ['required', Rule::in(['android', 'ios', 'web', 'ios-voip'])],
         ]);
 
         $deviceToken = DeviceToken::updateOrCreate(
