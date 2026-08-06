@@ -16,10 +16,13 @@ workflows:
       node: 22
       xcode: latest
       cocoapods: default
-      # PAS de bloc `ios_signing` : il déclenche la signature AUTOMATIQUE de Codemagic
-      # au démarrage, qui ne fait que CHERCHER un profil existant et échoue
-      # ("No matching profiles found") avant nos scripts. On gère la signature
-      # manuellement plus bas avec `fetch-signing-files --create`.
+      # Signature automatique Codemagic : utilise le certificat de distribution stocké
+      # dans Code signing identities (avec sa clé privée) et crée/récupère le profil de
+      # provisioning via l'intégration App Store Connect `codemagic`. Le profil hérite
+      # des capacités de l'App ID, dont Push Notifications (requis pour VoIP).
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.airmess.driver
       vars:
         CI: "1"
         # Build de prod : l'app parle à la prod, qui envoie le push VoIP.
@@ -44,20 +47,6 @@ workflows:
           set -e
           cd ios
           pod install --repo-update
-
-      - name: Set up code signing
-        script: |
-          set -e
-          keychain initialize
-          # --create : crée le certificat de distribution ET le profil de provisioning
-          # pour com.airmess.driver s'ils n'existent pas encore (via la clé App Store
-          # Connect). Le profil hérite des capacités de l'App ID, dont Push Notifications
-          # (requis pour VoIP). Sans --create, "No matching profiles found".
-          app-store-connect fetch-signing-files "com.airmess.driver" \
-            --type IOS_APP_STORE \
-            --create
-          keychain add-certificates
-          xcode-project use-profiles
 
       - name: Bump build number (unique pour TestFlight)
         script: |
