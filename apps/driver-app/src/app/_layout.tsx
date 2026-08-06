@@ -14,6 +14,7 @@ import {
 } from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
+import { useIosVoipCall } from '../hooks/useIosVoipCall'
 import BrandSplash from '../components/BrandSplash'
 import {
   useFonts,
@@ -68,6 +69,7 @@ export default function RootLayout() {
   }, [router])
 
   usePushTokenRegistration()
+  useIosVoipCall()
 
   // ── Course entrante : détection de l'événement qui doit ouvrir l'écran d'appel ──
 
