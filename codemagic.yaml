@@ -16,9 +16,10 @@ workflows:
       node: 22
       xcode: latest
       cocoapods: default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.airmess.driver
+      # PAS de bloc `ios_signing` : il déclenche la signature AUTOMATIQUE de Codemagic
+      # au démarrage, qui ne fait que CHERCHER un profil existant et échoue
+      # ("No matching profiles found") avant nos scripts. On gère la signature
+      # manuellement plus bas avec `fetch-signing-files --create`.
       vars:
         CI: "1"
         # Build de prod : l'app parle à la prod, qui envoie le push VoIP.
