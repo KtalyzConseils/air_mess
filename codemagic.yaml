@@ -45,7 +45,18 @@ workflows:
           pod install --repo-update
 
       - name: Set up code signing
-        script: xcode-project use-profiles
+        script: |
+          set -e
+          keychain initialize
+          # --create : crée le certificat de distribution ET le profil de provisioning
+          # pour com.airmess.driver s'ils n'existent pas encore (via la clé App Store
+          # Connect). Le profil hérite des capacités de l'App ID, dont Push Notifications
+          # (requis pour VoIP). Sans --create, "No matching profiles found".
+          app-store-connect fetch-signing-files "com.airmess.driver" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
 
       - name: Bump build number (unique pour TestFlight)
         script: |
