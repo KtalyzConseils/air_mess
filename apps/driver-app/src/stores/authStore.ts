@@ -11,6 +11,7 @@ interface AuthState {
 
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  deleteAccount: () => Promise<void>
   hydrate: () => Promise<void>
 }
 
@@ -51,6 +52,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await SecureStore.deleteItemAsync('airmess_push_token').catch(() => {})
     set({ user: null, token: null })
   },
+
+  deleteAccount: async () => {
+    const prevToken = get().token
+    const auth = prevToken ? { headers: { Authorization: `Bearer ${prevToken}` } } : {}
+
+    try {
+      const pushToken = await SecureStore.getItemAsync('airmess_push_token')
+      if (pushToken) {
+        await api.delete('/device-tokens', { data: { token: pushToken }, ...auth })
+      }
+    } catch { /* ignore */ }
+
+    try { await stopLocationTracking() } catch { /* ignore */ }
+    
+    // Appel de l'endpoint de suppression
+    await api.delete('/auth/me', auth)
+
+    await SecureStore.deleteItemAsync('airmess_token').catch(() => {})
+    await SecureStore.deleteItemAsync('airmess_push_token').catch(() => {})
+    set({ user: null, token: null })
+  },
+
 
   hydrate: async () => {
     const token = await SecureStore.getItemAsync('airmess_token')

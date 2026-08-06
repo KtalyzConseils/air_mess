@@ -556,4 +556,48 @@ class AuthController extends Controller
         ], 422);
     }
 
+    /**
+     * Supprime définitivement le compte de l'utilisateur connecté.
+     */
+    public function deleteAccount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Pour un marchand :
+        if ($user->isMarchant()) {
+            $hasActiveCourses = \App\Models\Course::where('sender_id', $user->id)
+                ->whereNotIn('status', \App\Models\Course::TERMINAL_STATUSES)
+                ->exists();
+
+            if ($hasActiveCourses) {
+                return response()->json([
+                    'message' => 'Suppression impossible : vous avez des courses en cours.',
+                ], 422);
+            }
+        }
+
+        // Pour un livreur (driver) :
+        if ($user->isDriver() && $user->driver) {
+            $hasActiveCourses = \App\Models\Course::where('driver_id', $user->driver->id)
+                ->whereNotIn('status', \App\Models\Course::TERMINAL_STATUSES)
+                ->exists();
+
+            if ($hasActiveCourses) {
+                return response()->json([
+                    'message' => 'Suppression impossible : vous avez des livraisons en cours.',
+                ], 422);
+            }
+        }
+
+        DB::transaction(function () use ($user) {
+            $user->tokens()->delete();
+            $user->delete();
+        });
+
+        return response()->json([
+            'message' => 'Votre compte a été supprimé avec succès.',
+        ]);
+    }
+
 }
+

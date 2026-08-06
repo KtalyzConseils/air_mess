@@ -45,7 +45,7 @@ const VEHICLE_META: Record<
  * plaque + Compte + Préférences + déconnexion.
  */
 export default function ProfileScreen() {
-  const { user, logout, token } = useAuthStore()
+  const { user, logout, token, deleteAccount } = useAuthStore()
   const router = useRouter()
   const driver = user?.driver
   const initials = `${driver?.first_name?.[0] ?? ''}${driver?.last_name?.[0] ?? ''}`.toUpperCase()
@@ -125,6 +125,46 @@ export default function ProfileScreen() {
         },
       },
     ])
+  }
+
+  function handleDeleteAccount() {
+    Alert.alert(
+      'Supprimer le compte ?',
+      'Cette action est définitive et supprimera toutes tes données personnelles, ton historique et ta caution.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer mon compte',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Confirmer la suppression',
+              'Es-tu absolument sûr de vouloir supprimer définitivement ton compte ? Cette action est irréversible.',
+              [
+                { text: 'Annuler', style: 'cancel' },
+                {
+                  text: 'Confirmer',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setLoggingOut(true)
+                    try {
+                      await deleteAccount()
+                    } catch (error: any) {
+                      Alert.alert(
+                        'Erreur',
+                        error?.response?.data?.message || 'Une erreur est survenue lors de la suppression.'
+                      )
+                    } finally {
+                      setLoggingOut(false)
+                    }
+                  }
+                }
+              ]
+            )
+          }
+        }
+      ]
+    )
   }
 
   return (
@@ -213,6 +253,12 @@ export default function ProfileScreen() {
               icon="headset-outline"
               title="Contacter le support"
               onPress={() => setSupportOpen(true)}
+            />
+            <ProfileRow
+              icon="trash-outline"
+              title="Supprimer mon compte"
+              onPress={handleDeleteAccount}
+              destructive
               isLast
             />
           </View>
@@ -317,6 +363,7 @@ function ProfileRow({
   onPress,
   comingSoon,
   isLast,
+  destructive,
 }: {
   icon: keyof typeof Ionicons.glyphMap
   title: string
@@ -324,6 +371,7 @@ function ProfileRow({
   onPress?: () => void
   comingSoon?: boolean
   isLast?: boolean
+  destructive?: boolean
 }) {
   return (
     <Pressable
@@ -336,11 +384,11 @@ function ProfileRow({
       ].join(' ')}
       style={({ pressed }) => (pressed && onPress ? { opacity: 0.7 } : undefined)}
     >
-      <View className="w-10 h-10 rounded-xl bg-warm-100 items-center justify-center mr-3">
-        <Ionicons name={icon} size={18} color="#1A1614" />
+      <View className="w-10 h-10 rounded-xl bg-warm-100 items-center justify-center mr-3" style={destructive ? { backgroundColor: 'rgba(212, 5, 17, 0.08)' } : undefined}>
+        <Ionicons name={icon} size={18} color={destructive ? '#D40511' : '#1A1614'} />
       </View>
       <View className="flex-1">
-        <Text className="text-[15px] text-ink font-jk-bold">{title}</Text>
+        <Text className={['text-[15px] font-jk-bold', destructive ? 'text-airmess-red' : 'text-ink'].join(' ')}>{title}</Text>
         {subtitle ? (
           <Text className="text-xs text-warm-500 font-jk-medium mt-0.5">{subtitle}</Text>
         ) : null}

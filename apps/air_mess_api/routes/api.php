@@ -91,6 +91,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+        Route::delete('/me', [AuthController::class, 'deleteAccount']);
         // Enregistre l'acceptation des CGU + politique confidentialité par l'utilisateur connecté.
         // Requis pour les utilisateurs pré-existant à la mise en place (accepted_terms_at IS NULL)
         // ET pour tout bump de TERMS_VERSION.
