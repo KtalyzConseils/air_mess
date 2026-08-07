@@ -16,11 +16,13 @@ workflows:
       node: 22
       xcode: latest
       cocoapods: default
-      # Signature MANUELLE : le mode auto (ios_signing) ne crée pas le profil ici, et
-      # fetch-signing-files seul ne récupère pas la clé privée. On importe donc le
-      # certificat (.p12) via les variables réservées CM_CERTIFICATE (base64) +
-      # CM_CERTIFICATE_PASSWORD, puis on crée le profil. Ces deux variables sont à
-      # définir dans Codemagic (Environment variables, sécurisées).
+      # Groupe de variables défini dans Codemagic (Environment variables) qui contient
+      # CM_CERTIFICATE (le .p12 en base64) et CM_CERTIFICATE_PASSWORD. Sans cette
+      # référence de groupe, le YAML ne voit pas les variables saisies dans l'UI.
+      groups:
+        - ios_signing
+      # Signature MANUELLE : on importe le certificat (.p12) via CM_CERTIFICATE puis on
+      # crée le profil (fetch-signing-files). Cf. étape "Set up code signing".
       vars:
         CI: "1"
         # Build de prod : l'app parle à la prod, qui envoie le push VoIP.
