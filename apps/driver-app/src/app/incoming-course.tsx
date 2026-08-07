@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, Text, Pressable, ActivityIndicator, Vibration } from 'react-native'
+import { View, Text, Pressable, ActivityIndicator, Vibration, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
@@ -151,11 +151,14 @@ export default function IncomingCourseScreen() {
       dismissedRef.current = true
       await clearRingQueue() // livreur occupé → plus aucune course ne doit sonner
       router.replace('/(tabs)')
-    } catch {
-      // Déjà prise par un autre / plus dispo → on passe à la suivante de la file.
-      dismissedRef.current = true
-      const next = await dequeueRing(courseId)
-      goNext(next?.course_id ?? null)
+    } catch (e: any) {
+      // On NE rebondit plus en silence : on montre la raison exacte du refus serveur
+      // (409 course déjà prise, 403 pas disponible…) pour pouvoir diagnostiquer.
+      const status = e?.response?.status
+      const msg = e?.response?.data?.message ?? e?.message ?? 'Erreur inconnue'
+      console.warn('[accept] échec', status, msg)
+      Alert.alert("Impossible d'accepter", `${msg}${status ? ` (code ${status})` : ''}`)
+      setActing(null)
     }
   }
 
