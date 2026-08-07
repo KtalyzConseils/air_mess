@@ -2,16 +2,27 @@ const {
   withInfoPlist,
   withEntitlementsPlist,
   withAppDelegate,
+  withDangerousMod,
 } = require('@expo/config-plugins')
+const fs = require('fs')
+const path = require('path')
 
 // Marqueur d'idempotence : évite une double injection si prebuild rejoue le plugin.
 const VOIP_MARKER = '// airmess-voip'
 
-// Imports Swift ajoutés en tête de l'AppDelegate.
+// Imports Swift ajoutés en tête de l'AppDelegate. RNVoipPushNotification et RNCallKeep
+// ne s'importent PAS comme modules Swift (headers ObjC only) → ils passent par le
+// bridging header (cf. withVoipBridgingHeader). Seul PushKit est un vrai module Swift.
 const VOIP_IMPORTS = `${VOIP_MARKER}
-import PushKit
-import RNVoipPushNotification
-import RNCallKeep`
+import PushKit`
+
+// Imports ObjC ajoutés au bridging header : rendent RNVoipPushNotificationManager et
+// RNCallKeep accessibles depuis Swift sans `import` de module.
+const BRIDGING_IMPORTS = `
+${VOIP_MARKER}
+#import <RNVoipPushNotification/RNVoipPushNotificationManager.h>
+#import <RNCallKeep/RNCallKeep.h>
+`
 
 // Enregistrement du registre VoIP, injecté dans didFinishLaunchingWithOptions.
 const VOIP_REGISTER = `    RNVoipPushNotificationManager.voipRegistration() ${VOIP_MARKER}`
@@ -138,9 +149,36 @@ function withVoipEntitlements(config) {
   })
 }
 
+/**
+ * Ajoute les imports ObjC (RNVoipPushNotification + RNCallKeep) au bridging header, pour
+ * que Swift accède à ces classes sans `import` de module (les deux libs n'exposent pas de
+ * module Swift avec useFrameworks:static).
+ */
+function withVoipBridgingHeader(config) {
+  return withDangerousMod(config, [
+    'ios',
+    (config) => {
+      const projectName = config.modRequest.projectName
+      const bridgingPath = path.join(
+        config.modRequest.platformProjectRoot,
+        projectName,
+        `${projectName}-Bridging-Header.h`,
+      )
+      if (fs.existsSync(bridgingPath)) {
+        let contents = fs.readFileSync(bridgingPath, 'utf8')
+        if (!contents.includes(VOIP_MARKER)) {
+          fs.writeFileSync(bridgingPath, `${contents.trimEnd()}\n${BRIDGING_IMPORTS}`)
+        }
+      }
+      return config
+    },
+  ])
+}
+
 module.exports = function withIosVoip(config) {
   config = withVoipInfoPlist(config)
   config = withVoipEntitlements(config)
   config = withVoipAppDelegate(config)
+  config = withVoipBridgingHeader(config)
   return config
 }
