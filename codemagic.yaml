@@ -52,22 +52,20 @@ workflows:
         script: |
           set -e
           keychain initialize
-          # keychain add-certificates ne lit PAS la variable CM_CERTIFICATE : il cherche
-          # des .p12 sur le disque. On décode donc la variable base64 en fichier, puis on
-          # le passe explicitement (avec sa clé privée → plus d'erreur "without key").
-          if [ -z "$CM_CERTIFICATE" ]; then
-            echo "ERREUR: variable CM_CERTIFICATE absente (mets le .p12 en base64 dans Codemagic)."
+          # Approche par CLÉ PRIVÉE fournie (CERTIFICATE_PRIVATE_KEY, variable Codemagic) :
+          # fetch-signing-files crée un certificat de distribution POUR cette clé la 1re
+          # fois, puis le réutilise. Il télécharge cert (avec la clé) + profil app_store
+          # sur le disque, que keychain add-certificates importe ensuite. Évite les
+          # écueils du .p12 (mauvais mot de passe / clé absente) rencontrés avant.
+          if [ -z "$CERTIFICATE_PRIVATE_KEY" ]; then
+            echo "ERREUR: variable CERTIFICATE_PRIVATE_KEY absente dans Codemagic."
             exit 1
           fi
-          echo "$CM_CERTIFICATE" | base64 --decode > /tmp/airmess_dist.p12
-          keychain add-certificates \
-            --certificate /tmp/airmess_dist.p12 \
-            --certificate-password "$CM_CERTIFICATE_PASSWORD"
-          # Crée le profil de provisioning app_store pour com.airmess.driver (hérite de la
-          # capacité Push de l'App ID).
           app-store-connect fetch-signing-files "com.airmess.driver" \
             --type IOS_APP_STORE \
+            --certificate-key @env:CERTIFICATE_PRIVATE_KEY \
             --create
+          keychain add-certificates
           xcode-project use-profiles
 
       - name: Bump build number (unique pour TestFlight)
