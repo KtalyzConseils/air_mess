@@ -66,7 +66,10 @@ workflows:
             --certificate-key @env:CERTIFICATE_PRIVATE_KEY \
             --create
           keychain add-certificates
-          xcode-project use-profiles
+          # --project limité au projet de l'app : par défaut use-profiles scanne TOUS les
+          # *.xcodeproj (dont ceux des libs dans node_modules, ex. RNDateTimePicker) et
+          # échoue dessus. On ne configure la signature que sur AirMessDriver.xcodeproj.
+          xcode-project use-profiles --project "ios/*.xcodeproj"
 
       - name: Bump build number (unique pour TestFlight)
         script: |
