@@ -82,11 +82,10 @@ function withVoipAppDelegate(config) {
       return config
     }
 
-    // 1. Imports — juste avant la déclaration de la classe AppDelegate.
-    src = src.replace(
-      /(class AppDelegate\b)/,
-      `${VOIP_IMPORTS}\n\n$1`,
-    )
+    // 1. Imports — insérés APRÈS le premier `import` existant, pour rester dans le bloc
+    //    d'imports en tête de fichier. (Les insérer avant `class AppDelegate` casserait
+    //    l'attribut @main en le séparant de la classe, et placerait un import hors bloc.)
+    src = src.replace(/^(import .+\n)/m, `$1${VOIP_IMPORTS}\n`)
 
     // 2. voipRegistration() — avant le `return super.application(...)` de didFinishLaunching.
     src = src.replace(
