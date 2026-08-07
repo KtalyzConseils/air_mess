@@ -54,7 +54,7 @@ extension AppDelegate: PKPushRegistryDelegate {
       payload: data,
       withCompletionHandler: completion
     )
-    RNVoipPushNotificationManager.didReceiveIncomingPush(withPayload: payload, forType: type.rawValue)
+    RNVoipPushNotificationManager.didReceiveIncomingPush(with: payload, forType: type.rawValue)
   }
 }
 `
