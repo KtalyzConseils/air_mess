@@ -50,12 +50,19 @@ workflows:
         script: |
           set -e
           keychain initialize
-          # Importe le certificat de distribution + sa clé privée depuis les variables
-          # réservées CM_CERTIFICATE (.p12 base64) et CM_CERTIFICATE_PASSWORD.
-          keychain add-certificates
-          # Crée le profil de provisioning app_store pour com.airmess.driver (hérite de
-          # la capacité Push de l'App ID). Le certificat étant déjà dans le keychain avec
-          # sa clé, plus d'erreur "without certificate private key".
+          # keychain add-certificates ne lit PAS la variable CM_CERTIFICATE : il cherche
+          # des .p12 sur le disque. On décode donc la variable base64 en fichier, puis on
+          # le passe explicitement (avec sa clé privée → plus d'erreur "without key").
+          if [ -z "$CM_CERTIFICATE" ]; then
+            echo "ERREUR: variable CM_CERTIFICATE absente (mets le .p12 en base64 dans Codemagic)."
+            exit 1
+          fi
+          echo "$CM_CERTIFICATE" | base64 --decode > /tmp/airmess_dist.p12
+          keychain add-certificates \
+            --certificate /tmp/airmess_dist.p12 \
+            --certificate-password "$CM_CERTIFICATE_PASSWORD"
+          # Crée le profil de provisioning app_store pour com.airmess.driver (hérite de la
+          # capacité Push de l'App ID).
           app-store-connect fetch-signing-files "com.airmess.driver" \
             --type IOS_APP_STORE \
             --create
