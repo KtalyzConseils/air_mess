@@ -1,0 +1,30 @@
+{
+  "_comment": "TEMPLATE — remplacer les valeurs REPLACE_ME et sauvegarder en tant que google-services.json (fichier réel non versionné). En prod, injecter via EAS Secrets (voir SECRETS.md à la racine).",
+  "project_info": {
+    "project_number": "REPLACE_ME_PROJECT_NUMBER",
+    "project_id": "REPLACE_ME_PROJECT_ID",
+    "storage_bucket": "REPLACE_ME_PROJECT_ID.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "REPLACE_ME_MOBILESDK_APP_ID",
+        "android_client_info": {
+          "package_name": "com.anonymous.driverapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "REPLACE_ME_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
