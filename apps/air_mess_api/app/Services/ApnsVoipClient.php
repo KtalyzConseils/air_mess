@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -93,7 +92,13 @@ class ApnsVoipClient
         }
     }
 
-    /** JWT ES256 signé avec la clé .p8, mis en cache ~50 min. */
+    /**
+     * JWT ES256 signé avec la clé .p8, mis en cache ~50 min.
+     *
+     * Signature faite « à la main » avec openssl (et conversion DER → R||S brut) plutôt
+     * qu'avec firebase/php-jwt, qui échouait à charger la clé depuis la variable d'env
+     * ("OpenSSL unable to validate key"). Ce chemin est celui validé contre APNs (HTTP 200).
+     */
     private function authToken(): ?string
     {
         $cfg    = config('services.apns');
@@ -109,19 +114,56 @@ class ApnsVoipClient
             return $this->cachedJwt;
         }
 
-        try {
-            $this->cachedJwt = JWT::encode(
-                ['iss' => $teamId, 'iat' => time()],
-                $key,
-                'ES256',
-                $keyId,
-            );
-            $this->cachedJwtAt = time();
-            return $this->cachedJwt;
-        } catch (\Throwable $e) {
-            Log::error('APNs VoIP: signature JWT impossible', ['error' => $e->getMessage()]);
+        $pkey = openssl_pkey_get_private($key);
+        if ($pkey === false) {
+            Log::error('APNs VoIP: clé privée illisible', ['error' => openssl_error_string()]);
             return null;
         }
+
+        $header  = self::b64url(json_encode(['alg' => 'ES256', 'kid' => $keyId]));
+        $claims  = self::b64url(json_encode(['iss' => $teamId, 'iat' => time()]));
+        $signingInput = "{$header}.{$claims}";
+
+        $der = '';
+        if (! openssl_sign($signingInput, $der, $pkey, OPENSSL_ALGO_SHA256)) {
+            Log::error('APNs VoIP: openssl_sign a échoué', ['error' => openssl_error_string()]);
+            return null;
+        }
+
+        $this->cachedJwt   = "{$signingInput}." . self::b64url(self::derToRaw($der));
+        $this->cachedJwtAt = time();
+        return $this->cachedJwt;
+    }
+
+    /** base64url sans padding (format JWT). */
+    private static function b64url(string $data): string
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    /**
+     * Convertit une signature ECDSA DER (SEQUENCE de deux INTEGER R,S) en 64 octets
+     * bruts R||S, comme l'exige JWS ES256. openssl_sign renvoie du DER ; APNs veut du brut.
+     */
+    private static function derToRaw(string $der): string
+    {
+        $offset = 2;
+        if (ord($der[1]) & 0x80) {
+            $offset += ord($der[1]) & 0x7f;
+        }
+        $offset++;                       // saute le tag INTEGER de R
+        $rLen = ord($der[$offset]);
+        $offset++;
+        $r = substr($der, $offset, $rLen);
+        $offset += $rLen;
+        $offset++;                       // saute le tag INTEGER de S
+        $sLen = ord($der[$offset]);
+        $offset++;
+        $s = substr($der, $offset, $sLen);
+
+        $r = ltrim($r, "\x00");
+        $s = ltrim($s, "\x00");
+        return str_pad($r, 32, "\x00", STR_PAD_LEFT) . str_pad($s, 32, "\x00", STR_PAD_LEFT);
     }
 
     /** Contenu PEM de la clé .p8 : depuis APNS_KEY (inline) ou APNS_KEY_PATH (fichier). */
