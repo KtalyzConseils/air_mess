@@ -66,10 +66,17 @@ export function useIosVoipCall() {
         return Number.isFinite(n) && n > 0 ? n : null
       }
 
-      // Token VoIP fraîchement émis par iOS → on l'enregistre côté backend (canal séparé
-      // du token Expo : platform 'ios-voip').
+      // Envoie le token VoIP au backend (canal séparé du token Expo : platform 'ios-voip').
+      // Idempotent côté serveur (updateOrCreate sur le token).
+      const sendVoipToken = (token: string) => {
+        if (typeof token === 'string' && token.length > 0) {
+          api.post('/device-tokens', { token, platform: 'ios-voip' }).catch(() => {})
+        }
+      }
+
+      // Token VoIP fraîchement émis par iOS.
       VoipPushNotification.addEventListener('register', (token: string) => {
-        api.post('/device-tokens', { token, platform: 'ios-voip' }).catch(() => {})
+        sendVoipToken(token)
       })
 
       // Push VoIP reçu (l'appel CallKit est déjà présenté par le natif) : on retient la
@@ -79,10 +86,14 @@ export function useIosVoipCall() {
         if (id) pendingCourseId = id
       })
 
-      // Cold start : événements VoIP survenus avant que JS soit prêt.
+      // Cold start : événements VoIP survenus AVANT que le JS soit prêt. C'est le cas le
+      // plus fréquent pour le TOKEN : iOS l'émet dès le démarrage (AppDelegate), bien
+      // avant que ce hook s'abonne. Sans ce rattrapage, le token n'est jamais envoyé.
       VoipPushNotification.addEventListener('didLoadWithEvents', (events: any[]) => {
         for (const e of events ?? []) {
-          if (e?.name === 'RNVoipPushRemoteNotificationReceivedEvent') {
+          if (e?.name === 'RNVoipPushRemoteNotificationsRegisteredEvent') {
+            sendVoipToken(e?.data)
+          } else if (e?.name === 'RNVoipPushRemoteNotificationReceivedEvent') {
             const id = courseIdFrom(e?.data)
             if (id) pendingCourseId = id
           }
