@@ -193,6 +193,7 @@ class ApnsVoipClient
         // \n / \r\n littéraux → vrais sauts de ligne.
         $s = str_replace(['\r\n', '\n', '\r'], "\n", $raw);
 
+        // Cas avec marqueurs PEM : on extrait le corps et on ré-emballe proprement.
         if (preg_match('/-----BEGIN ([A-Z0-9 ]+?)-----(.*?)-----END [A-Z0-9 ]+?-----/s', $s, $m)) {
             $label = trim($m[1]);
             $body  = preg_replace('/\s+/', '', $m[2]); // enlève tous les blancs du base64
@@ -200,6 +201,15 @@ class ApnsVoipClient
             return "-----BEGIN {$label}-----\n{$wrapped}-----END {$label}-----\n";
         }
 
-        return $s; // pas de marqueurs PEM reconnus : on renvoie tel quel
+        // Cas SANS marqueurs : la variable ne contient que le corps base64 (fréquent quand
+        // on colle une clé .p8 sans les lignes BEGIN/END). Le .p8 d'Apple étant du PKCS#8,
+        // on l'emballe en "PRIVATE KEY".
+        $body = preg_replace('/\s+/', '', $s);
+        if ($body !== '' && preg_match('#^[A-Za-z0-9+/=]+$#', $body)) {
+            $wrapped = chunk_split($body, 64, "\n");
+            return "-----BEGIN PRIVATE KEY-----\n{$wrapped}-----END PRIVATE KEY-----\n";
+        }
+
+        return $s; // forme non reconnue : on renvoie tel quel
     }
 }
