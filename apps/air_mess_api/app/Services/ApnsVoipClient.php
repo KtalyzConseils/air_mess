@@ -172,15 +172,34 @@ class ApnsVoipClient
         $cfg = config('services.apns');
         $inline = $cfg['key'] ?? null;
         if (is_string($inline) && trim($inline) !== '') {
-            // Les secrets multi-lignes sont souvent stockés avec des \n littéraux.
-            return str_contains($inline, '-----BEGIN')
-                ? str_replace('\n', "\n", $inline)
-                : $inline;
+            return self::normalizePem($inline);
         }
         $path = $cfg['key_path'] ?? null;
         if (is_string($path) && $path !== '' && is_readable($path)) {
-            return file_get_contents($path) ?: null;
+            $contents = file_get_contents($path);
+            return $contents ? self::normalizePem($contents) : null;
         }
         return null;
+    }
+
+    /**
+     * Reconstruit un PEM canonique quelle que soit la façon dont la variable d'env a
+     * abîmé la clé : \n littéraux, tout collé sur une ligne, espaces, \r\n… OpenSSL 3
+     * refuse ("DECODER unsupported") le moindre écart de format. On extrait le corps
+     * base64, on le nettoie et on le ré-emballe en lignes de 64 caractères.
+     */
+    private static function normalizePem(string $raw): string
+    {
+        // \n / \r\n littéraux → vrais sauts de ligne.
+        $s = str_replace(['\r\n', '\n', '\r'], "\n", $raw);
+
+        if (preg_match('/-----BEGIN ([A-Z0-9 ]+?)-----(.*?)-----END [A-Z0-9 ]+?-----/s', $s, $m)) {
+            $label = trim($m[1]);
+            $body  = preg_replace('/\s+/', '', $m[2]); // enlève tous les blancs du base64
+            $wrapped = chunk_split($body, 64, "\n");
+            return "-----BEGIN {$label}-----\n{$wrapped}-----END {$label}-----\n";
+        }
+
+        return $s; // pas de marqueurs PEM reconnus : on renvoie tel quel
     }
 }
