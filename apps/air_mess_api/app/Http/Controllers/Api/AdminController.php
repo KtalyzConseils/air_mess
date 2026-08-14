@@ -13,6 +13,7 @@ use App\Models\SupportNote;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use App\Services\NotificationService;
 use App\Services\DriverWalletService;
@@ -86,6 +87,114 @@ class AdminController extends Controller
         }
 
         return response()->json($query->paginate(min((int) $request->query('per_page', 20), 100)));
+    }
+
+    public function createAirmessMission(
+        Request $request,
+        NotificationService $notifier,
+    ): JsonResponse {
+        $data = $request->validate([
+            'package_category_id' => ['nullable', 'exists:package_categories,id'],
+            'admin_instructions'  => ['nullable', 'string', 'max:1000'],
+            'package_description' => ['required', 'string', 'max:255'],
+            'origin_name'         => ['required', 'string', 'max:150'],
+            'origin_phone'        => ['required', 'string', 'max:20'],
+            'destination_name'    => ['required', 'string', 'max:150'],
+            'destination_phone'   => ['required', 'string', 'max:20'],
+        ]);
+
+        $packageCategoryId = (int) ($data['package_category_id']
+            ?? \App\Models\PackageCategory::where('is_active', true)->value('id'));
+        if (! $packageCategoryId) {
+            return response()->json(['message' => 'Aucune catégorie de colis active.'], 422);
+        }
+
+        $urgency = 'standard';
+        $deliveryFee = 0;
+        $driverEarnings = 0;
+
+        $missionType = 'other';
+        $instructions = trim((string) ($data['admin_instructions'] ?? ''));
+
+        $course = DB::transaction(function () use (
+            $data,
+            $request,
+            $packageCategoryId,
+            $urgency,
+            $deliveryFee,
+            $driverEarnings,
+            $missionType,
+            $instructions,
+        ) {
+            $course = Course::create([
+                'sender_id'       => $request->user()->id,
+                'package_category_id' => $packageCategoryId,
+                'source'          => Course::SOURCE_ADMIN_AIRMESS,
+                'external_reference' => 'MISSION-' . strtoupper($missionType) . '-' . now()->format('YmdHis'),
+                'status'          => Course::STATUS_AWAITING,
+                'origin_name'     => trim($data['origin_name']),
+                'origin_phone'    => trim($data['origin_phone']),
+                'origin_quartier' => 'AirMess',
+                'origin_city'     => 'A confirmer',
+                'origin_lat'      => 0,
+                'origin_lng'      => 0,
+                'destination_name' => trim($data['destination_name']),
+                'destination_phone' => trim($data['destination_phone']),
+                'destination_quartier' => 'AirMess',
+                'destination_city' => 'A confirmer',
+                'destination_lat' => 0,
+                'destination_lng' => 0,
+                'package_description' => trim($data['package_description']),
+                'package_size'    => 'M',
+                'delivery_fee'    => $deliveryFee,
+                'driver_earnings' => $driverEarnings,
+                'has_collection'  => false,
+                'urgency'         => $urgency,
+                'is_high_value'   => true,
+                'delivery_fee_paid_by' => Course::PAID_BY_SENDER,
+                'origin_instructions' => 'Mission AirMess interne.',
+                'destination_instructions' => $instructions ?: null,
+                'reference'       => $this->generateReference(),
+                'tracking_token'  => Str::random(10),
+                'pickup_code'     => Course::generateCode(),
+                'delivery_code'   => Course::generateCode(),
+            ]);
+
+            CourseStatusHistory::create([
+                'course_id'       => $course->id,
+                'from_status'     => null,
+                'to_status'       => Course::STATUS_AWAITING,
+                'changed_by_id'   => $request->user()->id,
+                'changed_by_type' => 'user',
+                'reason'          => 'Mission interne AirMess créée par admin',
+            ]);
+
+            return $course;
+        });
+
+        $driverUserIds = Driver::query()
+            ->where('kind', Driver::KIND_AIRMESS)
+            ->where('availability_status', Driver::STATUS_AVAILABLE)
+            ->where('activation_status', 'active')
+            ->pluck('user_id')
+            ->toArray();
+
+        $notifier->sendToUsers(
+            $driverUserIds,
+            'course.airmess_mission',
+            'Mission AirMess prioritaire',
+            "{$course->origin_name} ? {$course->destination_name} ? {$course->package_description}",
+            [
+                'reference' => $course->reference,
+                'source'    => Course::SOURCE_ADMIN_AIRMESS,
+            ],
+            $course->id,
+        );
+
+        return response()->json([
+            'message' => 'Mission AirMess créée et envoyée aux drivers AirMess disponibles.',
+            'course'  => $course->load(['sender', 'packageCategory']),
+        ], 201);
     }
 
     // ===== 3. RÉAFFECTER UNE COURSE =====
@@ -212,7 +321,7 @@ class AdminController extends Controller
                 $newDriver->user_id,
                 'course.assigned_to_you',
                 'Course attribuée',
-                "{$course->origin_quartier} → {$course->destination_quartier} · {$course->driver_earnings} FCFA",
+            "{$course->origin_name} ? {$course->destination_name} ? {$course->package_description}",
                 ['reference' => $course->reference],
                 $course->id,
             );
@@ -772,6 +881,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         return response()->json([
             'driver'   => $driver,
             'stats'    => $stats,
+            'quality_rating' => $driver->qualityRating(),
             'declines' => [
                 'total_30d'   => $declinesByReason->sum(),
                 'by_reason'   => $declinesByReason,
@@ -2825,5 +2935,17 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             'message'    => 'Particulier réactivé.',
             'individual' => $individual->fresh()->load('user'),
         ]);
+    }
+
+    private function generateReference(): string
+    {
+        $year = now()->format('Y');
+        $count = Course::whereYear('created_at', $year)->count() + 1;
+
+        do {
+            $ref = sprintf('AM-%s-%05d', $year, $count++);
+        } while (Course::where('reference', $ref)->exists());
+
+        return $ref;
     }
 }

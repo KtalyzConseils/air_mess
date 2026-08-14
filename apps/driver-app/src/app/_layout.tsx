@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import notifee, { EventType } from '../lib/notifeeSafe'
 import { AppState } from 'react-native'
 import { useAuthStore } from '../stores/authStore'
@@ -16,6 +17,7 @@ import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import { useIosVoipCall } from '../hooks/useIosVoipCall'
 import BrandSplash from '../components/BrandSplash'
+import { hasCompletedOnboarding } from '../lib/onboarding'
 import {
   useFonts,
   PlusJakartaSans_400Regular,
@@ -34,7 +36,7 @@ const queryClient = new QueryClient()
 const MIN_SPLASH_MS = 1200
 
 export default function RootLayout() {
-  const { user, hydrated, hydrate } = useAuthStore()
+  const { user, hydrated, hydrate, onboardingSeen, setOnboardingSeen } = useAuthStore()
   const router = useRouter()
   const segments = useSegments()
   const [minElapsed, setMinElapsed] = useState(false)
@@ -157,6 +159,23 @@ export default function RootLayout() {
 
   useEffect(() => { hydrate() }, [hydrate])
 
+  useEffect(() => {
+    let alive = true
+
+    if (!hydrated || !user) {
+      setOnboardingSeen(null)
+      return
+    }
+
+    hasCompletedOnboarding().then((seen) => {
+      if (alive) setOnboardingSeen(seen)
+    })
+
+    return () => {
+      alive = false
+    }
+  }, [hydrated, setOnboardingSeen, user?.id])
+
   // Timer pour la durée minimum du BrandSplash
   useEffect(() => {
     const t = setTimeout(() => setMinElapsed(true), MIN_SPLASH_MS)
@@ -174,14 +193,19 @@ export default function RootLayout() {
       first === 'register' ||
       first === 'forgot-password' ||
       first === 'reset-password'
+    const inOnboardingRoute = first === 'onboarding'
     if (!user && !inAuthRoute) {
       router.replace('/login')
+    } else if (user && onboardingSeen === false && !inOnboardingRoute) {
+      router.replace('/onboarding')
+    } else if (user && onboardingSeen === true && inOnboardingRoute) {
+      router.replace('/')
     } else if (user && (first === 'login' || first === 'register')) {
       // Un utilisateur connecté ne doit pas rester sur login/register, mais on
       // le LAISSE sur forgot/reset s'il a suivi un lien mail (cas rare mais valide).
-      router.replace('/')
+      router.replace(onboardingSeen === false ? '/onboarding' : '/')
     }
-  }, [hydrated, user, segments, router])
+  }, [hydrated, onboardingSeen, user, segments, router])
 
   // Splash React tant que : store pas hydraté OU durée minimum pas écoulée OU police pas prête
   if (!hydrated || !minElapsed || !fontsLoaded) {
@@ -189,10 +213,12 @@ export default function RootLayout() {
   }
 
   return (
-    <KeyboardProvider>
-      <QueryClientProvider client={queryClient}>
-        <Stack screenOptions={{ headerShown: false }} />
-      </QueryClientProvider>
-    </KeyboardProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
+        <QueryClientProvider client={queryClient}>
+          <Stack screenOptions={{ headerShown: false }} />
+        </QueryClientProvider>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   )
 }

@@ -1,8 +1,10 @@
 import api from './client'
+import type { User } from '../types/auth'
 
 export interface DriverCourseSummary {
   id: number
   reference: string
+  source?: 'admin_airmess' | string | null
   status: string
   origin_name: string
   origin_quartier: string
@@ -50,6 +52,16 @@ export interface DriverCourseSummary {
 
 export type Availability = 'offline' | 'available' | 'on_break'
 
+export interface DriverProfilePayload {
+  first_name: string
+  last_name: string
+  phone: string
+  vehicle_type: 'scooter' | 'moto' | 'voiture' | 'velo'
+  vehicle_plate?: string | null
+  vehicle_brand?: string | null
+  preferred_response_channel?: 'email' | 'sms' | 'whatsapp' | null
+}
+
 export type TransitionAction =
   | 'start_to_pickup'
   | 'arrived_pickup'
@@ -62,6 +74,11 @@ export type TransitionAction =
 export async function updateAvailability(status: Availability) {
   const { data } = await api.post('/driver/availability', { availability_status: status })
   return data.driver
+}
+
+export async function updateDriverProfile(payload: DriverProfilePayload): Promise<User> {
+  const { data } = await api.patch('/driver/profile', payload)
+  return data.user
 }
 
 export async function updatePosition(lat: number, lng: number) {
@@ -138,7 +155,22 @@ export interface PeriodStat {
   earnings: number
 }
 
-export type DriverStats = Record<StatPeriod, PeriodStat>
+export interface DriverQualityRating {
+  rating: number | null
+  stars: number
+  label: string
+  summary: string
+  criteria: {
+    delivered_courses: number
+    acceptance_rate: number
+    incidents_count: number
+    failed_courses: number
+  }
+}
+
+export type DriverStats = Record<StatPeriod, PeriodStat> & {
+  quality_rating?: DriverQualityRating
+}
 
 export async function fetchDriverStats(): Promise<DriverStats> {
   const { data } = await api.get('/driver/stats')

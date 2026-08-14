@@ -1,6 +1,8 @@
-import { useEffect, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
+import { useForm } from 'react-hook-form'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { AxiosError } from 'axios'
 import AppHeader from '../components/AppHeader'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -9,6 +11,8 @@ import PageEyebrow from '../components/ui/PageEyebrow'
 import { useAuthStore } from '../stores/authStore'
 import type { Marchant } from '../types/auth'
 import { useUiPrefsStore, type ClientNavMode } from '../stores/uiPrefsStore'
+import Input from '../components/ui/Input'
+import { addDriverRole, type AddDriverRolePayload } from '../api/profileRole'
 
 const SECTEUR_KEY: Record<Marchant['secteur_activite'], string> = {
   supermarche: 'profile.sectorSupermarche',
@@ -46,11 +50,64 @@ function initialsOf(name: string): string {
 
 export default function ProfilePage() {
   const { t } = useTranslation()
-  const { user, fetchMe } = useAuthStore()
+  const { user, fetchMe, setUser } = useAuthStore()
+  const [driverRoleSuccess, setDriverRoleSuccess] = useState<string | null>(null)
+  const [driverRoleError, setDriverRoleError] = useState<string | null>(null)
+  const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string[]>>({})
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<AddDriverRolePayload>({
+    defaultValues: {
+      vehicle_type: 'moto',
+      preferred_response_channel: 'whatsapp',
+      equipment: {
+        isothermal_bag: false,
+        top_case: false,
+        refrigerated_bag: false,
+      },
+    },
+  })
 
   useEffect(() => {
     fetchMe()
   }, [fetchMe])
+
+  const serverErr = (field: string): string | undefined => serverFieldErrors[field]?.[0]
+
+  async function onAddDriverRole(values: AddDriverRolePayload) {
+    setDriverRoleError(null)
+    setDriverRoleSuccess(null)
+    setServerFieldErrors({})
+    try {
+      const res = await addDriverRole({
+        ...values,
+        first_name: values.first_name.trim(),
+        last_name: values.last_name.trim(),
+        gender: values.gender || undefined,
+        birth_date: values.birth_date || undefined,
+        vehicle_plate: values.vehicle_plate.trim(),
+        vehicle_brand: values.vehicle_brand?.trim() || null,
+        emergency_contact_name: values.emergency_contact_name.trim(),
+        emergency_contact_phone: values.emergency_contact_phone.trim(),
+        emergency_contact2_name: values.emergency_contact2_name?.trim() || null,
+        emergency_contact2_phone: values.emergency_contact2_phone?.trim() || null,
+        preferred_response_channel: values.preferred_response_channel ?? 'whatsapp',
+      })
+      setUser(res.user)
+      setDriverRoleSuccess(res.message)
+    } catch (err) {
+      const ax = err as AxiosError<{ message?: string; errors?: Record<string, string[]> }>
+      if (ax.response?.status === 422 && ax.response.data?.errors) {
+        setServerFieldErrors(ax.response.data.errors)
+      }
+      setDriverRoleError(
+        ax.response?.data?.message ??
+          "Impossible d'envoyer la demande livreur. Réessaie dans un instant.",
+      )
+    }
+  }
 
   if (!user) {
     return (
@@ -160,6 +217,203 @@ export default function ProfilePage() {
             </dl>
           </Card>
         )}
+
+        {/* ============================================================
+            MULTI-RÔLE : MARCHAND → LIVREUR
+            ============================================================ */}
+        <div className="mt-6">
+          <Card variant="default" padding="lg">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-h3 text-ink font-bold">Devenir aussi livreur</h3>
+                <p className="text-body-s text-warm-500 mt-1">
+                  Ajoute un profil livreur à ce compte. Ton espace marchand reste inchangé.
+                </p>
+              </div>
+              {user.driver && (
+                <Badge
+                  variant={user.driver.activation_status === 'active' ? 'success' : 'warning'}
+                  size="sm"
+                >
+                  {user.driver.activation_status === 'active'
+                    ? 'Livreur actif'
+                    : 'Validation livreur en attente'}
+                </Badge>
+              )}
+            </div>
+
+            {user.driver ? (
+              <p className="text-body-s text-warm-600">
+                Un profil livreur est déjà associé à ce compte. Une fois validé,
+                tu pourras te connecter à l'app Driver avec les mêmes identifiants.
+              </p>
+            ) : (
+              <form onSubmit={handleSubmit(onAddDriverRole)} className="space-y-4">
+                {driverRoleSuccess && (
+                  <div className="rounded-md bg-success-bg border border-success/30 px-4 py-3">
+                    <p className="text-body-s text-success font-medium">{driverRoleSuccess}</p>
+                  </div>
+                )}
+                {driverRoleError && (
+                  <div className="rounded-md bg-danger-bg border border-airmess-red/30 px-4 py-3">
+                    <p className="text-body-s text-airmess-red font-medium">{driverRoleError}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Prénom"
+                    defaultValue={user.name.split(' ')[0] ?? ''}
+                    {...register('first_name', { required: 'Prénom obligatoire' })}
+                    error={errors.first_name?.message ?? serverErr('first_name')}
+                  />
+                  <Input
+                    label="Nom"
+                    defaultValue={user.name.split(' ').slice(1).join(' ')}
+                    {...register('last_name', { required: 'Nom obligatoire' })}
+                    error={errors.last_name?.message ?? serverErr('last_name')}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block mb-1.5 text-caption text-warm-600 font-medium">
+                      Genre
+                    </label>
+                    <select
+                      {...register('gender')}
+                      className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
+                      defaultValue=""
+                    >
+                      <option value="">Non précisé</option>
+                      <option value="M">Homme</option>
+                      <option value="F">Femme</option>
+                      <option value="autre">Autre</option>
+                    </select>
+                    {serverErr('gender') && (
+                      <p className="mt-1.5 text-caption text-airmess-red">{serverErr('gender')}</p>
+                    )}
+                  </div>
+                  <Input
+                    label="Date de naissance"
+                    type="date"
+                    {...register('birth_date')}
+                    error={serverErr('birth_date')}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block mb-1.5 text-caption text-warm-600 font-medium">
+                      Véhicule
+                    </label>
+                    <select
+                      {...register('vehicle_type', { required: 'Véhicule obligatoire' })}
+                      className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
+                    >
+                      <option value="moto">Moto</option>
+                      <option value="scooter">Scooter</option>
+                      <option value="voiture">Voiture</option>
+                      <option value="velo">Vélo</option>
+                    </select>
+                    {(errors.vehicle_type?.message || serverErr('vehicle_type')) && (
+                      <p className="mt-1.5 text-caption text-airmess-red">
+                        {errors.vehicle_type?.message ?? serverErr('vehicle_type')}
+                      </p>
+                    )}
+                  </div>
+                  <Input
+                    label="Plaque"
+                    placeholder="BJ-0001-AM"
+                    {...register('vehicle_plate', { required: 'Plaque obligatoire' })}
+                    error={errors.vehicle_plate?.message ?? serverErr('vehicle_plate')}
+                  />
+                  <Input
+                    label="Marque"
+                    placeholder="Bajaj, TVS..."
+                    {...register('vehicle_brand')}
+                    error={serverErr('vehicle_brand')}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Contact d'urgence"
+                    {...register('emergency_contact_name', {
+                      required: "Nom du contact d'urgence obligatoire",
+                    })}
+                    error={errors.emergency_contact_name?.message ?? serverErr('emergency_contact_name')}
+                  />
+                  <Input
+                    label="Téléphone urgence"
+                    {...register('emergency_contact_phone', {
+                      required: "Téléphone du contact d'urgence obligatoire",
+                    })}
+                    error={errors.emergency_contact_phone?.message ?? serverErr('emergency_contact_phone')}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Second contact"
+                    helper="Optionnel"
+                    {...register('emergency_contact2_name')}
+                    error={serverErr('emergency_contact2_name')}
+                  />
+                  <Input
+                    label="Téléphone second contact"
+                    helper="Optionnel"
+                    {...register('emergency_contact2_phone')}
+                    error={serverErr('emergency_contact2_phone')}
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1.5 text-caption text-warm-600 font-medium">
+                    Canal préféré pour la réponse admin
+                  </label>
+                  <select
+                    {...register('preferred_response_channel')}
+                    className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
+                  >
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="sms">SMS</option>
+                    <option value="email">Email</option>
+                  </select>
+                </div>
+
+                <fieldset className="border border-warm-200 rounded-md p-4">
+                  <legend className="px-1 text-caption text-warm-600 font-medium">
+                    Équipement
+                  </legend>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <label className="flex items-center gap-2 text-body-s text-ink">
+                      <input type="checkbox" {...register('equipment.isothermal_bag')} />
+                      Sac isotherme
+                    </label>
+                    <label className="flex items-center gap-2 text-body-s text-ink">
+                      <input type="checkbox" {...register('equipment.top_case')} />
+                      Top case
+                    </label>
+                    <label className="flex items-center gap-2 text-body-s text-ink">
+                      <input type="checkbox" {...register('equipment.refrigerated_bag')} />
+                      Sac réfrigéré
+                    </label>
+                  </div>
+                </fieldset>
+
+                <div className="pt-2 flex flex-col md:flex-row md:items-center gap-3">
+                  <Button type="submit" loading={isSubmitting}>
+                    Envoyer ma demande livreur
+                  </Button>
+                  <p className="text-body-s text-warm-500">
+                    Un admin devra valider le profil avant réception des courses.
+                  </p>
+                </div>
+              </form>
+            )}
+          </Card>
+        </div>
 
         {/* ============================================================
             Préférences d'affichage — navigation

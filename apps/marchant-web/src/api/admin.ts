@@ -64,6 +64,19 @@ export interface DriverStats {
   last_delivery_at: string | null
 }
 
+export interface DriverQualityRating {
+  rating: number | null
+  stars: number
+  label: string
+  summary: string
+  criteria: {
+    delivered_courses: number
+    acceptance_rate: number
+    incidents_count: number
+    failed_courses: number
+  }
+}
+
 export interface DriverWallet {
   id: number
   balance: number
@@ -191,7 +204,12 @@ export interface DriverDeclines {
 
 export async function fetchDriver(
   id: number | string,
-): Promise<{ driver: DriverDetail; stats: DriverStats; declines: DriverDeclines }> {
+): Promise<{
+  driver: DriverDetail
+  stats: DriverStats
+  quality_rating: DriverQualityRating
+  declines: DriverDeclines
+}> {
   const { data } = await api.get(`/admin/drivers/${id}`)
   return data
 }
@@ -299,6 +317,21 @@ export async function fetchAdminCourses(params: {
 }): Promise<Paginated<Course>> {
   const { data } = await api.get('/admin/courses', { params })
   return data
+}
+
+export interface CreateAirmessMissionPayload {
+  package_category_id?: number
+  admin_instructions?: string
+  package_description: string
+  origin_name: string
+  origin_phone: string
+  destination_name: string
+  destination_phone: string
+}
+
+export async function createAirmessMission(payload: CreateAirmessMissionPayload): Promise<Course> {
+  const { data } = await api.post('/admin/courses/airmess-mission', payload)
+  return data.course
 }
 
 export type MarchantWithUser = Marchant & {

@@ -37,6 +37,7 @@ export default function CourseDetailModal({
 }: Props) {
   const queryClient = useQueryClient()
   const isExpress = course.urgency === 'express'
+  const isAirmessMission = course.source === 'admin_airmess'
 
   const mutation = useMutation({
     mutationFn: () => acceptCourse(course.id),
@@ -48,7 +49,11 @@ export default function CourseDetailModal({
     },
   })
 
-  const subtitle = isExpress ? 'Express · à prendre vite' : 'Course standard'
+  const subtitle = isAirmessMission
+    ? 'Mission interne AirMess'
+    : isExpress
+      ? 'Express · à prendre vite'
+      : 'Course standard'
 
   return (
     <BottomSheet
@@ -105,6 +110,14 @@ export default function CourseDetailModal({
       }
     >
       {/* Bandeau express — signature */}
+      {isAirmessMission && (
+        <View className="bg-ink rounded-2xl px-3 py-2 mb-3 flex-row items-center">
+          <Ionicons name="shield-checkmark" size={14} color="#FFCC00" />
+          <Text className="text-airmess-yellow text-xs font-extrabold tracking-widest ml-2">
+            MISSION AIRMESS
+          </Text>
+        </View>
+      )}
       {isExpress && (
         <View className="bg-airmess-red rounded-2xl px-3 py-2 mb-3 flex-row items-center">
           <Ionicons name="flash" size={14} color="#ffffff" />
@@ -117,11 +130,20 @@ export default function CourseDetailModal({
       {/* Hero gain */}
       <View className="bg-airmess-yellow rounded-2xl p-5 mb-3">
         <Text className="text-[10px] uppercase text-ink/70 tracking-widest font-extrabold">
-          Ton gain
+          {isAirmessMission ? 'Mission interne' : 'Ton gain'}
         </Text>
         <Text className="text-4xl font-extrabold text-ink mt-1">
-          {course.driver_earnings.toLocaleString('fr-FR')}
-          <Text className="text-lg font-bold text-ink/80"> FCFA</Text>
+          {isAirmessMission ? (
+            <>
+              AirMess
+              <Text className="text-lg font-bold text-ink/80"> prioritaire</Text>
+            </>
+          ) : (
+            <>
+              {course.driver_earnings.toLocaleString('fr-FR')}
+              <Text className="text-lg font-bold text-ink/80"> FCFA</Text>
+            </>
+          )}
         </Text>
       </View>
 

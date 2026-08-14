@@ -9,10 +9,18 @@ import AdminModal from '../../components/admin/AdminModal'
 import AdminPagination from '../../components/admin/AdminPagination'
 import { AdminSearchInput, AdminSelect, AdminButton } from '../../components/admin/AdminToolbar'
 import StatusBadge from '../../components/StatusBadge'
-import { fetchAdminCourses, fetchAdminDrivers, reassignCourse, type DriverFull, type DriverKind } from '../../api/admin'
+import {
+  createAirmessMission,
+  fetchAdminCourses,
+  fetchAdminDrivers,
+  reassignCourse,
+  type CreateAirmessMissionPayload,
+  type DriverFull,
+  type DriverKind,
+} from '../../api/admin'
 import type { Course } from '../../api/courses'
 import { computeEligibility, type EligibilityReason } from '../../lib/reassignEligibility'
-import { CheckIcon, AlertTriangleIcon } from '../../components/ui/icons'
+import { CheckIcon, AlertTriangleIcon, PackageIcon } from '../../components/ui/icons'
 
 // picked_up et at_dropoff sont désormais réassignables via transfert physique
 // (Cas 5 — panne/accident driver). Le back exige la case cochée dans le modal.
@@ -34,6 +42,7 @@ export default function AdminCoursesPage() {
   const [vehicleFilter, setVehicleFilter] = useState<string>('')
   // Override manuel des règles d'éligibilité — cas exceptionnels (l'ops force)
   const [forceOverride, setForceOverride] = useState(false)
+  const [missionOpen, setMissionOpen] = useState(false)
 
   const coursesQuery = useQuery({
     queryKey: ['admin', 'courses', { search, statusFilter, page }],
@@ -51,6 +60,21 @@ export default function AdminCoursesPage() {
   const driversQuery = useQuery({
     queryKey: ['admin', 'drivers'],
     queryFn: fetchAdminDrivers,
+  })
+
+  const missionMutation = useMutation({
+    mutationFn: createAirmessMission,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'courses'] })
+      setMissionOpen(false)
+    },
+    onError: (err) => {
+      const message =
+        err instanceof AxiosError
+          ? err.response?.data?.message ?? 'Impossible de créer la mission AirMess.'
+          : 'Impossible de créer la mission AirMess.'
+      window.alert(message)
+    },
   })
 
   const reassignMutation = useMutation({
@@ -126,6 +150,15 @@ export default function AdminCoursesPage() {
       <AdminPageHeader
         title={t('admin.courses.pageTitle')}
         subtitle={t('admin.courses.pageSubtitle', { count: total })}
+        actions={
+          <AdminButton
+            variant="primary"
+            onClick={() => setMissionOpen(true)}
+            leftIcon={<PackageIcon size={15} />}
+          >
+            Mission AirMess
+          </AdminButton>
+        }
         toolbar={
           <div className="flex flex-wrap gap-2 items-center">
             <AdminSearchInput
@@ -219,6 +252,14 @@ export default function AdminCoursesPage() {
                               title="Course premium — hors pool driver, prise en charge manuelle"
                             >
                               Premium
+                            </span>
+                          )}
+                          {c.source === 'admin_airmess' && (
+                            <span
+                              className="text-[10px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-ink text-airmess-yellow border border-ink"
+                              title="Mission interne AirMess"
+                            >
+                              Mission
                             </span>
                           )}
                         </div>
@@ -402,7 +443,199 @@ export default function AdminCoursesPage() {
           )}
         </div>
       </AdminModal>
+
+      <AirmessMissionModal
+        open={missionOpen}
+        loading={missionMutation.isPending}
+        onClose={() => setMissionOpen(false)}
+        onSubmit={(payload) => missionMutation.mutate(payload)}
+      />
     </AdminPageShell>
+  )
+}
+
+type MissionForm = {
+  admin_instructions: string
+  package_description: string
+  origin_name: string
+  origin_phone: string
+  destination_name: string
+  destination_phone: string
+}
+
+const EMPTY_MISSION_FORM: MissionForm = {
+  admin_instructions: '',
+  package_description: '',
+  origin_name: '',
+  origin_phone: '',
+  destination_name: '',
+  destination_phone: '',
+}
+
+function AirmessMissionModal({
+  open,
+  loading,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean
+  loading: boolean
+  onClose: () => void
+  onSubmit: (payload: CreateAirmessMissionPayload) => void
+}) {
+  const [form, setForm] = useState<MissionForm>(EMPTY_MISSION_FORM)
+
+  function update<K extends keyof MissionForm>(key: K, value: MissionForm[K]) {
+    setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function close() {
+    if (!loading) {
+      setForm(EMPTY_MISSION_FORM)
+      onClose()
+    }
+  }
+
+  function submit() {
+    onSubmit({
+      admin_instructions: form.admin_instructions.trim() || undefined,
+      package_description: form.package_description.trim(),
+      origin_name: form.origin_name.trim(),
+      origin_phone: form.origin_phone.trim(),
+      destination_name: form.destination_name.trim(),
+      destination_phone: form.destination_phone.trim(),
+    })
+  }
+
+  const canSubmit =
+    form.package_description.trim().length >= 3 &&
+    form.origin_name.trim().length >= 2 &&
+    form.origin_phone.trim().length >= 6 &&
+    form.destination_name.trim().length >= 2 &&
+    form.destination_phone.trim().length >= 6 &&
+    !loading
+
+  return (
+    <AdminModal
+      open={open}
+      onClose={close}
+      title="Créer une mission AirMess"
+      subtitle="Mission interne visible uniquement par les drivers AirMess sous contrat."
+      footer={
+        <>
+          <AdminButton variant="secondary" onClick={close} disabled={loading}>
+            Annuler
+          </AdminButton>
+          <AdminButton variant="primary" onClick={submit} disabled={!canSubmit}>
+            {loading ? 'Création...' : 'Envoyer aux AirMess'}
+          </AdminButton>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="rounded-lg bg-ink text-white p-4">
+          <p className="text-caption text-airmess-yellow font-bold uppercase tracking-wide">
+            Mission interne
+          </p>
+          <MissionTextarea
+            label="Consigne admin"
+            value={form.admin_instructions}
+            onChange={(value) => update('admin_instructions', value)}
+            placeholder="Ex: récupérer un colis VIP, passer au hub, contacter le support ops..."
+            dark
+          />
+        </div>
+
+        <MissionField
+          label="Objet"
+          value={form.package_description}
+          onChange={(value) => update('package_description', value)}
+          placeholder="Documents, colis, matériel..."
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-lg border border-warm-200 bg-cream/40 p-3">
+            <p className="text-caption font-bold text-ink uppercase tracking-wide mb-3">Expéditeur</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <MissionField label="Nom" value={form.origin_name} onChange={(value) => update('origin_name', value)} />
+              <MissionField label="Numéro" value={form.origin_phone} onChange={(value) => update('origin_phone', value)} />
+            </div>
+          </div>
+          <div className="rounded-lg border border-warm-200 bg-cream/40 p-3">
+            <p className="text-caption font-bold text-ink uppercase tracking-wide mb-3">Destinataire</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <MissionField label="Nom" value={form.destination_name} onChange={(value) => update('destination_name', value)} />
+              <MissionField label="Numéro" value={form.destination_phone} onChange={(value) => update('destination_phone', value)} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </AdminModal>
+  )
+}
+
+function MissionField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  className = '',
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  className?: string
+}) {
+  return (
+    <label className={className}>
+      <span className="block mb-1.5 text-caption font-medium text-warm-600">{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full h-10 rounded-md bg-off-white border border-warm-300 px-3 text-body-s text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
+      />
+    </label>
+  )
+}
+
+function MissionTextarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+  dark,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  dark?: boolean
+}) {
+  return (
+    <label className="block mt-3">
+      <span
+        className={[
+          'block mb-1.5 text-caption font-medium',
+          dark ? 'text-airmess-yellow uppercase tracking-wide font-bold' : 'text-warm-600',
+        ].join(' ')}
+      >
+        {label}
+      </span>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={3}
+        className={[
+          'w-full rounded-md border px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all',
+          dark
+            ? 'bg-white/10 border-white/15 text-white placeholder:text-white/45'
+            : 'bg-off-white border-warm-300 text-ink placeholder:text-warm-400',
+        ].join(' ')}
+      />
+    </label>
   )
 }
 

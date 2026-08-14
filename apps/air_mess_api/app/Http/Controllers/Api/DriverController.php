@@ -28,6 +28,51 @@ class DriverController extends Controller
      */
     private const MIN_CONTACT_ATTEMPTS_FOR_UNREACHABLE = 2;
 
+    // ===== 0. PROFIL =====
+    public function updateProfile(Request $request): JsonResponse
+    {
+        if ($request->has('phone')) {
+            $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+        }
+
+        $driver = $this->currentDriver($request);
+        $user = $request->user();
+
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:80'],
+            'last_name' => ['required', 'string', 'max:80'],
+            'phone' => ['required', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($user->id)],
+            'vehicle_type' => ['required', Rule::in(['scooter', 'moto', 'voiture', 'velo'])],
+            'vehicle_plate' => ['nullable', 'string', 'max:20'],
+            'vehicle_brand' => ['nullable', 'string', 'max:80'],
+            'preferred_response_channel' => ['nullable', Rule::in(['email', 'sms', 'whatsapp'])],
+        ]);
+
+        DB::transaction(function () use ($driver, $user, $data) {
+            $firstName = trim($data['first_name']);
+            $lastName = trim($data['last_name']);
+
+            $user->update([
+                'name' => trim("{$firstName} {$lastName}"),
+                'phone' => $data['phone'],
+            ]);
+
+            $driver->update([
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'vehicle_type' => $data['vehicle_type'],
+                'vehicle_plate' => ($data['vehicle_plate'] ?? null) ? strtoupper(trim($data['vehicle_plate'])) : null,
+                'vehicle_brand' => ($data['vehicle_brand'] ?? null) ? trim($data['vehicle_brand']) : null,
+                'preferred_response_channel' => $data['preferred_response_channel'] ?? null,
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Profil mis à jour.',
+            'user' => $user->fresh()->load(['driver', 'marchant', 'individual', 'admin']),
+        ]);
+    }
+
     // ===== 1. AVAILABILITY =====
     public function updateAvailability(Request $request): JsonResponse
     {
@@ -117,6 +162,11 @@ class DriverController extends Controller
         // NULL-safe pour les colonnes ajoutées après-coup (rows historiques).
         if (! $isAirmess) {
             $query->where(function ($q) {
+                $q->where('source', '!=', Course::SOURCE_ADMIN_AIRMESS)
+                  ->orWhereNull('source');
+            });
+
+            $query->where(function ($q) {
                 $q->where('is_high_value', false)->orWhereNull('is_high_value');
             });
 
@@ -162,10 +212,12 @@ class DriverController extends Controller
             }
 
             $query
+                ->orderByRaw("source = ? DESC", [Course::SOURCE_ADMIN_AIRMESS])
                 ->orderByRaw("urgency = 'express' DESC")
                 ->orderBy('distance_km');
         } else {
             $query
+                ->orderByRaw("source = ? DESC", [Course::SOURCE_ADMIN_AIRMESS])
                 ->orderByRaw("urgency = 'express' DESC")
                 ->latest();
         }
@@ -635,7 +687,7 @@ class DriverController extends Controller
     {
         $user = $request->user();
 
-        if (! $user || ! $user->isDriver() || ! $user->driver) {
+        if (! $user || ! $user->driver) {
             abort(403, 'Réservé aux livreurs.');
         }
 
@@ -1134,6 +1186,8 @@ class DriverController extends Controller
                 'earnings' => (float) (clone $q)->sum('driver_earnings'),
             ];
         }
+
+        $response['quality_rating'] = $driver->qualityRating();
 
         return response()->json($response);
     }

@@ -40,6 +40,8 @@ class Course extends Model
     public const PAID_BY_SENDER    = 'sender';
     public const PAID_BY_RECIPIENT = 'recipient';
 
+    public const SOURCE_ADMIN_AIRMESS = 'admin_airmess';
+
     protected $guarded = ['id']; // mass assignment OK sur tous les champs sauf id
 
     protected function casts(): array

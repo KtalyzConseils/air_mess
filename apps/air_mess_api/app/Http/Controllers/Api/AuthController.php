@@ -439,7 +439,7 @@ class AuthController extends Controller
         $token = $user->createToken($user->type . '-' . $user->id)->plainTextToken;
 
         return response()->json([
-            'user'    => $user->load($user->type), // charge marchant, individual, driver ou admin
+            'user'    => $user->load(['driver', 'marchant', 'individual', 'admin']),
             'token'   => $token,
             // Statut d'acceptation des CGU — le front s'en sert immédiatement après login
             // pour décider d'afficher la modale bloquante (utilisateurs pré-existant à la mise en place des CGU).
@@ -600,4 +600,3 @@ class AuthController extends Controller
     }
 
 }
-

@@ -4,6 +4,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useQuery } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
+import { AxiosError } from 'axios'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '../../stores/authStore'
 import AvailabilityToggle from '../../components/AvailabilityToggle'
@@ -21,6 +22,10 @@ import Card from '../../components/ui/Card'
 function initials(first?: string, last?: string, fallback?: string): string {
   const res = `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase()
   return res || fallback?.[0]?.toUpperCase() || '?'
+}
+
+function isNetworkError(error: unknown): boolean {
+  return error instanceof AxiosError && !error.response
 }
 
 export default function DriverDashboard() {
@@ -61,6 +66,10 @@ export default function DriverDashboard() {
     enabled: canSeeOffers,
     refetchInterval: 8_000,
   })
+  const offlineWarning =
+    isNetworkError(meQuery.error) ||
+    isNetworkError(activeQuery.error) ||
+    isNetworkError(offeredQuery.error)
 
   useNewCourseAlert(availability === 'available' ? (offeredQuery.data?.length ?? 0) : 0)
 
@@ -177,9 +186,33 @@ export default function DriverDashboard() {
             className="w-11 h-11 rounded-full bg-airmess-dark items-center justify-center ml-2"
             style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
           >
-            <Ionicons name="paper-plane" size={18} color="#FFCC00" />
+            <Ionicons name="notifications" size={18} color="#FFCC00" />
           </Pressable>
         </View>
+
+        {offlineWarning && (
+          <View className="mb-4 bg-warning-bg border border-warning/30 rounded-2xl px-3 py-3 flex-row items-start">
+            <View className="w-9 h-9 rounded-full bg-warning/15 items-center justify-center mr-3">
+              <Ionicons name="cloud-offline-outline" size={18} color="#F59E0B" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-ink text-sm font-jk-extrabold">
+                Pas de connexion internet
+              </Text>
+              <Text className="text-warm-600 text-xs font-jk-medium mt-0.5 leading-4">
+                Les courses, gains et notifications peuvent ne pas être à jour.
+              </Text>
+            </View>
+            <Pressable
+              onPress={refreshAll}
+              className="h-9 px-3 rounded-xl bg-off-white border border-warm-200 items-center justify-center ml-2"
+              accessibilityRole="button"
+              accessibilityLabel="Réessayer la connexion"
+            >
+              <Text className="text-ink text-xs font-jk-extrabold">Réessayer</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* ============ STATUT ============ */}
         <View className="mb-4">

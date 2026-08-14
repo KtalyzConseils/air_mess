@@ -21,6 +21,7 @@ export interface CourseIncident {
 export interface Course {
   id: number
   reference: string
+  source?: 'admin_airmess' | string | null
   status: string
   origin_name: string
   origin_quartier: string

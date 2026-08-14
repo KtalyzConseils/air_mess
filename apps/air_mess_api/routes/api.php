@@ -104,6 +104,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('profile/add-role')->group(function () {
         Route::post('/marchant', [ProfileRoleController::class, 'addMarchantRole'])
             ->middleware('throttle:auth-register');
+        Route::post('/driver', [ProfileRoleController::class, 'addDriverRole'])
+            ->middleware('throttle:auth-register');
     });
 
     // Courses
@@ -121,6 +123,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Driver
     Route::prefix('driver')->group(function () {
+        Route::patch('/profile', [DriverController::class, 'updateProfile']);
         Route::post('/availability', [DriverController::class, 'updateAvailability']);
         Route::post('/position',     [DriverController::class, 'updatePosition']);
         // Canal de réponse à la candidature — accessible au driver pending
@@ -320,6 +323,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // === ÉCRITURE OPS (réassignation course, validation driver, retraits) ===
     // Les retraits (argent) restent strictement ops — pas accessibles au support.
     Route::middleware('admin:ops')->group(function () {
+        Route::post('/courses/airmess-mission',      [AdminController::class, 'createAirmessMission']);
         Route::post('/courses/{course}/reassign',      [AdminController::class, 'reassignCourse']);
         Route::post('/courses/{course}/dispute',       [AdminController::class, 'disputeCourse']);
         Route::post('/drivers/{driver}/validate',      [AdminController::class, 'validateDriver']);
@@ -400,4 +404,3 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 
 // Fedapey public lien
 Route::post('/webhooks/fedapay', [SubscriptionController::class, 'webhook']);
-

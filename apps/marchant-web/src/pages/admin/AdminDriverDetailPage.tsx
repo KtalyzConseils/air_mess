@@ -533,6 +533,31 @@ export default function AdminDriverDetailPage() {
 
             {/* Stats courses */}
             <Section title={t('admin.drivers.sectionActivity')}>
+              <div className="mb-4 rounded-lg bg-airmess-dark px-4 py-3 text-cream">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-caption uppercase tracking-widest font-bold text-airmess-yellow">
+                      Note qualité
+                    </p>
+                    <div className="flex items-center gap-1 mt-1">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <span
+                          key={n}
+                          className={n <= data.quality_rating.stars ? 'text-airmess-yellow' : 'text-warm-500'}
+                        >
+                          ★
+                        </span>
+                      ))}
+                      <span className="ml-2 text-body font-bold text-airmess-yellow">
+                        {data.quality_rating.label}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-caption text-warm-300 max-w-xs text-right">
+                    {data.quality_rating.summary}
+                  </p>
+                </div>
+              </div>
               <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
                 <KpiBox label={t('admin.drivers.statTotal')} value={data.stats.courses_total} />
                 <KpiBox label={t('admin.drivers.statDelivered')} value={data.stats.courses_delivered} tone="success" />

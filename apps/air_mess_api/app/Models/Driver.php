@@ -173,6 +173,65 @@ class Driver extends Model
     }
 
     /**
+     * Note qualité V1 sur 5 étoiles.
+     *
+     * Volontairement simple pour le MVP : on s'appuie uniquement sur les signaux
+     * déjà fiables aujourd'hui (livraisons, acceptation, incidents, échecs).
+     */
+    public function qualityRating(): array
+    {
+        $delivered = Course::where('driver_id', $this->id)
+            ->where('status', Course::STATUS_DELIVERED)
+            ->count();
+        $failed = Course::where('driver_id', $this->id)
+            ->where('status', Course::STATUS_FAILED)
+            ->count();
+        $incidents = (int) $this->incidents_count;
+        $acceptance = $this->acceptance_rate !== null ? (float) $this->acceptance_rate : 100.0;
+
+        if ($delivered < 5) {
+            return [
+                'rating' => null,
+                'stars' => 0,
+                'label' => 'Nouveau',
+                'summary' => 'Note disponible après 5 courses livrées.',
+                'criteria' => [
+                    'delivered_courses' => $delivered,
+                    'acceptance_rate' => round($acceptance, 2),
+                    'incidents_count' => $incidents,
+                    'failed_courses' => $failed,
+                ],
+            ];
+        }
+
+        $rating = 5.0;
+
+        if ($acceptance < 60) {
+            $rating -= 1.0;
+        } elseif ($acceptance < 80) {
+            $rating -= 0.5;
+        }
+
+        $rating -= min(1.2, $incidents * 0.25);
+        $rating -= min(1.0, $failed * 0.2);
+
+        $rating = round(max(1.0, min(5.0, $rating)), 1);
+
+        return [
+            'rating' => $rating,
+            'stars' => (int) round($rating),
+            'label' => number_format($rating, 1),
+            'summary' => 'Basée sur les courses livrées, l’acceptation et les incidents.',
+            'criteria' => [
+                'delivered_courses' => $delivered,
+                'acceptance_rate' => round($acceptance, 2),
+                'incidents_count' => $incidents,
+                'failed_courses' => $failed,
+            ],
+        ];
+    }
+
+    /**
      * Plafonds retrait effectifs pour ce driver : override si défini, sinon
      * fallback sur les valeurs globales de AppSetting.
      *

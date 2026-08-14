@@ -8,25 +8,29 @@ interface AuthState {
   user: User | null
   token: string | null
   hydrated: boolean
+  onboardingSeen: boolean | null
 
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   deleteAccount: () => Promise<void>
   hydrate: () => Promise<void>
+  setUser: (user: User) => void
+  setOnboardingSeen: (seen: boolean | null) => void
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   hydrated: false,
+  onboardingSeen: null,
 
   login: async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password })
-    if (data.user?.type !== 'driver') {
+    if (!data.user?.driver) {
       throw new Error('Compte non-livreur. Utilisez l\'application RMess Marchand.')
     }
     await SecureStore.setItemAsync('airmess_token', data.token)
-    set({ user: data.user, token: data.token })
+    set({ user: data.user, token: data.token, onboardingSeen: null })
   },
 
   logout: async () => {
@@ -50,7 +54,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     await SecureStore.deleteItemAsync('airmess_token').catch(() => {})
     await SecureStore.deleteItemAsync('airmess_push_token').catch(() => {})
-    set({ user: null, token: null })
+    set({ user: null, token: null, onboardingSeen: null })
   },
 
   deleteAccount: async () => {
@@ -71,9 +75,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     await SecureStore.deleteItemAsync('airmess_token').catch(() => {})
     await SecureStore.deleteItemAsync('airmess_push_token').catch(() => {})
-    set({ user: null, token: null })
+    set({ user: null, token: null, onboardingSeen: null })
   },
 
+  setUser: (user) => set({ user }),
+
+  setOnboardingSeen: (seen) => set({ onboardingSeen: seen }),
 
   hydrate: async () => {
     const token = await SecureStore.getItemAsync('airmess_token')

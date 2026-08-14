@@ -35,13 +35,17 @@ export interface Driver {
   user_id: number
   first_name: string
   last_name: string
+  photo_url?: string | null
+  kind?: 'independent' | 'airmess'
   availability_status: 'offline' | 'available' | 'busy' | 'on_break'
   activation_status: 'pending' | 'validated' | 'active' | 'suspended' | 'banned'
   vehicle_type: string
   vehicle_plate: string | null
   vehicle_brand: string | null
+  preferred_response_channel?: 'email' | 'sms' | 'whatsapp' | null
   acceptance_rate: number | null
   current_lat: number | null
   current_lng: number | null
+  created_at?: string
 }
 
