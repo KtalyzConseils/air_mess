@@ -1,14 +1,18 @@
-import { useEffect, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useMutation } from '@tanstack/react-query'
+import { AxiosError } from 'axios'
 import AppHeader from '../components/AppHeader'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
+import Input from '../components/ui/Input'
 import PageEyebrow from '../components/ui/PageEyebrow'
 import { useAuthStore } from '../stores/authStore'
 import type { Marchant } from '../types/auth'
 import { useUiPrefsStore, type ClientNavMode } from '../stores/uiPrefsStore'
+import { updateMarchantProfile, type UpdateMarchantProfilePayload } from '../api/profile'
 
 const SECTEUR_KEY: Record<Marchant['secteur_activite'], string> = {
   supermarche: 'profile.sectorSupermarche',
@@ -18,6 +22,15 @@ const SECTEUR_KEY: Record<Marchant['secteur_activite'], string> = {
   ecommerce:   'profile.sectorEcommerce',
   autre:       'profile.sectorAutre',
 }
+
+const SECTOR_OPTIONS: { value: Marchant['secteur_activite']; labelKey: string }[] = [
+  { value: 'supermarche', labelKey: 'profile.sectorSupermarche' },
+  { value: 'restaurant', labelKey: 'profile.sectorRestaurant' },
+  { value: 'boutique', labelKey: 'profile.sectorBoutique' },
+  { value: 'pharmacie', labelKey: 'profile.sectorPharmacie' },
+  { value: 'ecommerce', labelKey: 'profile.sectorEcommerce' },
+  { value: 'autre', labelKey: 'profile.sectorAutre' },
+]
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -46,11 +59,56 @@ function initialsOf(name: string): string {
 
 export default function ProfilePage() {
   const { t } = useTranslation()
-  const { user, fetchMe } = useAuthStore()
+  const { user, fetchMe, setUser } = useAuthStore()
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState<UpdateMarchantProfilePayload>({
+    name: '',
+    phone: '',
+    raison_sociale: '',
+    ifu_rccm: '',
+    secteur_activite: 'autre',
+  })
+  const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchMe()
   }, [fetchMe])
+
+  useEffect(() => {
+    if (!user?.marchant) return
+    setForm({
+      name: user.name,
+      phone: user.phone ?? '',
+      raison_sociale: user.marchant.raison_sociale,
+      ifu_rccm: user.marchant.ifu_rccm ?? '',
+      secteur_activite: user.marchant.secteur_activite,
+    })
+  }, [user])
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      updateMarchantProfile({
+        ...form,
+        name: form.name.trim(),
+        phone: form.phone?.trim() || null,
+        raison_sociale: form.raison_sociale.trim(),
+        ifu_rccm: form.ifu_rccm?.trim() || null,
+      }),
+    onSuccess: (updatedUser) => {
+      setUser(updatedUser)
+      setEditing(false)
+      setFormError(null)
+    },
+    onError: (err) => {
+      const message =
+        err instanceof AxiosError
+          ? (err.response?.data as { message?: string; errors?: Record<string, string[]> })?.message ??
+            Object.values((err.response?.data as { errors?: Record<string, string[]> })?.errors ?? {})[0]?.[0] ??
+            'Impossible de modifier le profil.'
+          : 'Impossible de modifier le profil.'
+      setFormError(message)
+    },
+  })
 
   if (!user) {
     return (
@@ -67,6 +125,10 @@ export default function ProfilePage() {
   const secteur = marchant ? t(SECTEUR_KEY[marchant.secteur_activite]) : null
   const displayName = marchant?.raison_sociale || user.name
   const initials = initialsOf(displayName)
+  const canSave =
+    form.name.trim().length >= 2 &&
+    form.raison_sociale.trim().length >= 2 &&
+    !updateMutation.isPending
 
   return (
     <div className="min-h-screen bg-cream">
@@ -101,7 +163,21 @@ export default function ProfilePage() {
             COMPTE
             ============================================================ */}
         <Card variant="default" padding="lg" className="mb-6">
-          <h3 className="text-h3 text-ink font-bold mb-5">{t('profile.account')}</h3>
+          <div className="flex items-start justify-between gap-3 mb-5">
+            <h3 className="text-h3 text-ink font-bold">{t('profile.account')}</h3>
+            {marchant && (
+              <Button
+                variant={editing ? 'secondary' : 'dark'}
+                size="sm"
+                onClick={() => {
+                  setFormError(null)
+                  setEditing((value) => !value)
+                }}
+              >
+                {editing ? 'Annuler' : 'Modifier'}
+              </Button>
+            )}
+          </div>
           <dl className="grid grid-cols-[140px_1fr] md:grid-cols-[180px_1fr] gap-y-3 items-center text-body-s">
             <dt className="text-warm-500 font-medium">{t('profile.fullName')}</dt>
             <dd className="text-ink">{user.name}</dd>
@@ -122,6 +198,94 @@ export default function ProfilePage() {
             <dt className="text-warm-500 font-medium">{t('profile.lastLogin')}</dt>
             <dd className="text-warm-600">{formatDateTime(user.last_login_at)}</dd>
           </dl>
+
+          {editing && marchant && (
+            <div className="mt-6 pt-5 border-t border-warm-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Nom du responsable"
+                  value={form.name}
+                  onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))}
+                />
+                <Input
+                  label={t('common.phone')}
+                  value={form.phone ?? ''}
+                  onChange={(e) => setForm((v) => ({ ...v, phone: e.target.value }))}
+                />
+                <Input
+                  label={t('common.email')}
+                  value={user.email}
+                  disabled
+                  helper="L'email ne peut pas être modifié depuis cet écran."
+                />
+                <Input
+                  label={t('profile.legalName')}
+                  value={form.raison_sociale}
+                  onChange={(e) => setForm((v) => ({ ...v, raison_sociale: e.target.value }))}
+                />
+                <Input
+                  label={t('profile.ifuRccm')}
+                  value={form.ifu_rccm ?? ''}
+                  onChange={(e) => setForm((v) => ({ ...v, ifu_rccm: e.target.value }))}
+                />
+                <label className="w-full">
+                  <span className="block mb-1.5 text-caption text-warm-600 font-medium">
+                    {t('profile.sectorLabel')}
+                  </span>
+                  <select
+                    value={form.secteur_activite}
+                    onChange={(e) =>
+                      setForm((v) => ({
+                        ...v,
+                        secteur_activite: e.target.value as Marchant['secteur_activite'],
+                      }))
+                    }
+                    className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
+                  >
+                    {SECTOR_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {t(option.labelKey)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {formError && (
+                <p className="mt-4 text-body-s text-airmess-red font-medium">{formError}</p>
+              )}
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={updateMutation.isPending}
+                  disabled={!canSave}
+                  onClick={() => updateMutation.mutate()}
+                >
+                  Enregistrer
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={updateMutation.isPending}
+                  onClick={() => {
+                    setEditing(false)
+                    setFormError(null)
+                    setForm({
+                      name: user.name,
+                      phone: user.phone ?? '',
+                      raison_sociale: marchant.raison_sociale,
+                      ifu_rccm: marchant.ifu_rccm ?? '',
+                      secteur_activite: marchant.secteur_activite,
+                    })
+                  }}
+                >
+                  Annuler
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 pt-5 border-t border-warm-100 flex flex-wrap gap-3">
             <Link to="/forgot-password">

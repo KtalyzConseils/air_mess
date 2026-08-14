@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\UserWalletController;
 use App\Http\Controllers\Api\PlacesController;
 use App\Http\Controllers\Api\ProfileRoleController;
+use App\Http\Controllers\Api\ProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -105,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/marchant', [ProfileRoleController::class, 'addMarchantRole'])
             ->middleware('throttle:auth-register');
     });
+    Route::patch('/profile/marchant', [ProfileController::class, 'updateMarchant']);
 
     // Courses
     Route::prefix('courses')->group(function () {
@@ -400,4 +402,3 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 
 // Fedapey public lien
 Route::post('/webhooks/fedapay', [SubscriptionController::class, 'webhook']);
-
