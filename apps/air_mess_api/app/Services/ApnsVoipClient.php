@@ -190,8 +190,10 @@ class ApnsVoipClient
      */
     private static function normalizePem(string $raw): string
     {
-        // \n / \r\n littéraux → vrais sauts de ligne.
-        $s = str_replace(['\r\n', '\n', '\r'], "\n", $raw);
+        // Séquences d'échappement littérales → vrais sauts de ligne. On gère UN OU
+        // PLUSIEURS antislash avant r/n (\n mais aussi \\n sur-échappé, fréquent quand la
+        // clé traverse JSON → env). Un seul antislash laissait des parasites dans le base64.
+        $s = preg_replace('/\\\\+[rn]/', "\n", $raw);
 
         // Cas avec marqueurs PEM : on extrait le corps et on ré-emballe proprement.
         if (preg_match('/-----BEGIN ([A-Z0-9 ]+?)-----(.*?)-----END [A-Z0-9 ]+?-----/s', $s, $m)) {
