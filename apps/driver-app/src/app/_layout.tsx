@@ -18,6 +18,7 @@ import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import { useIosVoipCall } from '../hooks/useIosVoipCall'
 import BrandSplash from '../components/BrandSplash'
 import { hasCompletedOnboarding } from '../lib/onboarding'
+import BackgroundLocationDisclosure from '../components/BackgroundLocationDisclosure'
 import {
   useFonts,
   PlusJakartaSans_400Regular,
@@ -216,6 +217,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <KeyboardProvider>
         <QueryClientProvider client={queryClient}>
+          <BackgroundLocationDisclosure />
           <Stack screenOptions={{ headerShown: false }} />
         </QueryClientProvider>
       </KeyboardProvider>

@@ -2,8 +2,13 @@ import { useMemo, useRef, useState, type JSX } from 'react'
 import { View, Text, Pressable, Animated, Easing } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
+import * as Location from 'expo-location'
 import { Ionicons } from '@expo/vector-icons'
 import Button from '../ui/Button'
+import {
+  markBackgroundLocationDisclosureAccepted,
+  requestBackgroundLocationDisclosure,
+} from '../../lib/backgroundLocationDisclosure'
 import {
   AvailabilityPreview,
   CourseSwipePreview,
@@ -48,6 +53,7 @@ interface Props {
 
 export default function OnboardingFlow({ onComplete, pendingValidation = false }: Props) {
   const [step, setStep] = useState(0)
+  const [requestingPermissions, setRequestingPermissions] = useState(false)
   const fade = useRef(new Animated.Value(1)).current
   const slides = useMemo<OnboardingSlide[]>(() => {
     if (!pendingValidation) return ACTIVE_DRIVER_SLIDES
@@ -62,6 +68,7 @@ export default function OnboardingFlow({ onComplete, pendingValidation = false }
   }, [pendingValidation])
   const slide = slides[step]
   const isLast = step === slides.length - 1
+  const isPermissionsStep = slide.Preview === PermissionsPreview
 
   function animateTo(next: number) {
     Animated.sequence([
@@ -81,8 +88,38 @@ export default function OnboardingFlow({ onComplete, pendingValidation = false }
     setTimeout(() => setStep(next), 120)
   }
 
-  function goNext() {
+  async function requestLocationPermissions() {
+    setRequestingPermissions(true)
+    try {
+      let foregroundPerm = await Location.getForegroundPermissionsAsync()
+      if (foregroundPerm.status !== 'granted') {
+        foregroundPerm = await Location.requestForegroundPermissionsAsync()
+      }
+      if (foregroundPerm.status !== 'granted') return
+
+      const backgroundPerm = await Location.getBackgroundPermissionsAsync()
+      if (backgroundPerm.status === 'granted') {
+        await markBackgroundLocationDisclosureAccepted()
+        return
+      }
+
+      const acceptedDisclosure = await requestBackgroundLocationDisclosure()
+      if (!acceptedDisclosure) return
+
+      const requestedBackgroundPerm = await Location.requestBackgroundPermissionsAsync()
+      if (requestedBackgroundPerm.status === 'granted') {
+        await markBackgroundLocationDisclosureAccepted()
+      }
+    } finally {
+      setRequestingPermissions(false)
+    }
+  }
+
+  async function goNext() {
     if (isLast) {
+      if (isPermissionsStep) {
+        await requestLocationPermissions()
+      }
       onComplete()
       return
     }
@@ -152,7 +189,14 @@ export default function OnboardingFlow({ onComplete, pendingValidation = false }
           <Text className="text-warm-400 text-xs font-jk-medium text-center mb-4 tabular-nums">
             {step + 1} / {slides.length}
           </Text>
-          <Button onPress={goNext}>{isLast ? 'Commencer' : 'Suivant'}</Button>
+          <Button
+            loading={isLast && requestingPermissions}
+            onPress={() => {
+              void goNext()
+            }}
+          >
+            {isLast && isPermissionsStep ? 'Autoriser' : isLast ? 'Commencer' : 'Suivant'}
+          </Button>
         </View>
       </SafeAreaView>
     </View>
