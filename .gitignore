@@ -1,0 +1,13 @@
+# Fichiers locaux / temporaires a la racine (jamais commites)
+debug.log
+*.log
+profile_backup.txt
+*.bak
+npm-debug.*
+# Fichiers de credentials Firebase / secrets en fichiers epars
+*-adminsdk-*.json
+firebase-adminsdk-*
+serviceAccountKey.json
+# Dossier landing (non suivi actuellement)
+apps/landing/
+apps/landing
