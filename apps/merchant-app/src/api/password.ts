@@ -9,3 +9,16 @@ export async function requestPasswordReset(email: string): Promise<string> {
   const { data } = await api.post<{ message: string }>('/auth/password/forgot', { email })
   return data.message
 }
+
+/**
+ * Changer le mot de passe quand connecté.
+ * Requires l'ancien mot de passe pour confirmer l'identité.
+ */
+export async function updatePassword(currentPassword: string, newPassword: string): Promise<string> {
+  const { data } = await api.post<{ message: string }>('/auth/password/update', {
+    current_password: currentPassword,
+    password: newPassword,
+    password_confirmation: newPassword,
+  })
+  return data.message
+}

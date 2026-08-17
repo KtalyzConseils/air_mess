@@ -52,10 +52,10 @@ export default function LoginScreen() {
   const canSubmit = email.trim().length > 3 && password.length >= 4
 
   return (
-    <SafeAreaView className="flex-1 bg-airmess-dark" edges={['top', 'left', 'right']}>
-      <StatusBar style="light" />
+    <SafeAreaView className="flex-1 bg-airmess-dark" edges={['top']}>
+      <StatusBar style="light" translucent backgroundColor="rgba(0,0,0,0)" />
       <KeyboardAwareScrollView
-        bottomOffset={24}
+        bottomOffset={32}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

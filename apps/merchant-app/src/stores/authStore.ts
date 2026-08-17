@@ -32,7 +32,13 @@ export interface RegisterMarchantPayload {
   firebase_google_id_token?: string
   accepted_terms: boolean
 }
-
+export interface UpdateProfilePayload {
+  name?: string
+  first_name?: string
+  last_name?: string
+  email: string
+  phone: string
+}
 interface AuthState {
   user: User | null
   token: string | null
@@ -41,6 +47,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>
   registerIndividual: (payload: RegisterIndividualPayload) => Promise<void>
   registerMarchant: (payload: RegisterMarchantPayload) => Promise<void>
+  updateProfile: (payload: UpdateProfilePayload) => Promise<void>
   logout: () => Promise<void>
   hydrate: () => Promise<void>
 }
@@ -71,6 +78,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   registerMarchant: async (payload) => {
     const { data } = await api.post('/auth/register/marchant', payload)
     await persistSession(data.user, data.token, set)
+  },
+
+  updateProfile: async (payload) => {
+    const auth = { headers: { Authorization: `Bearer ${get().token}` } }
+    const { data } = await api.post('/auth/profile', payload, auth)
+    // Mettre à jour l'utilisateur dans l'état avec les données retournées
+    const updatedUser = { ...get().user, ...data.user }
+    set({ user: updatedUser })
   },
 
   logout: async () => {

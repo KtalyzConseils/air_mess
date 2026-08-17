@@ -94,7 +94,7 @@ export default function NotificationsScreen() {
   )
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
+    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color="#1A1614" size="large" />

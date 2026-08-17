@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentProps } from 'react'
+import { useMemo, useRef, useState, forwardRef, type ComponentProps } from 'react'
 import { View, Text, TextInput, Pressable, Switch } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -13,6 +13,7 @@ import Button from '../components/ui/Button'
 // OTP Firebase conservé dans components/PhoneOtpField.tsx — à rebrancher plus tard.
 
 type AccountType = 'marchant' | 'individual'
+type FieldName = 'name' | 'firstName' | 'lastName' | 'email' | 'phone' | 'password' | 'passwordConfirmation' | 'raisonSociale' | 'ifu'
 
 const SECTEURS: { value: SecteurActivite; label: string }[] = [
   { value: 'restaurant', label: 'Restaurant' },
@@ -22,6 +23,32 @@ const SECTEURS: { value: SecteurActivite; label: string }[] = [
   { value: 'ecommerce', label: 'E-commerce' },
   { value: 'autre', label: 'Autre' },
 ]
+
+interface FieldProps extends ComponentProps<typeof TextInput> {
+  label: string
+  error?: boolean
+}
+
+const Field = forwardRef<TextInput, FieldProps>(function Field(
+  { label, error, ...props },
+  ref,
+) {
+  return (
+    <View className="mb-4">
+      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mb-1.5">
+        {label}
+      </Text>
+      <TextInput
+        ref={ref}
+        placeholderTextColor="#B8AF9F"
+        className={`border-2 rounded-2xl px-4 h-14 text-base text-ink bg-off-white ${
+          error ? 'border-airmess-red' : 'border-warm-200'
+        }`}
+        {...props}
+      />
+    </View>
+  )
+})
 
 /**
  * Inscription marchand / particulier.
@@ -36,6 +63,7 @@ export default function RegisterScreen() {
   const [type, setType] = useState<AccountType>('marchant')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorField, setErrorField] = useState<FieldName | null>(null)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const [email, setEmail] = useState('')
@@ -50,6 +78,8 @@ export default function RegisterScreen() {
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+
+  const fieldRefs = useRef<Record<FieldName, TextInput | null>>({})
 
   const canSubmit = useMemo(() => {
     if (!acceptedTerms) return false
@@ -70,8 +100,39 @@ export default function RegisterScreen() {
     lastName,
   ])
 
+  const fieldErrorMap: Record<string, FieldName> = {
+    name: 'name',
+    first_name: 'firstName',
+    last_name: 'lastName',
+    email: 'email',
+    phone: 'phone',
+    password: 'password',
+    password_confirmation: 'passwordConfirmation',
+    raison_sociale: 'raisonSociale',
+    ifu_rccm: 'ifu',
+  }
+
+  const frenchErrors: Record<string, string> = {
+    'already been taken': 'est déjà utilisé',
+    required: 'est obligatoire',
+    min: 'est trop court',
+    invalid: 'n\'est pas valide',
+    confirmed: 'ne correspondent pas',
+    regex: 'n\'a pas le bon format',
+  }
+
+  function translateError(errMsg: string): string {
+    for (const [key, fr] of Object.entries(frenchErrors)) {
+      if (errMsg.toLowerCase().includes(key.toLowerCase())) {
+        return fr
+      }
+    }
+    return errMsg
+  }
+
   async function handleSubmit() {
     setError(null)
+    setErrorField(null)
     setLoading(true)
     try {
       const normalized = normalizePhone(phone)
@@ -101,8 +162,25 @@ export default function RegisterScreen() {
     } catch (err) {
       if (err instanceof AxiosError) {
         const data = err.response?.data as { message?: string; errors?: Record<string, string[]> }
-        const firstField = data?.errors ? Object.values(data.errors)[0]?.[0] : null
-        setError(firstField ?? data?.message ?? 'Inscription impossible.')
+        let errMsg = data?.message ?? 'Inscription impossible. Réessaie.'
+        let fieldKey: FieldName | null = null
+
+        if (data?.errors) {
+          const firstErrorKey = Object.keys(data.errors)[0]
+          const firstErrorMsg = data.errors[firstErrorKey]?.[0] ?? ''
+          fieldKey = fieldErrorMap[firstErrorKey] ?? null
+          if (firstErrorMsg) {
+            errMsg = `${firstErrorKey}: ${translateError(firstErrorMsg)}`
+          }
+        }
+
+        setError(errMsg)
+        setErrorField(fieldKey)
+        if (fieldKey && fieldRefs.current[fieldKey]) {
+          setTimeout(() => {
+            fieldRefs.current[fieldKey]?.focus()
+          }, 100)
+        }
       } else {
         setError((err as Error).message)
       }
@@ -112,10 +190,10 @@ export default function RegisterScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
-      <StatusBar style="dark" />
+    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <StatusBar style="dark" translucent backgroundColor="rgba(255,255,255,0)" />
       <KeyboardAwareScrollView
-        bottomOffset={24}
+        bottomOffset={32}
         contentContainerStyle={{ padding: 20, paddingBottom: 40 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
       >
@@ -147,9 +225,36 @@ export default function RegisterScreen() {
 
         {type === 'marchant' ? (
           <>
-            <Field label="Nom du contact" value={name} onChangeText={setName} />
-            <Field label="Raison sociale" value={raisonSociale} onChangeText={setRaisonSociale} />
-            <Field label="IFU / RCCM (optionnel)" value={ifu} onChangeText={setIfu} />
+            <Field
+              ref={(r) => {
+                if (r) fieldRefs.current.name = r
+              }}
+              label="Nom du contact"
+              value={name}
+              onChangeText={setName}
+              placeholder="ex. Jean Dupont"
+              error={errorField === 'name'}
+            />
+            <Field
+              ref={(r) => {
+                if (r) fieldRefs.current.raisonSociale = r
+              }}
+              label="Raison sociale"
+              value={raisonSociale}
+              onChangeText={setRaisonSociale}
+              placeholder="ex. SARL Dupont Logistique"
+              error={errorField === 'raisonSociale'}
+            />
+            <Field
+              ref={(r) => {
+                if (r) fieldRefs.current.ifu = r
+              }}
+              label="IFU / RCCM (optionnel)"
+              value={ifu}
+              onChangeText={setIfu}
+              placeholder="ex. BJ1234567"
+              error={errorField === 'ifu'}
+            />
             <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mb-1.5">
               Secteur
             </Text>
@@ -171,31 +276,73 @@ export default function RegisterScreen() {
           </>
         ) : (
           <>
-            <Field label="Prénom" value={firstName} onChangeText={setFirstName} />
-            <Field label="Nom" value={lastName} onChangeText={setLastName} />
+            <Field
+              ref={(r) => {
+                if (r) fieldRefs.current.firstName = r
+              }}
+              label="Prénom"
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="ex. Marie"
+              error={errorField === 'firstName'}
+            />
+            <Field
+              ref={(r) => {
+                if (r) fieldRefs.current.lastName = r
+              }}
+              label="Nom"
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="ex. Dupont"
+              error={errorField === 'lastName'}
+            />
           </>
         )}
 
         <Field
+          ref={(r) => {
+            if (r) fieldRefs.current.email = r
+          }}
           label="Email"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          placeholder="vous@example.com"
+          error={errorField === 'email'}
         />
         <Field
+          ref={(r) => {
+            if (r) fieldRefs.current.phone = r
+          }}
           label="Téléphone"
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
-          placeholder="+229…"
+          placeholder="+229 XX XXX XXX"
+          error={errorField === 'phone'}
         />
-        <Field label="Mot de passe" value={password} onChangeText={setPassword} secureTextEntry />
         <Field
+          ref={(r) => {
+            if (r) fieldRefs.current.password = r
+          }}
+          label="Mot de passe"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          placeholder="Minimum 8 caractères"
+          error={errorField === 'password'}
+        />
+        <Field
+          ref={(r) => {
+            if (r) fieldRefs.current.passwordConfirmation = r
+          }}
           label="Confirmer le mot de passe"
           value={passwordConfirmation}
           onChangeText={setPasswordConfirmation}
           secureTextEntry
+          placeholder="Confirme ton mot de passe"
+          error={errorField === 'passwordConfirmation'}
         />
 
         <View className="flex-row items-center mb-5">
@@ -206,8 +353,11 @@ export default function RegisterScreen() {
         </View>
 
         {error && (
-          <View className="bg-danger-bg border border-airmess-red/30 rounded-2xl p-3 mb-4">
-            <Text className="text-airmess-red text-sm font-semibold">{error}</Text>
+          <View className="bg-danger-bg border-2 border-airmess-red/30 rounded-2xl p-3 mb-4 flex-row items-start">
+            <View className="w-5 h-5 rounded-full bg-airmess-red items-center justify-center mr-2 mt-0.5">
+              <Ionicons name="alert" size={10} color="#ffffff" />
+            </View>
+            <Text className="text-airmess-red text-sm flex-1 font-semibold">{error}</Text>
           </View>
         )}
 
@@ -222,25 +372,5 @@ export default function RegisterScreen() {
         </Button>
       </KeyboardAwareScrollView>
     </SafeAreaView>
-  )
-}
-
-function Field({
-  label,
-  ...props
-}: {
-  label: string
-} & ComponentProps<typeof TextInput>) {
-  return (
-    <View className="mb-4">
-      <Text className="text-[10px] uppercase text-warm-500 tracking-widest font-extrabold mb-1.5">
-        {label}
-      </Text>
-      <TextInput
-        placeholderTextColor="#B8AF9F"
-        className="border-2 border-warm-200 rounded-2xl px-4 h-14 text-base text-ink bg-off-white"
-        {...props}
-      />
-    </View>
   )
 }

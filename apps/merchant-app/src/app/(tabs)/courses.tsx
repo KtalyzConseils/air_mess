@@ -37,7 +37,7 @@ export default function CoursesScreen() {
   )
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
+    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <Text className="text-3xl font-extrabold text-ink">Mes courses</Text>
         <Pressable

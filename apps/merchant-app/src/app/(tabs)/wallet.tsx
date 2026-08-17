@@ -160,7 +160,7 @@ export default function WalletScreen() {
     data.available >= data.min_withdraw_fcfa && !data.pending_withdraw_request
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
+    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
         refreshControl={

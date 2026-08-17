@@ -34,7 +34,7 @@ export default function DashboardScreen() {
     user?.type === 'marchant' && !user.marchant?.validated_at
 
   return (
-    <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right']}>
+    <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
         refreshControl={

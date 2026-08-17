@@ -6,7 +6,13 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://dev.api.airmess-logistics.com/api",
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://dev.app.airmess-logistics.com",
+        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_JSON",
+        "GOOGLE_MAPS_ANDROID_KEY": "$GOOGLE_MAPS_ANDROID_KEY"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -15,7 +21,9 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.airmess-logistics.com/api",
-        "EXPO_PUBLIC_WEB_BASE_URL": "https://app.airmess-logistics.com"
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://app.airmess-logistics.com",
+        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_JSON",
+        "GOOGLE_MAPS_ANDROID_KEY": "$GOOGLE_MAPS_ANDROID_KEY"
       }
     },
     "preview-dev": {
@@ -25,7 +33,9 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://dev.api.airmess-logistics.com/api",
-        "EXPO_PUBLIC_WEB_BASE_URL": "https://dev.app.airmess-logistics.com"
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://dev.app.airmess-logistics.com",
+        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_JSON",
+        "GOOGLE_MAPS_ANDROID_KEY": "$GOOGLE_MAPS_ANDROID_KEY"
       }
     },
     "production": {
@@ -35,7 +45,9 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.airmess-logistics.com/api",
-        "EXPO_PUBLIC_WEB_BASE_URL": "https://app.airmess-logistics.com"
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://app.airmess-logistics.com",
+        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_JSON",
+        "GOOGLE_MAPS_ANDROID_KEY": "$GOOGLE_MAPS_ANDROID_KEY"
       }
     }
   },

@@ -39,6 +39,11 @@ yarn-error.*
 # build. Un template avec placeholders est versionné dans google-services.json.example.
 google-services.json
 GoogleService-Info.plist
+# Comptes de service Firebase Admin SDK / Firebase (fichiers JSON avec secrets)
+*-adminsdk-*.json
+firebase-adminsdk-*
+*-firebase-*.json
+service-account*.json
 
 # build logs
 build-android.log
