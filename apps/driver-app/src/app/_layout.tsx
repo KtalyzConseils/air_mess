@@ -16,6 +16,7 @@ import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import { useIosVoipCall } from '../hooks/useIosVoipCall'
 import BrandSplash from '../components/BrandSplash'
+import BackgroundLocationDisclosure from '../components/BackgroundLocationDisclosure'
 import {
   useFonts,
   PlusJakartaSans_400Regular,
@@ -191,6 +192,7 @@ export default function RootLayout() {
   return (
     <KeyboardProvider>
       <QueryClientProvider client={queryClient}>
+        <BackgroundLocationDisclosure />
         <Stack screenOptions={{ headerShown: false }} />
       </QueryClientProvider>
     </KeyboardProvider>

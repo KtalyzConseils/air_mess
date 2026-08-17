@@ -3,6 +3,10 @@ import { AppState } from 'react-native'
 import * as Location from 'expo-location'
 import { LOCATION_TASK } from '../lib/locationTask'
 import { IS_EXPO_GO } from '../lib/notifications'
+import {
+  markBackgroundLocationDisclosureAccepted,
+  requestBackgroundLocationDisclosure,
+} from '../lib/backgroundLocationDisclosure'
 import { updatePosition } from '../api/driver'
 import type { Availability } from '../api/driver'
 
@@ -102,11 +106,21 @@ export function useDriverLocationTracker({ availability, intervalMs = 15_000, di
           perm = await Location.requestForegroundPermissionsAsync()
         }
         if (perm.status !== 'granted') return
-        try {
-          await Location.requestBackgroundPermissionsAsync()
-        } catch {
-          /* ignore */
+
+        const backgroundPerm = await Location.getBackgroundPermissionsAsync()
+        if (backgroundPerm.status !== 'granted') {
+          const acceptedDisclosure = await requestBackgroundLocationDisclosure()
+          if (!acceptedDisclosure || cancelled || AppState.currentState !== 'active') return
+          try {
+            const requestedBackgroundPerm = await Location.requestBackgroundPermissionsAsync()
+            if (requestedBackgroundPerm.status === 'granted') {
+              await markBackgroundLocationDisclosureAccepted()
+            }
+          } catch {
+            /* ignore */
+          }
         }
+
         if (cancelled || AppState.currentState !== 'active') return
 
         // stop PUIS start : `startLocationUpdatesAsync` seul ne ranime pas un service mort
