@@ -34,6 +34,7 @@ import MissingFieldsBanner, {
 } from '../components/course/MissingFieldsBanner'
 import {
   AlertTriangleIcon,
+  ArrowRightIcon,
   ChevronDownIcon,
   PackageIcon,
   RouteIcon,
@@ -41,6 +42,7 @@ import {
 } from '../components/ui/icons'
 
 type FormValues = CreateCoursePayload
+type CourseFormStep = 1 | 2 | 3
 
 /**
  * Métadonnées de chaque champ obligatoire pour piloter le bandeau d'erreurs :
@@ -73,6 +75,19 @@ const inputClass =
   'placeholder:text-warm-400 transition-all duration-200 ' +
   'focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow ' +
   'disabled:opacity-60 disabled:cursor-not-allowed'
+
+const STEP_FIELD_NAMES: Record<CourseFormStep, Array<keyof FormValues>> = {
+  1: ['origin_name', 'origin_phone', 'origin_quartier', 'origin_city', 'origin_lat', 'origin_lng'],
+  2: [
+    'destination_name',
+    'destination_phone',
+    'destination_quartier',
+    'destination_city',
+    'destination_lat',
+    'destination_lng',
+  ],
+  3: ['package_category_id', 'package_description'],
+}
 
 export default function NewCoursePage() {
   const { t } = useTranslation()
@@ -113,6 +128,9 @@ export default function NewCoursePage() {
     watch,
     setValue,
     setFocus,
+    setError,
+    trigger,
+    getValues,
     formState: { errors, isSubmitted },
   } = useForm<FormValues>({
     defaultValues: {
@@ -154,6 +172,7 @@ export default function NewCoursePage() {
   const [showDestExtra, setShowDestExtra] = useState(false)
   const [showDeclared, setShowDeclared] = useState(false)
   const [originDrawerOpen, setOriginDrawerOpen] = useState(false)
+  const [currentStep, setCurrentStep] = useState<CourseFormStep>(1)
 
   // Onboarding — coach-marks du formulaire. Si l'utilisateur ne les a pas
   // encore vus, on ouvre l'accordion "Options" pour que les cibles
@@ -232,6 +251,18 @@ export default function NewCoursePage() {
   })
 
   function onSubmit(values: FormValues) {
+    const allMissingFields = ([1, 2, 3] as CourseFormStep[]).flatMap(getMissingStepFields)
+    if (allMissingFields.length > 0) {
+      allMissingFields.forEach((field) => {
+        setError(field.fieldName as keyof FormValues, {
+          type: 'required',
+          message: t('courses.new.required'),
+        })
+      })
+      handleFirstMissing(allMissingFields)
+      return
+    }
+
     if (!values.has_collection && !collectionDecided) {
       setPendingValues(values)
       return
@@ -317,12 +348,13 @@ export default function NewCoursePage() {
 
   // Au retour d'une erreur backend qui concerne l'origine, remonter en haut pour
   // que la bannière rouge soit visible tout de suite (comme pour le submit client).
-  const hasBackendOriginError = originErrorKeys.some((k) => backendFieldErrors[k])
+  const firstBackendField = Object.keys(backendFieldErrors).find((k) => FIELD_META[k])
   useEffect(() => {
-    if (hasBackendOriginError) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-  }, [hasBackendOriginError])
+    if (!firstBackendField) return
+    handleMissingFieldClick(firstBackendField)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstBackendField])
 
   /**
    * Navigue vers le champ manquant cliqué : ouvre le drawer / l'accordion si
@@ -332,8 +364,15 @@ export default function NewCoursePage() {
   function handleMissingFieldClick(fieldName: string) {
     const meta = FIELD_META[fieldName]
     if (!meta) return
+    if (meta.location === 'drawer' || meta.location === 'map_A') {
+      setCurrentStep(1)
+    } else if (meta.location === 'main' || meta.location === 'map_B') {
+      setCurrentStep(2)
+    } else if (meta.location === 'options') {
+      setCurrentStep(3)
+      setOptionsOpen(true)
+    }
     if (meta.location === 'drawer') setOriginDrawerOpen(true)
-    if (meta.location === 'options') setOptionsOpen(true)
 
     // Petit tick pour laisser le drawer/accordion se monter avant focus.
     setTimeout(() => {
@@ -357,6 +396,50 @@ export default function NewCoursePage() {
     const first = fields[0]
     if (!first) return
     handleMissingFieldClick(first.fieldName)
+  }
+
+  function getMissingStepFields(step: CourseFormStep): MissingField[] {
+    return STEP_FIELD_NAMES[step]
+      .filter((name) => {
+        const value = getValues(name)
+        if (name === 'origin_lat' || name === 'origin_lng' || name === 'destination_lat' || name === 'destination_lng') {
+          const numeric = Number(value)
+          return !Number.isFinite(numeric) || numeric === 0
+        }
+        return value == null || String(value).trim() === ''
+      })
+      .map((name) => {
+        const meta = FIELD_META[String(name)]
+        return {
+          fieldName: String(name),
+          label: meta ? t(meta.labelKey) : String(name),
+        }
+      })
+  }
+
+  async function goToNextStep() {
+    const missingFieldsBeforeTrigger = getMissingStepFields(currentStep)
+    if (missingFieldsBeforeTrigger.length > 0) {
+      missingFieldsBeforeTrigger.forEach((field) => {
+        setError(field.fieldName as keyof FormValues, {
+          type: 'required',
+          message: t('courses.new.required'),
+        })
+      })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      handleFirstMissing(missingFieldsBeforeTrigger)
+      return
+    }
+
+    const valid = await trigger(STEP_FIELD_NAMES[currentStep], { shouldFocus: false })
+    if (!valid) {
+      const fields = getMissingStepFields(currentStep)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      handleFirstMissing(fields)
+      return
+    }
+    setCurrentStep((step) => Math.min(3, step + 1) as CourseFormStep)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   /**
@@ -519,6 +602,15 @@ export default function NewCoursePage() {
   const submitLabel = mutation.isPending
     ? t('courses.new.creating')
     : t('courses.new.confirmCta')
+  const stepPrimaryAction =
+    currentStep < 3
+      ? {
+          label: 'Continuer',
+          onClick: () => {
+            void goToNextStep()
+          },
+        }
+      : undefined
 
   const packageCategoryId = Number(watch('package_category_id')) || undefined
   const packageCategoryLabel =
@@ -577,6 +669,30 @@ export default function NewCoursePage() {
         </h1>
         <p className="text-body-l text-warm-500 mb-8">{t('courses.new.subtitle')}</p>
 
+        <div className="mb-6 grid grid-cols-3 gap-2 rounded-xl bg-warm-100 p-1">
+          {[
+            { step: 1 as const, label: 'Retrait' },
+            { step: 2 as const, label: 'Livraison' },
+            { step: 3 as const, label: 'Colis & paiement' },
+          ].map((item) => (
+            <button
+              key={item.step}
+              type="button"
+              onClick={() => setCurrentStep(item.step)}
+              className={[
+                'rounded-lg px-2 py-2 text-caption sm:text-body-s font-bold transition-all',
+                currentStep === item.step
+                  ? 'bg-off-white text-ink shadow-sm ring-1 ring-warm-200'
+                  : 'text-warm-500 hover:text-ink',
+              ].join(' ')}
+              aria-current={currentStep === item.step ? 'step' : undefined}
+            >
+              <span className="hidden sm:inline">{item.step}. </span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+
         {/* Bandeau erreur quota / position manquante */}
         {quotaError && (
           <Card
@@ -612,6 +728,11 @@ export default function NewCoursePage() {
           })}
           id="new-course-form"
         >
+          <input type="hidden" {...register('origin_lat', { required: true })} />
+          <input type="hidden" {...register('origin_lng', { required: true })} />
+          <input type="hidden" {...register('destination_lat', { required: true })} />
+          <input type="hidden" {...register('destination_lng', { required: true })} />
+
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
             {/* ===================== Colonne formulaire ===================== */}
             <div className="space-y-4">
@@ -626,18 +747,58 @@ export default function NewCoursePage() {
               {/* Bloc EXPÉDITEUR (bannière compacte).
                   Bordure rouge quand un champ origine est en erreur (le drawer est fermé
                   par défaut → l'utilisateur ne voit sinon pas quel bloc corriger). */}
-              <div data-onboarding-id="origin">
-                <OriginBanner
-                  name={originName}
-                  quartier={originQuartier}
-                  city={originCity}
-                  hasError={originHasError}
-                  errorMessage={originErrorMessage}
-                  onEdit={() => setOriginDrawerOpen(true)}
-                />
-              </div>
+              {currentStep === 1 && (
+                <>
+                  <div data-onboarding-id="origin">
+                    <OriginBanner
+                      name={originName}
+                      quartier={originQuartier}
+                      city={originCity}
+                      hasError={originHasError}
+                      errorMessage={originErrorMessage}
+                      onEdit={() => setOriginDrawerOpen(true)}
+                    />
+                  </div>
+
+                  <section className="bg-off-white border border-warm-200 rounded-lg p-5 md:p-6">
+                    <div className="mb-4 pb-3 border-b border-warm-100 flex items-center gap-2">
+                      <span className="text-warm-600">
+                        <RouteIcon size={18} />
+                      </span>
+                      <h3 className="text-h3 text-ink font-bold">Position de retrait</h3>
+                    </div>
+                    <p className="text-caption text-warm-600 font-medium mb-1.5">
+                      {t('courses.new.dualMap.blockTitle')}
+                    </p>
+                    <DualPinMap
+                      originLat={Number(watch('origin_lat')) || undefined}
+                      originLng={Number(watch('origin_lng')) || undefined}
+                      destLat={Number(watch('destination_lat')) || undefined}
+                      destLng={Number(watch('destination_lng')) || undefined}
+                      defaultActive="A"
+                      onOriginChange={(la, ln) => {
+                        setValue('origin_lat', la, { shouldDirty: true, shouldValidate: true })
+                        setValue('origin_lng', ln, { shouldDirty: true, shouldValidate: true })
+                      }}
+                      onOriginPlaceSelect={fillOriginFromPlace}
+                      onDestChange={(la, ln) => {
+                        setValue('destination_lat', la, { shouldDirty: true, shouldValidate: true })
+                        setValue('destination_lng', ln, { shouldDirty: true, shouldValidate: true })
+                      }}
+                      onDestPlaceSelect={fillDestinationFromPlace}
+                    />
+                    {geoStatus === 'success' && (
+                      <p className="text-caption text-success mt-1.5">{t('courses.new.geoSuccess')}</p>
+                    )}
+                    {geoStatus === 'denied' && (
+                      <p className="text-caption text-warning mt-1.5">{t('courses.new.geoDenied')}</p>
+                    )}
+                  </section>
+                </>
+              )}
 
               {/* Bloc TRAJET (destinataire + carte destination) */}
+              {currentStep === 2 && (
               <section className="bg-off-white border border-warm-200 rounded-lg p-5 md:p-6">
                 <div className="mb-4 pb-3 border-b border-warm-100 flex items-center gap-2">
                   <span className="text-warm-600">
@@ -705,10 +866,6 @@ export default function NewCoursePage() {
                       }}
                       onDestPlaceSelect={fillDestinationFromPlace}
                     />
-                    <input type="hidden" {...register('origin_lat', { required: true })} />
-                    <input type="hidden" {...register('origin_lng', { required: true })} />
-                    <input type="hidden" {...register('destination_lat', { required: true })} />
-                    <input type="hidden" {...register('destination_lng', { required: true })} />
                     {geoStatus === 'success' && (
                       <p className="text-caption text-success mt-1.5">{t('courses.new.geoSuccess')}</p>
                     )}
@@ -753,8 +910,11 @@ export default function NewCoursePage() {
                   )}
                 </div>
               </section>
+              )}
 
               {/* Bloc COLIS */}
+              {currentStep === 3 && (
+              <>
               <section className="bg-off-white border border-warm-200 rounded-lg p-5 md:p-6">
                 <div className="mb-4 pb-3 border-b border-warm-100 flex items-center gap-2">
                   <span className="text-warm-600">
@@ -1057,6 +1217,41 @@ export default function NewCoursePage() {
                   {apiError}
                 </Card>
               )}
+              </>
+              )}
+
+              <div className="flex flex-col-reverse sm:flex-row gap-3 justify-between pt-2">
+                {currentStep > 1 ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    pill
+                    onClick={() => {
+                      setCurrentStep((step) => Math.max(1, step - 1) as CourseFormStep)
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
+                  >
+                    Retour
+                  </Button>
+                ) : (
+                  <span />
+                )}
+                {currentStep < 3 && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    pill
+                    onClick={() => {
+                      void goToNextStep()
+                    }}
+                    rightIcon={<ArrowRightIcon size={16} />}
+                  >
+                    Continuer
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* ===================== Colonne récap (desktop only) ===================== */}
@@ -1072,6 +1267,7 @@ export default function NewCoursePage() {
               isSubmitting={mutation.isPending}
               submitLabel={submitLabel}
               missingCount={missingCount}
+              primaryAction={stepPrimaryAction}
             />
           </div>
 
@@ -1088,6 +1284,7 @@ export default function NewCoursePage() {
             originLng={originLng || undefined}
             destinationLat={destinationLat || undefined}
             destinationLng={destinationLng || undefined}
+            primaryAction={stepPrimaryAction}
           />
         </form>
       </main>
@@ -1105,7 +1302,7 @@ export default function NewCoursePage() {
 
       {/* Modal d'encaissement (garde-fou : "sûr que tu n'encaisses rien ?") */}
       {pendingValues && (
-        <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 ams-anim-fade-in">
+        <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center z-[2000] p-4 ams-anim-fade-in">
           <Card variant="signature" padding="lg" className="max-w-md w-full ams-anim-scale-in">
             <h2 className="text-h2 text-ink font-bold">{t('courses.new.collectionModalTitle')}</h2>
             <p className="text-body-s text-warm-600 mt-2">

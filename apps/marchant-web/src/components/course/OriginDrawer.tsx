@@ -51,7 +51,7 @@ export default function OriginDrawer({
   const hasOrigin = originLat !== 0 && originLng !== 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-ink/60 backdrop-blur-sm ams-anim-fade-in">
+    <div className="fixed inset-0 z-[2000] flex items-end md:items-center justify-center bg-ink/60 backdrop-blur-sm ams-anim-fade-in">
       <div className="w-full md:max-w-2xl md:mx-4 bg-off-white rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col ams-anim-scale-in">
         <div className="flex items-center justify-between border-b border-warm-100 px-5 py-4">
           <div>

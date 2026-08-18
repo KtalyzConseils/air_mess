@@ -28,6 +28,10 @@ interface Props {
   originLng?: number
   destinationLat?: number
   destinationLng?: number
+  primaryAction?: {
+    label: string
+    onClick: () => void
+  }
 }
 
 /**
@@ -48,6 +52,7 @@ export default function MobileCoursePriceBar({
   originLng,
   destinationLat,
   destinationLng,
+  primaryAction,
 }: Props) {
   const { t } = useTranslation()
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -69,7 +74,7 @@ export default function MobileCoursePriceBar({
   return (
     <>
       {sheetOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex items-end bg-ink/60 backdrop-blur-sm ams-anim-fade-in">
+        <div className="lg:hidden fixed inset-0 z-[2000] flex items-end bg-ink/60 backdrop-blur-sm ams-anim-fade-in">
           <div className="w-full bg-off-white rounded-t-2xl shadow-2xl max-h-[90vh] flex flex-col ams-anim-scale-in">
             <div className="flex items-center justify-between border-b border-warm-100 px-5 py-4 shrink-0">
               <div className="min-w-0">
@@ -180,7 +185,7 @@ export default function MobileCoursePriceBar({
         </div>
       )}
 
-      <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-warm-200 bg-off-white/95 backdrop-blur-sm shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.08)]">
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-[1500] border-t border-warm-200 bg-off-white/95 backdrop-blur-sm shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.08)]">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             type="button"
@@ -214,14 +219,15 @@ export default function MobileCoursePriceBar({
             )}
           </button>
           <Button
-            type="submit"
+            type={primaryAction ? 'button' : 'submit'}
             variant="primary"
             size="md"
             pill
             loading={isSubmitting}
+            onClick={primaryAction?.onClick}
             rightIcon={!isSubmitting && <ArrowRightIcon size={16} />}
           >
-            {submitLabel}
+            {primaryAction?.label ?? submitLabel}
           </Button>
         </div>
       </div>

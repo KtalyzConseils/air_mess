@@ -27,6 +27,10 @@ interface Props {
   isSubmitting: boolean
   submitLabel: string
   missingCount: number
+  primaryAction?: {
+    label: string
+    onClick: () => void
+  }
 }
 
 /**
@@ -47,6 +51,7 @@ export default function CoursePriceRecap({
   isSubmitting,
   submitLabel,
   missingCount,
+  primaryAction,
 }: Props) {
   const { t } = useTranslation()
   const [mapVisible, setMapVisible] = useState(false)
@@ -185,15 +190,16 @@ export default function CoursePriceRecap({
 
         <div className="px-5 py-4 border-t border-warm-100 shrink-0">
           <Button
-            type="submit"
+            type={primaryAction ? 'button' : 'submit'}
             variant="primary"
             size="lg"
             pill
             fullWidth
             loading={isSubmitting}
+            onClick={primaryAction?.onClick}
             rightIcon={!isSubmitting && <ArrowRightIcon size={16} />}
           >
-            {submitLabel}
+            {primaryAction?.label ?? submitLabel}
           </Button>
         </div>
       </div>

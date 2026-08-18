@@ -177,7 +177,7 @@ export default function DualPinMap({
 
       {/* Chemin #3 : clic sur la carte → applique au pin actif */}
       <div
-        className="rounded-lg overflow-hidden border border-warm-200"
+        className="relative z-0 isolate rounded-lg overflow-hidden border border-warm-200"
         style={{ height }}
       >
         <MapContainer
