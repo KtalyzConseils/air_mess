@@ -3,7 +3,7 @@
     "name": "AirMess Driver",
     "slug": "driver-app",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "airmess",
     "userInterfaceStyle": "automatic",
@@ -49,6 +49,10 @@
         {
           "ios": {
             "useFrameworks": "static"
+          },
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ],
