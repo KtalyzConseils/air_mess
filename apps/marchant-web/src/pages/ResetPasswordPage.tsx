@@ -49,17 +49,17 @@ export default function ResetPasswordPage() {
       : null
 
   return (
-    <div className="min-h-screen bg-cream flex flex-col">
-      <div className="p-6 md:p-8 flex items-center justify-between gap-4">
-        <Link to="/" className="inline-block">
-          <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
+    <div className="min-h-[100svh] bg-cream flex flex-col">
+      <div className="px-4 py-4 sm:p-6 md:p-8 flex items-center justify-between gap-3">
+        <Link to="/" className="inline-block min-w-0">
+          <img src={wordmark} alt="Air Mess" className="h-7 sm:h-8 w-auto max-w-[160px] sm:max-w-none" />
         </Link>
         <LanguageToggle variant="light" />
       </div>
 
-      <div className="flex-1 flex items-center justify-center px-4 pb-12">
-        <Card variant="signature" padding="lg" className="max-w-md w-full">
-          <h1 className="text-h1 text-ink">{t('auth.reset.title')}</h1>
+      <div className="flex-1 flex flex-col items-center justify-center w-full px-4 py-6 sm:pb-12">
+        <Card variant="signature" padding="none" className="max-w-md w-full p-5 sm:p-8">
+          <h1 className="text-h2 sm:text-h1 text-ink leading-tight">{t('auth.reset.title')}</h1>
 
           {tokenMissing ? (
             <div className="mt-6 bg-danger-bg border border-airmess-red/30 text-airmess-red rounded-md p-4">
@@ -79,7 +79,9 @@ export default function ResetPasswordPage() {
           ) : (
             <>
               <p className="text-body-s text-warm-500 mt-2 mb-6">
-                {t('auth.reset.subtitlePrefix')} <strong className="text-ink">{email}</strong>{t('auth.reset.subtitleSuffix')}
+                {t('auth.reset.subtitlePrefix')}{' '}
+                <strong className="text-ink break-all">{email}</strong>
+                {t('auth.reset.subtitleSuffix')}
               </p>
 
               <form

@@ -24,7 +24,7 @@ export default function AuthSupportFooter({ context }: { context?: string }) {
           <HelpCircleIcon size={14} />
           {t('support.needHelpLink')}
         </button>
-        <div className="flex items-center gap-3 text-caption text-warm-400">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-caption text-warm-400 text-center">
           <Link to="/legal/terms" className="hover:text-ink transition-colors">
             {t('legal.footerLinkTerms')}
           </Link>

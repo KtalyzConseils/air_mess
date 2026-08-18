@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Polyline, useMapEvents, useMap } from 
 import { useTranslation } from 'react-i18next'
 import { ORIGIN_ICON, DEST_ICON } from './tripPins'
 import PlaceSearchInput from './PlaceSearchInput'
+import type { PlaceDetails } from '../../api/places'
 
 interface Props {
   originLat?: number
@@ -11,6 +12,8 @@ interface Props {
   destLng?: number
   onOriginChange: (lat: number, lng: number) => void
   onDestChange: (lat: number, lng: number) => void
+  onOriginPlaceSelect?: (place: PlaceDetails) => void
+  onDestPlaceSelect?: (place: PlaceDetails) => void
   /** Pin actif par défaut. Le marchand connaît son origine ⇒ 'B' est plus fréquent. */
   defaultActive?: 'A' | 'B'
   height?: string
@@ -31,6 +34,8 @@ export default function DualPinMap({
   destLng,
   onOriginChange,
   onDestChange,
+  onOriginPlaceSelect,
+  onDestPlaceSelect,
   defaultActive = 'B',
   height = '340px',
 }: Props) {
@@ -147,6 +152,8 @@ export default function DualPinMap({
         onSelect={(place) => {
           setError(null)
           apply(place.lat, place.lng)
+          if (active === 'A') onOriginPlaceSelect?.(place)
+          else onDestPlaceSelect?.(place)
         }}
       />
 

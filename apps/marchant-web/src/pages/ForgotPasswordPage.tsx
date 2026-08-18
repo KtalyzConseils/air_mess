@@ -29,18 +29,18 @@ export default function ForgotPasswordPage() {
       : null
 
   return (
-    <div className="min-h-screen bg-cream flex flex-col">
+    <div className="min-h-[100svh] bg-cream flex flex-col">
       {/* Logo top */}
-      <div className="p-6 md:p-8 flex items-center justify-between gap-4">
-        <Link to="/" className="inline-block">
-          <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
+      <div className="px-4 py-4 sm:p-6 md:p-8 flex items-center justify-between gap-3">
+        <Link to="/" className="inline-block min-w-0">
+          <img src={wordmark} alt="Air Mess" className="h-7 sm:h-8 w-auto max-w-[160px] sm:max-w-none" />
         </Link>
         <LanguageToggle variant="light" />
       </div>
 
       {/* Card centrée */}
-      <div className="flex-1 flex items-center justify-center px-4 pb-12">
-        <Card variant="signature" padding="lg" className="max-w-md w-full">
+      <div className="flex-1 flex flex-col items-center justify-center w-full px-4 py-6 sm:pb-12">
+        <Card variant="signature" padding="none" className="max-w-md w-full p-5 sm:p-8">
           <Link
             to="/login"
             className="inline-flex items-center gap-1 text-caption text-warm-500 hover:text-ink mb-4"
@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
             {t('auth.forgot.backToLogin')}
           </Link>
 
-          <h1 className="text-h1 text-ink">{t('auth.forgot.title')}</h1>
+          <h1 className="text-h2 sm:text-h1 text-ink leading-tight">{t('auth.forgot.title')}</h1>
 
           {submitted ? (
             <div className="mt-6 bg-success-bg border border-success/20 text-success rounded-md p-4">

@@ -19,6 +19,7 @@ import {
 } from '../api/courses'
 import AddressPicker from '../components/AddressPicker'
 import type { Address } from '../api/addresses'
+import type { PlaceDetails } from '../api/places'
 import { useAuthStore } from '../stores/authStore'
 import { fetchWallet } from '../api/wallet'
 import { useOnboardingStore } from '../stores/onboardingStore'
@@ -455,6 +456,34 @@ export default function NewCoursePage() {
     if (addr.street || addr.landmark || addr.instructions) setShowDestExtra(true)
   }
 
+  function fillOriginFromPlace(place: PlaceDetails) {
+    setValue('origin_lat', place.lat, { shouldDirty: true, shouldValidate: true })
+    setValue('origin_lng', place.lng, { shouldDirty: true, shouldValidate: true })
+    if (place.quartier) {
+      setValue('origin_quartier', place.quartier, { shouldDirty: true, shouldValidate: true })
+    }
+    if (place.city) {
+      setValue('origin_city', place.city, { shouldDirty: true, shouldValidate: true })
+    }
+    if (place.formatted_address && !watch('origin_street')) {
+      setValue('origin_street', place.formatted_address, { shouldDirty: true })
+    }
+  }
+
+  function fillDestinationFromPlace(place: PlaceDetails) {
+    setValue('destination_lat', place.lat, { shouldDirty: true, shouldValidate: true })
+    setValue('destination_lng', place.lng, { shouldDirty: true, shouldValidate: true })
+    if (place.quartier) {
+      setValue('destination_quartier', place.quartier, { shouldDirty: true, shouldValidate: true })
+    }
+    if (place.city) {
+      setValue('destination_city', place.city, { shouldDirty: true, shouldValidate: true })
+    }
+    if (place.formatted_address && !watch('destination_street')) {
+      setValue('destination_street', place.formatted_address, { shouldDirty: true })
+    }
+  }
+
   // Coords utilisées à la fois pour la carte, le récap et l'estimation tarif.
   // Reboxées explicitement pour être stables dans les deps du useQuery estimate.
   const originLat = Number(watch('origin_lat')) || 0
@@ -636,13 +665,21 @@ export default function NewCoursePage() {
                       className={inputClass}
                     />
                   </Field>
-                  <Field label={t('courses.new.destinationQuartier')} required>
+                  <Field
+                    label={t('courses.new.destinationQuartier')}
+                    required
+                    error={errors.destination_quartier?.message}
+                  >
                     <input
                       {...register('destination_quartier', { required: t('courses.new.required') })}
                       className={inputClass}
                     />
                   </Field>
-                  <Field label={t('courses.new.destinationCity')} required>
+                  <Field
+                    label={t('courses.new.destinationCity')}
+                    required
+                    error={errors.destination_city?.message}
+                  >
                     <input
                       {...register('destination_city', { required: t('courses.new.required') })}
                       className={inputClass}
@@ -658,13 +695,15 @@ export default function NewCoursePage() {
                       destLat={Number(watch('destination_lat')) || undefined}
                       destLng={Number(watch('destination_lng')) || undefined}
                       onOriginChange={(la, ln) => {
-                        setValue('origin_lat', la)
-                        setValue('origin_lng', ln)
+                        setValue('origin_lat', la, { shouldDirty: true, shouldValidate: true })
+                        setValue('origin_lng', ln, { shouldDirty: true, shouldValidate: true })
                       }}
+                      onOriginPlaceSelect={fillOriginFromPlace}
                       onDestChange={(la, ln) => {
-                        setValue('destination_lat', la)
-                        setValue('destination_lng', ln)
+                        setValue('destination_lat', la, { shouldDirty: true, shouldValidate: true })
+                        setValue('destination_lng', ln, { shouldDirty: true, shouldValidate: true })
                       }}
+                      onDestPlaceSelect={fillDestinationFromPlace}
                     />
                     <input type="hidden" {...register('origin_lat', { required: true })} />
                     <input type="hidden" {...register('origin_lng', { required: true })} />

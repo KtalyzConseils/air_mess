@@ -94,14 +94,22 @@ export default function OriginDrawer({
                 className={inputClass}
               />
             </Field>
-            <Field label={t('courses.new.originQuartier')} required>
+            <Field
+              label={t('courses.new.originQuartier')}
+              required
+              error={errors.origin_quartier?.message}
+            >
               <input
                 {...register('origin_quartier', { required: t('courses.new.required') })}
                 className={inputClass}
                 placeholder={t('courses.new.quartierPlaceholder')}
               />
             </Field>
-            <Field label={t('courses.new.originCity')} required>
+            <Field
+              label={t('courses.new.originCity')}
+              required
+              error={errors.origin_city?.message}
+            >
               <input
                 {...register('origin_city', { required: t('courses.new.required') })}
                 className={inputClass}
