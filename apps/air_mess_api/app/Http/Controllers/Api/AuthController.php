@@ -36,8 +36,10 @@ class AuthController extends Controller
             'email'            => ['required', 'email', 'unique:users,email'],
             'phone'            => ['required', 'string', 'max:20', 'unique:users,phone'],
             'password'         => ['required', 'string', 'min:8', 'confirmed'],
-            // OTP téléphone (obligatoire) + connexion Google (optionnelle)
-            'firebase_id_token'        => ['required', 'string'],
+            // OTP téléphone (optionnel pour les marchands/particuliers — l'app
+            // mobile marchand n'a pas d'UI OTP. S'il est fourni, il est vérifié
+            // et marque phone_verified_at ; sinon phone_verified_at reste null.
+            'firebase_id_token'        => ['nullable', 'string'],
             'firebase_google_id_token' => ['nullable', 'string'],
             'raison_sociale'   => ['required', 'string', 'max:255'],
             'ifu_rccm'         => ['nullable', 'string', 'max:50'],
@@ -49,16 +51,22 @@ class AuthController extends Controller
             'accepted_terms'   => ['required', 'accepted'],
         ]);
 
-        $emailVerifiedAt = $this->assertRegistrationTokens($firebaseVerifier, $data);
+        // OTP téléphone optionnel : on ne vérifie que si un jeton est fourni.
+        $emailVerifiedAt = null;
+        $phoneVerifiedAt = null;
+        if (! empty($data['firebase_id_token'])) {
+            $emailVerifiedAt = $this->assertRegistrationTokens($firebaseVerifier, $data);
+            $phoneVerifiedAt = now();
+        }
 
-        $user = DB::transaction(function () use ($data, $emailVerifiedAt) {
+        $user = DB::transaction(function () use ($data, $emailVerifiedAt, $phoneVerifiedAt) {
             $user = User::create([
                 'name'                   => $data['name'],
                 'email'                  => $data['email'],
                 'phone'                  => $data['phone'],
                 'password'               => $data['password'], // hashé via cast 'hashed'
                 'type'                   => User::TYPE_MARCHANT,
-                'phone_verified_at'      => now(), // prouvé par l'OTP Firebase
+                'phone_verified_at'      => $phoneVerifiedAt,
                 'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
                 'accepted_terms_version' => User::TERMS_VERSION,
@@ -109,23 +117,29 @@ class AuthController extends Controller
             'phone'      => ['required', 'string', 'max:20', 'unique:users,phone'],
             'password'   => ['required', 'string', 'min:8', 'confirmed'],
             'gender'     => ['nullable', Rule::in(['M', 'F', 'autre'])],
-            // OTP téléphone (obligatoire) + connexion Google (optionnelle)
-            'firebase_id_token'        => ['required', 'string'],
+            // OTP téléphone (optionnel pour les particuliers — voir registerMarchant).
+            'firebase_id_token'        => ['nullable', 'string'],
             'firebase_google_id_token' => ['nullable', 'string'],
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms' => ['required', 'accepted'],
         ]);
 
-        $emailVerifiedAt = $this->assertRegistrationTokens($firebaseVerifier, $data);
+        // OTP téléphone optionnel : on ne vérifie que si un jeton est fourni.
+        $emailVerifiedAt = null;
+        $phoneVerifiedAt = null;
+        if (! empty($data['firebase_id_token'])) {
+            $emailVerifiedAt = $this->assertRegistrationTokens($firebaseVerifier, $data);
+            $phoneVerifiedAt = now();
+        }
 
-        $user = DB::transaction(function () use ($data, $emailVerifiedAt) {
+        $user = DB::transaction(function () use ($data, $emailVerifiedAt, $phoneVerifiedAt) {
             $user = User::create([
                 'name'                   => $data['first_name'] . ' ' . $data['last_name'],
                 'email'                  => $data['email'],
                 'phone'                  => $data['phone'],
                 'password'               => $data['password'],
                 'type'                   => User::TYPE_INDIVIDUAL,
-                'phone_verified_at'      => now(), // prouvé par l'OTP Firebase
+                'phone_verified_at'      => $phoneVerifiedAt,
                 'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
                 'accepted_terms_version' => User::TERMS_VERSION,
