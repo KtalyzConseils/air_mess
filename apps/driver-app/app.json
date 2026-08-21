@@ -30,8 +30,8 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "resize",
-      "package": "com.anonymous.driver",
+            "softwareKeyboardLayoutMode": "resize",
+      "package": "com.airmess.driver",
       "googleServicesFile": "./google-services.json"
     },
 
@@ -94,7 +94,8 @@
         }
       ],
       "./plugins/withFullScreenNotifications",
-      "./plugins/withIosVoip"
+      "./plugins/withIosVoip",
+      "./plugins/withLocalMavenRepos"
     ],
 
     "experiments": {
@@ -112,3 +113,4 @@
     "owner": "ktalyzconseils"
   }
 }
+
