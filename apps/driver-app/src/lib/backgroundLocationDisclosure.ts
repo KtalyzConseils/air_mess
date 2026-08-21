@@ -47,6 +47,7 @@ export async function requestBackgroundLocationDisclosure(): Promise<boolean> {
 }
 
 export async function acceptBackgroundLocationDisclosure() {
+  await markBackgroundLocationDisclosureAccepted()
   pendingResolve?.(true)
   pendingResolve = null
   emit(false)
