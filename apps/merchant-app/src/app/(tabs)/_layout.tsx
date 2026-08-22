@@ -1,7 +1,8 @@
 import { Tabs } from 'expo-router'
-import { View } from 'react-native'
+import { View, StatusBar as NativeStatusBar } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import * as Device from 'expo-device'
+import Constants from 'expo-constants'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery } from '@tanstack/react-query'
@@ -52,8 +53,24 @@ export default function TabsLayout() {
     refetchInterval: 15_000,
   })
 
+  // Hauteur du bandeau sombre derrière la barre système. On ne se fie PAS à la
+  // seule valeur de `insets.top` : au tout premier montage elle vaut parfois 0
+  // sur Android (le safe-area provider n'a pas encore mesuré l'encoche), ce qui
+  // rendait le bandeau invisible → les icônes blanches forcées (ROM Transsion…)
+  // étaient perdues sur fond clair tant qu'aucune navigation n'avait forcé la
+  // mise à jour. On prend le max avec la hauteur native de la barre système.
+  const barHeight = Math.max(
+    insets.top,
+    NativeStatusBar.currentHeight ?? 0,
+    Constants.statusBarHeight ?? 0,
+  )
+
   return (
     <>
+      {/* Barre claire → icônes sombres partout où l'OEM le permet. Sur les ROM
+          d'entrée de gamme (Transsion…), les icônes sont forcées blanches : on pose
+          un bandeau sombre derrière pour qu'elles restent lisibles dès le premier
+          montage (et pas seulement après une navigation). */}
       <StatusBar style={FORCE_DARK_BANDEAU ? 'light' : 'dark'} />
       {FORCE_DARK_BANDEAU && (
         <View
@@ -63,7 +80,7 @@ export default function TabsLayout() {
             top: 0,
             left: 0,
             right: 0,
-            height: insets.top,
+            height: barHeight,
             backgroundColor: INK,
             zIndex: 100,
           }}
@@ -153,3 +170,4 @@ export default function TabsLayout() {
     </>
   )
 }
+

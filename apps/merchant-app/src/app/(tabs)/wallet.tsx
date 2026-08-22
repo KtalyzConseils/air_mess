@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -156,11 +157,13 @@ export default function WalletScreen() {
     )
   }
 
-  const canWithdraw =
+          const canWithdraw =
     data.available >= data.min_withdraw_fcfa && !data.pending_withdraw_request
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <StatusBar style="light" translucent backgroundColor="rgba(0,0,0,0.5)" />
+
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
         refreshControl={

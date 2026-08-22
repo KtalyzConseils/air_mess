@@ -1,4 +1,5 @@
 import { View, Text, Pressable, RefreshControl, ScrollView, ActivityIndicator } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
@@ -33,8 +34,9 @@ export default function DashboardScreen() {
   const pendingValidation =
     user?.type === 'marchant' && !user.marchant?.validated_at
 
-  return (
+      return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <StatusBar style="light" translucent backgroundColor="rgba(0,0,0,0.5)" />
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
         refreshControl={

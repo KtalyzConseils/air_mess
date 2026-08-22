@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
@@ -91,10 +92,11 @@ export default function NotificationsScreen() {
         )}
       </View>
     </View>
-  )
+    )
 
   return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <StatusBar style="light" translucent backgroundColor="rgba(0,0,0,0.5)" />
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color="#1A1614" size="large" />

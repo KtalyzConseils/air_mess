@@ -155,10 +155,15 @@ export default function ProfileScreen() {
             <PushStatusCard />
 
             <View className="mx-5 mt-5 bg-off-white border border-warm-200 rounded-2xl overflow-hidden">
-              <Row
+                            <Row
                 icon="lock-closed-outline"
                 label="Modifier mon mot de passe"
-                onPress={() => router.push({ pathname: '/forgot-password-webview', params: { email: user?.email } })}
+                onPress={() =>
+                  router.push({
+                    pathname: '/change-password',
+                    params: { email: user?.email },
+                  })
+                }
               />
               <View className="h-px bg-warm-200" />
               <Row

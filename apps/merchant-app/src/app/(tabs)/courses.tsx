@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Pressable,
 } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
@@ -36,8 +37,9 @@ export default function CoursesScreen() {
     [data],
   )
 
-  return (
+        return (
     <SafeAreaView className="flex-1 bg-cream" edges={['top']}>
+      <StatusBar style="light" translucent backgroundColor="rgba(0,0,0,0.5)" />
       <View className="px-5 pt-3 pb-2 flex-row items-center justify-between">
         <Text className="text-3xl font-extrabold text-ink">Mes courses</Text>
         <Pressable
