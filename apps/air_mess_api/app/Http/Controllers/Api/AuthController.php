@@ -555,6 +555,70 @@ class AuthController extends Controller
     }
 
     /**
+     * Mise à jour du profil de l'utilisateur connecté (marchand ou particulier).
+     *
+     * Accepte selon le type :
+     *   - marchand  : email, phone, name (nom du contact)
+     *   - individuel: email, phone, first_name, last_name
+     *
+     * L'unicité email/phone ignore l'utilisateur courant ; rien n'est changé si un
+     * champ n'est pas fourni. Retourne l'user à jour chargé de sa relation type.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $rules = [
+            'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => ['sometimes', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($user->id)],
+        ];
+
+        if ($user->type === User::TYPE_MARCHANT) {
+            $rules['name'] = ['sometimes', 'string', 'max:255'];
+        } elseif ($user->type === User::TYPE_INDIVIDUAL) {
+            $rules['first_name'] = ['sometimes', 'string', 'max:100'];
+            $rules['last_name']  = ['sometimes', 'string', 'max:100'];
+        }
+
+        $data = $request->validate($rules);
+
+        DB::transaction(function () use ($user, $data) {
+            if (isset($data['email'])) {
+                $user->email = $data['email'];
+            }
+            if (isset($data['phone'])) {
+                $user->phone = $data['phone'];
+            }
+
+            if ($user->type === User::TYPE_MARCHANT && isset($data['name'])) {
+                $user->name = $data['name'];
+            }
+
+            if ($user->type === User::TYPE_INDIVIDUAL) {
+                // Mise à jour du nom complet dérivé + prénom/nom métier.
+                $first = isset($data['first_name']) ? $data['first_name'] : $user->individual->first_name;
+                $last  = isset($data['last_name'])  ? $data['last_name']  : $user->individual->last_name;
+
+                if (isset($data['first_name'])) {
+                    $user->individual->first_name = $data['first_name'];
+                }
+                if (isset($data['last_name'])) {
+                    $user->individual->last_name = $data['last_name'];
+                }
+                $user->name = trim("{$first} {$last}");
+                $user->individual->save();
+            }
+
+            $user->save();
+        });
+
+        return response()->json([
+            'message' => 'Profil mis à jour.',
+            'user'    => $user->fresh()->load($user->type),
+        ]);
+    }
+
+    /**
      * Étape 1 du reset : envoie un email avec un lien contenant un token.
      */
     public function forgotPassword(\Illuminate\Http\Request $request): JsonResponse
