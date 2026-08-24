@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "AirMess",
+    "slug": "airmess",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "airmess",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.airmess.merchant"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1A1614",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "usesCleartextTraffic": true,
+      "package": "com.airmess.merchant"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          },
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1A1614",
+          "image": "./assets/icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-secure-store",
+      "expo-image",
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "AirMess accede a vos photos pour joindre des images a vos courses.",
+          "cameraPermission": "AirMess accede a l'appareil photo pour joindre des images a vos courses."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {}
+    }
+  }
+}
