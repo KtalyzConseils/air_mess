@@ -10,12 +10,15 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   hydrate: () => Promise<void>
+  setUser: (user: User) => void
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   hydrated: false,
+
+  setUser: (user) => set({ user }),
 
   login: async (email, password) => {
     const { data } = await api.post<LoginResponse>('/auth/login', { email, password })
