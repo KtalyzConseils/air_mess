@@ -20,7 +20,7 @@ export default function CourseDetailScreen() {
     <Screen scroll py={14} className="px-5">
       <View className="mb-4 flex-row items-center justify-between">
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(tabs)/dashboard')}
           className="h-11 w-11 items-center justify-center rounded-full bg-off-white"
           accessibilityRole="button"
           accessibilityLabel="Retour"

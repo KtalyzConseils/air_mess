@@ -1,6 +1,8 @@
-import { useMemo } from 'react'
-import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native'
+import { useCallback, useMemo, useState } from 'react'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import * as Location from 'expo-location'
+import { Image } from 'expo-image'
 import { Link } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import Card from '../../components/ui/Card'
@@ -72,14 +74,52 @@ export default function DashboardScreen() {
 }
 
 function Header() {
+  const [positionLabel, setPositionLabel] = useState('Votre position')
+  const [locating, setLocating] = useState(false)
+  const [locationError, setLocationError] = useState(false)
+
+  const detectPosition = useCallback(async () => {
+    setLocating(true)
+    setLocationError(false)
+
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync()
+      if (permission.status !== 'granted') {
+        setLocationError(true)
+        setPositionLabel('Localisation refusee')
+        return
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      })
+      const reverse = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      }).catch(() => [])
+      const first = reverse[0]
+      const nextLabel =
+        [first?.district || first?.subregion || first?.street, first?.city || first?.region]
+          .filter(Boolean)
+          .join(', ') || 'Position detectee'
+
+      setPositionLabel(nextLabel)
+    } catch {
+      setLocationError(true)
+      setPositionLabel('Position indisponible')
+    } finally {
+      setLocating(false)
+    }
+  }, [])
+
   return (
     <View className="mb-5">
       <View className="mb-4 flex-row items-start justify-between">
-        <View className="h-14 w-28 items-center justify-center rounded-2xl bg-airmess-dark">
+        <View className="h-14 w-36 items-start justify-center">
           <Image
-            source={require('../../../assets/images/splash-icon.png')}
-            style={{ width: 82, height: 46 }}
-            resizeMode="contain"
+            source={require('../../../assets/logo/airmess-wordmark.svg')}
+            style={{ width: 132, height: 38 }}
+            contentFit="contain"
           />
         </View>
         <Link href="/(tabs)/profile" asChild>
@@ -94,14 +134,34 @@ function Header() {
       </View>
 
       <Pressable
-        className="self-start flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-3.5 py-3 shadow-card"
+        onPress={() => void detectPosition()}
+        className={[
+          'max-w-[82%] self-start flex-row items-center rounded-full border px-3 py-2.5 shadow-card',
+          locationError ? 'border-airmess-red/30 bg-danger-bg' : 'border-airmess-yellow/40 bg-white',
+        ].join(' ')}
         accessibilityRole="button"
+        accessibilityLabel="Detecter votre position"
       >
-        <View className="mr-2 h-7 w-7 items-center justify-center rounded-full bg-danger-bg">
-          <Ionicons name="location-outline" size={15} color="#D40511" />
+        <View
+          className={[
+            'mr-2 h-8 w-8 items-center justify-center rounded-full',
+            locationError ? 'bg-white' : 'bg-airmess-yellow',
+          ].join(' ')}
+        >
+          {locating ? (
+            <ActivityIndicator size="small" color="#1A1614" />
+          ) : (
+            <Ionicons
+              name={locationError ? 'alert-circle-outline' : 'navigate-outline'}
+              size={16}
+              color={locationError ? '#D40511' : '#1A1614'}
+            />
+          )}
         </View>
-        <Text className="text-sm font-extrabold text-ink">Votre position</Text>
-        <Ionicons name="chevron-down" size={15} color="#8A7E68" />
+        <Text className="flex-shrink text-sm font-extrabold text-ink" numberOfLines={1}>
+          {locating ? 'Detection...' : positionLabel}
+        </Text>
+        <Ionicons name="chevron-forward" size={15} color="#8A7E68" style={{ marginLeft: 4 }} />
       </Pressable>
     </View>
   )

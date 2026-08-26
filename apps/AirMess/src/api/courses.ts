@@ -48,3 +48,53 @@ export async function fetchCourse(id: number | string): Promise<Course> {
   const { data } = await api.get(`/courses/${id}`)
   return data.course
 }
+
+export interface PackageCategory {
+  id: number
+  code: string
+  name: string
+  requires_isothermal_bag: boolean
+}
+
+export async function fetchPackageCategories(): Promise<PackageCategory[]> {
+  const { data } = await api.get<PackageCategory[]>('/package-categories')
+  return data
+}
+
+export interface CreateCoursePayload {
+  package_category_id: number
+  urgency: 'standard' | 'express'
+  package_description: string
+  package_size: 'S' | 'M' | 'L' | 'XL'
+  package_declared_value?: number
+  origin_name: string
+  origin_phone: string
+  origin_street?: string
+  origin_quartier: string
+  origin_city: string
+  origin_lat: number
+  origin_lng: number
+  destination_name: string
+  destination_phone: string
+  destination_street?: string
+  destination_quartier: string
+  destination_city: string
+  destination_lat: number
+  destination_lng: number
+  has_collection: boolean
+  collection_amount?: number
+  collection_method?: 'cash' | 'mobile_money' | 'prepaid'
+  delivery_fee_paid_by?: 'sender' | 'recipient'
+}
+
+export interface CreateCourseResult {
+  course?: Course
+  payment_required?: boolean
+  checkout_url?: string
+  message?: string
+}
+
+export async function createCourse(payload: CreateCoursePayload): Promise<CreateCourseResult> {
+  const { data } = await api.post<CreateCourseResult>('/courses', payload)
+  return data
+}

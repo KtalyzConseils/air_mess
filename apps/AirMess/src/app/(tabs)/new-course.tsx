@@ -1,23 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, Pressable, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
-import { useLocalSearchParams } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
+import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { fetchAddresses } from '../../api/addresses'
+import { createCourse, fetchPackageCategories } from '../../api/courses'
 import { fetchPlaceDetails, searchPlaces, type PlaceDetails, type PlaceSuggestion } from '../../api/places'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { useAuthStore } from '../../stores/authStore'
 
-type Step = 'package' | 'location' | 'details'
+type Step = 'package' | 'location' | 'details' | 'recap'
 type LocationTarget = 'origin' | 'destination'
 
 interface PackageType {
   id: string
+  categoryCode: string
   title: string
   subtitle: string
   icon: keyof typeof Ionicons.glyphMap
@@ -44,18 +46,22 @@ interface LocationDraft {
   urgency: 'standard' | 'express'
   packageDeclaredValue: string
   deliveryFeePaidBy: 'sender' | 'recipient'
+  hasCollection: boolean
+  collectionAmount: string
+  collectionMethod: 'cash' | 'mobile_money' | 'prepaid'
 }
 
 const PACKAGE_TYPES: PackageType[] = [
-  { id: 'parcel', title: 'Colis', subtitle: 'Paquet simple', icon: 'cube-outline', size: 'M' },
-  { id: 'food', title: 'Repas', subtitle: 'Restaurant, snack', icon: 'fast-food-outline', size: 'S' },
-  { id: 'documents', title: 'Documents', subtitle: 'Plis et papiers', icon: 'document-text-outline', size: 'S' },
-  { id: 'shopping', title: 'Courses', subtitle: 'Achats client', icon: 'bag-handle-outline', size: 'M' },
-  { id: 'pharmacy', title: 'Pharmacie', subtitle: 'Produit sensible', icon: 'medkit-outline', size: 'S' },
-  { id: 'other', title: 'Autre', subtitle: 'A preciser apres', icon: 'ellipsis-horizontal-circle-outline', size: 'L' },
+  { id: 'parcel', categoryCode: 'standard', title: 'Colis', subtitle: 'Paquet simple', icon: 'cube-outline', size: 'M' },
+  { id: 'food', categoryCode: 'hot_meal', title: 'Repas', subtitle: 'Restaurant, snack', icon: 'fast-food-outline', size: 'S' },
+  { id: 'documents', categoryCode: 'document', title: 'Documents', subtitle: 'Plis et papiers', icon: 'document-text-outline', size: 'S' },
+  { id: 'shopping', categoryCode: 'standard', title: 'Courses', subtitle: 'Achats client', icon: 'bag-handle-outline', size: 'M' },
+  { id: 'pharmacy', categoryCode: 'pharmacy', title: 'Pharmacie', subtitle: 'Produit sensible', icon: 'medkit-outline', size: 'S' },
+  { id: 'other', categoryCode: 'standard', title: 'Autre', subtitle: 'A preciser apres', icon: 'ellipsis-horizontal-circle-outline', size: 'L' },
 ]
 
 export default function NewCourseScreen() {
+  const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const { addressId } = useLocalSearchParams<{ addressId?: string }>()
   const [step, setStep] = useState<Step>('package')
@@ -63,6 +69,8 @@ export default function NewCourseScreen() {
   const [locationTarget, setLocationTarget] = useState<LocationTarget>('destination')
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [collectionDecided, setCollectionDecided] = useState(false)
   const [draft, setDraft] = useState<LocationDraft>({
     originName: user?.marchant?.raison_sociale ?? user?.name ?? '',
     originPhone: user?.phone ?? '',
@@ -83,11 +91,18 @@ export default function NewCourseScreen() {
     urgency: 'standard',
     packageDeclaredValue: '',
     deliveryFeePaidBy: 'sender',
+    hasCollection: false,
+    collectionAmount: '',
+    collectionMethod: 'cash',
   })
 
   const { data: addresses = [] } = useQuery({
     queryKey: ['addresses'],
     queryFn: fetchAddresses,
+  })
+  const { data: categories = [] } = useQuery({
+    queryKey: ['package-categories'],
+    queryFn: fetchPackageCategories,
   })
 
   const selectedAddress = useMemo(
@@ -188,6 +203,14 @@ export default function NewCourseScreen() {
 
   const hasOriginCoords = draft.originLat !== null && draft.originLng !== null
   const hasDestinationCoords = draft.destinationLat !== null && draft.destinationLng !== null
+  const missingPositionLabel =
+    !hasOriginCoords && !hasDestinationCoords
+      ? 'la prise en charge et la destination'
+      : !hasOriginCoords
+        ? 'la prise en charge'
+        : !hasDestinationCoords
+          ? 'la destination'
+          : ''
   const canContinueLocation =
     !!selectedPackage &&
     draft.originName.trim().length >= 2 &&
@@ -195,7 +218,67 @@ export default function NewCourseScreen() {
     draft.destinationAddress.trim().length >= 2 &&
     draft.destinationName.trim().length >= 2 &&
     draft.destinationPhone.trim().length >= 4
-  const canContinueDetails = draft.packageDescription.trim().length >= 2
+  const canContinueDetails =
+    draft.packageDescription.trim().length >= 2 &&
+    (!draft.hasCollection || Number(draft.collectionAmount) > 0)
+  const packageCategory = categories.find((category) => category.code === selectedPackage?.categoryCode)
+  const canCreateCourse =
+    canContinueLocation &&
+    canContinueDetails &&
+    hasOriginCoords &&
+    hasDestinationCoords &&
+    !!packageCategory
+
+  const createMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedPackage || !packageCategory || !draft.originLat || !draft.originLng || !draft.destinationLat || !draft.destinationLng) {
+        throw new Error('Selectionne une position exacte pour le depart et la destination.')
+      }
+
+      const declaredValue = Number(draft.packageDeclaredValue)
+      const collectionAmount = Number(draft.collectionAmount)
+
+      return createCourse({
+        package_category_id: packageCategory.id,
+        urgency: draft.urgency,
+        package_description: draft.packageDescription.trim(),
+        package_size: selectedPackage.size,
+        package_declared_value: Number.isFinite(declaredValue) && declaredValue > 0 ? declaredValue : undefined,
+        origin_name: draft.originName.trim(),
+        origin_phone: draft.originPhone.trim(),
+        origin_street: draft.originAddress.trim() || undefined,
+        origin_quartier: draft.originQuartier.trim() || draft.originAddress.trim(),
+        origin_city: draft.originCity.trim() || 'Cotonou',
+        origin_lat: draft.originLat,
+        origin_lng: draft.originLng,
+        destination_name: draft.destinationName.trim(),
+        destination_phone: draft.destinationPhone.trim(),
+        destination_street: draft.destinationAddress.trim() || undefined,
+        destination_quartier: draft.destinationQuartier.trim() || draft.destinationAddress.trim(),
+        destination_city: draft.destinationCity.trim() || 'Cotonou',
+        destination_lat: draft.destinationLat,
+        destination_lng: draft.destinationLng,
+        has_collection: draft.hasCollection,
+        collection_amount:
+          draft.hasCollection && Number.isFinite(collectionAmount) && collectionAmount > 0
+            ? collectionAmount
+            : undefined,
+        collection_method: draft.hasCollection ? draft.collectionMethod : undefined,
+        delivery_fee_paid_by: draft.deliveryFeePaidBy,
+      })
+    },
+    onSuccess: (result) => {
+      setCreateError(null)
+      if (result.checkout_url) {
+        void Linking.openURL(result.checkout_url)
+        return
+      }
+      if (result.course?.id) {
+        router.replace({ pathname: '/courses/[id]', params: { id: String(result.course.id) } })
+      }
+    },
+    onError: (error) => setCreateError(getApiErrorMessage(error)),
+  })
 
   const fillDestinationFromAddress = (address: (typeof addresses)[number]) => {
     setDraft((current) => ({
@@ -242,6 +325,8 @@ export default function NewCourseScreen() {
           <StepDot active={step === 'location'} done={canContinueLocation} label="Trajet" />
           <View className="mx-2 h-0.5 flex-1 bg-warm-200" />
           <StepDot active={step === 'details'} done={canContinueDetails} label="Details" />
+          <View className="mx-2 h-0.5 flex-1 bg-warm-200" />
+          <StepDot active={step === 'recap'} done={!!createMutation.data?.course} label="Recap" />
         </View>
       </View>
 
@@ -454,6 +539,12 @@ export default function NewCourseScreen() {
           ) : (
             <Card className="mb-4" padding="md">
               <Text className="text-base font-extrabold text-ink">Expediteur</Text>
+              <FieldLabel required>Prise en charge</FieldLabel>
+              <CourseInput
+                value={draft.originAddress}
+                onChangeText={(value) => setDraft((current) => ({ ...current, originAddress: value }))}
+                placeholder="Adresse de depart"
+              />
               <FieldLabel required>Nom du commerce</FieldLabel>
               <CourseInput
                 value={draft.originName}
@@ -480,7 +571,7 @@ export default function NewCourseScreen() {
             Continuer
           </Button>
         </View>
-      ) : (
+      ) : step === 'details' ? (
         <View>
           <View className="mb-4 flex-row items-center justify-between">
             <Pressable
@@ -585,7 +676,59 @@ export default function NewCourseScreen() {
             </View>
 
             <View className="mt-3 border-t border-warm-200 pt-1">
-               
+                <FieldLabel required>Encaissement a la livraison</FieldLabel>
+                <View className="gap-2">
+                  <PaymentOption
+                    title="Non"
+                    subtitle="Le livreur ne recupere pas d'argent"
+                    selected={!draft.hasCollection}
+                    onPress={() => {
+                      setCollectionDecided(true)
+                      setDraft((current) => ({ ...current, hasCollection: false }))
+                    }}
+                  />
+                  <PaymentOption
+                    title="Oui"
+                    subtitle="Le livreur encaisse un montant chez le client"
+                    selected={draft.hasCollection}
+                    onPress={() => {
+                      setCollectionDecided(true)
+                      setDraft((current) => ({ ...current, hasCollection: true }))
+                    }}
+                  />
+                </View>
+
+                {draft.hasCollection && (
+                  <View>
+                    <FieldLabel required>Montant a encaisser</FieldLabel>
+                    <CourseInput
+                      value={draft.collectionAmount}
+                      onChangeText={(value) => setDraft((current) => ({ ...current, collectionAmount: value }))}
+                      placeholder="Montant en FCFA"
+                      keyboardType="numeric"
+                    />
+
+                    <FieldLabel required>Methode</FieldLabel>
+                    <View className="flex-row gap-2">
+                      <MethodChip
+                        label="Cash"
+                        selected={draft.collectionMethod === 'cash'}
+                        onPress={() => setDraft((current) => ({ ...current, collectionMethod: 'cash' }))}
+                      />
+                      <MethodChip
+                        label="Mobile Money"
+                        selected={draft.collectionMethod === 'mobile_money'}
+                        onPress={() => setDraft((current) => ({ ...current, collectionMethod: 'mobile_money' }))}
+                      />
+                      <MethodChip
+                        label="Deja paye"
+                        selected={draft.collectionMethod === 'prepaid'}
+                        onPress={() => setDraft((current) => ({ ...current, collectionMethod: 'prepaid' }))}
+                      />
+                    </View>
+                  </View>
+                )}
+
                 <FieldLabel>Frais de livraison payes par</FieldLabel>
                 <View className="gap-2">
                   <PaymentOption
@@ -613,10 +756,111 @@ export default function NewCourseScreen() {
           </Card>
 
           <Button
+            onPress={() => {
+              if (!collectionDecided) {
+                Alert.alert(
+                  'Encaissement a la livraison ?',
+                  'Le livreur doit-il recuperer un montant chez le client ?',
+                  [
+                    {
+                      text: 'Non',
+                      onPress: () => {
+                        setCollectionDecided(true)
+                        setDraft((current) => ({ ...current, hasCollection: false }))
+                        setStep('recap')
+                      },
+                    },
+                    {
+                      text: 'Oui',
+                      onPress: () => {
+                        setCollectionDecided(true)
+                        setDraft((current) => ({ ...current, hasCollection: true }))
+                      },
+                    },
+                  ],
+                )
+                return
+              }
+              setStep('recap')
+            }}
             disabled={!canContinueDetails}
             rightIcon={<Ionicons name="arrow-forward" size={20} color="#1A1614" />}
           >
-            Voir le recapitulatif
+            Creer une course
+          </Button>
+        </View>
+      ) : (
+        <View>
+          <View className="mb-4 flex-row items-center justify-between">
+            <Pressable
+              onPress={() => setStep('details')}
+              className="h-10 flex-row items-center rounded-full bg-off-white px-3"
+              accessibilityRole="button"
+            >
+              <Ionicons name="chevron-back" size={18} color="#1A1614" />
+              <Text className="ml-1 text-sm font-extrabold text-ink">Details</Text>
+            </Pressable>
+          </View>
+
+          <Card className="mb-4" padding="lg">
+            <View className="mb-4 flex-row items-center">
+              <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
+                <Ionicons name="receipt-outline" size={22} color="#1A1614" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-xl font-extrabold text-ink">Synthese</Text>
+                <Text className="mt-0.5 text-sm font-semibold text-warm-500">Verifie avant de creer</Text>
+              </View>
+            </View>
+
+            <RecapRow icon="cube-outline" label="Colis" value={selectedPackage?.title ?? '--'} />
+            <RecapRow icon="navigate-outline" label="Trajet" value={`${formatCompactPlace(draft.originQuartier, draft.originCity) || 'Depart'} vers ${draft.destinationAddress || 'Destination'}`} />
+            <RecapRow icon="person-outline" label="Client" value={`${draft.destinationName} - ${draft.destinationPhone}`} />
+            <RecapRow icon="flash-outline" label="Urgence" value={draft.urgency === 'express' ? 'Express' : 'Standard'} />
+            <RecapRow icon="document-text-outline" label="Details" value={draft.packageDescription} />
+            <RecapRow
+              icon={draft.hasCollection ? 'cash-outline' : 'ban-outline'}
+              label="Encaissement"
+              value={
+                draft.hasCollection
+                  ? `${draft.collectionAmount.trim()} FCFA - ${formatCollectionMethod(draft.collectionMethod)}`
+                  : 'Aucun montant a encaisser'
+              }
+            />
+            <RecapRow
+              icon={draft.deliveryFeePaidBy === 'recipient' ? 'cash-outline' : 'wallet-outline'}
+              label="Paiement"
+              value={
+                draft.deliveryFeePaidBy === 'recipient'
+                  ? 'Le client paie les frais a la livraison'
+                  : 'Le commerce paie via son wallet'
+              }
+            />
+            {!!draft.packageDeclaredValue.trim() && (
+              <RecapRow icon="shield-checkmark-outline" label="Valeur" value={`${draft.packageDeclaredValue.trim()} FCFA`} />
+            )}
+
+            {(!hasOriginCoords || !hasDestinationCoords) && (
+              <View className="mt-4 rounded-2xl border border-warning/30 bg-warning-bg p-3">
+                <Text className="text-sm font-bold text-ink">Position exacte manquante</Text>
+                <Text className="mt-1 text-xs font-semibold leading-5 text-warm-600">
+                  Selectionne {missingPositionLabel} dans les resultats de recherche pour permettre au livreur de trouver le trajet.
+                </Text>
+              </View>
+            )}
+
+            {createError && (
+              <Text className="mt-4 text-sm font-bold text-airmess-red">{createError}</Text>
+            )}
+          </Card>
+
+          <Button
+            onPress={() => createMutation.mutate()}
+            loading={createMutation.isPending}
+            disabled={!canCreateCourse || createMutation.isPending}
+            rightIcon={<Ionicons name="checkmark" size={20} color="#1A1614" />}
+          >
+            Creer la course
           </Button>
         </View>
       )}
@@ -864,8 +1108,61 @@ function PaymentOption({
   )
 }
 
+function MethodChip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string
+  selected: boolean
+  onPress: () => void
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className={[
+        'h-11 flex-1 items-center justify-center rounded-xl border px-2',
+        selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-white',
+      ].join(' ')}
+      accessibilityRole="button"
+    >
+      <Text className="text-center text-xs font-extrabold text-ink" numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  )
+}
+
+function RecapRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  label: string
+  value: string
+}) {
+  return (
+    <View className="flex-row items-start border-t border-warm-100 py-3">
+      <View className="mr-3 h-9 w-9 items-center justify-center rounded-full bg-warm-100">
+        <Ionicons name={icon} size={18} color="#1A1614" />
+      </View>
+      <View className="flex-1">
+        <Text className="text-xs font-extrabold uppercase text-warm-500">{label}</Text>
+        <Text className="mt-0.5 text-sm font-extrabold leading-5 text-ink">{value}</Text>
+      </View>
+    </View>
+  )
+}
+
 function formatCompactPlace(quartier: string, city: string) {
   return [quartier, city].filter(Boolean).join(', ')
+}
+
+function formatCollectionMethod(method: 'cash' | 'mobile_money' | 'prepaid') {
+  if (method === 'mobile_money') return 'Mobile Money'
+  if (method === 'prepaid') return 'Deja paye'
+  return 'Cash'
 }
 
 function generateSessionId() {
