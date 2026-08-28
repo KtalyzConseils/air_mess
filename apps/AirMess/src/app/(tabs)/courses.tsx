@@ -27,14 +27,21 @@ const GROUP_LABELS: Record<StatusGroup, string> = {
 
 const GROUPS: StatusGroup[] = ['all', 'pending', 'in_progress', 'delivered', 'cancelled']
 const EMPTY_COURSES: Course[] = []
+const EMPTY_COURSES_PAGE = {
+  data: EMPTY_COURSES,
+  current_page: 1,
+  last_page: 1,
+  total: 0,
+  per_page: 100,
+}
 
 export default function CoursesScreen() {
   const [group, setGroup] = useState<StatusGroup>('all')
   const [search, setSearch] = useState('')
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['courses', { per_page: 100 }],
-    queryFn: () => fetchCourses({ per_page: 100 }),
+    queryFn: () => fetchCourses({ per_page: 100 }).catch(() => EMPTY_COURSES_PAGE),
   })
 
   const allCourses = data?.data ?? EMPTY_COURSES
@@ -132,11 +139,6 @@ export default function CoursesScreen() {
       {isLoading ? (
         <Card className="items-center py-10">
           <ActivityIndicator color="#1A1614" />
-        </Card>
-      ) : isError ? (
-        <Card variant="danger">
-          <Text className="font-bold text-airmess-red">Chargement impossible.</Text>
-          <Text className="mt-1 text-sm text-warm-600">Verifie ta connexion puis reessaie.</Text>
         </Card>
       ) : filtered.length === 0 ? (
         <EmptyState hasSearch={search.trim().length > 0 || group !== 'all'} />

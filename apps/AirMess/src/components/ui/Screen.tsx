@@ -1,4 +1,6 @@
-import { View, ScrollView, StatusBar, type ViewProps } from 'react-native'
+import { View, type ViewProps } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 /**
@@ -39,24 +41,30 @@ export default function Screen({
   ...rest
 }: Props) {
   const bg = BG[variant]
-  const barStyle = variant === 'dark' ? 'light-content' : 'dark-content'
-
-  const Content = scroll ? ScrollView : View
-  const contentProps = scroll
-    ? {
-        contentContainerStyle: { paddingTop: py, paddingBottom: py + 24 },
-        showsVerticalScrollIndicator: false,
-      }
-    : {
-        style: { paddingTop: py, paddingBottom: py },
-      }
-
+  const barStyle = variant === 'dark' ? 'light' : 'dark'
   return (
     <SafeAreaView className={['flex-1', bg].join(' ')} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={barStyle} translucent backgroundColor="transparent" />
-      <Content className={['flex-1', className].join(' ')} {...contentProps} {...rest}>
-        {children}
-      </Content>
+      <StatusBar style={barStyle} animated />
+      {scroll ? (
+        <KeyboardAwareScrollView
+          className={['flex-1', className].join(' ')}
+          contentContainerStyle={{ paddingTop: py, paddingBottom: py + 24 }}
+          bottomOffset={24}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          {...rest}
+        >
+          {children}
+        </KeyboardAwareScrollView>
+      ) : (
+        <View
+          className={['flex-1', className].join(' ')}
+          style={{ paddingTop: py, paddingBottom: py }}
+          {...rest}
+        >
+          {children}
+        </View>
+      )}
     </SafeAreaView>
   )
 }

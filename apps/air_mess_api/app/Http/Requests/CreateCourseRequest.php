@@ -43,7 +43,7 @@ class CreateCourseRequest extends FormRequest
         return [
             'package_category_id'      => ['required', 'exists:package_categories,id'],
             'urgency'                  => ['nullable', Rule::in(['standard', 'express'])],
-            'package_description'      => ['required', 'string', 'max:255'],
+            'package_description'      => ['nullable', 'string', 'max:255'],
             'package_size'             => ['required', Rule::in(['S', 'M', 'L', 'XL'])],
             'package_weight_kg'        => ['nullable', 'numeric', 'min:0', 'max:50'],
             'package_declared_value'   => ['nullable', 'numeric', 'min:0'],
@@ -51,6 +51,7 @@ class CreateCourseRequest extends FormRequest
             // Origine
             'origin_name'              => ['required', 'string', 'max:150'],
             'origin_phone'             => ['required', 'string', 'max:20'],
+            'origin_phone_secondary'   => ['nullable', 'string', 'max:20'],
             'origin_street'            => ['nullable', 'string', 'max:255'],
             'origin_landmark'          => ['nullable', 'string', 'max:255'],
             'origin_quartier'          => ['required', 'string', 'max:100'],
@@ -62,6 +63,7 @@ class CreateCourseRequest extends FormRequest
             // Destination
             'destination_name'         => ['required', 'string', 'max:150'],
             'destination_phone'        => ['required', 'string', 'max:20'],
+            'destination_phone_secondary' => ['nullable', 'string', 'max:20'],
             'destination_street'       => ['nullable', 'string', 'max:255'],
             'destination_landmark'     => ['nullable', 'string', 'max:255'],
             'destination_quartier'     => ['required', 'string', 'max:100'],

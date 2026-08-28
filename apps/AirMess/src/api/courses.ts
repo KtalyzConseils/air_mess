@@ -64,11 +64,12 @@ export async function fetchPackageCategories(): Promise<PackageCategory[]> {
 export interface CreateCoursePayload {
   package_category_id: number
   urgency: 'standard' | 'express'
-  package_description: string
+  package_description?: string
   package_size: 'S' | 'M' | 'L' | 'XL'
   package_declared_value?: number
   origin_name: string
   origin_phone: string
+  origin_phone_secondary?: string
   origin_street?: string
   origin_quartier: string
   origin_city: string
@@ -76,6 +77,7 @@ export interface CreateCoursePayload {
   origin_lng: number
   destination_name: string
   destination_phone: string
+  destination_phone_secondary?: string
   destination_street?: string
   destination_quartier: string
   destination_city: string

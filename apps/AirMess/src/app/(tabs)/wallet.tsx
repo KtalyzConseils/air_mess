@@ -10,10 +10,30 @@ import {
   requestTopUp,
   requestWithdraw,
   type WalletTransaction,
+  type WalletState,
   type WithdrawMethod,
 } from '../../api/wallet'
 
 const TOP_UP_AMOUNTS = [5_000, 10_000, 25_000, 50_000]
+const EMPTY_WALLET: WalletState = {
+  balance: 0,
+  pending_reserved: 0,
+  available: 0,
+  total_deposited: 0,
+  total_spent: 0,
+  min_recommended_fcfa: 5_000,
+  min_withdraw_fcfa: 1_000,
+  is_low: false,
+  recent_transactions: [],
+  pending_withdraw_request: null,
+  withdraw_limits: {
+    max_per_day_count: 0,
+    max_per_week_count: 0,
+    max_per_day_fcfa: 0,
+    max_per_week_fcfa: 0,
+    used: { count_24h: 0, count_7d: 0, amount_24h: 0, amount_7d: 0 },
+  },
+}
 
 export default function WalletScreen() {
   const queryClient = useQueryClient()
@@ -24,9 +44,9 @@ export default function WalletScreen() {
   const [withdrawMethod, setWithdrawMethod] = useState<WithdrawMethod>('momo')
   const [withdrawAccount, setWithdrawAccount] = useState('')
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['me', 'wallet'],
-    queryFn: fetchWallet,
+    queryFn: () => fetchWallet().catch(() => EMPTY_WALLET),
     refetchInterval: 30_000,
   })
 
@@ -115,10 +135,6 @@ export default function WalletScreen() {
       {isLoading ? (
         <Card className="items-center py-10">
           <ActivityIndicator color="#1A1614" />
-        </Card>
-      ) : isError ? (
-        <Card variant="danger">
-          <Text className="font-bold text-airmess-red">Solde indisponible.</Text>
         </Card>
       ) : (
         <>

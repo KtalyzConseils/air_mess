@@ -1,6 +1,7 @@
 import '../global.css'
 import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import {
@@ -46,12 +47,21 @@ export default function RootLayout() {
     return () => clearTimeout(timer)
   }, [])
 
+  useEffect(() => {
+    // L'ancien development build peut ne pas encore embarquer ce module natif.
+    // L'import dynamique évite de bloquer toute l'app avant le prochain build Android.
+    void import('expo-navigation-bar')
+      .then(({ NavigationBar }) => NavigationBar.setStyle('light'))
+      .catch(() => undefined)
+  }, [])
+
   if (!hydrated || !minElapsed || !fontsLoaded) {
     return <BrandSplash />
   }
 
   return (
     <KeyboardProvider>
+      <StatusBar style="dark" animated />
       <QueryClientProvider client={queryClient}>
         <Stack screenOptions={{ headerShown: false }} />
       </QueryClientProvider>

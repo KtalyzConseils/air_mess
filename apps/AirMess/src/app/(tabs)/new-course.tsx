@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -29,6 +28,7 @@ interface PackageType {
 interface LocationDraft {
   originName: string
   originPhone: string
+  originPhoneSecondary: string
   originAddress: string
   originQuartier: string
   originCity: string
@@ -36,19 +36,16 @@ interface LocationDraft {
   originLng: number | null
   destinationName: string
   destinationPhone: string
+  destinationPhoneSecondary: string
   destinationAddress: string
   destinationQuartier: string
   destinationCity: string
   destinationLat: number | null
   destinationLng: number | null
   packageDescription: string
-  packagePhotoUri: string | null
   urgency: 'standard' | 'express'
   packageDeclaredValue: string
   deliveryFeePaidBy: 'sender' | 'recipient'
-  hasCollection: boolean
-  collectionAmount: string
-  collectionMethod: 'cash' | 'mobile_money' | 'prepaid'
 }
 
 const PACKAGE_TYPES: PackageType[] = [
@@ -70,10 +67,10 @@ export default function NewCourseScreen() {
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
-  const [collectionDecided, setCollectionDecided] = useState(false)
   const [draft, setDraft] = useState<LocationDraft>({
     originName: user?.marchant?.raison_sociale ?? user?.name ?? '',
     originPhone: user?.phone ?? '',
+    originPhoneSecondary: '',
     originAddress: '',
     originQuartier: '',
     originCity: 'Cotonou',
@@ -81,19 +78,16 @@ export default function NewCourseScreen() {
     originLng: null,
     destinationName: '',
     destinationPhone: '',
+    destinationPhoneSecondary: '',
     destinationAddress: '',
     destinationQuartier: '',
     destinationCity: 'Cotonou',
     destinationLat: null,
     destinationLng: null,
     packageDescription: '',
-    packagePhotoUri: null,
     urgency: 'standard',
     packageDeclaredValue: '',
     deliveryFeePaidBy: 'sender',
-    hasCollection: false,
-    collectionAmount: '',
-    collectionMethod: 'cash',
   })
 
   const { data: addresses = [] } = useQuery({
@@ -218,9 +212,7 @@ export default function NewCourseScreen() {
     draft.destinationAddress.trim().length >= 2 &&
     draft.destinationName.trim().length >= 2 &&
     draft.destinationPhone.trim().length >= 4
-  const canContinueDetails =
-    draft.packageDescription.trim().length >= 2 &&
-    (!draft.hasCollection || Number(draft.collectionAmount) > 0)
+  const canContinueDetails = true
   const packageCategory = categories.find((category) => category.code === selectedPackage?.categoryCode)
   const canCreateCourse =
     canContinueLocation &&
@@ -236,16 +228,15 @@ export default function NewCourseScreen() {
       }
 
       const declaredValue = Number(draft.packageDeclaredValue)
-      const collectionAmount = Number(draft.collectionAmount)
-
       return createCourse({
         package_category_id: packageCategory.id,
         urgency: draft.urgency,
-        package_description: draft.packageDescription.trim(),
+        package_description: draft.packageDescription.trim() || undefined,
         package_size: selectedPackage.size,
         package_declared_value: Number.isFinite(declaredValue) && declaredValue > 0 ? declaredValue : undefined,
         origin_name: draft.originName.trim(),
         origin_phone: draft.originPhone.trim(),
+        origin_phone_secondary: draft.originPhoneSecondary.trim() || undefined,
         origin_street: draft.originAddress.trim() || undefined,
         origin_quartier: draft.originQuartier.trim() || draft.originAddress.trim(),
         origin_city: draft.originCity.trim() || 'Cotonou',
@@ -253,17 +244,13 @@ export default function NewCourseScreen() {
         origin_lng: draft.originLng,
         destination_name: draft.destinationName.trim(),
         destination_phone: draft.destinationPhone.trim(),
+        destination_phone_secondary: draft.destinationPhoneSecondary.trim() || undefined,
         destination_street: draft.destinationAddress.trim() || undefined,
         destination_quartier: draft.destinationQuartier.trim() || draft.destinationAddress.trim(),
         destination_city: draft.destinationCity.trim() || 'Cotonou',
         destination_lat: draft.destinationLat,
         destination_lng: draft.destinationLng,
-        has_collection: draft.hasCollection,
-        collection_amount:
-          draft.hasCollection && Number.isFinite(collectionAmount) && collectionAmount > 0
-            ? collectionAmount
-            : undefined,
-        collection_method: draft.hasCollection ? draft.collectionMethod : undefined,
+        has_collection: false,
         delivery_fee_paid_by: draft.deliveryFeePaidBy,
       })
     },
@@ -293,26 +280,6 @@ export default function NewCourseScreen() {
     }))
     setLocationTarget('destination')
     setShowAddressBook(false)
-  }
-
-  const pickPackagePhoto = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
-
-    if (permission.status !== 'granted') {
-      setLocationError('Autorise les photos pour ajouter une image du colis.')
-      return
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      quality: 0.75,
-      legacy: true,
-    })
-
-    if (!result.canceled) {
-      setDraft((current) => ({ ...current, packagePhotoUri: result.assets[0]?.uri ?? null }))
-    }
   }
 
   return (
@@ -535,6 +502,14 @@ export default function NewCourseScreen() {
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
               />
+              <FieldLabel>Second numero du client</FieldLabel>
+              <CourseInput
+                value={draft.destinationPhoneSecondary}
+                onChangeText={(value) => setDraft((current) => ({ ...current, destinationPhoneSecondary: value }))}
+                placeholder="+229... (optionnel)"
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+              />
             </Card>
           ) : (
             <Card className="mb-4" padding="md">
@@ -610,7 +585,7 @@ export default function NewCourseScreen() {
               />
             </View>
 
-            <FieldLabel required>Description du colis</FieldLabel>
+            <FieldLabel>Description du colis (optionnel)</FieldLabel>
             <TextInput
               value={draft.packageDescription}
               onChangeText={(value) => setDraft((current) => ({ ...current, packageDescription: value }))}
@@ -621,45 +596,14 @@ export default function NewCourseScreen() {
               textAlignVertical="top"
             />
 
-            <FieldLabel>Photo du colis</FieldLabel>
-            <View className="rounded-2xl border border-dashed border-warm-300 bg-white p-3">
-              {draft.packagePhotoUri ? (
-                <View className="flex-row items-center">
-                  <View className="mr-3 h-12 w-12 items-center justify-center rounded-xl bg-success-bg">
-                    <Ionicons name="image-outline" size={24} color="#16A34A" />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-extrabold text-ink" numberOfLines={1}>
-                      Photo ajoutee
-                    </Text>
-                    <Text className="mt-0.5 text-xs font-semibold text-warm-500" numberOfLines={1}>
-                      {draft.packagePhotoUri}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => setDraft((current) => ({ ...current, packagePhotoUri: null }))}
-                    className="h-10 w-10 items-center justify-center rounded-full bg-danger-bg"
-                    accessibilityRole="button"
-                    accessibilityLabel="Retirer la photo"
-                  >
-                    <Ionicons name="trash-outline" size={19} color="#D40511" />
-                  </Pressable>
-                </View>
-              ) : (
-                <Text className="text-sm font-semibold text-warm-500">
-                  Optionnel, utile pour identifier le colis.
-                </Text>
-              )}
-
-              <Pressable
-                onPress={() => void pickPackagePhoto()}
-                className="mt-3 h-11 flex-row items-center justify-center rounded-xl bg-warm-100"
-                accessibilityRole="button"
-              >
-                <Ionicons name="image-outline" size={19} color="#1A1614" />
-                <Text className="ml-2 text-sm font-extrabold text-ink">Ajouter une photo</Text>
-              </Pressable>
-            </View>
+            <FieldLabel>Second numero a joindre (marchand)</FieldLabel>
+            <CourseInput
+              value={draft.originPhoneSecondary}
+              onChangeText={(value) => setDraft((current) => ({ ...current, originPhoneSecondary: value }))}
+              placeholder="+229... (optionnel)"
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+            />
           </Card>
 
           <Card className="mb-4" padding="md">
@@ -670,65 +614,12 @@ export default function NewCourseScreen() {
               <View className="flex-1">
                 <Text className="text-base font-extrabold text-ink">Options avancees</Text>
                 <Text className="mt-0.5 text-xs font-semibold text-warm-500">
-                  Valeur et paiement
+                  Valeur et paiement de la livraison
                 </Text>
               </View>
             </View>
 
             <View className="mt-3 border-t border-warm-200 pt-1">
-                <FieldLabel required>Encaissement a la livraison</FieldLabel>
-                <View className="gap-2">
-                  <PaymentOption
-                    title="Non"
-                    subtitle="Le livreur ne recupere pas d'argent"
-                    selected={!draft.hasCollection}
-                    onPress={() => {
-                      setCollectionDecided(true)
-                      setDraft((current) => ({ ...current, hasCollection: false }))
-                    }}
-                  />
-                  <PaymentOption
-                    title="Oui"
-                    subtitle="Le livreur encaisse un montant chez le client"
-                    selected={draft.hasCollection}
-                    onPress={() => {
-                      setCollectionDecided(true)
-                      setDraft((current) => ({ ...current, hasCollection: true }))
-                    }}
-                  />
-                </View>
-
-                {draft.hasCollection && (
-                  <View>
-                    <FieldLabel required>Montant a encaisser</FieldLabel>
-                    <CourseInput
-                      value={draft.collectionAmount}
-                      onChangeText={(value) => setDraft((current) => ({ ...current, collectionAmount: value }))}
-                      placeholder="Montant en FCFA"
-                      keyboardType="numeric"
-                    />
-
-                    <FieldLabel required>Methode</FieldLabel>
-                    <View className="flex-row gap-2">
-                      <MethodChip
-                        label="Cash"
-                        selected={draft.collectionMethod === 'cash'}
-                        onPress={() => setDraft((current) => ({ ...current, collectionMethod: 'cash' }))}
-                      />
-                      <MethodChip
-                        label="Mobile Money"
-                        selected={draft.collectionMethod === 'mobile_money'}
-                        onPress={() => setDraft((current) => ({ ...current, collectionMethod: 'mobile_money' }))}
-                      />
-                      <MethodChip
-                        label="Deja paye"
-                        selected={draft.collectionMethod === 'prepaid'}
-                        onPress={() => setDraft((current) => ({ ...current, collectionMethod: 'prepaid' }))}
-                      />
-                    </View>
-                  </View>
-                )}
-
                 <FieldLabel>Frais de livraison payes par</FieldLabel>
                 <View className="gap-2">
                   <PaymentOption
@@ -756,33 +647,7 @@ export default function NewCourseScreen() {
           </Card>
 
           <Button
-            onPress={() => {
-              if (!collectionDecided) {
-                Alert.alert(
-                  'Encaissement a la livraison ?',
-                  'Le livreur doit-il recuperer un montant chez le client ?',
-                  [
-                    {
-                      text: 'Non',
-                      onPress: () => {
-                        setCollectionDecided(true)
-                        setDraft((current) => ({ ...current, hasCollection: false }))
-                        setStep('recap')
-                      },
-                    },
-                    {
-                      text: 'Oui',
-                      onPress: () => {
-                        setCollectionDecided(true)
-                        setDraft((current) => ({ ...current, hasCollection: true }))
-                      },
-                    },
-                  ],
-                )
-                return
-              }
-              setStep('recap')
-            }}
+            onPress={() => setStep('recap')}
             disabled={!canContinueDetails}
             rightIcon={<Ionicons name="arrow-forward" size={20} color="#1A1614" />}
           >
@@ -816,17 +681,16 @@ export default function NewCourseScreen() {
             <RecapRow icon="cube-outline" label="Colis" value={selectedPackage?.title ?? '--'} />
             <RecapRow icon="navigate-outline" label="Trajet" value={`${formatCompactPlace(draft.originQuartier, draft.originCity) || 'Depart'} vers ${draft.destinationAddress || 'Destination'}`} />
             <RecapRow icon="person-outline" label="Client" value={`${draft.destinationName} - ${draft.destinationPhone}`} />
+            {!!draft.destinationPhoneSecondary.trim() && (
+              <RecapRow icon="call-outline" label="Second numero client" value={draft.destinationPhoneSecondary.trim()} />
+            )}
+            {!!draft.originPhoneSecondary.trim() && (
+              <RecapRow icon="call-outline" label="Second numero marchand" value={draft.originPhoneSecondary.trim()} />
+            )}
             <RecapRow icon="flash-outline" label="Urgence" value={draft.urgency === 'express' ? 'Express' : 'Standard'} />
-            <RecapRow icon="document-text-outline" label="Details" value={draft.packageDescription} />
-            <RecapRow
-              icon={draft.hasCollection ? 'cash-outline' : 'ban-outline'}
-              label="Encaissement"
-              value={
-                draft.hasCollection
-                  ? `${draft.collectionAmount.trim()} FCFA - ${formatCollectionMethod(draft.collectionMethod)}`
-                  : 'Aucun montant a encaisser'
-              }
-            />
+            {!!draft.packageDescription.trim() && (
+              <RecapRow icon="document-text-outline" label="Details" value={draft.packageDescription.trim()} />
+            )}
             <RecapRow
               icon={draft.deliveryFeePaidBy === 'recipient' ? 'cash-outline' : 'wallet-outline'}
               label="Paiement"
@@ -923,13 +787,13 @@ function PlaceSearchBox({
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const [loadingDetail, setLoadingDetail] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [detailError, setDetailError] = useState<string | null>(null)
   const sessionIdRef = useRef(generateSessionId())
 
   useEffect(() => {
     setQuery('')
     setDebounced('')
-    setError(null)
+    setDetailError(null)
   }, [target])
 
   useEffect(() => {
@@ -943,7 +807,7 @@ function PlaceSearchBox({
     return () => clearTimeout(timer)
   }, [query])
 
-  const { data: suggestions = [], isFetching } = useQuery({
+  const { data: suggestions = [], isFetching, error: searchError } = useQuery({
     queryKey: ['places-search', debounced],
     queryFn: () => searchPlaces(debounced, sessionIdRef.current, 'fr'),
     enabled: debounced.length >= 2,
@@ -952,7 +816,7 @@ function PlaceSearchBox({
 
   const selectPlace = async (suggestion: PlaceSuggestion) => {
     setLoadingDetail(true)
-    setError(null)
+    setDetailError(null)
     try {
       const place = await fetchPlaceDetails(suggestion.place_id, sessionIdRef.current, 'fr')
       onSelect(place)
@@ -960,7 +824,7 @@ function PlaceSearchBox({
       setDebounced('')
       sessionIdRef.current = generateSessionId()
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      setDetailError(getApiErrorMessage(err))
     } finally {
       setLoadingDetail(false)
     }
@@ -980,7 +844,11 @@ function PlaceSearchBox({
         {(isFetching || loadingDetail) && <ActivityIndicator color="#1A1614" />}
       </View>
 
-      {error && <Text className="mt-2 text-sm font-bold text-airmess-red">{error}</Text>}
+      {(detailError || searchError) && (
+        <Text className="mt-2 text-sm font-bold text-airmess-red">
+          {detailError ?? getApiErrorMessage(searchError)}
+        </Text>
+      )}
 
       {debounced.length >= 2 && suggestions.length > 0 && (
         <View className="mt-2 overflow-hidden rounded-2xl border border-warm-200 bg-off-white">
@@ -1108,31 +976,6 @@ function PaymentOption({
   )
 }
 
-function MethodChip({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string
-  selected: boolean
-  onPress: () => void
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className={[
-        'h-11 flex-1 items-center justify-center rounded-xl border px-2',
-        selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-white',
-      ].join(' ')}
-      accessibilityRole="button"
-    >
-      <Text className="text-center text-xs font-extrabold text-ink" numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
-
 function RecapRow({
   icon,
   label,
@@ -1157,12 +1000,6 @@ function RecapRow({
 
 function formatCompactPlace(quartier: string, city: string) {
   return [quartier, city].filter(Boolean).join(', ')
-}
-
-function formatCollectionMethod(method: 'cash' | 'mobile_money' | 'prepaid') {
-  if (method === 'mobile_money') return 'Mobile Money'
-  if (method === 'prepaid') return 'Deja paye'
-  return 'Cash'
 }
 
 function generateSessionId() {

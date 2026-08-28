@@ -59,6 +59,28 @@ class CreateCourseTest extends TestCase
         $this->assertDatabaseCount('courses', 1);
     }
 
+    public function test_description_is_optional_and_secondary_phones_are_stored(): void
+    {
+        $user = User::factory()->create(['type' => 'marchant']);
+        Marchant::factory()->create(['user_id' => $user->id]);
+        $cat = PackageCategory::factory()->create();
+
+        Sanctum::actingAs($user);
+
+        $payload = $this->validPayload($cat->id);
+        unset($payload['package_description']);
+        $payload['origin_phone_secondary'] = '+22997111111';
+        $payload['destination_phone_secondary'] = '+22996111111';
+
+        $this->postJson('/api/courses', $payload)->assertStatus(201);
+
+        $this->assertDatabaseHas('courses', [
+            'package_description' => null,
+            'origin_phone_secondary' => '+22997111111',
+            'destination_phone_secondary' => '+22996111111',
+        ]);
+    }
+
     public function test_unauthenticated_user_cannot_create_course(): void
     {
         $cat = PackageCategory::factory()->create();
