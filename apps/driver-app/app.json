@@ -2,7 +2,7 @@
   "expo": {
     "name": "AirMess Driver",
     "slug": "driver-app",
-    "version": "1.0.0",
+    "version": "1.1.2",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "airmess",
@@ -31,7 +31,8 @@
       ],
       "predictiveBackGestureEnabled": false,
             "softwareKeyboardLayoutMode": "resize",
-      "package": "com.airmess.driver",
+      "package": "com.anonymous.driver",
+      "versionCode": 7,
       "googleServicesFile": "./google-services.json"
     },
 

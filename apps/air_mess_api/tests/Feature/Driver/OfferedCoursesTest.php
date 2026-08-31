@@ -149,4 +149,19 @@ class OfferedCoursesTest extends TestCase
         $this->assertArrayHasKey('distance_km', $first);
         $this->assertIsNumeric($first['distance_km']);
     }
+
+    public function test_offered_courses_per_page_can_return_more_than_default_window(): void
+    {
+        [$user] = $this->makeAvailableDriverAt(6.3703, 2.3912);
+
+        for ($i = 0; $i < 12; $i++) {
+            $this->makeAwaitingCourseAt(6.3710 + ($i * 0.0001), 2.3920);
+        }
+
+        Sanctum::actingAs($user);
+        $response = $this->getJson('/api/driver/offered-courses?per_page=12');
+
+        $response->assertStatus(200);
+        $this->assertCount(12, $response->json('courses'));
+    }
 }

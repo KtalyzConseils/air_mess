@@ -9,6 +9,7 @@ import { useMutation } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { forgotPassword } from '../api/password'
 import Button from '../components/ui/Button'
+import SupportContactSheet from '../components/SupportContactSheet'
 
 /**
  * Mot de passe oublié — pendant natif de la page web marchand.
@@ -20,6 +21,7 @@ export default function ForgotPasswordScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [email, setEmail] = useState('')
+  const [supportOpen, setSupportOpen] = useState(false)
 
   const mutation = useMutation({
     mutationFn: () => forgotPassword(email.trim()),
@@ -140,12 +142,24 @@ export default function ForgotPasswordScreen() {
         </View>
 
         <View className="items-center mt-6 px-6">
-          <Text className="text-warm-500 text-xs text-center">
-            Une question ?{' '}
-            <Text className="text-airmess-yellow font-bold">Contacte le support</Text>
-          </Text>
+          <Pressable
+            onPress={() => setSupportOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Contacter le support"
+          >
+            <Text className="text-warm-500 text-xs text-center">
+              Une question ?{' '}
+              <Text className="text-airmess-yellow font-bold">Contacte le support</Text>
+            </Text>
+          </Pressable>
         </View>
       </KeyboardAwareScrollView>
+      <SupportContactSheet
+        visible={supportOpen}
+        onClose={() => setSupportOpen(false)}
+        context="Mot de passe oublié livreur"
+      />
     </SafeAreaView>
   )
 }

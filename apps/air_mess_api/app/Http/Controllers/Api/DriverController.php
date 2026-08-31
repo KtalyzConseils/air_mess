@@ -171,7 +171,9 @@ class DriverController extends Controller
         }
 
 
-        $courses = $query->limit(10)->get()->makeHidden(['pickup_code', 'delivery_code']);
+        $perPage = min(max((int) $request->query('per_page', 30), 1), 100);
+
+        $courses = $query->limit($perPage)->get()->makeHidden(['pickup_code', 'delivery_code']);
 
         return response()->json(['courses' => $courses]);
     }

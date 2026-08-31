@@ -5,8 +5,6 @@ import {
   TextInput,
   Pressable,
   Image,
-  Linking,
-  Alert,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -17,7 +15,7 @@ import Constants from 'expo-constants'
 import { AxiosError } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
-import { getSignupUrl } from '../lib/signupUrl'
+import SupportContactSheet from '../components/SupportContactSheet'
 
 /**
  * Login driver — continuation directe du splash.
@@ -42,6 +40,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [supportOpen, setSupportOpen] = useState(false)
 
   const version = Constants.expoConfig?.version ?? ''
 
@@ -207,14 +206,27 @@ export default function LoginScreen() {
 
           {/* Footer version + mention équipe */}
           <View className="items-center mt-8">
-            <Text className="text-warm-500 text-xs">
-              Une question ? <Text className="text-airmess-yellow font-bold">Contacte le support</Text>
-            </Text>
+            <Pressable
+              onPress={() => setSupportOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Contacter le support"
+            >
+              <Text className="text-warm-500 text-xs">
+                Une question ?{' '}
+                <Text className="text-airmess-yellow font-bold">Contacte le support</Text>
+              </Text>
+            </Pressable>
             {version ? (
               <Text className="text-warm-600 text-[10px] mt-2 font-mono">v{version}</Text>
             ) : null}
           </View>
       </KeyboardAwareScrollView>
+      <SupportContactSheet
+        visible={supportOpen}
+        onClose={() => setSupportOpen(false)}
+        context="Connexion livreur"
+      />
     </SafeAreaView>
   )
 }
