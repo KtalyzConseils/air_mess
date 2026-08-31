@@ -1,5 +1,5 @@
 import { create } from 'axios'
-import * as SecureStore from 'expo-secure-store'
+import { getAuthToken } from '../utils/authStorage'
 
 const api = create({
   baseURL: process.env.EXPO_PUBLIC_API_BASE_URL,
@@ -12,7 +12,7 @@ const api = create({
 
 api.interceptors.request.use(async (config) => {
   if (!config.headers.Authorization) {
-    const token = await SecureStore.getItemAsync('airmess_token')
+    const token = await getAuthToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }

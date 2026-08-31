@@ -1,5 +1,6 @@
 import '../global.css'
 import { useEffect, useState } from 'react'
+import { AppState } from 'react-native'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -13,6 +14,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/plus-jakarta-sans'
 import BrandSplash from '../components/BrandSplash'
+import { registerPushNotifications } from '../lib/notifications'
 import { useAuthStore } from '../stores/authStore'
 
 const queryClient = new QueryClient({
@@ -29,6 +31,7 @@ const MIN_SPLASH_MS = 1200
 export default function RootLayout() {
   const hydrate = useAuthStore((state) => state.hydrate)
   const hydrated = useAuthStore((state) => state.hydrated)
+  const user = useAuthStore((state) => state.user)
   const [minElapsed, setMinElapsed] = useState(false)
   const [fontsLoaded] = useFonts({
     PlusJakartaSans_400Regular,
@@ -43,8 +46,24 @@ export default function RootLayout() {
   }, [hydrate])
 
   useEffect(() => {
+    if (!user) return
+    void registerPushNotifications().catch((error) => {
+      console.warn('[push] Enregistrement impossible :', error)
+    })
+  }, [user])
+
+  useEffect(() => {
     const timer = setTimeout(() => setMinElapsed(true), MIN_SPLASH_MS)
     return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void queryClient.invalidateQueries({ refetchType: 'active' })
+      }
+    })
+    return () => subscription.remove()
   }, [])
 
   useEffect(() => {

@@ -21,7 +21,8 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "usesCleartextTraffic": true,
-      "package": "com.airmess.merchant"
+      "package": "com.airmess.merchantapp",
+      "googleServicesFile": "../merchant-app/google-services.json"
     },
     "web": {
       "output": "static",
@@ -37,6 +38,9 @@
         }
       ],
       "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "expo-notifications",
       [
         "expo-build-properties",
         {
@@ -45,7 +49,10 @@
           },
           "android": {
             "enableMinifyInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraMavenRepos": [
+              "../../node_modules/@notifee/react-native/android/libs"
+            ]
           }
         }
       ],

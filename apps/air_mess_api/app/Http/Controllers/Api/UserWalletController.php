@@ -87,6 +87,7 @@ class UserWalletController extends Controller
         Request $request,
         UserWalletService $userWalletService,
         WalletWithdrawPayoutInitiator $payoutInitiator,
+        \App\Services\NotificationService $notifier,
     ): JsonResponse
     {
         $user = $request->user();
@@ -196,6 +197,14 @@ class UserWalletController extends Controller
             // Initie le payout Fedapay HORS transaction (le webhook confirmera ou refund).
             $payoutInitiator->initiate($req->fresh());
 
+            $notifier->sendToUser(
+                $user->id,
+                'wallet.withdraw_initiated',
+                'Retrait initié',
+                number_format((int) $data['amount'], 0, ',', ' ') . ' FCFA sont en cours de transfert.',
+                ['withdraw_id' => $req->id, 'amount' => (int) $data['amount']],
+            );
+
             return response()->json([
                 'message' => 'Retrait initié. Le paiement sera confirmé sous quelques minutes.',
                 'request' => $req->fresh(),
@@ -210,6 +219,14 @@ class UserWalletController extends Controller
             'target_account' => $data['target_account'],
             'status'         => WalletWithdrawRequest::STATUS_PENDING,
         ]);
+
+        $notifier->sendToUser(
+            $user->id,
+            'wallet.withdraw_requested',
+            'Demande de retrait reçue',
+            number_format((int) $data['amount'], 0, ',', ' ') . ' FCFA seront traités après validation.',
+            ['withdraw_id' => $req->id, 'amount' => (int) $data['amount']],
+        );
 
         return response()->json([
             'message' => 'Demande de retrait créée. Un admin la traitera sous 24h ouvrées.',
@@ -308,6 +325,96 @@ class UserWalletController extends Controller
             'checkout_url' => $checkout['checkout_url'],
             'amount'       => $data['amount'],
             'min_recommended' => $minRecommended,
+        ]);
+    }
+
+    /** Confirme un paiement au retour de FedaPay, sans dépendre du webhook. */
+    public function confirmPayment(
+        Payment $payment,
+        Request $request,
+        FedapayService $fedapay,
+        UserWalletService $walletService,
+        \App\Services\CourseBillingService $billing,
+        \App\Services\NotificationService $notifier,
+    ): JsonResponse {
+        $user = $request->user();
+        $allowedTypes = [Payment::TYPE_USER_WALLET_DEPOSIT, Payment::TYPE_DELIVERY_FEE];
+
+        if ($payment->user_id !== $user->id || ! in_array($payment->type, $allowedTypes, true)) {
+            return response()->json(['message' => 'Paiement introuvable.'], 404);
+        }
+
+        if ($payment->isPaid()) {
+            return response()->json([
+                'status'    => 'paid',
+                'processed' => false,
+                'course_id' => $payment->metadata['course_id'] ?? null,
+            ]);
+        }
+
+        if (! $payment->provider_ref) {
+            return response()->json(['status' => $payment->status, 'processed' => false], 202);
+        }
+
+        try {
+            $transaction = $fedapay->fetchTransaction((string) $payment->provider_ref);
+        } catch (\Throwable $e) {
+            Log::warning('confirmPayment: fetchTransaction failed', [
+                'payment_id' => $payment->id,
+                'error'      => $e->getMessage(),
+            ]);
+            return response()->json(['status' => $payment->status, 'processed' => false], 202);
+        }
+
+        if (($transaction['status'] ?? null) !== 'approved') {
+            return response()->json([
+                'status'    => $transaction['status'] ?? 'pending',
+                'processed' => false,
+            ], 202);
+        }
+
+        $courseId = null;
+        $processed = DB::transaction(function () use (
+            $payment,
+            $transaction,
+            $user,
+            $walletService,
+            $billing,
+            $notifier,
+            &$courseId,
+        ) {
+            $fresh = Payment::whereKey($payment->id)->lockForUpdate()->first();
+            if (! $fresh || $fresh->isPaid()) {
+                $courseId = $fresh?->metadata['course_id'] ?? null;
+                return false;
+            }
+
+            $fresh->update([
+                'status'       => Payment::STATUS_PAID,
+                'paid_at'      => now(),
+                'raw_response' => $transaction,
+            ]);
+
+            if ($fresh->type === Payment::TYPE_USER_WALLET_DEPOSIT) {
+                $walletService->deposit($user, (int) $fresh->amount_fcfa, $fresh);
+                $notifier->sendToUser(
+                    $user->id,
+                    'wallet.deposited',
+                    '💰 Recharge confirmée',
+                    number_format((int) $fresh->amount_fcfa, 0, ',', ' ') . ' FCFA ont été ajoutés à votre wallet.',
+                    ['payment_id' => $fresh->id, 'amount' => (int) $fresh->amount_fcfa],
+                );
+            } else {
+                $courseId = $billing->finalizeOneShotCourse($fresh, $notifier)?->id;
+            }
+
+            return true;
+        });
+
+        return response()->json([
+            'status'    => 'paid',
+            'processed' => $processed,
+            'course_id' => $courseId,
         ]);
     }
 }

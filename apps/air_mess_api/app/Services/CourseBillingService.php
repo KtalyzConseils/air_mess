@@ -91,7 +91,7 @@ class CourseBillingService
         $callbackUrl = $coursePayload['callback_url'] ?? null;
         if (! $callbackUrl) {
             return response()->json([
-                'message'         => 'Quota mensuel atteint. Le paiement à la course nécessite un callback_url.',
+                'message'         => 'Le paiement direct nécessite une URL de retour.',
                 'payment_required'=> true,
             ], 402);
         }
@@ -142,8 +142,8 @@ class CourseBillingService
             'payment_required' => true,
             'payment_id'       => $payment->id,
             'checkout_url'     => $checkout['checkout_url'],
-            'message'          => 'Quota atteint : paiement requis pour cette course.',
-        ], 402);
+            'message'          => 'Paiement direct requis pour finaliser cette course.',
+        ]);
     }
 
     /**

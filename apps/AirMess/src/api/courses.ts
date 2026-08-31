@@ -114,10 +114,12 @@ export interface CreateCoursePayload {
   collection_amount?: number
   collection_method?: 'cash' | 'mobile_money' | 'prepaid'
   delivery_fee_paid_by?: 'sender' | 'recipient'
+  callback_url?: string
 }
 
 export interface CreateCourseResult {
   course?: Course
+  payment_id?: number
   payment_required?: boolean
   checkout_url?: string
   message?: string

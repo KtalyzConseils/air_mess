@@ -95,10 +95,19 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Alertes',
+          tabBarBadge: unread > 0 ? unread : undefined,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="notifications-outline" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profil',
-          tabBarBadge: unread > 0 ? unread : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" color={color} size={size} />
           ),
