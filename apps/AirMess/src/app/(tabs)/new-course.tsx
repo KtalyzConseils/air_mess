@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { fetchAddresses } from '../../api/addresses'
-import { createCourse, fetchPackageCategories } from '../../api/courses'
+import { createCourse, estimateCourseFee, fetchPackageCategories } from '../../api/courses'
 import { fetchPlaceDetails, searchPlaces, type PlaceDetails, type PlaceSuggestion } from '../../api/places'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
@@ -173,6 +173,8 @@ export default function NewCourseScreen() {
   }
 
   const handleSelectPlace = (place: PlaceDetails) => {
+    setLocationError(null)
+
     if (locationTarget === 'origin') {
       setDraft((current) => ({
         ...current,
@@ -197,6 +199,10 @@ export default function NewCourseScreen() {
 
   const hasOriginCoords = draft.originLat !== null && draft.originLng !== null
   const hasDestinationCoords = draft.destinationLat !== null && draft.destinationLng !== null
+  const originLat = draft.originLat ?? 0
+  const originLng = draft.originLng ?? 0
+  const destinationLat = draft.destinationLat ?? 0
+  const destinationLng = draft.destinationLng ?? 0
   const missingPositionLabel =
     !hasOriginCoords && !hasDestinationCoords
       ? 'la prise en charge et la destination'
@@ -220,6 +226,20 @@ export default function NewCourseScreen() {
     hasOriginCoords &&
     hasDestinationCoords &&
     !!packageCategory
+  const estimateQuery = useQuery({
+    queryKey: ['course-estimate', originLat, originLng, destinationLat, destinationLng, draft.urgency],
+    queryFn: () =>
+      estimateCourseFee({
+        origin_lat: originLat,
+        origin_lng: originLng,
+        destination_lat: destinationLat,
+        destination_lng: destinationLng,
+        urgency: draft.urgency,
+      }),
+    enabled: hasOriginCoords && hasDestinationCoords,
+    staleTime: 30_000,
+  })
+  const currentFee = estimateQuery.data?.fee ?? null
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -268,6 +288,7 @@ export default function NewCourseScreen() {
   })
 
   const fillDestinationFromAddress = (address: (typeof addresses)[number]) => {
+    setLocationError(null)
     setDraft((current) => ({
       ...current,
       destinationName: address.recipient_name,
@@ -423,6 +444,7 @@ export default function NewCourseScreen() {
               <PlaceSearchBox
                 target={locationTarget}
                 onSelect={handleSelectPlace}
+                onSearchChange={() => setLocationError(null)}
                 placeholder={
                   locationTarget === 'origin'
                     ? 'Rechercher la prise en charge'
@@ -484,7 +506,10 @@ export default function NewCourseScreen() {
               <FieldLabel required>Destination</FieldLabel>
               <CourseInput
                 value={draft.destinationAddress}
-                onChangeText={(value) => setDraft((current) => ({ ...current, destinationAddress: value }))}
+                onChangeText={(value) => {
+                  setLocationError(null)
+                  setDraft((current) => ({ ...current, destinationAddress: value }))
+                }}
                 placeholder="Adresse de livraison"
               />
               <FieldLabel required>Nom du client</FieldLabel>
@@ -517,7 +542,10 @@ export default function NewCourseScreen() {
               <FieldLabel required>Prise en charge</FieldLabel>
               <CourseInput
                 value={draft.originAddress}
-                onChangeText={(value) => setDraft((current) => ({ ...current, originAddress: value }))}
+                onChangeText={(value) => {
+                  setLocationError(null)
+                  setDraft((current) => ({ ...current, originAddress: value }))
+                }}
                 placeholder="Adresse de depart"
               />
               <FieldLabel required>Nom du commerce</FieldLabel>
@@ -678,6 +706,35 @@ export default function NewCourseScreen() {
               </View>
             </View>
 
+            <View className="mb-4 rounded-2xl bg-ink p-4">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-3">
+                  <Text className="text-xs font-extrabold uppercase text-airmess-yellow">
+                    Prix estime
+                  </Text>
+                  <Text className="mt-1 text-3xl font-extrabold text-white">
+                    {estimateQuery.isFetching
+                      ? 'Calcul...'
+                      : currentFee !== null
+                        ? `${currentFee.toLocaleString('fr-FR')} FCFA`
+                        : 'A calculer'}
+                  </Text>
+                  <Text className="mt-1 text-xs font-semibold text-warm-300">
+                    {currentFee !== null && estimateQuery.data
+                      ? `${estimateQuery.data.distance_km.toFixed(1)} km - ${draft.urgency === 'express' ? 'Express' : 'Standard'}`
+                      : 'Selectionne les positions exactes pour voir le prix.'}
+                  </Text>
+                </View>
+                <View className="h-12 w-12 items-center justify-center rounded-2xl bg-airmess-yellow">
+                  {estimateQuery.isFetching ? (
+                    <ActivityIndicator color="#1A1614" />
+                  ) : (
+                    <Ionicons name="cash-outline" size={24} color="#1A1614" />
+                  )}
+                </View>
+              </View>
+            </View>
+
             <RecapRow icon="cube-outline" label="Colis" value={selectedPackage?.title ?? '--'} />
             <RecapRow icon="navigate-outline" label="Trajet" value={`${formatCompactPlace(draft.originQuartier, draft.originCity) || 'Depart'} vers ${draft.destinationAddress || 'Destination'}`} />
             <RecapRow icon="person-outline" label="Client" value={`${draft.destinationName} - ${draft.destinationPhone}`} />
@@ -779,10 +836,12 @@ function PlaceSearchBox({
   target,
   placeholder,
   onSelect,
+  onSearchChange,
 }: {
   target: LocationTarget
   placeholder: string
   onSelect: (place: PlaceDetails) => void
+  onSearchChange?: () => void
 }) {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -836,7 +895,10 @@ function PlaceSearchBox({
         <Ionicons name="search" size={19} color="#6F665D" />
         <TextInput
           value={query}
-          onChangeText={setQuery}
+          onChangeText={(value) => {
+            onSearchChange?.()
+            setQuery(value)
+          }}
           className="ml-3 h-full flex-1 text-sm font-semibold text-ink"
           placeholder={placeholder}
           placeholderTextColor="#A89F95"

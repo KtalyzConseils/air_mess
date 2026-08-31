@@ -2,6 +2,8 @@ import { Redirect, Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useQuery } from '@tanstack/react-query'
 import { fetchUnreadCount } from '../../api/notifications'
+import { fetchTermsStatus } from '../../api/terms'
+import AcceptTermsSheet from '../../components/AcceptTermsSheet'
 import { useAuthStore } from '../../stores/authStore'
 
 export default function TabsLayout() {
@@ -13,30 +15,40 @@ export default function TabsLayout() {
     refetchInterval: 30_000,
     enabled: !!user,
   })
+  const termsQuery = useQuery({
+    queryKey: ['terms'],
+    queryFn: fetchTermsStatus,
+    enabled: !!user,
+  })
 
   if (!user) {
     return <Redirect href="/login" />
   }
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#1A1614',
-        tabBarInactiveTintColor: '#8A7E68',
-        tabBarStyle: {
-          minHeight: 68,
-          paddingTop: 8,
-          paddingBottom: 10,
-          backgroundColor: '#FDFCF9',
-          borderTopColor: '#EEE8DC',
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontFamily: 'PlusJakartaSans_700Bold',
-        },
-      }}
-    >
+    <>
+      <AcceptTermsSheet
+        visible={!!termsQuery.data?.needs_acceptance}
+        onAccepted={() => termsQuery.refetch()}
+      />
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: '#1A1614',
+          tabBarInactiveTintColor: '#8A7E68',
+          tabBarStyle: {
+            minHeight: 68,
+            paddingTop: 8,
+            paddingBottom: 10,
+            backgroundColor: '#FDFCF9',
+            borderTopColor: '#EEE8DC',
+          },
+          tabBarLabelStyle: {
+            fontSize: 11,
+            fontFamily: 'PlusJakartaSans_700Bold',
+          },
+        }}
+      >
       <Tabs.Screen
         name="dashboard"
         options={{
@@ -92,6 +104,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-    </Tabs>
+      </Tabs>
+    </>
   )
 }

@@ -61,6 +61,33 @@ export async function fetchPackageCategories(): Promise<PackageCategory[]> {
   return data
 }
 
+export interface CourseFeeEstimate {
+  distance_km: number
+  raw_haversine_km: number
+  detour_factor: number
+  per_km: number
+  min: number
+  max: number
+  multiplier: number
+  urgency: 'standard' | 'express'
+  fee_before_round: number
+  fee: number
+  capped: boolean
+}
+
+export interface EstimateFeeParams {
+  origin_lat: number
+  origin_lng: number
+  destination_lat: number
+  destination_lng: number
+  urgency?: 'standard' | 'express'
+}
+
+export async function estimateCourseFee(params: EstimateFeeParams): Promise<CourseFeeEstimate> {
+  const { data } = await api.post<CourseFeeEstimate>('/courses/estimate', params)
+  return data
+}
+
 export interface CreateCoursePayload {
   package_category_id: number
   urgency: 'standard' | 'express'

@@ -130,8 +130,6 @@ export default function AddressesScreen() {
   const canSave =
     form.recipient_name.trim().length >= 2 &&
     form.recipient_phone.trim().length >= 4 &&
-    form.quartier.trim().length >= 2 &&
-    form.city.trim().length >= 2 &&
     !saveMutation.isPending
 
   const saveAddress = () => {
@@ -140,8 +138,8 @@ export default function AddressesScreen() {
     saveMutation.mutate({
       recipient_name: form.recipient_name.trim(),
       recipient_phone: form.recipient_phone.trim(),
-      quartier: form.quartier.trim(),
-      city: form.city.trim(),
+      quartier: form.quartier.trim() || 'Adresse client',
+      city: form.city.trim() || 'Cotonou',
     })
   }
 
@@ -378,25 +376,6 @@ function AddressFormModal({
               keyboardType="phone-pad"
               textContentType="telephoneNumber"
             />
-
-            <View className="flex-row gap-3">
-              <View className="flex-1">
-                <FieldLabel>Quartier</FieldLabel>
-                <AddressInput
-                  value={form.quartier}
-                  onChangeText={(value) => updateField('quartier', value)}
-                  placeholder="Cadjehoun"
-                />
-              </View>
-              <View className="flex-1">
-                <FieldLabel>Ville</FieldLabel>
-                <AddressInput
-                  value={form.city}
-                  onChangeText={(value) => updateField('city', value)}
-                  placeholder="Cotonou"
-                />
-              </View>
-            </View>
 
             {formError && <Text className="mt-3 text-sm font-bold text-airmess-red">{formError}</Text>}
 

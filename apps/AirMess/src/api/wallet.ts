@@ -83,7 +83,7 @@ export interface WithdrawRequestPayload {
   target_account: string
 }
 
-export async function requestWithdraw(payload: WithdrawRequestPayload): Promise<{ request: PendingWithdrawRequest }> {
+export async function requestWithdraw(payload: WithdrawRequestPayload): Promise<{ message?: string; request: PendingWithdrawRequest }> {
   const { data } = await api.post('/me/wallet/withdraw-request', payload)
   return data
 }

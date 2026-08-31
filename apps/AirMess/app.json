@@ -58,6 +58,12 @@
           "resizeMode": "contain"
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AirMess utilise votre position pour renseigner le point de prise en charge, calculer le prix de la course et faciliter la livraison. L'application marchand ne suit pas votre position en arriere-plan."
+        }
+      ],
       "expo-secure-store",
       "expo-image",
       "expo-asset",

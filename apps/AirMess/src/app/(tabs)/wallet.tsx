@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import {
@@ -51,14 +52,14 @@ export default function WalletScreen() {
   })
 
   const topUpMutation = useMutation({
-    mutationFn: (amount: number) => requestTopUp(amount, 'airmess://wallet'),
+    mutationFn: (amount: number) => requestTopUp(amount),
     onSuccess: async (result) => {
       setTopUpOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] })
       await Linking.openURL(result.checkout_url)
     },
-    onError: () => {
-      Alert.alert('Recharge impossible', 'Verifie ta connexion puis reessaie.')
+    onError: (error) => {
+      Alert.alert('Recharge impossible', getApiErrorMessage(error))
     },
   })
 
@@ -69,12 +70,12 @@ export default function WalletScreen() {
         target_method: withdrawMethod,
         target_account: withdrawAccount.trim(),
       }),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setWithdrawOpen(false)
       setWithdrawAmount('')
       setWithdrawAccount('')
       await queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] })
-      Alert.alert('Demande envoyee', 'Ton retrait sera traite par un administrateur.')
+      Alert.alert('Retrait envoye', result.message ?? 'Ton retrait est en cours de traitement.')
     },
     onError: () => {
       Alert.alert('Retrait impossible', 'Verifie les informations puis reessaie.')
@@ -409,7 +410,7 @@ function WithdrawModal({
         <Card padding="lg" className="bg-cream">
           <Text className="text-2xl font-extrabold text-ink">Retirer du wallet</Text>
           <Text className="mt-1 text-sm leading-5 text-warm-600">
-            Demande traitee par un administrateur sous 24h ouvrees.
+            Le retrait est envoye au service de paiement. Selon la configuration, il peut etre traite automatiquement.
           </Text>
 
           <Text className="mb-1.5 mt-5 text-xs font-extrabold uppercase tracking-widest text-warm-500">
@@ -429,16 +430,15 @@ function WithdrawModal({
           </Text>
           <View className="flex-row gap-2">
             <MethodChip label="Mobile Money" active={method === 'momo'} onPress={() => onMethodChange('momo')} />
-            <MethodChip label="Banque" active={method === 'bank'} onPress={() => onMethodChange('bank')} />
           </View>
 
           <Text className="mb-1.5 mt-4 text-xs font-extrabold uppercase tracking-widest text-warm-500">
-            {method === 'momo' ? 'Numero mobile money' : 'Compte bancaire'}
+            Numero mobile money
           </Text>
           <TextInput
             value={account}
             onChangeText={onAccountChange}
-            placeholder={method === 'momo' ? '+229 90 12 34 56' : 'BJXXXX...'}
+            placeholder="+229 90 12 34 56"
             placeholderTextColor="#B8AF9F"
             className="h-14 rounded-2xl border border-warm-200 bg-off-white px-4 text-base font-extrabold text-ink"
           />
@@ -590,4 +590,13 @@ function formatDateTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function getApiErrorMessage(error: unknown) {
+  if (isAxiosError(error)) {
+    const data = error.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
+    return data?.message ?? Object.values(data?.errors ?? {})[0]?.[0] ?? 'Verifie ta connexion puis reessaie.'
+  }
+
+  return 'Verifie ta connexion puis reessaie.'
 }
