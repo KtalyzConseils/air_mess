@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -11,6 +11,7 @@ import { fetchPlaceDetails, searchPlaces, type PlaceDetails, type PlaceSuggestio
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
+import { getPaymentCallbackUrl } from '../../lib/payment'
 import { useAuthStore } from '../../stores/authStore'
 
 type Step = 'package' | 'location' | 'details' | 'recap'
@@ -241,6 +242,37 @@ export default function NewCourseScreen() {
   })
   const currentFee = estimateQuery.data?.fee ?? null
 
+  const resetForm = () => {
+    setStep('package')
+    setSelectedPackage(null)
+    setLocationTarget('destination')
+    setLocationError(null)
+    setCreateError(null)
+    setShowAddressBook(false)
+    setDraft({
+      originName: user?.marchant?.raison_sociale ?? user?.name ?? '',
+      originPhone: user?.phone ?? '',
+      originPhoneSecondary: '',
+      originAddress: '',
+      originQuartier: '',
+      originCity: 'Cotonou',
+      originLat: null,
+      originLng: null,
+      destinationName: '',
+      destinationPhone: '',
+      destinationPhoneSecondary: '',
+      destinationAddress: '',
+      destinationQuartier: '',
+      destinationCity: 'Cotonou',
+      destinationLat: null,
+      destinationLng: null,
+      packageDescription: '',
+      urgency: 'standard',
+      packageDeclaredValue: '',
+      deliveryFeePaidBy: 'sender',
+    })
+  }
+
   const createMutation = useMutation({
     mutationFn: () => {
       if (!selectedPackage || !packageCategory || !draft.originLat || !draft.originLng || !draft.destinationLat || !draft.destinationLng) {
@@ -272,15 +304,24 @@ export default function NewCourseScreen() {
         destination_lng: draft.destinationLng,
         has_collection: false,
         delivery_fee_paid_by: draft.deliveryFeePaidBy,
+        callback_url: getPaymentCallbackUrl('course'),
       })
     },
     onSuccess: (result) => {
       setCreateError(null)
       if (result.checkout_url) {
-        void Linking.openURL(result.checkout_url)
+        router.push({
+          pathname: '/payment',
+          params: {
+            checkoutUrl: result.checkout_url,
+            context: 'course',
+            paymentId: String(result.payment_id ?? ''),
+          },
+        })
         return
       }
       if (result.course?.id) {
+        resetForm()
         router.replace({ pathname: '/courses/[id]', params: { id: String(result.course.id) } })
       }
     },

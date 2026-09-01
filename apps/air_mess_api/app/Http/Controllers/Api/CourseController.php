@@ -166,6 +166,15 @@ class CourseController extends Controller
                 ['reference' => $course->reference],
                 $course->id,
             );
+
+            $notifier->sendToUser(
+                $course->sender_id,
+                'course.created',
+                '✅ Course créée',
+                "Votre course {$course->reference} a bien été créée et recherche un livreur.",
+                ['reference' => $course->reference, 'status' => $course->status],
+                $course->id,
+            );
         }
 
         return response()->json([

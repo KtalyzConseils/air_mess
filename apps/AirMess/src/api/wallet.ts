@@ -77,6 +77,17 @@ export async function requestTopUp(amount: number, callbackUrl?: string): Promis
   return data
 }
 
+export interface PaymentConfirmation {
+  status: string
+  processed: boolean
+  course_id?: number
+}
+
+export async function confirmPayment(paymentId: number): Promise<PaymentConfirmation> {
+  const { data } = await api.post<PaymentConfirmation>(`/me/payments/${paymentId}/confirm`)
+  return data
+}
+
 export interface WithdrawRequestPayload {
   amount: number
   target_method: WithdrawMethod

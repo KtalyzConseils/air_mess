@@ -235,6 +235,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/withdraw-requests/{withdraw}/cancel',     [UserWalletController::class, 'cancelWithdraw']);
     });
 
+    Route::post('/me/payments/{payment}/confirm', [UserWalletController::class, 'confirmPayment'])
+        ->middleware('throttle:30,60');
+
     // ─── Mode développeur — apps API du user connecté ────────────────
     // Le user (marchand ou particulier) peut créer plusieurs apps, chacune
     // avec son plan API et ses clés. Voir MyApiApplicationController.

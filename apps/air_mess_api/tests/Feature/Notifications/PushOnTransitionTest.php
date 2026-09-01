@@ -4,6 +4,7 @@ namespace Tests\Feature\Notifications;
 
 use App\Models\Course;
 use App\Models\Driver;
+use App\Models\DriverWallet;
 use App\Models\PackageCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,11 +25,15 @@ class PushOnTransitionTest extends TestCase
             'availability_status' => 'busy',
             'activation_status' => 'active',
         ]);
+        DriverWallet::factory()->create(['driver_id' => $driver->id]);
         $course = Course::factory()->create([
             'sender_id' => $senderId,
             'driver_id' => $driver->id,
             'status'    => $status,
             'package_category_id' => PackageCategory::factory()->create()->id,
+            'has_collection' => false,
+            'collection_amount' => null,
+            'collection_method' => null,
         ]);
         return [$driverUser, $course];
     }

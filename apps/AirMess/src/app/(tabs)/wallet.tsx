@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { KeyboardAvoidingView, KeyboardProvider } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
+import { getPaymentCallbackUrl } from '../../lib/payment'
 import {
   cancelWithdraw,
   fetchWallet,
@@ -38,6 +40,7 @@ const EMPTY_WALLET: WalletState = {
 }
 
 export default function WalletScreen() {
+  const router = useRouter()
   const queryClient = useQueryClient()
   const [topUpOpen, setTopUpOpen] = useState(false)
   const [topUpAmount, setTopUpAmount] = useState('5000')
@@ -53,11 +56,17 @@ export default function WalletScreen() {
   })
 
   const topUpMutation = useMutation({
-    mutationFn: (amount: number) => requestTopUp(amount),
-    onSuccess: async (result) => {
+    mutationFn: (amount: number) => requestTopUp(amount, getPaymentCallbackUrl('wallet')),
+    onSuccess: (result) => {
       setTopUpOpen(false)
-      await queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] })
-      await Linking.openURL(result.checkout_url)
+      router.push({
+        pathname: '/payment',
+        params: {
+          checkoutUrl: result.checkout_url,
+          context: 'wallet',
+          paymentId: String(result.payment_id),
+        },
+      })
     },
     onError: (error) => {
       Alert.alert('Recharge impossible', getApiErrorMessage(error))

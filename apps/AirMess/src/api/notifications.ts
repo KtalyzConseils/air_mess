@@ -5,7 +5,7 @@ export interface NotificationItem {
   type: string
   title: string
   body: string
-  data: Record<string, any> | null
+  data: Record<string, unknown> | null
   course_id: number | null
   read_at: string | null
   created_at: string

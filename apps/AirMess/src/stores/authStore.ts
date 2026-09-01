@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import * as SecureStore from 'expo-secure-store'
 import api from '../api/client'
 import {
   sendQuickRegistrationCode,
@@ -8,6 +7,8 @@ import {
   type SendQuickRegistrationCodeResponse,
 } from '../api/register'
 import type { LoginResponse, User } from '../types/auth'
+import { unregisterPushNotifications } from '../lib/notifications'
+import { deleteAuthToken, getAuthToken, setAuthToken } from '../utils/authStorage'
 
 interface AuthState {
   user: User | null
@@ -36,14 +37,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error('Ce compte n est pas un compte marchand ou particulier.')
     }
 
-    await SecureStore.setItemAsync('airmess_token', data.token)
+    await setAuthToken(data.token)
     set({ user: data.user, token: data.token })
   },
 
   sendQuickRegistrationCode,
 
   refreshUser: async () => {
-    const token = get().token ?? (await SecureStore.getItemAsync('airmess_token'))
+    const token = get().token ?? (await getAuthToken())
     if (!token) return
 
     const { data } = await api.get<{ user: User }>('/auth/me')
@@ -61,7 +62,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error('Ce compte n est pas un compte marchand ou particulier.')
     }
 
-    await SecureStore.setItemAsync('airmess_token', data.token)
+    await setAuthToken(data.token)
     set({ user: data.user, token: data.token })
   },
 
@@ -69,18 +70,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const prevToken = get().token
     const auth = prevToken ? { headers: { Authorization: `Bearer ${prevToken}` } } : {}
 
+    await unregisterPushNotifications().catch(() => undefined)
+
     try {
       await api.post('/auth/logout', {}, auth)
     } catch {
       // Logout local meme si le serveur est indisponible.
     }
 
-    await SecureStore.deleteItemAsync('airmess_token').catch(() => {})
+    await deleteAuthToken().catch(() => {})
     set({ user: null, token: null })
   },
 
   hydrate: async () => {
-    const token = await SecureStore.getItemAsync('airmess_token')
+    const token = await getAuthToken()
     if (token) {
       try {
         await get().refreshUser()
@@ -89,7 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } catch {
         // Token invalide ou API indisponible au demarrage.
       }
-      await SecureStore.deleteItemAsync('airmess_token').catch(() => {})
+      await deleteAuthToken().catch(() => {})
     }
     set({ user: null, token: null, hydrated: true })
   },

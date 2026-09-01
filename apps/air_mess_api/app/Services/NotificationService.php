@@ -47,7 +47,15 @@ class NotificationService
 
         $allTokens = DeviceToken::where('user_id', $userId)->get(['token', 'platform']);
         // Mobile Expo/FCM (android + ios), hors web ET hors token VoIP iOS (canal séparé).
-        $tokens     = $allTokens->whereNotIn('platform', ['web', 'ios-voip'])->pluck('token')->toArray();
+        $mobileTokens = $allTokens->whereNotIn('platform', ['web', 'ios-voip']);
+        $tokens = $mobileTokens->pluck('token')->filter(
+            fn (string $token) => str_starts_with($token, 'ExponentPushToken[')
+                || str_starts_with($token, 'ExpoPushToken['),
+        )->values()->toArray();
+        $androidFcmTokens = $allTokens->where('platform', 'android')->pluck('token')->reject(
+            fn (string $token) => str_starts_with($token, 'ExponentPushToken[')
+                || str_starts_with($token, 'ExpoPushToken['),
+        )->values()->toArray();
         $webTokens  = $allTokens->where('platform', 'web')->pluck('token')->toArray();
         $voipTokens = $allTokens->where('platform', 'ios-voip')->pluck('token')->toArray();
 
@@ -67,6 +75,10 @@ class NotificationService
             'type'            => $type,
             'course_id'       => $courseId,
         ]);
+
+        if (! empty($androidFcmTokens) && ! in_array($type, self::CALL_TYPES, true)) {
+            $this->fcm->sendAndroid($androidFcmTokens, $title, $body, $payload);
+        }
 
         if (in_array($type, self::CALL_TYPES, true)) {
             // Alerte "appel entrant". On envoie un push DATA-ONLY :

@@ -1,0 +1,4 @@
+# Local Firebase configuration and private service-account credentials
+apps/AirMess/google-services.json
+apps/merchant-app/google-services.json
+apps/merchant-app/*firebase-adminsdk*.json
