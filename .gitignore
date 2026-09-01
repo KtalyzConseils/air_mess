@@ -2,3 +2,6 @@
 apps/AirMess/google-services.json
 apps/merchant-app/google-services.json
 apps/merchant-app/*firebase-adminsdk*.json
+
+# Local Android build artifacts
+apps/driver-app/releases/
