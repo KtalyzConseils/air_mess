@@ -8,10 +8,12 @@ use App\Models\Driver;
 use App\Models\Individual;
 use App\Models\Marchant;
 use App\Models\User;
+use App\Mail\QuickRegistrationCodeMail;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +24,178 @@ use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
+    private const QUICK_REGISTER_TTL = 600;
+    private const QUICK_REGISTER_MAX_ATTEMPTS = 5;
+
+    public function sendQuickRegistrationCode(
+        Request $request,
+        \App\Services\BrevoSmsService $sms,
+    ): JsonResponse {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'account_type'         => ['required', Rule::in([User::TYPE_MARCHANT, User::TYPE_INDIVIDUAL])],
+            'display_name'         => ['required', 'string', 'max:255'],
+            'email'                => ['nullable', 'email', 'unique:users,email'],
+            'phone'                => ['required', 'string', 'max:20', 'unique:users,phone'],
+            'verification_channel' => ['required', Rule::in(['phone', 'email'])],
+            'phone_is_whatsapp'    => ['accepted'],
+            'accepted_terms'       => ['required', 'accepted'],
+        ]);
+
+        if ($data['verification_channel'] === 'email' && empty($data['email'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email' => ['Ajoutez un email pour recevoir le code par email.'],
+            ]);
+        }
+
+        $phone = $data['phone'];
+        $cooldownKey = "quick-register:cooldown:{$phone}";
+        if (Cache::has($cooldownKey)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'phone' => ['Patientez quelques secondes avant de redemander un code.'],
+            ]);
+        }
+
+        $code = (string) random_int(100000, 999999);
+        Cache::put("quick-register:code:{$phone}", [
+            'hash'     => Hash::make($code),
+            'attempts' => 0,
+            'payload'  => $data,
+        ], self::QUICK_REGISTER_TTL);
+        Cache::put($cooldownKey, true, 45);
+
+        if ($data['verification_channel'] === 'email') {
+            Mail::to($data['email'])->send(new QuickRegistrationCodeMail(
+                $code,
+                $data['display_name'],
+                (int) (self::QUICK_REGISTER_TTL / 60),
+            ));
+        } else {
+            $sms->send($phone, "AirMess : votre code de confirmation est {$code}. Valable 10 minutes.");
+        }
+
+        $response = [
+            'message'    => $data['verification_channel'] === 'email' ? 'Code envoyÃ© par email.' : 'Code envoyÃ© par SMS.',
+            'expires_in' => self::QUICK_REGISTER_TTL,
+        ];
+        if ($data['verification_channel'] === 'phone' && config('services.brevo.sms_fake')) {
+            $response['debug_code'] = $code;
+        }
+
+        return response()->json($response);
+    }
+
+    public function verifyQuickRegistration(Request $request): JsonResponse
+    {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'phone' => ['required', 'string', 'max:20'],
+            'code'  => ['required', 'string'],
+        ]);
+
+        $phone = $data['phone'];
+        $key = "quick-register:code:{$phone}";
+        $entry = Cache::get($key);
+        if (! $entry) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'code' => ['Code expirÃ© ou inexistant. Demandez un nouveau code.'],
+            ]);
+        }
+
+        if (($entry['attempts'] ?? 0) >= self::QUICK_REGISTER_MAX_ATTEMPTS) {
+            Cache::forget($key);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'code' => ['Trop de tentatives. Demandez un nouveau code.'],
+            ]);
+        }
+
+        if (! Hash::check($data['code'], $entry['hash'])) {
+            $entry['attempts'] = ((int) ($entry['attempts'] ?? 0)) + 1;
+            Cache::put($key, $entry, self::QUICK_REGISTER_TTL);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'code' => ['Code incorrect.'],
+            ]);
+        }
+
+        $payload = $entry['payload'];
+        if (User::where('phone', $phone)->exists() || (! empty($payload['email']) && User::where('email', $payload['email'])->exists())) {
+            Cache::forget($key);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'phone' => ['Ce compte existe dÃ©jÃ . Connectez-vous.'],
+            ]);
+        }
+
+        $user = DB::transaction(function () use ($payload, $phone) {
+            $isMarchant = $payload['account_type'] === User::TYPE_MARCHANT;
+            $name = trim($payload['display_name']);
+
+            $user = User::create([
+                'name'                   => $name,
+                'email'                  => $payload['email'] ?? null,
+                'phone'                  => $phone,
+                'password'               => Str::random(48),
+                'type'                   => $payload['account_type'],
+                'phone_verified_at'      => $payload['verification_channel'] === 'phone' ? now() : null,
+                'email_verified_at'      => $payload['verification_channel'] === 'email' ? now() : null,
+                'accepted_terms_at'      => now(),
+                'accepted_terms_version' => User::TERMS_VERSION,
+            ]);
+
+            if ($isMarchant) {
+                Marchant::create([
+                    'user_id'             => $user->id,
+                    'raison_sociale'      => $name,
+                    'secteur_activite'    => 'autre',
+                    'subscription_plan'   => 'trial',
+                    'subscription_status' => 'trial',
+                ]);
+            } else {
+                [$firstName, $lastName] = $this->splitDisplayName($name);
+                Individual::create([
+                    'user_id'                   => $user->id,
+                    'first_name'                => $firstName,
+                    'last_name'                 => $lastName,
+                    'monthly_courses_limit'     => (int) \App\Models\AppSetting::get('individual_monthly_courses_limit', 20),
+                    'monthly_period_started_at' => now()->startOfMonth(),
+                ]);
+            }
+
+            \App\Models\UserWallet::firstOrCreate(['user_id' => $user->id]);
+
+            return $user;
+        });
+
+        Cache::forget($key);
+        Cache::forget("quick-register:cooldown:{$phone}");
+
+        if ($user->email) {
+            try {
+                Mail::to($user->email)->send(new \App\Mail\WelcomeUserMail($user));
+            } catch (\Throwable $e) {
+                Log::warning('WelcomeUserMail failed', ['err' => $e->getMessage(), 'user_id' => $user->id]);
+            }
+        }
+
+        $token = $user->createToken($user->type . '-' . $user->id)->plainTextToken;
+
+        return response()->json([
+            'message' => 'Compte crÃ©Ã©.',
+            'user'    => $user->load($user->type),
+            'token'   => $token,
+        ], 201);
+    }
+
+    private function splitDisplayName(string $name): array
+    {
+        $parts = preg_split('/\s+/', trim($name)) ?: [];
+        $firstName = array_shift($parts) ?: $name;
+        $lastName = trim(implode(' ', $parts));
+
+        return [$firstName, $lastName !== '' ? $lastName : '-'];
+    }
+
     /**
      * Inscription d'un marchand (validation manuelle ensuite par un admin).
      */
@@ -600,4 +774,3 @@ class AuthController extends Controller
     }
 
 }
-

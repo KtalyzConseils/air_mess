@@ -9,7 +9,7 @@ import {
 import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
 import { AxiosError } from 'axios'
-import { Redirect } from 'expo-router'
+import { Link, Redirect } from 'expo-router'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Button from '../components/ui/Button'
@@ -147,6 +147,15 @@ export default function LoginScreen() {
           >
             Se connecter
           </Button>
+
+          <View className="mt-5 flex-row justify-center">
+            <Text className="text-sm font-semibold text-warm-500">Pas encore de compte ? </Text>
+            <Link href="/register" asChild>
+              <Pressable accessibilityRole="button">
+                <Text className="text-sm font-extrabold text-airmess-red">Créer un compte</Text>
+              </Pressable>
+            </Link>
+          </View>
         </View>
       </KeyboardAwareScrollView>
     </SafeAreaView>

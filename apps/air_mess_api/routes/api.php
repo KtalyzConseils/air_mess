@@ -30,6 +30,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('auth')->group(function () {
     Route::post('/register/marchant',  [AuthController::class, 'registerMarchant'])->middleware('throttle:auth-register');
     Route::post('/register/individual',[AuthController::class, 'registerIndividual'])->middleware('throttle:auth-register');
+    Route::post('/register/quick/send-code', [AuthController::class, 'sendQuickRegistrationCode'])->middleware('throttle:auth-otp-send');
+    Route::post('/register/quick/verify',    [AuthController::class, 'verifyQuickRegistration'])->middleware('throttle:auth-otp-verify');
     Route::post('/register/driver',    [AuthController::class, 'registerDriver'])->middleware('throttle:auth-register');
     // Vérification du numéro par SMS (OTP) — inscription livreur depuis l'app mobile.
     Route::post('/phone/otp/send',   [\App\Http\Controllers\Api\PhoneOtpController::class, 'send'])->middleware('throttle:auth-otp-send');

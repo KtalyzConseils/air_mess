@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -10,13 +9,16 @@ import {
   View,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { Link, useRouter } from 'expo-router'
+import { Link, useFocusEffect, useRouter } from 'expo-router'
 import { isAxiosError } from 'axios'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import Button from '../../components/ui/Button'
+import SupportContactSheet from '../../components/SupportContactSheet'
 import { updateMarchantProfile, type UpdateMarchantProfilePayload } from '../../api/profile'
 import { useAuthStore } from '../../stores/authStore'
+import { useLanguageStore } from '../../stores/languageStore'
+import { useThemeStore } from '../../stores/themeStore'
 import type { Marchant } from '../../types/auth'
 
 const SECTOR_OPTIONS: { value: Marchant['secteur_activite']; label: string }[] = [
@@ -28,11 +30,126 @@ const SECTOR_OPTIONS: { value: Marchant['secteur_activite']; label: string }[] =
   { value: 'autre', label: 'Autre' },
 ]
 
+const PROFILE_COPY = {
+  fr: {
+    profileFallback: 'Profil',
+    history: 'Historique',
+    support: 'Assistance',
+    addresses: 'Adresses',
+    settings: 'Parametres',
+    profileConfirmed: 'Compte certifie',
+    confirmProfile: 'Confirmer votre profil',
+    certifiedVisibleDrivers: 'Badge visible par les conducteurs durant les courses.',
+    visibleDrivers: "Le badge sera ajoute apres verification par l'equipe Air Mess.",
+    trustBadge: 'Badge de confiance',
+    trustBadgeReady: 'Votre profil est pret pour la verification Air Mess.',
+    trustBadgePending: "Votre profil est complet. L'equipe Air Mess peut maintenant le verifier.",
+    completeItems: 'informations completees',
+    remainingItems: 'restantes',
+    completeProfile: 'Completer',
+    editProfile: 'Modifier',
+    checklist: {
+      manager: 'Nom du responsable',
+      phone: 'Telephone WhatsApp',
+      business: 'Nom du commerce',
+      sector: "Secteur d'activite",
+      businessId: 'IFU / RCCM',
+    },
+    businessInfo: 'Informations du commerce',
+    businessIdentity: 'Identite visible pendant les courses',
+    edit: 'Modifier',
+    merchantOnly: 'Cette section est reservee aux comptes marchands.',
+    profileUpdated: 'Profil mis a jour.',
+    paymentMethods: 'Modes de paiement',
+    paymentSubtitle: 'Wallet AirMess et especes',
+    becomeDriver: 'Devenez livreur',
+    security: 'Securite',
+    securitySubtitle: 'Compte et sessions',
+    information: 'Informations',
+    informationSubtitle: 'A propos de AirMess',
+    deleteAccount: 'Supprimer mon compte',
+    deleteAccountSubtitle: 'Demande definitive de suppression',
+    logout: 'Se deconnecter',
+    editBusiness: 'Modifier le commerce',
+    editBusinessSubtitle: 'Informations visibles aux livreurs',
+    responsibleName: 'Nom du responsable',
+    fullName: 'Nom complet',
+    phone: 'Telephone',
+    businessName: 'Raison sociale',
+    businessPlaceholder: 'Nom du commerce',
+    businessId: 'IFU / RCCM',
+    optional: 'Optionnel',
+    sector: "Secteur d'activite",
+    cancel: 'Annuler',
+    save: 'Enregistrer',
+    updateFailed: 'Impossible de mettre a jour.',
+  },
+  en: {
+    profileFallback: 'Profile',
+    history: 'History',
+    support: 'Support',
+    addresses: 'Addresses',
+    settings: 'Settings',
+    profileConfirmed: 'Certified account',
+    confirmProfile: 'Confirm your profile',
+    certifiedVisibleDrivers: 'Badge visible to drivers during deliveries.',
+    visibleDrivers: 'The badge will be added after verification by the Air Mess team.',
+    trustBadge: 'Trust badge',
+    trustBadgeReady: 'Your profile is ready for Air Mess verification.',
+    trustBadgePending: 'Your profile is complete. The Air Mess team can now verify it.',
+    completeItems: 'completed details',
+    remainingItems: 'remaining',
+    completeProfile: 'Complete',
+    editProfile: 'Edit',
+    checklist: {
+      manager: 'Manager name',
+      phone: 'WhatsApp phone',
+      business: 'Business name',
+      sector: 'Business sector',
+      businessId: 'Tax / registration ID',
+    },
+    businessInfo: 'Business information',
+    businessIdentity: 'Identity shown during deliveries',
+    edit: 'Edit',
+    merchantOnly: 'This section is reserved for merchant accounts.',
+    profileUpdated: 'Profile updated.',
+    paymentMethods: 'Payment methods',
+    paymentSubtitle: 'AirMess wallet and cash',
+    becomeDriver: 'Become a driver',
+    security: 'Security',
+    securitySubtitle: 'Account and sessions',
+    information: 'Information',
+    informationSubtitle: 'About AirMess',
+    deleteAccount: 'Delete my account',
+    deleteAccountSubtitle: 'Permanent deletion request',
+    logout: 'Log out',
+    editBusiness: 'Edit business',
+    editBusinessSubtitle: 'Information visible to drivers',
+    responsibleName: 'Manager name',
+    fullName: 'Full name',
+    phone: 'Phone',
+    businessName: 'Business name',
+    businessPlaceholder: 'Store name',
+    businessId: 'Tax / registration ID',
+    optional: 'Optional',
+    sector: 'Business sector',
+    cancel: 'Cancel',
+    save: 'Save',
+    updateFailed: 'Unable to update.',
+  },
+} as const
+
 export default function ProfileScreen() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
   const setUser = useAuthStore((state) => state.setUser)
+  const refreshUser = useAuthStore((state) => state.refreshUser)
+  const language = useLanguageStore((state) => state.language)
+  const theme = useThemeStore((state) => state.theme)
+  const copy = PROFILE_COPY[language]
+  const isDark = theme === 'dark'
+  const iconColor = isDark ? '#FDFCF9' : '#1A1614'
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<UpdateMarchantProfilePayload>({
     name: '',
@@ -44,6 +161,7 @@ export default function ProfileScreen() {
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null)
+  const [supportOpen, setSupportOpen] = useState(false)
 
   const fillFormFromUser = () => {
     if (!user?.marchant) return
@@ -61,15 +179,31 @@ export default function ProfileScreen() {
     fillFormFromUser()
   }, [user])
 
+  useFocusEffect(
+    useCallback(() => {
+      void refreshUser().catch(() => {})
+    }, [refreshUser]),
+  )
+
   const title =
     user?.marchant?.raison_sociale ??
     [user?.individual?.first_name, user?.individual?.last_name].filter(Boolean).join(' ') ??
     user?.name ??
-    'Profil'
+    copy.profileFallback
 
   const subtitle = user?.phone ?? user?.email ?? ''
   const marchant = user?.marchant
-  const isMarchantValidated = user?.type !== 'marchant' || !!marchant?.validated_at
+  const isCertifiedMarchant = !!marchant?.validated_at
+  const certificationItems = [
+    { label: copy.checklist.manager, done: (user?.name ?? '').trim().length >= 2 },
+    { label: copy.checklist.phone, done: (user?.phone ?? '').trim().length >= 8 },
+    { label: copy.checklist.business, done: (marchant?.raison_sociale ?? '').trim().length >= 2 },
+    { label: copy.checklist.sector, done: !!marchant?.secteur_activite },
+    { label: copy.checklist.businessId, done: (marchant?.ifu_rccm ?? '').trim().length >= 2 },
+  ]
+  const completedCertificationItems = certificationItems.filter((item) => item.done).length
+  const remainingCertificationItems = certificationItems.length - completedCertificationItems
+  const isCertificationProfileComplete = remainingCertificationItems === 0
   const canSaveProfile =
     !!marchant &&
     form.name.trim().length >= 2 &&
@@ -93,7 +227,7 @@ export default function ProfileScreen() {
       })
       setUser(updatedUser)
       setEditing(false)
-      setProfileSuccess('Profil mis a jour.')
+      setProfileSuccess(copy.profileUpdated)
     } catch (error) {
       setProfileError(getApiErrorMessage(error))
     } finally {
@@ -113,11 +247,11 @@ export default function ProfileScreen() {
     <Screen scroll py={14} className="px-5">
       <Pressable
         onPress={() => router.back()}
-        className="mb-3 h-11 w-11 items-center justify-center rounded-full bg-off-white"
+        className="mb-3 h-11 w-11 items-center justify-center rounded-full bg-off-white dark:bg-[#181B24]"
         accessibilityRole="button"
-        accessibilityLabel="Retour"
+        accessibilityLabel={language === 'fr' ? 'Retour' : 'Back'}
       >
-        <Ionicons name="arrow-back" size={24} color="#1A1614" />
+        <Ionicons name="arrow-back" size={24} color={iconColor} />
       </Pressable>
 
       <View className="items-center">
@@ -125,38 +259,103 @@ export default function ProfileScreen() {
           <Ionicons name="person" size={58} color="#FDFCF9" />
         </View>
         <View className="mt-4 flex-row items-center">
-          <Text className="max-w-[280px] text-center text-2xl font-extrabold text-ink" numberOfLines={1}>
+          <Text className="max-w-[280px] text-center text-2xl font-extrabold text-ink dark:text-white" numberOfLines={1}>
             {title}
           </Text>
-          <Ionicons name="checkmark-circle" size={18} color="#1A1614" />
+          {isCertifiedMarchant && (
+            <Ionicons name="checkmark-circle" size={18} color="#FFCC00" />
+          )}
         </View>
-        <Text className="mt-1 text-center text-base font-semibold text-warm-500" numberOfLines={1}>
+        <Text className="mt-1 text-center text-base font-semibold text-warm-500 dark:text-[#AEB6C5]" numberOfLines={1}>
           {subtitle}
         </Text>
       </View>
 
       <View className="mt-7 flex-row justify-between">
-        <QuickAction href="/(tabs)/courses" icon="time" label="Historique" />
-        <QuickAction icon="headset" label="Assistance" />
-        <QuickAction href="/(tabs)/addresses" icon="people" label="Adresses" />
-        <QuickAction icon="settings" label="Parametres" />
+        <QuickAction href="/(tabs)/courses" icon="time" label={copy.history} />
+        <QuickAction icon="headset" label={copy.support} onPress={() => setSupportOpen(true)} />
+        <QuickAction href="/(tabs)/addresses" icon="people" label={copy.addresses} />
+        <QuickAction href="/settings" icon="settings" label={copy.settings} />
       </View>
 
-      <Card variant={isMarchantValidated ? 'success' : 'warning'} className="mt-6 flex-row items-center">
-        <View className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-off-white">
-          <Text className="text-base font-extrabold text-info">
-            {isMarchantValidated ? '2/2' : '1/2'}
-          </Text>
-        </View>
-        <View className="flex-1">
-          <Text className="text-lg font-extrabold text-ink">
-            {isMarchantValidated ? 'Profil confirme' : 'Confirmer votre profil'}
-          </Text>
-          <Text className="text-sm leading-5 text-warm-600">
-            Visible par les conducteurs durant les courses.
-          </Text>
-        </View>
-      </Card>
+      {marchant && (
+        <Card variant={isCertifiedMarchant ? 'success' : 'warning'} className="mt-6">
+          <View className="flex-row items-start">
+            <View className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-off-white dark:bg-[#11141B]">
+              <Ionicons
+                name={isCertifiedMarchant ? 'shield-checkmark' : 'shield-outline'}
+                size={24}
+                color={isCertifiedMarchant ? '#16A34A' : '#B7791F'}
+              />
+            </View>
+            <View className="flex-1">
+              <Text className="text-lg font-extrabold text-ink dark:text-white">
+                {isCertifiedMarchant ? copy.profileConfirmed : copy.trustBadge}
+              </Text>
+              <Text className="text-sm leading-5 text-warm-600 dark:text-[#AEB6C5]">
+                {isCertifiedMarchant
+                  ? copy.certifiedVisibleDrivers
+                  : `${completedCertificationItems}/${certificationItems.length} ${copy.completeItems} - ${remainingCertificationItems} ${copy.remainingItems}`}
+              </Text>
+            </View>
+          </View>
+
+          {!isCertifiedMarchant && (
+            <>
+              <View className="mt-4 h-2 overflow-hidden rounded-full bg-white/70 dark:bg-[#11141B]">
+                <View
+                  className="h-2 rounded-full bg-airmess-yellow"
+                  style={{ width: `${(completedCertificationItems / certificationItems.length) * 100}%` }}
+                />
+              </View>
+
+              {isCertificationProfileComplete ? (
+                <Text className="mt-4 text-sm font-semibold leading-5 text-warm-600 dark:text-[#AEB6C5]">
+                  {copy.trustBadgePending}
+                </Text>
+              ) : (
+                <View className="mt-4 gap-2">
+                  {certificationItems.filter((item) => !item.done).map((item) => (
+                    <View key={item.label} className="flex-row items-center">
+                      <Ionicons name="ellipse-outline" size={18} color="#8A7E68" />
+                      <Text className="ml-2 flex-1 text-sm font-bold text-warm-600 dark:text-[#AEB6C5]">
+                        {item.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <Pressable
+                onPress={() => {
+                  fillFormFromUser()
+                  setEditing(true)
+                  setProfileError(null)
+                  setProfileSuccess(null)
+                }}
+                className="mt-4 h-12 flex-row items-center justify-center rounded-2xl bg-airmess-dark px-4 dark:bg-airmess-yellow"
+                accessibilityRole="button"
+              >
+                <Text className="text-base font-extrabold text-white dark:text-ink">
+                  {isCertificationProfileComplete ? copy.editProfile : copy.completeProfile}
+                </Text>
+                <Ionicons
+                  name="arrow-forward"
+                  size={18}
+                  color={isDark ? '#1A1614' : '#FFFFFF'}
+                  style={{ marginLeft: 8 }}
+                />
+              </Pressable>
+            </>
+          )}
+
+          {isCertifiedMarchant && (
+            <Text className="mt-3 text-sm font-semibold leading-5 text-warm-600 dark:text-[#AEB6C5]">
+              {copy.trustBadgeReady}
+            </Text>
+          )}
+        </Card>
+      )}
 
       <Card className="mt-5" padding="lg">
         <View className="mb-4 flex-row items-center justify-between">
@@ -165,9 +364,9 @@ export default function ProfileScreen() {
               <Ionicons name="storefront-outline" size={22} color="#1A1614" />
             </View>
             <View className="flex-1">
-              <Text className="text-xl font-extrabold text-ink">Informations du commerce</Text>
-              <Text className="mt-0.5 text-sm font-semibold text-warm-500" numberOfLines={1}>
-                Identite visible pendant les courses
+              <Text className="text-xl font-extrabold text-ink dark:text-white">{copy.businessInfo}</Text>
+              <Text className="mt-0.5 text-sm font-semibold text-warm-500 dark:text-[#AEB6C5]" numberOfLines={1}>
+                {copy.businessIdentity}
               </Text>
             </View>
           </View>
@@ -182,14 +381,14 @@ export default function ProfileScreen() {
               className="ml-3 h-10 items-center justify-center rounded-full bg-airmess-dark px-4"
               accessibilityRole="button"
             >
-              <Text className="text-sm font-extrabold text-white">Modifier</Text>
+              <Text className="text-sm font-extrabold text-white">{copy.edit}</Text>
             </Pressable>
           )}
         </View>
 
         {!marchant ? (
-          <Text className="text-sm font-semibold leading-5 text-warm-600">
-            Cette section est reservee aux comptes marchands.
+            <Text className="text-sm font-semibold leading-5 text-warm-600 dark:text-[#AEB6C5]">
+            {copy.merchantOnly}
           </Text>
         ) : (
           <>
@@ -201,7 +400,7 @@ export default function ProfileScreen() {
       </Card>
 
       <Card className="mt-5" padding="none">
-        <MenuRow icon="card" title="Modes de paiement" subtitle="Wallet AirMess et especes" href="/(tabs)/wallet" />
+        <MenuRow icon="card" title={copy.paymentMethods} subtitle={copy.paymentSubtitle} href="/(tabs)/wallet" />
       </Card>
 
       <Pressable
@@ -211,25 +410,25 @@ export default function ProfileScreen() {
         <View className="mr-4 h-10 w-10 items-center justify-center rounded-full bg-airmess-yellow">
           <Ionicons name="bicycle" size={20} color="#1A1614" />
         </View>
-        <Text className="flex-1 text-lg font-extrabold text-white">Devenez livreur</Text>
+        <Text className="flex-1 text-lg font-extrabold text-white">{copy.becomeDriver}</Text>
         <Ionicons name="chevron-forward" size={22} color="#D40511" />
       </Pressable>
 
       <Card className="mt-5" padding="none">
-        <MenuRow icon="shield-checkmark" title="Securite" subtitle="Compte et sessions" />
+        <MenuRow icon="shield-checkmark" title={copy.security} subtitle={copy.securitySubtitle} />
         <Divider />
-        <MenuRow icon="information-circle" title="Informations" subtitle="A propos de AirMess" />
+        <MenuRow icon="information-circle" title={copy.information} subtitle={copy.informationSubtitle} />
       </Card>
 
       <Pressable
-        className="mt-5 min-h-14 flex-row items-center rounded-2xl border border-airmess-red/30 bg-off-white px-5 py-3"
+        className="mt-5 min-h-14 flex-row items-center rounded-2xl border border-airmess-red/30 bg-off-white px-5 py-3 dark:bg-[#181B24]"
         accessibilityRole="button"
       >
         <Ionicons name="trash-outline" size={22} color="#D40511" />
         <View className="ml-3 flex-1">
-          <Text className="text-base font-extrabold text-airmess-red">Supprimer mon compte</Text>
-          <Text className="mt-0.5 text-xs font-semibold text-warm-500">
-            Demande definitive de suppression
+          <Text className="text-base font-extrabold text-airmess-red">{copy.deleteAccount}</Text>
+          <Text className="mt-0.5 text-xs font-semibold text-warm-500 dark:text-[#AEB6C5]">
+            {copy.deleteAccountSubtitle}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={21} color="#D40511" />
@@ -240,7 +439,7 @@ export default function ProfileScreen() {
         className="mt-5 h-14 items-center justify-center rounded-2xl bg-danger-bg"
         accessibilityRole="button"
       >
-        <Text className="text-base font-extrabold text-airmess-red">Se deconnecter</Text>
+        <Text className="text-base font-extrabold text-airmess-red">{copy.logout}</Text>
       </Pressable>
     </Screen>
     <Modal
@@ -251,43 +450,43 @@ export default function ProfileScreen() {
       statusBarTranslucent
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         className="flex-1 justify-end bg-black/40"
       >
         <Pressable className="flex-1" onPress={closeProfileModal} />
-        <View className="max-h-[100%] rounded-t-[28px] bg-cream px-5 pb-6 pt-4">
+        <View className="max-h-[100%] rounded-t-[28px] bg-cream px-5 pb-6 pt-4 dark:bg-[#0F1115]">
           <View className="mb-4 flex-row items-center justify-between">
             <View className="flex-row items-center">
               <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
                 <Ionicons name="storefront-outline" size={22} color="#1A1614" />
               </View>
               <View>
-                <Text className="text-xl font-extrabold text-ink">Modifier le commerce</Text>
-                <Text className="mt-0.5 text-sm font-semibold text-warm-500">
-                  Informations visibles aux livreurs
+                <Text className="text-xl font-extrabold text-ink dark:text-white">{copy.editBusiness}</Text>
+                <Text className="mt-0.5 text-sm font-semibold text-warm-500 dark:text-[#AEB6C5]">
+                  {copy.editBusinessSubtitle}
                 </Text>
               </View>
             </View>
             <Pressable
               onPress={closeProfileModal}
-              className="h-10 w-10 items-center justify-center rounded-full bg-off-white"
+              className="h-10 w-10 items-center justify-center rounded-full bg-off-white dark:bg-[#181B24]"
               accessibilityRole="button"
-              accessibilityLabel="Fermer"
+              accessibilityLabel={language === 'fr' ? 'Fermer' : 'Close'}
             >
-              <Ionicons name="close" size={22} color="#1A1614" />
+              <Ionicons name="close" size={22} color={iconColor} />
             </Pressable>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <FieldLabel>Nom du responsable</FieldLabel>
+            <FieldLabel>{copy.responsibleName}</FieldLabel>
             <ProfileInput
               value={form.name}
               onChangeText={(value) => setForm((current) => ({ ...current, name: value }))}
-              placeholder="Nom complet"
+              placeholder={copy.fullName}
               textContentType="name"
             />
 
-            <FieldLabel>Telephone</FieldLabel>
+            <FieldLabel>{copy.phone}</FieldLabel>
             <ProfileInput
               value={form.phone ?? ''}
               onChangeText={(value) => setForm((current) => ({ ...current, phone: value }))}
@@ -296,21 +495,21 @@ export default function ProfileScreen() {
               textContentType="telephoneNumber"
             />
 
-            <FieldLabel>Raison sociale</FieldLabel>
+            <FieldLabel>{copy.businessName}</FieldLabel>
             <ProfileInput
               value={form.raison_sociale}
               onChangeText={(value) => setForm((current) => ({ ...current, raison_sociale: value }))}
-              placeholder="Nom du commerce"
+              placeholder={copy.businessPlaceholder}
             />
 
-            <FieldLabel>IFU / RCCM</FieldLabel>
+            <FieldLabel>{copy.businessId}</FieldLabel>
             <ProfileInput
               value={form.ifu_rccm ?? ''}
               onChangeText={(value) => setForm((current) => ({ ...current, ifu_rccm: value }))}
-              placeholder="Optionnel"
+              placeholder={copy.optional}
             />
 
-            <FieldLabel>Secteur d'activite</FieldLabel>
+            <FieldLabel>{copy.sector}</FieldLabel>
             <View className="flex-row flex-wrap gap-2">
               {SECTOR_OPTIONS.map((option) => {
                 const selected = option.value === form.secteur_activite
@@ -320,11 +519,13 @@ export default function ProfileScreen() {
                     onPress={() => setForm((current) => ({ ...current, secteur_activite: option.value }))}
                     className={[
                       'min-h-10 items-center justify-center rounded-full border px-4',
-                      selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-white',
+                      selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]',
                     ].join(' ')}
                     accessibilityRole="button"
                   >
-                    <Text className="text-sm font-extrabold text-ink">{option.label}</Text>
+                    <Text className={['text-sm font-extrabold', selected ? 'text-ink' : 'text-ink dark:text-white'].join(' ')}>
+                      {option.label}
+                    </Text>
                   </Pressable>
                 )
               })}
@@ -337,7 +538,7 @@ export default function ProfileScreen() {
             <View className="mt-5 flex-row gap-3">
               <View className="flex-1">
                 <Button variant="outline" onPress={closeProfileModal} disabled={isSavingProfile}>
-                  Annuler
+                  {copy.cancel}
                 </Button>
               </View>
               <View className="flex-1">
@@ -347,7 +548,7 @@ export default function ProfileScreen() {
                   disabled={!canSaveProfile}
                   rightIcon={<Ionicons name="checkmark" size={20} color="#1A1614" />}
                 >
-                  Enregistrer
+                  {copy.save}
                 </Button>
               </View>
             </View>
@@ -355,6 +556,7 @@ export default function ProfileScreen() {
         </View>
       </KeyboardAvoidingView>
     </Modal>
+    <SupportContactSheet visible={supportOpen} onClose={() => setSupportOpen(false)} context="Profil marchand" />
     </>
   )
 }
@@ -363,17 +565,22 @@ function QuickAction({
   icon,
   label,
   href,
+  onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap
   label: string
-  href?: '/(tabs)/courses' | '/(tabs)/wallet' | '/(tabs)/addresses'
+  href?: '/(tabs)/courses' | '/(tabs)/wallet' | '/(tabs)/addresses' | '/settings'
+  onPress?: () => void
 }) {
+  const theme = useThemeStore((state) => state.theme)
+  const iconColor = theme === 'dark' ? '#FDFCF9' : '#1A1614'
+
   const content = (
-    <Pressable className="items-center" accessibilityRole="button">
-      <View className="mb-2 h-14 w-14 items-center justify-center rounded-full bg-off-white">
-        <Ionicons name={icon} size={24} color="#1A1614" />
+    <Pressable onPress={onPress} className="items-center" accessibilityRole="button">
+      <View className="mb-2 h-14 w-14 items-center justify-center rounded-full bg-off-white dark:bg-[#181B24]">
+        <Ionicons name={icon} size={24} color={iconColor} />
       </View>
-      <Text className="text-center text-sm font-extrabold text-ink">{label}</Text>
+      <Text className="text-center text-sm font-extrabold text-ink dark:text-white">{label}</Text>
     </Pressable>
   )
 
@@ -396,16 +603,19 @@ function MenuRow({
   subtitle: string
   href?: '/(tabs)/wallet'
 }) {
+  const theme = useThemeStore((state) => state.theme)
+  const iconColor = theme === 'dark' ? '#FDFCF9' : '#1A1614'
+
   const content = (
     <Pressable className="min-h-20 flex-row items-center px-5 py-3" accessibilityRole="button">
-      <Ionicons name={icon} size={25} color="#1A1614" />
+      <Ionicons name={icon} size={25} color={iconColor} />
       <View className="ml-4 flex-1">
-        <Text className="text-xl font-extrabold text-ink">{title}</Text>
-        <Text className="mt-0.5 text-sm font-semibold text-warm-500" numberOfLines={1}>
+        <Text className="text-xl font-extrabold text-ink dark:text-white">{title}</Text>
+        <Text className="mt-0.5 text-sm font-semibold text-warm-500 dark:text-[#AEB6C5]" numberOfLines={1}>
           {subtitle}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={22} color="#1A1614" />
+      <Ionicons name="chevron-forward" size={22} color={iconColor} />
     </Pressable>
   )
 
@@ -418,7 +628,7 @@ function MenuRow({
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <Text className="mb-2 mt-3 text-xs font-extrabold uppercase text-warm-500">{children}</Text>
+  return <Text className="mb-2 mt-3 text-xs font-extrabold uppercase text-warm-500 dark:text-[#AEB6C5]">{children}</Text>
 }
 
 function ProfileInput({
@@ -440,7 +650,7 @@ function ProfileInput({
       onChangeText={onChangeText}
       keyboardType={keyboardType}
       textContentType={textContentType}
-      className="h-14 rounded-2xl border border-warm-200 bg-white px-4 text-base font-semibold text-ink"
+      className="h-14 rounded-2xl border border-warm-200 bg-white px-4 text-base font-semibold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
       placeholder={placeholder}
       placeholderTextColor="#A89F95"
     />
@@ -448,14 +658,14 @@ function ProfileInput({
 }
 
 function Divider() {
-  return <View className="ml-16 h-px bg-warm-200" />
+  return <View className="ml-16 h-px bg-warm-200 dark:bg-[#2A2F3A]" />
 }
 
 function getApiErrorMessage(error: unknown) {
   if (isAxiosError(error)) {
     const data = error.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
-    return data?.message ?? Object.values(data?.errors ?? {})[0]?.[0] ?? 'Impossible de mettre a jour.'
+    return data?.message ?? Object.values(data?.errors ?? {})[0]?.[0] ?? PROFILE_COPY.fr.updateFailed
   }
 
-  return 'Impossible de mettre a jour.'
+  return PROFILE_COPY.fr.updateFailed
 }

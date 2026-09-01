@@ -54,10 +54,11 @@ export default function OnboardingScreen() {
             />
             <Pressable
               onPress={() => void continueNext()}
-              className="rounded-full bg-white/10 px-4 py-2"
+              className="h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow"
               accessibilityRole="button"
+              accessibilityLabel={isLast ? 'Terminer' : 'Suivant'}
             >
-              <Text className="text-sm font-extrabold text-white">{isLast ? 'OK' : 'Suivant'}</Text>
+              <Ionicons name={isLast ? 'checkmark' : 'arrow-forward'} size={21} color="#1A1614" />
             </Pressable>
           </View>
         </View>

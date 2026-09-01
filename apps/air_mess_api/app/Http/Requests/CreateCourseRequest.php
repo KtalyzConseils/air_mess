@@ -24,16 +24,8 @@ class CreateCourseRequest extends FormRequest
             return false;
         }
 
-        if ($user->isMarchant()) {
-            $marchant = $user->marchant;
-            // Seul prérequis : marchand validé (l'abo n'existe plus, le wallet gère le paiement).
-            return $marchant && $marchant->validated_at !== null;
-        }
-
-        if ($user->isIndividual()) {
-            // Le particulier crée librement : quota gratuit puis wallet/pay-as-you-go côté controller.
-            return true;
-        }
+        if ($user->isMarchant()) return $user->marchant !== null;
+        if ($user->isIndividual()) return $user->individual !== null;
 
         return false; // livreurs et admins ne peuvent pas créer de course
     }

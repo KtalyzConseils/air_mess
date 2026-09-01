@@ -27,9 +27,9 @@ interface Props extends ViewProps {
 }
 
 const BG: Record<Variant, string> = {
-  cream: 'bg-cream',
+  cream: 'bg-cream dark:bg-[#0F1115]',
   dark: 'bg-airmess-dark',
-  white: 'bg-off-white',
+  white: 'bg-off-white dark:bg-[#151821]',
 }
 
 export default function Screen({
@@ -49,8 +49,9 @@ export default function Screen({
         <KeyboardAwareScrollView
           className={['flex-1', className].join(' ')}
           contentContainerStyle={{ paddingTop: py, paddingBottom: py + 24 }}
-          bottomOffset={24}
+          bottomOffset={96}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
           {...rest}
         >

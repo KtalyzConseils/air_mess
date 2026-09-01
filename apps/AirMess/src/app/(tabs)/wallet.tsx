@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Modal, Pressable, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, KeyboardProvider } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
@@ -329,9 +330,11 @@ function TopUpModal({
   onSubmit: () => void
 }) {
   return (
-    <Modal transparent visible={open} animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
-        <Card padding="lg" className="bg-cream">
+    <Modal transparent visible={open} animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <KeyboardProvider navigationBarTranslucent statusBarTranslucent>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+          <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
+            <Card padding="lg" className="bg-cream">
           <Text className="text-2xl font-extrabold text-ink">Recharger le wallet</Text>
           <Text className="mt-1 text-sm leading-5 text-warm-600">
             Choisis un montant puis continue vers le paiement securise.
@@ -371,8 +374,10 @@ function TopUpModal({
             onCancel={onClose}
             onSubmit={onSubmit}
           />
-        </Card>
-      </View>
+            </Card>
+          </View>
+        </KeyboardAvoidingView>
+      </KeyboardProvider>
     </Modal>
   )
 }
@@ -405,9 +410,11 @@ function WithdrawModal({
   onSubmit: () => void
 }) {
   return (
-    <Modal transparent visible={open} animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
-        <Card padding="lg" className="bg-cream">
+    <Modal transparent visible={open} animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <KeyboardProvider navigationBarTranslucent statusBarTranslucent>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+          <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
+            <Card padding="lg" className="bg-cream">
           <Text className="text-2xl font-extrabold text-ink">Retirer du wallet</Text>
           <Text className="mt-1 text-sm leading-5 text-warm-600">
             Le retrait est envoye au service de paiement. Selon la configuration, il peut etre traite automatiquement.
@@ -453,8 +460,10 @@ function WithdrawModal({
             onCancel={onClose}
             onSubmit={onSubmit}
           />
-        </Card>
-      </View>
+            </Card>
+          </View>
+        </KeyboardAvoidingView>
+      </KeyboardProvider>
     </Modal>
   )
 }

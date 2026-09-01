@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { fetchCourses, type Course } from '../../api/courses'
+import { fetchUnreadCount } from '../../api/notifications'
 
 const ACTIVE_STATUSES = [
   'awaiting_assignment',
@@ -77,6 +78,11 @@ function Header() {
   const [positionLabel, setPositionLabel] = useState('Votre position')
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState(false)
+  const { data: unread = 0 } = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: fetchUnreadCount,
+    refetchInterval: 30_000,
+  })
 
   const detectPosition = useCallback(async () => {
     setLocating(true)
@@ -122,15 +128,33 @@ function Header() {
             contentFit="contain"
           />
         </View>
-        <Link href="/(tabs)/profile" asChild>
-          <Pressable
-            className="h-11 w-11 items-center justify-center rounded-full bg-off-white border border-warm-200"
-            accessibilityRole="button"
-            accessibilityLabel="Ouvrir le profil"
-          >
-            <Ionicons name="person-outline" size={22} color="#1A1614" />
-          </Pressable>
-        </Link>
+        <View className="flex-row items-center gap-2">
+          <Link href="/(tabs)/notifications" asChild>
+            <Pressable
+              className="relative h-12 w-12 items-center justify-center rounded-full border-2 bg-airmess-dark shadow-card"
+              accessibilityRole="button"
+              accessibilityLabel="Ouvrir les notifications"
+            >
+              <Ionicons name="notifications" size={24} color="#FFCC00" />
+              {unread > 0 && (
+                <View className="absolute -right-1.5 -top-1.5 min-h-6 min-w-6 items-center justify-center rounded-full border-2 border-cream bg-airmess-red px-1">
+                  <Text className="text-[10px] font-extrabold text-white" numberOfLines={1}>
+                    {unread > 9 ? '9+' : unread}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          </Link>
+          {/* <Link href="/(tabs)/profile" asChild>
+            <Pressable
+              className="h-12 w-12 items-center justify-center rounded-2xl border border-warm-200 bg-off-white"
+              accessibilityRole="button"
+              accessibilityLabel="Ouvrir le profil"
+            >
+              <Ionicons name="person" size={23} color="#1A1614" />
+            </Pressable>
+          </Link> */}
+        </View>
       </View>
 
       <Pressable

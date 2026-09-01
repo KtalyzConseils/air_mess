@@ -66,7 +66,7 @@ export default function BottomSheet({
             {/* On stoppe la propagation pour que le contenu ne ferme pas */}
             <Pressable
               onPress={() => {}}
-              className="bg-cream rounded-t-3xl overflow-hidden"
+              className="bg-cream rounded-t-3xl overflow-hidden dark:bg-[#0F1115]"
               style={{ maxHeight: '92%' }}
             >
               {/* Drag handle */}
@@ -77,14 +77,14 @@ export default function BottomSheet({
               {/* Header */}
               <View className="px-5 pt-2 pb-3 flex-row items-start">
                 <View className="flex-1">
-                  <Text className="text-xl font-extrabold text-ink">{title}</Text>
+                  <Text className="text-xl font-extrabold text-ink dark:text-white">{title}</Text>
                   {subtitle && (
-                    <Text className="text-xs text-warm-500 mt-1">{subtitle}</Text>
+                    <Text className="text-xs text-warm-500 mt-1 dark:text-[#AEB6C5]">{subtitle}</Text>
                   )}
                 </View>
                 <Pressable
                   onPress={onClose}
-                  className="w-9 h-9 rounded-full bg-off-white border border-warm-200 items-center justify-center"
+                  className="w-9 h-9 rounded-full bg-off-white border border-warm-200 items-center justify-center dark:bg-[#181B24] dark:border-[#343A46]"
                   style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
                   hitSlop={8}
                 >
@@ -105,7 +105,7 @@ export default function BottomSheet({
               {/* Footer actions — fond off-white + safe-area bas pour dégager la nav bar */}
               {footer && (
                 <View
-                  className="px-5 pt-3 bg-off-white border-t border-warm-200"
+                  className="px-5 pt-3 bg-off-white border-t border-warm-200 dark:bg-[#151821] dark:border-[#2A2F3A]"
                   style={{ paddingBottom: bottomPad }}
                 >
                   {footer}

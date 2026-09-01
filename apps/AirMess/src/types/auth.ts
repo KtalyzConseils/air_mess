@@ -3,7 +3,7 @@ export type UserType = 'marchant' | 'individual' | 'driver' | 'admin'
 export interface User {
   id: number
   name: string
-  email: string
+  email: string | null
   phone: string | null
   type: UserType
   is_active: boolean

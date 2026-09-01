@@ -41,6 +41,7 @@ class CreateCourseTest extends TestCase
             'destination_lng'      => 2.4300,
 
             'has_collection'       => false,
+            'delivery_fee_paid_by'  => Course::PAID_BY_RECIPIENT,
         ];
     }
 

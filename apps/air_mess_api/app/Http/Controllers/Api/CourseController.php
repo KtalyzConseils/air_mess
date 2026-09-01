@@ -116,6 +116,10 @@ class CourseController extends Controller
             return $billing->initiateOneShotCheckout($user, $data, $deliveryFee, $driverEarnings);
         }
 
+        if ($user->isIndividual() && $user->individual) {
+            $user->individual->increment('monthly_courses_used');
+        }
+
         if ($course->is_high_value) {
             // Course premium : ne PAS pusher aux drivers publics.
             // Alerter les 4 rôles admin — ops prend le lead, les autres en visibilité.

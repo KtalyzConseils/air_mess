@@ -29,13 +29,13 @@ const PADDING: Record<Padding, string> = {
 }
 
 const VARIANT: Record<Variant, string> = {
-  default:  'bg-off-white border border-warm-200',
-  elevated: 'bg-off-white shadow-card',
+  default:  'bg-off-white border border-warm-200 dark:bg-[#181B24] dark:border-[#2A2F3A]',
+  elevated: 'bg-off-white shadow-card dark:bg-[#181B24] dark:border dark:border-[#2A2F3A]',
   dark:     'bg-airmess-dark',
   accent:   'bg-airmess-yellow',
-  warning:  'bg-warning-bg border border-warning/30',
-  danger:   'bg-danger-bg border border-airmess-red/30',
-  success:  'bg-success-bg border border-success/30',
+  warning:  'bg-warning-bg border border-warning/30 dark:bg-[#2B2415] dark:border-warning/40',
+  danger:   'bg-danger-bg border border-airmess-red/30 dark:bg-[#2A1518] dark:border-airmess-red/40',
+  success:  'bg-success-bg border border-success/30 dark:bg-[#12281A] dark:border-success/40',
 }
 
 export default function Card({

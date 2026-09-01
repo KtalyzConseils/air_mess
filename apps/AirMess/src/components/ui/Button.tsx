@@ -52,8 +52,8 @@ const VARIANT: Record<
     pressed: 'bg-airmess-yellow-hi',
   },
   dark: {
-    container: 'bg-airmess-dark',
-    text: 'text-white font-bold',
+    container: 'bg-airmess-dark dark:bg-off-white',
+    text: 'text-white dark:text-ink font-bold',
     disabled: 'opacity-40',
     pressed: 'bg-warm-600',
   },
@@ -65,13 +65,13 @@ const VARIANT: Record<
   },
   ghost: {
     container: 'bg-transparent',
-    text: 'text-ink font-semibold',
+    text: 'text-ink dark:text-white font-semibold',
     disabled: 'opacity-40',
     pressed: 'bg-warm-100',
   },
   outline: {
-    container: 'bg-off-white border-2 border-warm-300',
-    text: 'text-ink font-semibold',
+    container: 'bg-off-white border-2 border-warm-300 dark:bg-[#181B24] dark:border-[#343A46]',
+    text: 'text-ink dark:text-white font-semibold',
     disabled: 'opacity-40',
     pressed: 'bg-cream',
   },
@@ -112,13 +112,18 @@ const Button = forwardRef<View, Props>(function Button(
       {loading ? (
         <ActivityIndicator color={variant === 'primary' || variant === 'outline' || variant === 'ghost' ? '#1A1614' : '#ffffff'} />
       ) : (
-        <>
-          {leftIcon && <View className="mr-2">{leftIcon}</View>}
-          <Text className={[TEXT_SIZE_CLASSES[size], v.text].join(' ')} numberOfLines={1}>
+        <View className="flex-row items-center justify-center">
+          {leftIcon && <View className="mr-2 shrink-0">{leftIcon}</View>}
+          <Text
+            className={[TEXT_SIZE_CLASSES[size], v.text, 'shrink'].join(' ')}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+          >
             {children}
           </Text>
-          {rightIcon && <View className="ml-2">{rightIcon}</View>}
-        </>
+          {rightIcon && <View className="ml-2 shrink-0">{rightIcon}</View>}
+        </View>
       )}
     </Pressable>
   )
