@@ -206,9 +206,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/',           [NotificationController::class, 'index']);
         Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
         Route::post('/{notification}/read', [NotificationController::class, 'markRead']);
+        Route::post('/{notification}/received', [NotificationController::class, 'acknowledgePush']);
     });
 
     Route::post('/device-tokens', [NotificationController::class, 'registerToken']);
+    Route::post('/device-tokens/check', [NotificationController::class, 'currentToken']);
     Route::delete('/device-tokens', [NotificationController::class, 'deleteToken']);
 
     // Abonnements (payement et tout) — masqués côté UI mais conservés pour réversibilité

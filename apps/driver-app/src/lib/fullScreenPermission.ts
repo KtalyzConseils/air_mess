@@ -45,14 +45,18 @@ export async function promptFullScreenIntentIfNeeded(): Promise<void> {
 
   const already = await SecureStore.getItemAsync(PROMPTED_KEY)
   if (already) return
-  await SecureStore.setItemAsync(PROMPTED_KEY, '1')
-
   Alert.alert(
     'Alertes de course',
     "Pour être réveillé même écran verrouillé quand une course arrive, active « Notifications plein écran » pour Air Mess.",
     [
       { text: 'Plus tard', style: 'cancel' },
-      { text: 'Activer', onPress: () => { void openFullScreenIntentSettings() } },
+      {
+        text: 'Activer',
+        onPress: () => {
+          void SecureStore.setItemAsync(PROMPTED_KEY, '1')
+          void openFullScreenIntentSettings()
+        },
+      },
     ],
   )
 }

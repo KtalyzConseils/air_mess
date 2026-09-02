@@ -14,6 +14,7 @@ import {
 } from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
+import { acknowledgePushReceipt } from '../api/notifications'
 import { useIosVoipCall } from '../hooks/useIosVoipCall'
 import BrandSplash from '../components/BrandSplash'
 import BackgroundLocationDisclosure from '../components/BackgroundLocationDisclosure'
@@ -61,7 +62,12 @@ export default function RootLayout() {
     import('expo-notifications').then((Notifications) => {
       sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data as any
-        if (data?.course_id) {
+        if (isCallType(data?.type) && data?.course_id != null) {
+          if (data.notification_id != null) {
+            void acknowledgePushReceipt(data.notification_id).catch(() => {})
+          }
+          setPendingCourseId(Number(data.course_id))
+        } else if (data?.course_id) {
           router.push('/(tabs)/notifications')
         }
       })
@@ -133,6 +139,9 @@ export default function RootLayout() {
       sub = Notifications.addNotificationReceivedListener(async (notif) => {
         const data = notif.request.content.data as any
         if (isCallType(data?.type) && data?.course_id != null) {
+          if (data.notification_id != null) {
+            void acknowledgePushReceipt(data.notification_id).catch(() => {})
+          }
           const head = await enqueueCourseFromPush(data)
           setPendingCourseId(head ?? Number(data.course_id))
         }

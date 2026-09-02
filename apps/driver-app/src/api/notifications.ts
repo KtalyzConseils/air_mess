@@ -29,3 +29,7 @@ export async function fetchUnreadCount(): Promise<number> {
 export async function markNotificationRead(id: number) {
   await api.post(`/notifications/${id}/read`)
 }
+
+export async function acknowledgePushReceipt(id: number | string) {
+  await api.post(`/notifications/${id}/received`)
+}

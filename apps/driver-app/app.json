@@ -31,7 +31,7 @@
       ],
       "predictiveBackGestureEnabled": false,
             "softwareKeyboardLayoutMode": "resize",
-      "package": "com.anonymous.driver",
+      "package": "com.anonymous.driverapp",
       "versionCode": 7,
       "googleServicesFile": "./google-services.json"
     },

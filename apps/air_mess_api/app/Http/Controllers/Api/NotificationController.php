@@ -20,6 +20,10 @@ class NotificationController extends Controller
             'token'    => ['required', 'string', 'max:255'],
             // 'ios-voip' = token PushKit (VoIP) iOS, canal séparé pour l'appel entrant.
             'platform' => ['required', Rule::in(['android', 'ios', 'web', 'ios-voip'])],
+            'manufacturer' => ['nullable', 'string', 'max:80'],
+            'model_name' => ['nullable', 'string', 'max:120'],
+            'os_version' => ['nullable', 'string', 'max:40'],
+            'app_version' => ['nullable', 'string', 'max:40'],
         ]);
 
         $deviceToken = DeviceToken::updateOrCreate(
@@ -28,10 +32,24 @@ class NotificationController extends Controller
                 'user_id'      => $request->user()->id,
                 'platform'     => $data['platform'],
                 'last_seen_at' => now(),
+                'manufacturer' => $data['manufacturer'] ?? null,
+                'model_name' => $data['model_name'] ?? null,
+                'os_version' => $data['os_version'] ?? null,
+                'app_version' => $data['app_version'] ?? null,
             ],
         );
 
         return response()->json(['device_token' => $deviceToken], 201);
+    }
+
+    public function currentToken(Request $request): JsonResponse
+    {
+        $data = $request->validate(['token' => ['required', 'string', 'max:255']]);
+        $exists = DeviceToken::where('user_id', $request->user()->id)
+            ->where('token', $data['token'])
+            ->exists();
+
+        return response()->json(['registered' => $exists]);
     }
 
     /**
@@ -77,6 +95,16 @@ class NotificationController extends Controller
         $notification->update(['read_at' => now()]);
 
         return response()->json(['notification' => $notification->fresh()]);
+    }
+
+    public function acknowledgePush(Request $request, Notification $notification): JsonResponse
+    {
+        if ($notification->user_id !== $request->user()->id) abort(403);
+        if ($notification->push_received_at === null) {
+            $notification->forceFill(['push_received_at' => now()])->save();
+        }
+
+        return response()->json(['received' => true]);
     }
 
     /**
