@@ -1,21 +1,31 @@
 import { Platform } from 'react-native'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
 import * as Device from 'expo-device'
-import * as Notifications from 'expo-notifications'
 import * as SecureStore from 'expo-secure-store'
 import api from '../api/client'
 
 const PUSH_TOKEN_KEY = 'airmess_push_token'
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-})
+// expo-notifications throws on import for Android push features when running in Expo Go,
+// so it must only be required (not statically imported) once we know we're in a dev build.
+const Notifications: typeof import('expo-notifications') | null = isExpoGo
+  ? null
+  : require('expo-notifications')
+
+if (Notifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  })
+}
 
 export async function registerPushNotifications() {
+  if (!Notifications) return null
   if (!Device.isDevice || (Platform.OS !== 'android' && Platform.OS !== 'ios')) return null
 
   if (Platform.OS === 'android') {

@@ -49,10 +49,7 @@
           },
           "android": {
             "enableMinifyInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true,
-            "extraMavenRepos": [
-              "../../node_modules/@notifee/react-native/android/libs"
-            ]
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ],
