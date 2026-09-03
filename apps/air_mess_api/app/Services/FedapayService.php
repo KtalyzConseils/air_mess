@@ -16,7 +16,11 @@ class FedapayService
     public function __construct()
     {
         $env = config('services.fedapay.env', 'sandbox');
-        $this->apiUrl = $env === 'production'
+        // FEDAPAY_ENV=live est la valeur documentée dans .env.example (et celle du
+        // dashboard Fedapay) ; 'production' reste accepté par compatibilité si déjà
+        // utilisé quelque part. Sans ce fallback, un .env réglé sur "live" retombe
+        // silencieusement sur l'URL sandbox alors que les clés sont des clés live.
+        $this->apiUrl = in_array($env, ['live', 'production'], true)
             ? 'https://api.fedapay.com/v1'
             : 'https://sandbox-api.fedapay.com/v1';
         $this->secretKey     = config('services.fedapay.secret_key');
