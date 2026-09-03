@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { fetchCourses, type Course } from '../../api/courses'
+import { useLanguageStore, type AppLanguage } from '../../stores/languageStore'
 
 type StatusGroup = 'all' | 'pending' | 'in_progress' | 'delivered' | 'cancelled'
 
@@ -15,14 +16,6 @@ const GROUP_STATUSES: Record<StatusGroup, string[]> = {
   in_progress: ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff'],
   delivered: ['delivered'],
   cancelled: ['cancelled', 'failed', 'disputed'],
-}
-
-const GROUP_LABELS: Record<StatusGroup, string> = {
-  all: 'Toutes',
-  pending: 'Attente',
-  in_progress: 'En cours',
-  delivered: 'Livrees',
-  cancelled: 'Annulees',
 }
 
 const GROUPS: StatusGroup[] = ['all', 'pending', 'in_progress', 'delivered', 'cancelled']
@@ -35,7 +28,88 @@ const EMPTY_COURSES_PAGE = {
   per_page: 100,
 }
 
+const COURSES_COPY = {
+  fr: {
+    locale: 'fr-FR',
+    groupLabels: {
+      all: 'Toutes',
+      pending: 'Attente',
+      in_progress: 'En cours',
+      delivered: 'Livrees',
+      cancelled: 'Annulees',
+    } as Record<StatusGroup, string>,
+    historyLabel: 'Historique',
+    title: 'Mes courses',
+    subtitle: 'Suivi de tes livraisons et anciens trajets.',
+    newCourse: 'Nouvelle course',
+    searchPlaceholder: 'Reference, destinataire, quartier...',
+    total: 'Total',
+    inProgress: 'En cours',
+    delivered: 'Livrees',
+    toDestination: 'vers',
+    noDriver: 'Livreur non assigne',
+    noCourseFound: 'Aucune course trouvee',
+    noCourse: 'Aucune course',
+    tryOtherFilter: 'Essaie un autre filtre ou une autre recherche.',
+    coursesAppearHere: 'Tes livraisons apparaitront ici apres creation.',
+    statusLabels: {
+      pending_preparation: 'Preparation',
+      awaiting_assignment: 'En attribution',
+      assigned: 'Assignee',
+      driver_to_pickup: 'Livreur en route',
+      at_pickup: 'Au retrait',
+      picked_up: 'Recuperee',
+      at_dropoff: 'En livraison',
+      delivered: 'Livree',
+      cancelled: 'Annulee',
+      failed: 'Echec',
+      disputed: 'Litige',
+    } as Record<string, string>,
+  },
+  en: {
+    locale: 'en-US',
+    groupLabels: {
+      all: 'All',
+      pending: 'Pending',
+      in_progress: 'In progress',
+      delivered: 'Delivered',
+      cancelled: 'Cancelled',
+    } as Record<StatusGroup, string>,
+    historyLabel: 'History',
+    title: 'My deliveries',
+    subtitle: 'Track your deliveries and past trips.',
+    newCourse: 'New delivery',
+    searchPlaceholder: 'Reference, recipient, area...',
+    total: 'Total',
+    inProgress: 'In progress',
+    delivered: 'Delivered',
+    toDestination: 'to',
+    noDriver: 'No driver assigned',
+    noCourseFound: 'No delivery found',
+    noCourse: 'No deliveries',
+    tryOtherFilter: 'Try another filter or search term.',
+    coursesAppearHere: 'Your deliveries will appear here once created.',
+    statusLabels: {
+      pending_preparation: 'Preparation',
+      awaiting_assignment: 'Awaiting assignment',
+      assigned: 'Assigned',
+      driver_to_pickup: 'Driver on the way',
+      at_pickup: 'At pickup',
+      picked_up: 'Picked up',
+      at_dropoff: 'Out for delivery',
+      delivered: 'Delivered',
+      cancelled: 'Cancelled',
+      failed: 'Failed',
+      disputed: 'Disputed',
+    } as Record<string, string>,
+  },
+} as const
+
+type CoursesCopy = (typeof COURSES_COPY)[AppLanguage]
+
 export default function CoursesScreen() {
+  const language = useLanguageStore((state) => state.language)
+  const copy = COURSES_COPY[language]
   const [group, setGroup] = useState<StatusGroup>('all')
   const [search, setSearch] = useState('')
 
@@ -78,18 +152,18 @@ export default function CoursesScreen() {
       <View className="mb-5 flex-row items-start justify-between">
         <View className="flex-1 pr-4">
           <Text className="text-xs font-extrabold uppercase tracking-widest text-airmess-red">
-            Historique
+            {copy.historyLabel}
           </Text>
-          <Text className="mt-1 text-3xl font-extrabold text-ink">Mes courses</Text>
+          <Text className="mt-1 text-3xl font-extrabold text-ink">{copy.title}</Text>
           <Text className="mt-1 text-sm font-semibold text-warm-500">
-            Suivi de tes livraisons et anciens trajets.
+            {copy.subtitle}
           </Text>
         </View>
         <Link href="/(tabs)/new-course" asChild>
           <Pressable
             className="h-12 w-12 items-center justify-center rounded-full bg-airmess-yellow"
             accessibilityRole="button"
-            accessibilityLabel="Nouvelle course"
+            accessibilityLabel={copy.newCourse}
           >
             <Ionicons name="add" size={24} color="#1A1614" />
           </Pressable>
@@ -101,7 +175,7 @@ export default function CoursesScreen() {
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Reference, destinataire, quartier..."
+          placeholder={copy.searchPlaceholder}
           placeholderTextColor="#B8AF9F"
           className="ml-3 h-13 flex-1 text-base font-semibold text-ink"
           autoCapitalize="none"
@@ -122,7 +196,7 @@ export default function CoursesScreen() {
         {GROUPS.map((item) => (
           <FilterChip
             key={item}
-            label={GROUP_LABELS[item]}
+            label={copy.groupLabels[item]}
             count={counts[item]}
             active={group === item}
             onPress={() => setGroup(item)}
@@ -131,9 +205,9 @@ export default function CoursesScreen() {
       </ScrollView>
 
       <View className="mb-4 flex-row gap-3">
-        <SummaryTile label="Total" value={counts.all} />
-        <SummaryTile label="En cours" value={counts.in_progress} accent />
-        <SummaryTile label="Livrees" value={counts.delivered} />
+        <SummaryTile label={copy.total} value={counts.all} />
+        <SummaryTile label={copy.inProgress} value={counts.in_progress} accent />
+        <SummaryTile label={copy.delivered} value={counts.delivered} />
       </View>
 
       {isLoading ? (
@@ -141,11 +215,11 @@ export default function CoursesScreen() {
           <ActivityIndicator color="#1A1614" />
         </Card>
       ) : filtered.length === 0 ? (
-        <EmptyState hasSearch={search.trim().length > 0 || group !== 'all'} />
+        <EmptyState hasSearch={search.trim().length > 0 || group !== 'all'} copy={copy} />
       ) : (
         <View className="gap-3">
           {filtered.map((course) => (
-            <CourseHistoryCard key={course.id} course={course} />
+            <CourseHistoryCard key={course.id} course={course} copy={copy} />
           ))}
         </View>
       )}
@@ -194,7 +268,7 @@ function SummaryTile({ label, value, accent = false }: { label: string; value: n
   )
 }
 
-function CourseHistoryCard({ course }: { course: Course }) {
+function CourseHistoryCard({ course, copy }: { course: Course; copy: CoursesCopy }) {
   return (
     <Link href={{ pathname: '/courses/[id]', params: { id: String(course.id) } }} asChild>
     <Pressable accessibilityRole="button">
@@ -206,14 +280,14 @@ function CourseHistoryCard({ course }: { course: Course }) {
           </View>
           <View className="ml-3">
             <Text className="font-mono text-xs font-bold text-warm-500">{course.reference}</Text>
-            <Text className="mt-0.5 text-xs font-semibold text-warm-500">{formatDate(course.created_at)}</Text>
+            <Text className="mt-0.5 text-xs font-semibold text-warm-500">{formatDate(course.created_at, copy.locale)}</Text>
           </View>
         </View>
-        <StatusPill status={course.status} label={course.status_label} />
+        <StatusPill status={course.status} label={course.status_label} copy={copy} />
       </View>
 
       <Text className="text-lg font-extrabold text-ink" numberOfLines={1}>
-        {course.origin_quartier} vers {course.destination_quartier}
+        {course.origin_quartier} {copy.toDestination} {course.destination_quartier}
       </Text>
       <Text className="mt-1 text-sm font-semibold text-warm-600" numberOfLines={1}>
         {course.destination_name}, {course.destination_city}
@@ -223,13 +297,13 @@ function CourseHistoryCard({ course }: { course: Course }) {
         <View className="flex-row items-center">
           <Ionicons name="cash-outline" size={16} color="#8A7E68" />
           <Text className="ml-1.5 text-sm font-extrabold text-ink">
-            {course.delivery_fee.toLocaleString('fr-FR')} FCFA
+            {course.delivery_fee.toLocaleString(copy.locale)} FCFA
           </Text>
         </View>
         <View className="flex-row items-center">
           <Ionicons name="person-outline" size={15} color="#8A7E68" />
           <Text className="ml-1 text-xs font-semibold text-warm-500" numberOfLines={1}>
-            {course.driver?.user.name ?? 'Livreur non assigne'}
+            {course.driver?.user.name ?? copy.noDriver}
           </Text>
         </View>
       </View>
@@ -239,29 +313,27 @@ function CourseHistoryCard({ course }: { course: Course }) {
   )
 }
 
-function StatusPill({ status, label }: { status: string; label?: string }) {
+function StatusPill({ status, label, copy }: { status: string; label?: string; copy: CoursesCopy }) {
   return (
     <View className={['rounded-full px-2.5 py-1', statusPillTone(status)].join(' ')}>
       <Text className="text-[10px] font-extrabold uppercase" numberOfLines={1}>
-        {label ?? fallbackStatusLabel(status)}
+        {label ?? fallbackStatusLabel(status, copy)}
       </Text>
     </View>
   )
 }
 
-function EmptyState({ hasSearch }: { hasSearch: boolean }) {
+function EmptyState({ hasSearch, copy }: { hasSearch: boolean; copy: CoursesCopy }) {
   return (
     <Card className="items-center py-10">
       <View className="mb-3 h-14 w-14 items-center justify-center rounded-full bg-warm-100">
         <Ionicons name={hasSearch ? 'filter-outline' : 'cube-outline'} size={24} color="#6B6250" />
       </View>
       <Text className="text-center text-lg font-extrabold text-ink">
-        {hasSearch ? 'Aucune course trouvee' : 'Aucune course'}
+        {hasSearch ? copy.noCourseFound : copy.noCourse}
       </Text>
       <Text className="mt-1 text-center text-sm leading-5 text-warm-600">
-        {hasSearch
-          ? 'Essaie un autre filtre ou une autre recherche.'
-          : 'Tes livraisons apparaitront ici apres creation.'}
+        {hasSearch ? copy.tryOtherFilter : copy.coursesAppearHere}
       </Text>
     </Card>
   )
@@ -305,25 +377,12 @@ function statusIcon(status: string): keyof typeof Ionicons.glyphMap {
   return 'bicycle-outline'
 }
 
-function fallbackStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    pending_preparation: 'Preparation',
-    awaiting_assignment: 'En attribution',
-    assigned: 'Assignee',
-    driver_to_pickup: 'Livreur en route',
-    at_pickup: 'Au retrait',
-    picked_up: 'Recuperee',
-    at_dropoff: 'En livraison',
-    delivered: 'Livree',
-    cancelled: 'Annulee',
-    failed: 'Echec',
-    disputed: 'Litige',
-  }
-  return labels[status] ?? status.replaceAll('_', ' ')
+function fallbackStatusLabel(status: string, copy: CoursesCopy) {
+  return copy.statusLabels[status] ?? status.replaceAll('_', ' ')
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('fr-FR', {
+function formatDate(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',

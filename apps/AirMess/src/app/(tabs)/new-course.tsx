@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { isAxiosError } from 'axios'
 import { fetchAddresses } from '../../api/addresses'
 import { createCourse, estimateCourseFee, fetchPackageCategories } from '../../api/courses'
 import { fetchPlaceDetails, searchPlaces, type PlaceDetails, type PlaceSuggestion } from '../../api/places'
@@ -13,6 +12,8 @@ import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { getPaymentCallbackUrl } from '../../lib/payment'
 import { useAuthStore } from '../../stores/authStore'
+import { useLanguageStore, type AppLanguage } from '../../stores/languageStore'
+import { getApiErrorMessage } from '../../lib/apiError'
 
 type Step = 'package' | 'location' | 'details' | 'recap'
 type LocationTarget = 'origin' | 'destination'
@@ -49,18 +50,192 @@ interface LocationDraft {
   deliveryFeePaidBy: 'sender' | 'recipient'
 }
 
-const PACKAGE_TYPES: PackageType[] = [
-  { id: 'parcel', categoryCode: 'standard', title: 'Colis', subtitle: 'Paquet simple', icon: 'cube-outline', size: 'M' },
-  { id: 'food', categoryCode: 'hot_meal', title: 'Repas', subtitle: 'Restaurant, snack', icon: 'fast-food-outline', size: 'S' },
-  { id: 'documents', categoryCode: 'document', title: 'Documents', subtitle: 'Plis et papiers', icon: 'document-text-outline', size: 'S' },
-  { id: 'shopping', categoryCode: 'standard', title: 'Courses', subtitle: 'Achats client', icon: 'bag-handle-outline', size: 'M' },
-  { id: 'pharmacy', categoryCode: 'pharmacy', title: 'Pharmacie', subtitle: 'Produit sensible', icon: 'medkit-outline', size: 'S' },
-  { id: 'other', categoryCode: 'standard', title: 'Autre', subtitle: 'A preciser apres', icon: 'ellipsis-horizontal-circle-outline', size: 'L' },
-]
+const NEW_COURSE_COPY = {
+  fr: {
+    locale: 'fr-FR',
+    packageTypes: [
+      { id: 'parcel', categoryCode: 'standard', title: 'Colis', subtitle: 'Paquet simple', icon: 'cube-outline' as const, size: 'M' as const },
+      { id: 'food', categoryCode: 'hot_meal', title: 'Repas', subtitle: 'Restaurant, snack', icon: 'fast-food-outline' as const, size: 'S' as const },
+      { id: 'documents', categoryCode: 'document', title: 'Documents', subtitle: 'Plis et papiers', icon: 'document-text-outline' as const, size: 'S' as const },
+      { id: 'shopping', categoryCode: 'standard', title: 'Courses', subtitle: 'Achats client', icon: 'bag-handle-outline' as const, size: 'M' as const },
+      { id: 'pharmacy', categoryCode: 'pharmacy', title: 'Pharmacie', subtitle: 'Produit sensible', icon: 'medkit-outline' as const, size: 'S' as const },
+      { id: 'other', categoryCode: 'standard', title: 'Autre', subtitle: 'A preciser apres', icon: 'ellipsis-horizontal-circle-outline' as const, size: 'L' as const },
+    ],
+    locationPermissionDenied: 'Active la localisation pour detecter le point de depart.',
+    positionUnavailable: 'Impossible de detecter la position actuelle.',
+    missingBoth: 'la prise en charge et la destination',
+    missingOrigin: 'la prise en charge',
+    missingDestination: 'la destination',
+    title: 'Nouvelle course',
+    stepPackage: 'Colis',
+    stepTrip: 'Trajet',
+    stepDetails: 'Details',
+    stepRecap: 'Recap',
+    whatAreWeDelivering: 'Nous livrons quoi ?',
+    pickup: 'Prise en charge',
+    currentPosition: 'Position actuelle',
+    editPickup: 'Modifier la prise en charge',
+    useMyPosition: 'Utiliser ma position',
+    destination: 'Destination',
+    whereToDeliver: 'Ou livrer ?',
+    editDestination: 'Modifier la destination',
+    searchPickup: 'Rechercher la prise en charge',
+    searchDestination: 'Rechercher une destination',
+    reception: 'Reception',
+    addressBook: 'Carnet',
+    noAddressSaved: 'Aucune adresse enregistree.',
+    destinationLabel: 'Destination',
+    deliveryAddress: 'Adresse de livraison',
+    customerName: 'Nom du client',
+    fullName: 'Nom complet',
+    customerPhone: 'Telephone du client',
+    customerPhoneSecondary: 'Second numero du client',
+    optionalPhone: '+229... (optionnel)',
+    sender: 'Expediteur',
+    departureAddress: 'Adresse de depart',
+    businessName: 'Nom du commerce',
+    businessPhone: 'Telephone du commerce',
+    continueLabel: 'Continuer',
+    usefulDetails: 'Details utiles',
+    urgency: 'Urgence',
+    standard: 'Standard',
+    standardSubtitle: 'Livraison normale',
+    express: 'Express',
+    expressSubtitle: 'Prioritaire',
+    packageDescription: 'Description du colis (optionnel)',
+    packageDescriptionPlaceholder: 'Ex: petit paquet, repas, documents...',
+    merchantPhoneSecondary: 'Second numero a joindre (marchand)',
+    advancedOptions: 'Options avancees',
+    advancedOptionsSubtitle: 'Valeur et paiement de la livraison',
+    paidBy: 'Frais de livraison payes par',
+    paidByMerchant: 'Le commerce',
+    paidByMerchantSubtitle: 'Debite du wallet AirMess',
+    paidByRecipient: 'Le destinataire',
+    paidByRecipientSubtitle: 'Le client paie a la livraison',
+    declaredValue: 'Valeur declaree du colis (optionnel)',
+    declaredValuePlaceholder: 'Montant en FCFA',
+    createCourse: 'Creer une course',
+    summary: 'Synthese',
+    verifyBeforeCreating: 'Verifie avant de creer',
+    estimatedPrice: 'Prix estime',
+    calculating: 'Calcul...',
+    toCalculate: 'A calculer',
+    selectExactPositions: 'Selectionne les positions exactes pour voir le prix.',
+    recapPackage: 'Colis',
+    recapTrip: 'Trajet',
+    recapTripValue: (origin: string, destination: string) => `${origin || 'Depart'} vers ${destination || 'Destination'}`,
+    recapClient: 'Client',
+    recapClientSecondary: 'Second numero client',
+    recapMerchantSecondary: 'Second numero marchand',
+    recapUrgency: 'Urgence',
+    recapDetails: 'Details',
+    recapPayment: 'Paiement',
+    recapPaymentRecipient: 'Le client paie les frais a la livraison',
+    recapPaymentSender: 'Le commerce paie via son wallet',
+    recapValue: 'Valeur',
+    missingPositionTitle: 'Position exacte manquante',
+    missingPositionSubtitle: (missing: string) =>
+      `Selectionne ${missing} dans les resultats de recherche pour permettre au livreur de trouver le trajet.`,
+    createFinal: 'Creer la course',
+    placesLanguage: 'fr',
+  },
+  en: {
+    locale: 'en-US',
+    packageTypes: [
+      { id: 'parcel', categoryCode: 'standard', title: 'Parcel', subtitle: 'Simple package', icon: 'cube-outline' as const, size: 'M' as const },
+      { id: 'food', categoryCode: 'hot_meal', title: 'Food', subtitle: 'Restaurant, snack', icon: 'fast-food-outline' as const, size: 'S' as const },
+      { id: 'documents', categoryCode: 'document', title: 'Documents', subtitle: 'Papers and mail', icon: 'document-text-outline' as const, size: 'S' as const },
+      { id: 'shopping', categoryCode: 'standard', title: 'Shopping', subtitle: "Customer's purchases", icon: 'bag-handle-outline' as const, size: 'M' as const },
+      { id: 'pharmacy', categoryCode: 'pharmacy', title: 'Pharmacy', subtitle: 'Sensitive product', icon: 'medkit-outline' as const, size: 'S' as const },
+      { id: 'other', categoryCode: 'standard', title: 'Other', subtitle: 'To specify later', icon: 'ellipsis-horizontal-circle-outline' as const, size: 'L' as const },
+    ],
+    locationPermissionDenied: 'Enable location to detect the pickup point.',
+    positionUnavailable: 'Unable to detect your current location.',
+    missingBoth: 'the pickup and the destination',
+    missingOrigin: 'the pickup',
+    missingDestination: 'the destination',
+    title: 'New delivery',
+    stepPackage: 'Package',
+    stepTrip: 'Trip',
+    stepDetails: 'Details',
+    stepRecap: 'Summary',
+    whatAreWeDelivering: 'What are we delivering?',
+    pickup: 'Pickup',
+    currentPosition: 'Current location',
+    editPickup: 'Edit pickup',
+    useMyPosition: 'Use my location',
+    destination: 'Destination',
+    whereToDeliver: 'Where to deliver?',
+    editDestination: 'Edit destination',
+    searchPickup: 'Search for the pickup',
+    searchDestination: 'Search for a destination',
+    reception: 'Recipient',
+    addressBook: 'Address book',
+    noAddressSaved: 'No saved address.',
+    destinationLabel: 'Destination',
+    deliveryAddress: 'Delivery address',
+    customerName: "Customer's name",
+    fullName: 'Full name',
+    customerPhone: "Customer's phone",
+    customerPhoneSecondary: "Customer's second number",
+    optionalPhone: '+229... (optional)',
+    sender: 'Sender',
+    departureAddress: 'Departure address',
+    businessName: 'Business name',
+    businessPhone: 'Business phone',
+    continueLabel: 'Continue',
+    usefulDetails: 'Useful details',
+    urgency: 'Urgency',
+    standard: 'Standard',
+    standardSubtitle: 'Regular delivery',
+    express: 'Express',
+    expressSubtitle: 'Priority',
+    packageDescription: 'Package description (optional)',
+    packageDescriptionPlaceholder: 'Ex: small package, meal, documents...',
+    merchantPhoneSecondary: 'Second number to reach (merchant)',
+    advancedOptions: 'Advanced options',
+    advancedOptionsSubtitle: 'Value and delivery payment',
+    paidBy: 'Delivery fee paid by',
+    paidByMerchant: 'The business',
+    paidByMerchantSubtitle: 'Debited from the AirMess wallet',
+    paidByRecipient: 'The recipient',
+    paidByRecipientSubtitle: 'Customer pays on delivery',
+    declaredValue: 'Declared package value (optional)',
+    declaredValuePlaceholder: 'Amount in FCFA',
+    createCourse: 'Create a delivery',
+    summary: 'Summary',
+    verifyBeforeCreating: 'Check before creating',
+    estimatedPrice: 'Estimated price',
+    calculating: 'Calculating...',
+    toCalculate: 'To calculate',
+    selectExactPositions: 'Select exact positions to see the price.',
+    recapPackage: 'Package',
+    recapTrip: 'Trip',
+    recapTripValue: (origin: string, destination: string) => `${origin || 'Pickup'} to ${destination || 'Destination'}`,
+    recapClient: 'Customer',
+    recapClientSecondary: "Customer's second number",
+    recapMerchantSecondary: "Merchant's second number",
+    recapUrgency: 'Urgency',
+    recapDetails: 'Details',
+    recapPayment: 'Payment',
+    recapPaymentRecipient: 'Customer pays the fee on delivery',
+    recapPaymentSender: 'Business pays via its wallet',
+    recapValue: 'Value',
+    missingPositionTitle: 'Exact position missing',
+    missingPositionSubtitle: (missing: string) =>
+      `Select ${missing} from the search results so the driver can find the trip.`,
+    createFinal: 'Create delivery',
+    placesLanguage: 'en',
+  },
+} as const
+
+type NewCourseCopy = (typeof NEW_COURSE_COPY)[AppLanguage]
 
 export default function NewCourseScreen() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
+  const language = useLanguageStore((state) => state.language)
+  const copy = NEW_COURSE_COPY[language]
   const { addressId } = useLocalSearchParams<{ addressId?: string }>()
   const [step, setStep] = useState<Step>('package')
   const [selectedPackage, setSelectedPackage] = useState<PackageType | null>(null)
@@ -131,6 +306,7 @@ export default function NewCourseScreen() {
 
   useEffect(() => {
     void useCurrentLocation()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const useCurrentLocation = async () => {
@@ -139,7 +315,7 @@ export default function NewCourseScreen() {
     try {
       const permission = await Location.requestForegroundPermissionsAsync()
       if (permission.status !== 'granted') {
-        setLocationError('Active la localisation pour detecter le point de depart.')
+        setLocationError(copy.locationPermissionDenied)
         return
       }
 
@@ -162,7 +338,7 @@ export default function NewCourseScreen() {
         originCity: first?.city || first?.region || current.originCity || 'Cotonou',
       }))
     } catch {
-      setLocationError('Impossible de detecter la position actuelle.')
+      setLocationError(copy.positionUnavailable)
     } finally {
       setLocating(false)
     }
@@ -206,11 +382,11 @@ export default function NewCourseScreen() {
   const destinationLng = draft.destinationLng ?? 0
   const missingPositionLabel =
     !hasOriginCoords && !hasDestinationCoords
-      ? 'la prise en charge et la destination'
+      ? copy.missingBoth
       : !hasOriginCoords
-        ? 'la prise en charge'
+        ? copy.missingOrigin
         : !hasDestinationCoords
-          ? 'la destination'
+          ? copy.missingDestination
           : ''
   const canContinueLocation =
     !!selectedPackage &&
@@ -276,7 +452,7 @@ export default function NewCourseScreen() {
   const createMutation = useMutation({
     mutationFn: () => {
       if (!selectedPackage || !packageCategory || !draft.originLat || !draft.originLng || !draft.destinationLat || !draft.destinationLng) {
-        throw new Error('Selectionne une position exacte pour le depart et la destination.')
+        throw new Error(copy.missingPositionSubtitle(missingPositionLabel))
       }
 
       const declaredValue = Number(draft.packageDeclaredValue)
@@ -325,7 +501,7 @@ export default function NewCourseScreen() {
         router.replace({ pathname: '/courses/[id]', params: { id: String(result.course.id) } })
       }
     },
-    onError: (error) => setCreateError(getApiErrorMessage(error)),
+    onError: (error) => setCreateError(getApiErrorMessage(error, language)),
   })
 
   const fillDestinationFromAddress = (address: (typeof addresses)[number]) => {
@@ -347,23 +523,23 @@ export default function NewCourseScreen() {
   return (
     <Screen scroll py={16} className="px-5">
       <View className="mb-4">
-        <Text className="text-2xl font-extrabold text-ink">Nouvelle course</Text>
+        <Text className="text-2xl font-extrabold text-ink">{copy.title}</Text>
         <View className="mt-3 flex-row items-center">
-          <StepDot active={step === 'package'} done={!!selectedPackage} label="Colis" />
+          <StepDot active={step === 'package'} done={!!selectedPackage} label={copy.stepPackage} />
           <View className="mx-2 h-0.5 flex-1 bg-warm-200" />
-          <StepDot active={step === 'location'} done={canContinueLocation} label="Trajet" />
+          <StepDot active={step === 'location'} done={canContinueLocation} label={copy.stepTrip} />
           <View className="mx-2 h-0.5 flex-1 bg-warm-200" />
-          <StepDot active={step === 'details'} done={canContinueDetails} label="Details" />
+          <StepDot active={step === 'details'} done={canContinueDetails} label={copy.stepDetails} />
           <View className="mx-2 h-0.5 flex-1 bg-warm-200" />
-          <StepDot active={step === 'recap'} done={!!createMutation.data?.course} label="Recap" />
+          <StepDot active={step === 'recap'} done={!!createMutation.data?.course} label={copy.stepRecap} />
         </View>
       </View>
 
       {step === 'package' ? (
         <View>
-          <Text className="mb-3 text-base font-extrabold text-ink">Nous livrons quoi ?</Text>
+          <Text className="mb-3 text-base font-extrabold text-ink">{copy.whatAreWeDelivering}</Text>
           <View className="flex-row flex-wrap gap-3">
-            {PACKAGE_TYPES.map((item) => (
+            {copy.packageTypes.map((item) => (
               <PackageCard
                 key={item.id}
                 item={item}
@@ -382,7 +558,7 @@ export default function NewCourseScreen() {
               accessibilityRole="button"
             >
               <Ionicons name="chevron-back" size={18} color="#1A1614" />
-              <Text className="ml-1 text-sm font-extrabold text-ink">Colis</Text>
+              <Text className="ml-1 text-sm font-extrabold text-ink">{copy.stepPackage}</Text>
             </Pressable>
             {selectedPackage && (
               <View className="flex-row items-center rounded-full bg-airmess-yellow px-3 py-2">
@@ -406,7 +582,7 @@ export default function NewCourseScreen() {
                   onPress={() => setLocationTarget('origin')}
                   className="mr-3 h-11 w-11 items-center justify-center"
                   accessibilityRole="button"
-                  accessibilityLabel="Modifier la prise en charge"
+                  accessibilityLabel={copy.editPickup}
                 >
                   <Ionicons name="storefront" size={25} color="#1A1614" />
                 </Pressable>
@@ -416,20 +592,20 @@ export default function NewCourseScreen() {
                   accessibilityRole="button"
                 >
                   <View className="flex-row items-center">
-                    <Text className="text-sm font-bold text-warm-400">Prise en charge</Text>
+                    <Text className="text-sm font-bold text-warm-400">{copy.pickup}</Text>
                     {hasOriginCoords && (
                       <Ionicons name="checkmark-circle" size={15} color="#16A34A" style={{ marginLeft: 6 }} />
                     )}
                   </View>
                   <Text className="mt-0.5 text-xl font-extrabold text-ink" numberOfLines={1}>
-                    {formatCompactPlace(draft.originQuartier, draft.originCity) || 'Position actuelle'}
+                    {formatCompactPlace(draft.originQuartier, draft.originCity) || copy.currentPosition}
                   </Text>
                 </Pressable>
                 <Pressable
                   onPress={useCurrentLocation}
                   className="ml-2 h-9 w-9 items-center justify-center rounded-full bg-warm-100"
                   accessibilityRole="button"
-                  accessibilityLabel="Utiliser ma position"
+                  accessibilityLabel={copy.useMyPosition}
                 >
                   {locating ? (
                     <ActivityIndicator size="small" color="#1A1614" />
@@ -453,7 +629,7 @@ export default function NewCourseScreen() {
                   onPress={() => setLocationTarget('destination')}
                   className="mr-3 h-11 w-11 items-center justify-center rounded-xl bg-airmess-red"
                   accessibilityRole="button"
-                  accessibilityLabel="Modifier la destination"
+                  accessibilityLabel={copy.editDestination}
                 >
                   <Ionicons name="flag" size={24} color="#FFFFFF" />
                 </Pressable>
@@ -463,7 +639,7 @@ export default function NewCourseScreen() {
                   accessibilityRole="button"
                 >
                   <View className="flex-row items-center">
-                    <Text className="text-sm font-bold text-warm-400">Destination</Text>
+                    <Text className="text-sm font-bold text-warm-400">{copy.destination}</Text>
                     {hasDestinationCoords && (
                       <Ionicons name="checkmark-circle" size={15} color="#16A34A" style={{ marginLeft: 6 }} />
                     )}
@@ -471,7 +647,7 @@ export default function NewCourseScreen() {
                   <Text className="mt-0.5 text-xl font-extrabold text-ink" numberOfLines={2}>
                     {draft.destinationAddress ||
                       formatCompactPlace(draft.destinationQuartier, draft.destinationCity) ||
-                      'Ou livrer ?'}
+                      copy.whereToDeliver}
                   </Text>
                 </Pressable>
               </Pressable>
@@ -484,13 +660,10 @@ export default function NewCourseScreen() {
             <View className="mt-3">
               <PlaceSearchBox
                 target={locationTarget}
+                copy={copy}
                 onSelect={handleSelectPlace}
                 onSearchChange={() => setLocationError(null)}
-                placeholder={
-                  locationTarget === 'origin'
-                    ? 'Rechercher la prise en charge'
-                    : 'Rechercher une destination'
-                }
+                placeholder={locationTarget === 'origin' ? copy.searchPickup : copy.searchDestination}
               />
             </View>
           </View>
@@ -498,14 +671,14 @@ export default function NewCourseScreen() {
           {locationTarget === 'destination' ? (
             <Card className="mb-4" padding="md">
               <View className="flex-row items-center justify-between">
-                <Text className="text-base font-extrabold text-ink">Reception</Text>
+                <Text className="text-base font-extrabold text-ink">{copy.reception}</Text>
                 <Pressable
                   onPress={() => setShowAddressBook((value) => !value)}
                   className="h-9 flex-row items-center rounded-full bg-warm-100 px-3"
                   accessibilityRole="button"
                 >
                   <Ionicons name="people" size={16} color="#1A1614" />
-                  <Text className="ml-1 text-xs font-extrabold text-ink">Carnet</Text>
+                  <Text className="ml-1 text-xs font-extrabold text-ink">{copy.addressBook}</Text>
                 </Pressable>
               </View>
 
@@ -513,7 +686,7 @@ export default function NewCourseScreen() {
                 <View className="mt-3 overflow-hidden rounded-2xl border border-warm-200 bg-white">
                   {addresses.length === 0 ? (
                     <Text className="px-4 py-3 text-sm font-semibold text-warm-500">
-                      Aucune adresse enregistree.
+                      {copy.noAddressSaved}
                     </Text>
                   ) : (
                     addresses.slice(0, 5).map((address) => (
@@ -544,23 +717,23 @@ export default function NewCourseScreen() {
                 </View>
               )}
 
-              <FieldLabel required>Destination</FieldLabel>
+              <FieldLabel required>{copy.destinationLabel}</FieldLabel>
               <CourseInput
                 value={draft.destinationAddress}
                 onChangeText={(value) => {
                   setLocationError(null)
                   setDraft((current) => ({ ...current, destinationAddress: value }))
                 }}
-                placeholder="Adresse de livraison"
+                placeholder={copy.deliveryAddress}
               />
-              <FieldLabel required>Nom du client</FieldLabel>
+              <FieldLabel required>{copy.customerName}</FieldLabel>
               <CourseInput
                 value={draft.destinationName}
                 onChangeText={(value) => setDraft((current) => ({ ...current, destinationName: value }))}
-                placeholder="Nom complet"
+                placeholder={copy.fullName}
                 textContentType="name"
               />
-              <FieldLabel required>Telephone du client</FieldLabel>
+              <FieldLabel required>{copy.customerPhone}</FieldLabel>
               <CourseInput
                 value={draft.destinationPhone}
                 onChangeText={(value) => setDraft((current) => ({ ...current, destinationPhone: value }))}
@@ -568,35 +741,35 @@ export default function NewCourseScreen() {
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
               />
-              <FieldLabel>Second numero du client</FieldLabel>
+              <FieldLabel>{copy.customerPhoneSecondary}</FieldLabel>
               <CourseInput
                 value={draft.destinationPhoneSecondary}
                 onChangeText={(value) => setDraft((current) => ({ ...current, destinationPhoneSecondary: value }))}
-                placeholder="+229... (optionnel)"
+                placeholder={copy.optionalPhone}
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
               />
             </Card>
           ) : (
             <Card className="mb-4" padding="md">
-              <Text className="text-base font-extrabold text-ink">Expediteur</Text>
-              <FieldLabel required>Prise en charge</FieldLabel>
+              <Text className="text-base font-extrabold text-ink">{copy.sender}</Text>
+              <FieldLabel required>{copy.pickup}</FieldLabel>
               <CourseInput
                 value={draft.originAddress}
                 onChangeText={(value) => {
                   setLocationError(null)
                   setDraft((current) => ({ ...current, originAddress: value }))
                 }}
-                placeholder="Adresse de depart"
+                placeholder={copy.departureAddress}
               />
-              <FieldLabel required>Nom du commerce</FieldLabel>
+              <FieldLabel required>{copy.businessName}</FieldLabel>
               <CourseInput
                 value={draft.originName}
                 onChangeText={(value) => setDraft((current) => ({ ...current, originName: value }))}
-                placeholder="Nom du commerce"
+                placeholder={copy.businessName}
                 textContentType="name"
               />
-              <FieldLabel required>Telephone du commerce</FieldLabel>
+              <FieldLabel required>{copy.businessPhone}</FieldLabel>
               <CourseInput
                 value={draft.originPhone}
                 onChangeText={(value) => setDraft((current) => ({ ...current, originPhone: value }))}
@@ -612,7 +785,7 @@ export default function NewCourseScreen() {
             disabled={!canContinueLocation}
             rightIcon={<Ionicons name="arrow-forward" size={20} color="#1A1614" />}
           >
-            Continuer
+            {copy.continueLabel}
           </Button>
         </View>
       ) : step === 'details' ? (
@@ -624,7 +797,7 @@ export default function NewCourseScreen() {
               accessibilityRole="button"
             >
               <Ionicons name="chevron-back" size={18} color="#1A1614" />
-              <Text className="ml-1 text-sm font-extrabold text-ink">Trajet</Text>
+              <Text className="ml-1 text-sm font-extrabold text-ink">{copy.stepTrip}</Text>
             </Pressable>
             {selectedPackage && (
               <View className="flex-row items-center rounded-full bg-airmess-yellow px-3 py-2">
@@ -635,41 +808,41 @@ export default function NewCourseScreen() {
           </View>
 
           <Card className="mb-4" padding="md">
-            <Text className="text-base font-extrabold text-ink">Details utiles</Text>
-            <FieldLabel required>Urgence</FieldLabel>
+            <Text className="text-base font-extrabold text-ink">{copy.usefulDetails}</Text>
+            <FieldLabel required>{copy.urgency}</FieldLabel>
             <View className="flex-row gap-3">
               <OptionCard
-                title="Standard"
-                subtitle="Livraison normale"
+                title={copy.standard}
+                subtitle={copy.standardSubtitle}
                 icon="time-outline"
                 selected={draft.urgency === 'standard'}
                 onPress={() => setDraft((current) => ({ ...current, urgency: 'standard' }))}
               />
               <OptionCard
-                title="Express"
-                subtitle="Prioritaire"
+                title={copy.express}
+                subtitle={copy.expressSubtitle}
                 icon="flash-outline"
                 selected={draft.urgency === 'express'}
                 onPress={() => setDraft((current) => ({ ...current, urgency: 'express' }))}
               />
             </View>
 
-            <FieldLabel>Description du colis (optionnel)</FieldLabel>
+            <FieldLabel>{copy.packageDescription}</FieldLabel>
             <TextInput
               value={draft.packageDescription}
               onChangeText={(value) => setDraft((current) => ({ ...current, packageDescription: value }))}
               className="min-h-20 rounded-2xl border border-warm-200 bg-white px-4 py-3 text-sm font-semibold text-ink"
-              placeholder="Ex: petit paquet, repas, documents..."
+              placeholder={copy.packageDescriptionPlaceholder}
               placeholderTextColor="#A89F95"
               multiline
               textAlignVertical="top"
             />
 
-            <FieldLabel>Second numero a joindre (marchand)</FieldLabel>
+            <FieldLabel>{copy.merchantPhoneSecondary}</FieldLabel>
             <CourseInput
               value={draft.originPhoneSecondary}
               onChangeText={(value) => setDraft((current) => ({ ...current, originPhoneSecondary: value }))}
-              placeholder="+229... (optionnel)"
+              placeholder={copy.optionalPhone}
               keyboardType="phone-pad"
               textContentType="telephoneNumber"
             />
@@ -681,35 +854,35 @@ export default function NewCourseScreen() {
                 <Ionicons name="options-outline" size={20} color="#1A1614" />
               </View>
               <View className="flex-1">
-                <Text className="text-base font-extrabold text-ink">Options avancees</Text>
+                <Text className="text-base font-extrabold text-ink">{copy.advancedOptions}</Text>
                 <Text className="mt-0.5 text-xs font-semibold text-warm-500">
-                  Valeur et paiement de la livraison
+                  {copy.advancedOptionsSubtitle}
                 </Text>
               </View>
             </View>
 
             <View className="mt-3 border-t border-warm-200 pt-1">
-                <FieldLabel>Frais de livraison payes par</FieldLabel>
+                <FieldLabel>{copy.paidBy}</FieldLabel>
                 <View className="gap-2">
                   <PaymentOption
-                    title="Le commerce"
-                    subtitle="Debite du wallet AirMess"
+                    title={copy.paidByMerchant}
+                    subtitle={copy.paidByMerchantSubtitle}
                     selected={draft.deliveryFeePaidBy === 'sender'}
                     onPress={() => setDraft((current) => ({ ...current, deliveryFeePaidBy: 'sender' }))}
                   />
                   <PaymentOption
-                    title="Le destinataire"
-                    subtitle="Le client paie a la livraison"
+                    title={copy.paidByRecipient}
+                    subtitle={copy.paidByRecipientSubtitle}
                     selected={draft.deliveryFeePaidBy === 'recipient'}
                     onPress={() => setDraft((current) => ({ ...current, deliveryFeePaidBy: 'recipient' }))}
                   />
                 </View>
 
-                <FieldLabel>Valeur declaree du colis (optionnel)</FieldLabel>
+                <FieldLabel>{copy.declaredValue}</FieldLabel>
                 <CourseInput
                   value={draft.packageDeclaredValue}
                   onChangeText={(value) => setDraft((current) => ({ ...current, packageDeclaredValue: value }))}
-                  placeholder="Montant en FCFA"
+                  placeholder={copy.declaredValuePlaceholder}
                   keyboardType="numeric"
                 />
             </View>
@@ -720,7 +893,7 @@ export default function NewCourseScreen() {
             disabled={!canContinueDetails}
             rightIcon={<Ionicons name="arrow-forward" size={20} color="#1A1614" />}
           >
-            Creer une course
+            {copy.createCourse}
           </Button>
         </View>
       ) : (
@@ -732,7 +905,7 @@ export default function NewCourseScreen() {
               accessibilityRole="button"
             >
               <Ionicons name="chevron-back" size={18} color="#1A1614" />
-              <Text className="ml-1 text-sm font-extrabold text-ink">Details</Text>
+              <Text className="ml-1 text-sm font-extrabold text-ink">{copy.stepDetails}</Text>
             </Pressable>
           </View>
 
@@ -742,8 +915,8 @@ export default function NewCourseScreen() {
                 <Ionicons name="receipt-outline" size={22} color="#1A1614" />
               </View>
               <View className="flex-1">
-                <Text className="text-xl font-extrabold text-ink">Synthese</Text>
-                <Text className="mt-0.5 text-sm font-semibold text-warm-500">Verifie avant de creer</Text>
+                <Text className="text-xl font-extrabold text-ink">{copy.summary}</Text>
+                <Text className="mt-0.5 text-sm font-semibold text-warm-500">{copy.verifyBeforeCreating}</Text>
               </View>
             </View>
 
@@ -751,19 +924,19 @@ export default function NewCourseScreen() {
               <View className="flex-row items-center justify-between">
                 <View className="flex-1 pr-3">
                   <Text className="text-xs font-extrabold uppercase text-airmess-yellow">
-                    Prix estime
+                    {copy.estimatedPrice}
                   </Text>
                   <Text className="mt-1 text-3xl font-extrabold text-white">
                     {estimateQuery.isFetching
-                      ? 'Calcul...'
+                      ? copy.calculating
                       : currentFee !== null
-                        ? `${currentFee.toLocaleString('fr-FR')} FCFA`
-                        : 'A calculer'}
+                        ? `${currentFee.toLocaleString(copy.locale)} FCFA`
+                        : copy.toCalculate}
                   </Text>
                   <Text className="mt-1 text-xs font-semibold text-warm-300">
                     {currentFee !== null && estimateQuery.data
-                      ? `${estimateQuery.data.distance_km.toFixed(1)} km - ${draft.urgency === 'express' ? 'Express' : 'Standard'}`
-                      : 'Selectionne les positions exactes pour voir le prix.'}
+                      ? `${estimateQuery.data.distance_km.toFixed(1)} km - ${draft.urgency === 'express' ? copy.express : copy.standard}`
+                      : copy.selectExactPositions}
                   </Text>
                 </View>
                 <View className="h-12 w-12 items-center justify-center rounded-2xl bg-airmess-yellow">
@@ -776,37 +949,37 @@ export default function NewCourseScreen() {
               </View>
             </View>
 
-            <RecapRow icon="cube-outline" label="Colis" value={selectedPackage?.title ?? '--'} />
-            <RecapRow icon="navigate-outline" label="Trajet" value={`${formatCompactPlace(draft.originQuartier, draft.originCity) || 'Depart'} vers ${draft.destinationAddress || 'Destination'}`} />
-            <RecapRow icon="person-outline" label="Client" value={`${draft.destinationName} - ${draft.destinationPhone}`} />
+            <RecapRow icon="cube-outline" label={copy.recapPackage} value={selectedPackage?.title ?? '--'} />
+            <RecapRow
+              icon="navigate-outline"
+              label={copy.recapTrip}
+              value={copy.recapTripValue(formatCompactPlace(draft.originQuartier, draft.originCity), draft.destinationAddress)}
+            />
+            <RecapRow icon="person-outline" label={copy.recapClient} value={`${draft.destinationName} - ${draft.destinationPhone}`} />
             {!!draft.destinationPhoneSecondary.trim() && (
-              <RecapRow icon="call-outline" label="Second numero client" value={draft.destinationPhoneSecondary.trim()} />
+              <RecapRow icon="call-outline" label={copy.recapClientSecondary} value={draft.destinationPhoneSecondary.trim()} />
             )}
             {!!draft.originPhoneSecondary.trim() && (
-              <RecapRow icon="call-outline" label="Second numero marchand" value={draft.originPhoneSecondary.trim()} />
+              <RecapRow icon="call-outline" label={copy.recapMerchantSecondary} value={draft.originPhoneSecondary.trim()} />
             )}
-            <RecapRow icon="flash-outline" label="Urgence" value={draft.urgency === 'express' ? 'Express' : 'Standard'} />
+            <RecapRow icon="flash-outline" label={copy.recapUrgency} value={draft.urgency === 'express' ? copy.express : copy.standard} />
             {!!draft.packageDescription.trim() && (
-              <RecapRow icon="document-text-outline" label="Details" value={draft.packageDescription.trim()} />
+              <RecapRow icon="document-text-outline" label={copy.recapDetails} value={draft.packageDescription.trim()} />
             )}
             <RecapRow
               icon={draft.deliveryFeePaidBy === 'recipient' ? 'cash-outline' : 'wallet-outline'}
-              label="Paiement"
-              value={
-                draft.deliveryFeePaidBy === 'recipient'
-                  ? 'Le client paie les frais a la livraison'
-                  : 'Le commerce paie via son wallet'
-              }
+              label={copy.recapPayment}
+              value={draft.deliveryFeePaidBy === 'recipient' ? copy.recapPaymentRecipient : copy.recapPaymentSender}
             />
             {!!draft.packageDeclaredValue.trim() && (
-              <RecapRow icon="shield-checkmark-outline" label="Valeur" value={`${draft.packageDeclaredValue.trim()} FCFA`} />
+              <RecapRow icon="shield-checkmark-outline" label={copy.recapValue} value={`${draft.packageDeclaredValue.trim()} FCFA`} />
             )}
 
             {(!hasOriginCoords || !hasDestinationCoords) && (
               <View className="mt-4 rounded-2xl border border-warning/30 bg-warning-bg p-3">
-                <Text className="text-sm font-bold text-ink">Position exacte manquante</Text>
+                <Text className="text-sm font-bold text-ink">{copy.missingPositionTitle}</Text>
                 <Text className="mt-1 text-xs font-semibold leading-5 text-warm-600">
-                  Selectionne {missingPositionLabel} dans les resultats de recherche pour permettre au livreur de trouver le trajet.
+                  {copy.missingPositionSubtitle(missingPositionLabel)}
                 </Text>
               </View>
             )}
@@ -822,7 +995,7 @@ export default function NewCourseScreen() {
             disabled={!canCreateCourse || createMutation.isPending}
             rightIcon={<Ionicons name="checkmark" size={20} color="#1A1614" />}
           >
-            Creer la course
+            {copy.createFinal}
           </Button>
         </View>
       )}
@@ -876,11 +1049,13 @@ function StepDot({ active, done, label }: { active: boolean; done: boolean; labe
 function PlaceSearchBox({
   target,
   placeholder,
+  copy,
   onSelect,
   onSearchChange,
 }: {
   target: LocationTarget
   placeholder: string
+  copy: NewCourseCopy
   onSelect: (place: PlaceDetails) => void
   onSearchChange?: () => void
 }) {
@@ -908,8 +1083,8 @@ function PlaceSearchBox({
   }, [query])
 
   const { data: suggestions = [], isFetching, error: searchError } = useQuery({
-    queryKey: ['places-search', debounced],
-    queryFn: () => searchPlaces(debounced, sessionIdRef.current, 'fr'),
+    queryKey: ['places-search', debounced, copy.placesLanguage],
+    queryFn: () => searchPlaces(debounced, sessionIdRef.current, copy.placesLanguage),
     enabled: debounced.length >= 2,
     staleTime: 5 * 60 * 1000,
   })
@@ -918,7 +1093,7 @@ function PlaceSearchBox({
     setLoadingDetail(true)
     setDetailError(null)
     try {
-      const place = await fetchPlaceDetails(suggestion.place_id, sessionIdRef.current, 'fr')
+      const place = await fetchPlaceDetails(suggestion.place_id, sessionIdRef.current, copy.placesLanguage)
       onSelect(place)
       setQuery(suggestion.main_text || suggestion.description)
       setDebounced('')
@@ -1108,13 +1283,4 @@ function formatCompactPlace(quartier: string, city: string) {
 function generateSessionId() {
   const rand = () => Math.floor(Math.random() * 0xffff).toString(16).padStart(4, '0')
   return `${rand()}${rand()}-${rand()}-${rand()}-${rand()}-${rand()}${rand()}${rand()}`
-}
-
-function getApiErrorMessage(error: unknown) {
-  if (isAxiosError(error)) {
-    const data = error.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
-    return data?.message ?? Object.values(data?.errors ?? {})[0]?.[0] ?? 'Recherche indisponible.'
-  }
-
-  return 'Recherche indisponible.'
 }

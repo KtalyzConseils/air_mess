@@ -8,53 +8,101 @@ import {
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
-import { AxiosError } from 'axios'
 import { Link, Redirect } from 'expo-router'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Button from '../components/ui/Button'
 import { useAuthStore } from '../stores/authStore'
+import { useLanguageStore } from '../stores/languageStore'
+import { getApiErrorMessage } from '../lib/apiError'
+
+const LOGIN_COPY = {
+  fr: {
+    tagline: 'Espace marchand',
+    welcome: 'Bienvenue',
+    subtitle: 'Connecte-toi avec ton numero de telephone.',
+    phone: 'Telephone',
+    edit: 'Modifier',
+    editLabel: 'Modifier le numero',
+    codeLabel: 'Code recu par SMS',
+    debugCode: 'Code test :',
+    sendCode: 'Envoyer le code',
+    login: 'Se connecter',
+    noAccount: 'Pas encore de compte ? ',
+    createAccount: 'Creer un compte',
+  },
+  en: {
+    tagline: 'Merchant space',
+    welcome: 'Welcome',
+    subtitle: 'Sign in with your phone number.',
+    phone: 'Phone',
+    edit: 'Edit',
+    editLabel: 'Edit phone number',
+    codeLabel: 'Code received by SMS',
+    debugCode: 'Test code:',
+    sendCode: 'Send code',
+    login: 'Log in',
+    noAccount: "Don't have an account yet? ",
+    createAccount: 'Create an account',
+  },
+} as const
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets()
+  const language = useLanguageStore((state) => state.language)
+  const copy = LOGIN_COPY[language]
   const user = useAuthStore((state) => state.user)
-  const login = useAuthStore((state) => state.login)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const sendLoginCode = useAuthStore((state) => state.sendLoginCode)
+  const verifyLoginCode = useAuthStore((state) => state.verifyLoginCode)
+  const [phone, setPhone] = useState('')
+  const [step, setStep] = useState<'phone' | 'code'>('phone')
+  const [code, setCode] = useState('')
+  const [debugCode, setDebugCode] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const canSubmit = email.trim().length > 3 && password.length >= 4
+  const trimmedPhone = phone.trim()
+  const canSendCode = trimmedPhone.length >= 8
+  const canVerifyCode = code.trim().length >= 4
 
   if (user) {
     return <Redirect href="/dashboard" />
   }
 
-  async function handleLogin() {
+  async function handleSendCode() {
+    if (!canSendCode) return
     setError(null)
+    setDebugCode(null)
     setLoading(true)
     try {
-      await login(email.trim(), password)
+      const response = await sendLoginCode(trimmedPhone)
+      setDebugCode(response.debug_code ?? null)
+      setStep('code')
     } catch (err) {
-      if (err instanceof AxiosError) {
-        if (!err.response) {
-          setError(
-            err.code === 'ECONNABORTED'
-              ? 'Le serveur met trop de temps a repondre. Reessaie.'
-              : 'Impossible de joindre le serveur. Verifie ta connexion internet.',
-          )
-        } else if (err.response.status === 401) {
-          setError('Email ou mot de passe incorrect.')
-        } else {
-          setError((err.response.data as { message?: string })?.message ?? `Erreur serveur (${err.response.status}).`)
-        }
-      } else {
-        setError((err as Error).message)
-      }
+      setError(getApiErrorMessage(err, language))
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleVerifyCode() {
+    if (!canVerifyCode) return
+    setError(null)
+    setLoading(true)
+    try {
+      await verifyLoginCode(trimmedPhone, code.trim())
+    } catch (err) {
+      setError(getApiErrorMessage(err, language))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function editPhone() {
+    setStep('phone')
+    setError(null)
+    setDebugCode(null)
+    setCode('')
   }
 
   return (
@@ -73,60 +121,63 @@ export default function LoginScreen() {
             resizeMode="contain"
           />
           <Text className="-mt-3 text-sm font-semibold uppercase tracking-widest text-warm-400">
-            Espace marchand
+            {copy.tagline}
           </Text>
         </View>
 
         <View className="mx-5 rounded-3xl bg-cream p-6 shadow-cta-dark">
-          <Text className="mb-1 text-xl font-extrabold text-ink">Bienvenue</Text>
-          <Text className="mb-5 text-sm text-warm-500">
-            Connecte-toi pour gerer tes courses.
-          </Text>
+          <Text className="mb-1 text-xl font-extrabold text-ink">{copy.welcome}</Text>
+          <Text className="mb-5 text-sm text-warm-500">{copy.subtitle}</Text>
 
           <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
-            Email
-          </Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            placeholder="marchand@example.com"
-            placeholderTextColor="#B8AF9F"
-            className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink"
-          />
-
-          <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
-            Mot de passe
+            {copy.phone}
           </Text>
           <View className="relative mb-4">
             <TextInput
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoComplete="password"
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="password"
-              placeholder="********"
+              value={phone}
+              onChangeText={setPhone}
+              editable={step === 'phone'}
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              placeholder="+229..."
               placeholderTextColor="#B8AF9F"
-              className="h-14 rounded-2xl border-2 border-warm-200 bg-off-white pl-4 pr-14 text-base text-ink"
+              className="h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink"
+              style={step === 'code' ? { opacity: 0.5 } : undefined}
             />
-            <Pressable
-              onPress={() => setShowPassword((value) => !value)}
-              className="absolute right-3 top-0 h-14 w-11 items-center justify-center"
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color="#8A7E68"
-              />
-            </Pressable>
+            {step === 'code' && (
+              <Pressable
+                onPress={editPhone}
+                className="absolute right-3 top-0 h-14 items-center justify-center"
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={copy.editLabel}
+              >
+                <Text className="text-xs font-extrabold text-airmess-red">{copy.edit}</Text>
+              </Pressable>
+            )}
           </View>
+
+          {step === 'code' && (
+            <>
+              {debugCode && (
+                <Text className="mb-3 rounded-2xl bg-airmess-yellow/20 px-3 py-2 text-center text-sm font-extrabold text-ink">
+                  {copy.debugCode} {debugCode}
+                </Text>
+              )}
+              <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
+                {copy.codeLabel}
+              </Text>
+              <TextInput
+                value={code}
+                onChangeText={setCode}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                placeholder="123456"
+                placeholderTextColor="#B8AF9F"
+                className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink"
+              />
+            </>
+          )}
 
           {error ? (
             <View className="mb-4 flex-row items-start rounded-2xl border-2 border-airmess-red/30 bg-danger-bg p-3">
@@ -137,22 +188,35 @@ export default function LoginScreen() {
             </View>
           ) : null}
 
-          <Button
-            variant="primary"
-            size="lg"
-            onPress={handleLogin}
-            loading={loading}
-            disabled={!canSubmit}
-            rightIcon={<Ionicons name="arrow-forward" size={18} color="#1A1614" />}
-          >
-            Se connecter
-          </Button>
+          {step === 'phone' ? (
+            <Button
+              variant="primary"
+              size="lg"
+              onPress={handleSendCode}
+              loading={loading}
+              disabled={!canSendCode}
+              rightIcon={<Ionicons name="send" size={18} color="#1A1614" />}
+            >
+              {copy.sendCode}
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="lg"
+              onPress={handleVerifyCode}
+              loading={loading}
+              disabled={!canVerifyCode}
+              rightIcon={<Ionicons name="checkmark" size={18} color="#1A1614" />}
+            >
+              {copy.login}
+            </Button>
+          )}
 
           <View className="mt-5 flex-row justify-center">
-            <Text className="text-sm font-semibold text-warm-500">Pas encore de compte ? </Text>
+            <Text className="text-sm font-semibold text-warm-500">{copy.noAccount}</Text>
             <Link href="/register" asChild>
               <Pressable accessibilityRole="button">
-                <Text className="text-sm font-extrabold text-airmess-red">Créer un compte</Text>
+                <Text className="text-sm font-extrabold text-airmess-red">{copy.createAccount}</Text>
               </Pressable>
             </Link>
           </View>

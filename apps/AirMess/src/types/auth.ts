@@ -10,6 +10,7 @@ export interface User {
   email_verified_at: string | null
   phone_verified_at: string | null
   last_login_at: string | null
+  password_set_at: string | null
   marchant?: Marchant
   individual?: Individual
   driver?: Driver

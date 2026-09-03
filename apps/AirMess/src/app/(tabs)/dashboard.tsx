@@ -9,6 +9,58 @@ import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { fetchCourses, type Course } from '../../api/courses'
 import { fetchUnreadCount } from '../../api/notifications'
+import { useLanguageStore } from '../../stores/languageStore'
+
+const DASHBOARD_COPY = {
+  fr: {
+    loadError: 'Impossible de charger tes donnees.',
+    newCourse: 'Creer une nouvelle course',
+    whatAreWeDelivering: 'Nous livrons quoi ?',
+    yourPosition: 'Votre position',
+    locationDenied: 'Localisation refusee',
+    positionDetected: 'Position detectee',
+    positionUnavailable: 'Position indisponible',
+    openNotifications: 'Ouvrir les notifications',
+    detectPosition: 'Detecter votre position',
+    detecting: 'Detection...',
+    todayCourses: 'Courses du jour',
+    activeCourse: (count: number) => `${count} course${count > 1 ? 's' : ''} encore active${count > 1 ? 's' : ''}`,
+    latestCourses: 'Dernieres courses',
+    seeAll: 'Voir tout',
+    noCourses: 'Aucune course pour le moment',
+    noCoursesSubtitle: 'Cree ta premiere livraison avec le bouton jaune.',
+    toDestination: 'vers',
+    someStats: 'Quelques stats',
+    active: 'En cours',
+    deliveredMonth: 'Livrees ce mois',
+    awaiting: 'En attribution',
+    revenueMonth: 'CA livre',
+  },
+  en: {
+    loadError: 'Unable to load your data.',
+    newCourse: 'Create a new delivery',
+    whatAreWeDelivering: "What are we delivering?",
+    yourPosition: 'Your location',
+    locationDenied: 'Location denied',
+    positionDetected: 'Location detected',
+    positionUnavailable: 'Location unavailable',
+    openNotifications: 'Open notifications',
+    detectPosition: 'Detect your location',
+    detecting: 'Detecting...',
+    todayCourses: "Today's deliveries",
+    activeCourse: (count: number) => `${count} ${count > 1 ? 'deliveries' : 'delivery'} still active`,
+    latestCourses: 'Latest deliveries',
+    seeAll: 'See all',
+    noCourses: 'No deliveries yet',
+    noCoursesSubtitle: 'Create your first delivery with the yellow button.',
+    toDestination: 'to',
+    someStats: 'Some stats',
+    active: 'Active',
+    deliveredMonth: 'Delivered this month',
+    awaiting: 'Awaiting assignment',
+    revenueMonth: 'Revenue delivered',
+  },
+} as const
 
 const ACTIVE_STATUSES = [
   'awaiting_assignment',
@@ -22,6 +74,8 @@ const ACTIVE_STATUSES = [
 const EMPTY_COURSES: Course[] = []
 
 export default function DashboardScreen() {
+  const language = useLanguageStore((state) => state.language)
+  const copy = DASHBOARD_COPY[language]
   const coursesQuery = useQuery({
     queryKey: ['courses', { per_page: 50 }],
     queryFn: () => fetchCourses({ per_page: 50 }),
@@ -42,7 +96,7 @@ export default function DashboardScreen() {
           </Card>
         ) : coursesQuery.isError ? (
           <Card variant="danger" className="mb-4">
-            <Text className="font-bold text-airmess-red">Impossible de charger tes donnees.</Text>
+            <Text className="font-bold text-airmess-red">{copy.loadError}</Text>
           </Card>
         ) : (
           <>
@@ -59,13 +113,13 @@ export default function DashboardScreen() {
         <Pressable
           className="absolute bottom-[76px] left-8 right-8 h-16 flex-row items-center justify-between rounded-2xl bg-airmess-yellow px-5 shadow-cta"
           accessibilityRole="button"
-          accessibilityLabel="Creer une nouvelle course"
+          accessibilityLabel={copy.newCourse}
         >
           <View className="flex-row items-center">
             <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-ink">
               <Ionicons name="cube-outline" size={20} color="#FFCC00" />
             </View>
-            <Text className="text-lg font-extrabold text-ink">Nous livrons quoi ?</Text>
+            <Text className="text-lg font-extrabold text-ink">{copy.whatAreWeDelivering}</Text>
           </View>
           <Ionicons name="arrow-forward" size={22} color="#1A1614" />
         </Pressable>
@@ -75,7 +129,9 @@ export default function DashboardScreen() {
 }
 
 function Header() {
-  const [positionLabel, setPositionLabel] = useState('Votre position')
+  const language = useLanguageStore((state) => state.language)
+  const copy = DASHBOARD_COPY[language]
+  const [positionLabel, setPositionLabel] = useState<string>(copy.yourPosition)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState(false)
   const { data: unread = 0 } = useQuery({
@@ -92,7 +148,7 @@ function Header() {
       const permission = await Location.requestForegroundPermissionsAsync()
       if (permission.status !== 'granted') {
         setLocationError(true)
-        setPositionLabel('Localisation refusee')
+        setPositionLabel(copy.locationDenied)
         return
       }
 
@@ -107,16 +163,16 @@ function Header() {
       const nextLabel =
         [first?.district || first?.subregion || first?.street, first?.city || first?.region]
           .filter(Boolean)
-          .join(', ') || 'Position detectee'
+          .join(', ') || copy.positionDetected
 
       setPositionLabel(nextLabel)
     } catch {
       setLocationError(true)
-      setPositionLabel('Position indisponible')
+      setPositionLabel(copy.positionUnavailable)
     } finally {
       setLocating(false)
     }
-  }, [])
+  }, [copy])
 
   return (
     <View className="mb-5">
@@ -133,7 +189,7 @@ function Header() {
             <Pressable
               className="relative h-12 w-12 items-center justify-center rounded-full border-2 bg-airmess-dark shadow-card"
               accessibilityRole="button"
-              accessibilityLabel="Ouvrir les notifications"
+              accessibilityLabel={copy.openNotifications}
             >
               <Ionicons name="notifications" size={24} color="#FFCC00" />
               {unread > 0 && (
@@ -164,7 +220,7 @@ function Header() {
           locationError ? 'border-airmess-red/30 bg-danger-bg' : 'border-airmess-yellow/40 bg-white',
         ].join(' ')}
         accessibilityRole="button"
-        accessibilityLabel="Detecter votre position"
+        accessibilityLabel={copy.detectPosition}
       >
         <View
           className={[
@@ -183,7 +239,7 @@ function Header() {
           )}
         </View>
         <Text className="flex-shrink text-sm font-extrabold text-ink" numberOfLines={1}>
-          {locating ? 'Detection...' : positionLabel}
+          {locating ? copy.detecting : positionLabel}
         </Text>
         <Ionicons name="chevron-forward" size={15} color="#8A7E68" style={{ marginLeft: 4 }} />
       </Pressable>
@@ -192,16 +248,18 @@ function Header() {
 }
 
 function TodayCard({ count, active }: { count: number; active: number }) {
+  const language = useLanguageStore((state) => state.language)
+  const copy = DASHBOARD_COPY[language]
   return (
     <Card variant="dark" padding="lg" className="mb-5 overflow-hidden">
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-5">
           <Text className="mb-3 text-xs font-extrabold uppercase tracking-widest text-airmess-yellow">
-            Courses du jour
+            {copy.todayCourses}
           </Text>
           <Text className="text-6xl font-extrabold leading-[68px] text-white">{count}</Text>
           <Text className="mt-2 text-base font-semibold text-warm-300">
-            {active} course{active > 1 ? 's' : ''} encore active{active > 1 ? 's' : ''}
+            {copy.activeCourse(active)}
           </Text>
         </View>
         <View className="h-16 w-16 items-center justify-center rounded-2xl bg-airmess-yellow">
@@ -213,13 +271,15 @@ function TodayCard({ count, active }: { count: number; active: number }) {
 }
 
 function LatestCourses({ courses }: { courses: Course[] }) {
+  const language = useLanguageStore((state) => state.language)
+  const copy = DASHBOARD_COPY[language]
   return (
     <View className="mb-5">
       <View className="mb-3 flex-row items-end justify-between">
-        <Text className="text-xl font-extrabold text-ink">Dernieres courses</Text>
+        <Text className="text-xl font-extrabold text-ink">{copy.latestCourses}</Text>
         <Link href="/(tabs)/courses" asChild>
           <Pressable hitSlop={8}>
-            <Text className="text-sm font-bold text-warm-600">Voir tout</Text>
+            <Text className="text-sm font-bold text-warm-600">{copy.seeAll}</Text>
           </Pressable>
         </Link>
       </View>
@@ -229,9 +289,9 @@ function LatestCourses({ courses }: { courses: Course[] }) {
           <View className="mb-3 h-12 w-12 items-center justify-center rounded-full bg-warm-100">
             <Ionicons name="receipt-outline" size={22} color="#6B6250" />
           </View>
-          <Text className="text-center text-base font-extrabold text-ink">Aucune course pour le moment</Text>
+          <Text className="text-center text-base font-extrabold text-ink">{copy.noCourses}</Text>
           <Text className="mt-1 text-center text-sm leading-5 text-warm-600">
-            Cree ta premiere livraison avec le bouton jaune.
+            {copy.noCoursesSubtitle}
           </Text>
         </Card>
       ) : (
@@ -246,6 +306,8 @@ function LatestCourses({ courses }: { courses: Course[] }) {
 }
 
 function CourseRow({ course }: { course: Course }) {
+  const language = useLanguageStore((state) => state.language)
+  const copy = DASHBOARD_COPY[language]
   return (
     <Link href={{ pathname: '/courses/[id]', params: { id: String(course.id) } }} asChild>
     <Pressable accessibilityRole="button">
@@ -261,7 +323,7 @@ function CourseRow({ course }: { course: Course }) {
             <StatusPill status={course.status} label={course.status_label} />
           </View>
           <Text className="text-base font-extrabold text-ink" numberOfLines={1}>
-            {course.origin_quartier} vers {course.destination_quartier}
+            {course.origin_quartier} {copy.toDestination} {course.destination_quartier}
           </Text>
           <Text className="mt-0.5 text-sm text-warm-600" numberOfLines={1}>
             {course.destination_name}, {course.destination_city}
@@ -275,16 +337,18 @@ function CourseRow({ course }: { course: Course }) {
 }
 
 function StatsGrid({ stats }: { stats: ReturnType<typeof getCourseStats> }) {
+  const language = useLanguageStore((state) => state.language)
+  const copy = DASHBOARD_COPY[language]
   return (
     <View>
-      <Text className="mb-3 text-xl font-extrabold text-ink">Quelques stats</Text>
+      <Text className="mb-3 text-xl font-extrabold text-ink">{copy.someStats}</Text>
       <View className="flex-row gap-3">
-        <StatTile label="En cours" value={stats.active} icon="navigate-outline" />
-        <StatTile label="Livrees ce mois" value={stats.deliveredMonth} icon="checkmark-done-outline" />
+        <StatTile label={copy.active} value={stats.active} icon="navigate-outline" />
+        <StatTile label={copy.deliveredMonth} value={stats.deliveredMonth} icon="checkmark-done-outline" />
       </View>
       <View className="mt-3 flex-row gap-3">
-        <StatTile label="En attribution" value={stats.awaiting} icon="time-outline" />
-        <StatTile label="CA livre" value={formatShortMoney(stats.revenueMonth)} icon="cash-outline" />
+        <StatTile label={copy.awaiting} value={stats.awaiting} icon="time-outline" />
+        <StatTile label={copy.revenueMonth} value={formatShortMoney(stats.revenueMonth)} icon="cash-outline" />
       </View>
     </View>
   )

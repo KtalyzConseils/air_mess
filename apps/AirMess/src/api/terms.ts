@@ -1,4 +1,5 @@
 import api from './client'
+import { WEB_BASE_URL } from '../lib/webUrl'
 
 export interface TermsStatus {
   current_version: number
@@ -7,7 +8,7 @@ export interface TermsStatus {
   needs_acceptance: boolean
 }
 
-export const MARCHANT_WEB_BASE_URL = 'https://app.airmess-logistics.com'
+export const MARCHANT_WEB_BASE_URL = WEB_BASE_URL
 export const TERMS_URL = `${MARCHANT_WEB_BASE_URL}/legal/terms`
 export const PRIVACY_URL = `${MARCHANT_WEB_BASE_URL}/legal/privacy`
 

@@ -58,4 +58,30 @@ class ProfileController extends Controller
             'user'    => $user->fresh()->load(['marchant', 'individual', 'driver', 'admin']),
         ]);
     }
+
+    /**
+     * Active l'accès au site web pour un compte créé via l'inscription rapide
+     * (mot de passe aléatoire, inconnu de l'utilisateur, jamais utilisable pour
+     * se connecter). L'utilisateur choisit ici lui-même un email + mot de passe.
+     */
+    public function setWebAccess(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'email'    => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user->update([
+            'email'           => $data['email'],
+            'password'        => $data['password'], // hashé via cast 'hashed' sur le model
+            'password_set_at' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Accès web activé.',
+            'user'    => $user->fresh()->load(['marchant', 'individual', 'driver', 'admin']),
+        ]);
+    }
 }

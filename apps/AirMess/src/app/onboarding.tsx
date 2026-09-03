@@ -7,30 +7,66 @@ import Button from '../components/ui/Button'
 import Screen from '../components/ui/Screen'
 import { PRIVACY_URL, TERMS_URL } from '../api/terms'
 import { markFirstLaunchCompleted } from '../lib/firstLaunch'
+import { useLanguageStore } from '../stores/languageStore'
 
-const SLIDES = [
-  {
-    icon: 'storefront-outline',
-    title: 'Gere tes livraisons Air Mess',
-    body: 'Cree des courses, suis les livraisons et consulte ton historique depuis ton espace marchand.',
+const ONBOARDING_COPY = {
+  fr: {
+    next: 'Suivant',
+    finish: 'Terminer',
+    continueLabel: 'Continuer',
+    terms: 'Conditions generales',
+    privacy: 'Politique de confidentialite',
+    slides: [
+      {
+        icon: 'storefront-outline' as const,
+        title: 'Gere tes livraisons Air Mess',
+        body: 'Cree des courses, suis les livraisons et consulte ton historique depuis ton espace marchand.',
+      },
+      {
+        icon: 'location-outline' as const,
+        title: 'Position utilisee avec ton accord',
+        body: "AirMess utilise ta position pour remplir le point de prise en charge et calculer le prix. L'app marchand ne suit pas ta position en arriere-plan.",
+      },
+      {
+        icon: 'shield-checkmark-outline' as const,
+        title: 'Confidentialite et conditions',
+        body: 'Tes donnees servent a creer les courses, traiter les paiements et securiser les livraisons. Lis les regles avant de continuer.',
+      },
+    ],
   },
-  {
-    icon: 'location-outline',
-    title: 'Position utilisee avec ton accord',
-    body: "AirMess utilise ta position pour remplir le point de prise en charge et calculer le prix. L'app marchand ne suit pas ta position en arriere-plan.",
+  en: {
+    next: 'Next',
+    finish: 'Finish',
+    continueLabel: 'Continue',
+    terms: 'Terms of service',
+    privacy: 'Privacy policy',
+    slides: [
+      {
+        icon: 'storefront-outline' as const,
+        title: 'Manage your Air Mess deliveries',
+        body: 'Create deliveries, track them and check your history from your merchant space.',
+      },
+      {
+        icon: 'location-outline' as const,
+        title: 'Location used with your consent',
+        body: "AirMess uses your location to fill in the pickup point and calculate the price. The merchant app doesn't track your location in the background.",
+      },
+      {
+        icon: 'shield-checkmark-outline' as const,
+        title: 'Privacy and terms',
+        body: 'Your data is used to create deliveries, process payments and secure deliveries. Read the rules before continuing.',
+      },
+    ],
   },
-  {
-    icon: 'shield-checkmark-outline',
-    title: 'Confidentialite et conditions',
-    body: 'Tes donnees servent a creer les courses, traiter les paiements et securiser les livraisons. Lis les regles avant de continuer.',
-  },
-] as const
+} as const
 
 export default function OnboardingScreen() {
   const router = useRouter()
+  const language = useLanguageStore((state) => state.language)
+  const copy = ONBOARDING_COPY[language]
   const [index, setIndex] = useState(0)
-  const slide = SLIDES[index]
-  const isLast = index === SLIDES.length - 1
+  const slide = copy.slides[index]
+  const isLast = index === copy.slides.length - 1
 
   async function continueNext() {
     if (!isLast) {
@@ -56,7 +92,7 @@ export default function OnboardingScreen() {
               onPress={() => void continueNext()}
               className="h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow"
               accessibilityRole="button"
-              accessibilityLabel={isLast ? 'Terminer' : 'Suivant'}
+              accessibilityLabel={isLast ? copy.finish : copy.next}
             >
               <Ionicons name={isLast ? 'checkmark' : 'arrow-forward'} size={21} color="#1A1614" />
             </Pressable>
@@ -76,15 +112,15 @@ export default function OnboardingScreen() {
 
           {isLast && (
             <View className="mt-6 gap-2">
-              <LegalButton title="Conditions generales" url={TERMS_URL} />
-              <LegalButton title="Politique de confidentialite" url={PRIVACY_URL} />
+              <LegalButton title={copy.terms} url={TERMS_URL} />
+              <LegalButton title={copy.privacy} url={PRIVACY_URL} />
             </View>
           )}
         </View>
 
         <View>
           <View className="mb-5 flex-row gap-2">
-            {SLIDES.map((item, dotIndex) => (
+            {copy.slides.map((item, dotIndex) => (
               <View
                 key={item.title}
                 className={[
@@ -99,7 +135,7 @@ export default function OnboardingScreen() {
             onPress={() => void continueNext()}
             rightIcon={<Ionicons name={isLast ? 'checkmark' : 'arrow-forward'} size={20} color="#1A1614" />}
           >
-            {isLast ? 'Continuer' : 'Suivant'}
+            {isLast ? copy.continueLabel : copy.next}
           </Button>
         </View>
       </View>

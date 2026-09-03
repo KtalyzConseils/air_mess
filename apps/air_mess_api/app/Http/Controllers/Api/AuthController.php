@@ -27,6 +27,10 @@ class AuthController extends Controller
     private const QUICK_REGISTER_TTL = 600;
     private const QUICK_REGISTER_MAX_ATTEMPTS = 5;
 
+    private const LOGIN_OTP_TTL = 600;
+    private const LOGIN_OTP_MAX_ATTEMPTS = 5;
+    private const LOGIN_OTP_COOLDOWN = 45;
+
     public function sendQuickRegistrationCode(
         Request $request,
         \App\Services\BrevoSmsService $sms,
@@ -241,6 +245,7 @@ class AuthController extends Controller
                 'email'                  => $data['email'],
                 'phone'                  => $data['phone'],
                 'password'               => $data['password'], // hashé via cast 'hashed'
+                'password_set_at'        => now(),
                 'type'                   => User::TYPE_MARCHANT,
                 'phone_verified_at'      => now(),
                 'email_verified_at'      => $emailVerifiedAt,
@@ -318,6 +323,7 @@ class AuthController extends Controller
                 'email'                  => $data['email'],
                 'phone'                  => $data['phone'],
                 'password'               => $data['password'],
+                'password_set_at'        => now(),
                 'type'                   => User::TYPE_INDIVIDUAL,
                 'phone_verified_at'      => now(),
                 'email_verified_at'      => $emailVerifiedAt,
@@ -430,6 +436,7 @@ class AuthController extends Controller
                     'email'                  => $data['email'],
                     'phone'                  => $data['phone'],
                     'password'               => $data['password'], // hashé via cast 'hashed' sur le model
+                    'password_set_at'        => now(),
                     'type'                   => User::TYPE_DRIVER,
                     'phone_verified_at'      => now(),
                     'accepted_terms_at'      => now(),
@@ -627,6 +634,124 @@ class AuthController extends Controller
     }
 
     /**
+     * Étape 1 du login par SMS : envoie un code OTP au numéro s'il est rattaché
+     * à un compte. Même mécanique que sendQuickRegistrationCode (cache haché,
+     * cooldown anti-spam, debug_code en mode sms_fake) mais côté login.
+     */
+    public function sendLoginCode(Request $request, \App\Services\BrevoSmsService $sms): JsonResponse
+    {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'phone' => ['required', 'string', 'max:20'],
+        ]);
+
+        $phone = $data['phone'];
+
+        if (! User::where('phone', $phone)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'phone' => ['Aucun compte associé à ce numéro.'],
+            ]);
+        }
+
+        $cooldownKey = "login-otp:cooldown:{$phone}";
+        if (Cache::has($cooldownKey)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'phone' => ['Patientez quelques secondes avant de redemander un code.'],
+            ]);
+        }
+
+        $code = (string) random_int(100000, 999999);
+        Cache::put("login-otp:code:{$phone}", [
+            'hash'     => Hash::make($code),
+            'attempts' => 0,
+        ], self::LOGIN_OTP_TTL);
+        Cache::put($cooldownKey, true, self::LOGIN_OTP_COOLDOWN);
+
+        $sms->send($phone, "AirMess : votre code de connexion est {$code}. Valable 10 minutes.");
+
+        $response = [
+            'message'    => 'Code envoyé par SMS.',
+            'expires_in' => self::LOGIN_OTP_TTL,
+        ];
+        if (config('services.brevo.sms_fake')) {
+            $response['debug_code'] = $code;
+        }
+
+        return response()->json($response);
+    }
+
+    /**
+     * Étape 2 du login par SMS : vérifie le code et connecte l'utilisateur,
+     * sans jamais lui demander de mot de passe (utile pour les comptes créés
+     * via l'inscription rapide, qui n'en connaissent pas).
+     */
+    public function verifyLoginCode(Request $request): JsonResponse
+    {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'phone' => ['required', 'string', 'max:20'],
+            'code'  => ['required', 'string'],
+        ]);
+
+        $phone = $data['phone'];
+        $key = "login-otp:code:{$phone}";
+        $entry = Cache::get($key);
+        if (! $entry) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'code' => ['Code expiré ou inexistant. Demandez un nouveau code.'],
+            ]);
+        }
+
+        if (($entry['attempts'] ?? 0) >= self::LOGIN_OTP_MAX_ATTEMPTS) {
+            Cache::forget($key);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'code' => ['Trop de tentatives. Demandez un nouveau code.'],
+            ]);
+        }
+
+        if (! Hash::check($data['code'], $entry['hash'])) {
+            $entry['attempts'] = ((int) ($entry['attempts'] ?? 0)) + 1;
+            Cache::put($key, $entry, self::LOGIN_OTP_TTL);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'code' => ['Code incorrect.'],
+            ]);
+        }
+
+        Cache::forget($key);
+        Cache::forget("login-otp:cooldown:{$phone}");
+
+        $user = User::where('phone', $phone)->first();
+        if (! $user) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'phone' => ['Aucun compte associé à ce numéro.'],
+            ]);
+        }
+
+        if (! $user->is_active) {
+            return response()->json([
+                'message' => 'Ce compte est désactivé. Contactez le support.',
+            ], 403);
+        }
+
+        $user->update(['last_login_at' => now()]);
+
+        $token = $user->createToken($user->type . '-' . $user->id)->plainTextToken;
+
+        return response()->json([
+            'user'  => $user->load($user->type),
+            'token' => $token,
+            'terms' => [
+                'current_version'  => User::TERMS_VERSION,
+                'accepted_version' => $user->accepted_terms_version,
+                'accepted_at'      => $user->accepted_terms_at?->toIso8601String(),
+                'needs_acceptance' => $user->needsToAcceptTerms(),
+            ],
+        ]);
+    }
+
+    /**
      * Logout du token courant uniquement.
      */
     public function logout(Request $request): JsonResponse
@@ -715,7 +840,7 @@ class AuthController extends Controller
         $status = \Illuminate\Support\Facades\Password::reset(
             $data,
             function ($user, $password) {
-                $user->update(['password' => bcrypt($password)]);
+                $user->update(['password' => bcrypt($password), 'password_set_at' => now()]);
                 // Invalide tous les tokens Sanctum existants (sécurité : déconnecte tous les appareils)
                 $user->tokens()->delete();
             },

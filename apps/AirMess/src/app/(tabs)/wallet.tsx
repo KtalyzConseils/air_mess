@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { ActivityIndicator, Alert, Linking, Modal, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { KeyboardAvoidingView, KeyboardProvider } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { isAxiosError } from 'axios'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { getPaymentCallbackUrl } from '../../lib/payment'
+import { useLanguageStore, type AppLanguage } from '../../stores/languageStore'
+import { getApiErrorMessage } from '../../lib/apiError'
 import {
   cancelWithdraw,
   fetchWallet,
@@ -39,9 +40,140 @@ const EMPTY_WALLET: WalletState = {
   },
 }
 
+const WALLET_COPY = {
+  fr: {
+    locale: 'fr-FR',
+    brand: 'AirMess Pay',
+    title: 'Wallet',
+    lowBalance: 'Solde faible',
+    lowBalanceSubtitle: (amount: string) => `Recharge recommandee : ${amount}.`,
+    availableBalance: 'Solde disponible',
+    totalBalance: (total: string, reserved: string) => `Solde total ${total} - Reserve ${reserved}`,
+    topUp: 'Recharger',
+    withdraw: 'Retirer',
+    pendingWithdraw: 'Retrait en attente',
+    pendingWithdrawSubtitle: (amount: string, method: string, account: string) => `${amount} vers ${method} - ${account}`,
+    createdOn: 'Cree le',
+    cancelling: 'Annulation...',
+    cancel: 'Annuler',
+    deposited: 'Depose',
+    spent: 'Depense',
+    recentTransactions: 'Transactions recentes',
+    noMovement: 'Aucun mouvement',
+    noMovementSubtitle: 'Tes recharges et paiements de courses apparaitront ici.',
+    topUpAlertTitle: 'Recharge impossible',
+    withdrawAlertTitle: 'Retrait impossible',
+    withdrawAlertBody: 'Verifie les informations puis reessaie.',
+    withdrawSentTitle: 'Retrait envoye',
+    withdrawSentBody: 'Ton retrait est en cours de traitement.',
+    cancelAlertTitle: 'Annulation impossible',
+    cancelAlertBody: 'Reessaie dans un instant.',
+    invalidAmountTitle: 'Montant invalide',
+    minAmountBody: 'Le montant minimum est 500 FCFA.',
+    minWithdrawBody: (amount: string) => `Le montant minimum est ${amount}.`,
+    insufficientBalanceTitle: 'Solde insuffisant',
+    insufficientBalanceBody: (amount: string) => `Solde disponible : ${amount}.`,
+    accountRequiredTitle: 'Compte requis',
+    accountRequiredBody: 'Renseigne le numero mobile money ou le compte bancaire.',
+    confirmCancelTitle: 'Annuler le retrait ?',
+    confirmCancelBody: 'Cette demande de retrait sera annulee.',
+    no: 'Non',
+    topUpTitle: 'Recharger le wallet',
+    topUpSubtitle: 'Choisis un montant puis continue vers le paiement securise.',
+    customAmount: 'Montant personnalise',
+    paying: 'Paiement...',
+    pay: 'Payer',
+    withdrawTitle: 'Retirer du wallet',
+    withdrawSubtitle: 'Le retrait est envoye au service de paiement. Selon la configuration, il peut etre traite automatiquement.',
+    amountMin: (min: string) => `Montant - min ${min}`,
+    method: 'Methode',
+    mobileMoney: 'Mobile Money',
+    mobileMoneyNumber: 'Numero mobile money',
+    availableBalanceLine: (amount: string) => `Solde disponible : ${amount}`,
+    sending: 'Envoi...',
+    send: 'Envoyer',
+    transactionLabels: {
+      deposit: 'Recharge',
+      course_charge: 'Paiement course',
+      refund: 'Remboursement',
+      adjustment_credit: 'Ajustement credit',
+      adjustment_debit: 'Ajustement debit',
+      withdraw: 'Retrait',
+      collection_credit: 'Encaissement',
+      adjustment_incident: 'Incident',
+    } as Record<WalletTransaction['type'], string>,
+  },
+  en: {
+    locale: 'en-US',
+    brand: 'AirMess Pay',
+    title: 'Wallet',
+    lowBalance: 'Low balance',
+    lowBalanceSubtitle: (amount: string) => `Recommended top-up: ${amount}.`,
+    availableBalance: 'Available balance',
+    totalBalance: (total: string, reserved: string) => `Total balance ${total} - Reserved ${reserved}`,
+    topUp: 'Top up',
+    withdraw: 'Withdraw',
+    pendingWithdraw: 'Withdrawal pending',
+    pendingWithdrawSubtitle: (amount: string, method: string, account: string) => `${amount} to ${method} - ${account}`,
+    createdOn: 'Created on',
+    cancelling: 'Cancelling...',
+    cancel: 'Cancel',
+    deposited: 'Deposited',
+    spent: 'Spent',
+    recentTransactions: 'Recent transactions',
+    noMovement: 'No activity yet',
+    noMovementSubtitle: 'Your top-ups and delivery payments will appear here.',
+    topUpAlertTitle: 'Top-up failed',
+    withdrawAlertTitle: 'Withdrawal failed',
+    withdrawAlertBody: 'Check the details and try again.',
+    withdrawSentTitle: 'Withdrawal sent',
+    withdrawSentBody: 'Your withdrawal is being processed.',
+    cancelAlertTitle: 'Cancellation failed',
+    cancelAlertBody: 'Try again in a moment.',
+    invalidAmountTitle: 'Invalid amount',
+    minAmountBody: 'The minimum amount is 500 FCFA.',
+    minWithdrawBody: (amount: string) => `The minimum amount is ${amount}.`,
+    insufficientBalanceTitle: 'Insufficient balance',
+    insufficientBalanceBody: (amount: string) => `Available balance: ${amount}.`,
+    accountRequiredTitle: 'Account required',
+    accountRequiredBody: 'Enter the mobile money number or bank account.',
+    confirmCancelTitle: 'Cancel this withdrawal?',
+    confirmCancelBody: 'This withdrawal request will be cancelled.',
+    no: 'No',
+    topUpTitle: 'Top up your wallet',
+    topUpSubtitle: 'Choose an amount then continue to the secure payment.',
+    customAmount: 'Custom amount',
+    paying: 'Processing...',
+    pay: 'Pay',
+    withdrawTitle: 'Withdraw from wallet',
+    withdrawSubtitle: 'The withdrawal is sent to the payment service. Depending on the setup, it may be processed automatically.',
+    amountMin: (min: string) => `Amount - min ${min}`,
+    method: 'Method',
+    mobileMoney: 'Mobile Money',
+    mobileMoneyNumber: 'Mobile money number',
+    availableBalanceLine: (amount: string) => `Available balance: ${amount}`,
+    sending: 'Sending...',
+    send: 'Send',
+    transactionLabels: {
+      deposit: 'Top-up',
+      course_charge: 'Delivery payment',
+      refund: 'Refund',
+      adjustment_credit: 'Credit adjustment',
+      adjustment_debit: 'Debit adjustment',
+      withdraw: 'Withdrawal',
+      collection_credit: 'Collection',
+      adjustment_incident: 'Incident',
+    } as Record<WalletTransaction['type'], string>,
+  },
+} as const
+
+type WalletCopy = (typeof WALLET_COPY)[AppLanguage]
+
 export default function WalletScreen() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const language = useLanguageStore((state) => state.language)
+  const copy = WALLET_COPY[language]
   const [topUpOpen, setTopUpOpen] = useState(false)
   const [topUpAmount, setTopUpAmount] = useState('5000')
   const [withdrawOpen, setWithdrawOpen] = useState(false)
@@ -69,7 +201,7 @@ export default function WalletScreen() {
       })
     },
     onError: (error) => {
-      Alert.alert('Recharge impossible', getApiErrorMessage(error))
+      Alert.alert(copy.topUpAlertTitle, getApiErrorMessage(error, language))
     },
   })
 
@@ -85,10 +217,10 @@ export default function WalletScreen() {
       setWithdrawAmount('')
       setWithdrawAccount('')
       await queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] })
-      Alert.alert('Retrait envoye', result.message ?? 'Ton retrait est en cours de traitement.')
+      Alert.alert(copy.withdrawSentTitle, result.message ?? copy.withdrawSentBody)
     },
     onError: () => {
-      Alert.alert('Retrait impossible', 'Verifie les informations puis reessaie.')
+      Alert.alert(copy.withdrawAlertTitle, copy.withdrawAlertBody)
     },
   })
 
@@ -98,14 +230,14 @@ export default function WalletScreen() {
       await queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] })
     },
     onError: () => {
-      Alert.alert('Annulation impossible', 'Reessaie dans un instant.')
+      Alert.alert(copy.cancelAlertTitle, copy.cancelAlertBody)
     },
   })
 
   function submitTopUp() {
     const amount = Number.parseInt(topUpAmount, 10)
     if (!amount || amount < 500) {
-      Alert.alert('Montant invalide', 'Le montant minimum est 500 FCFA.')
+      Alert.alert(copy.invalidAmountTitle, copy.minAmountBody)
       return
     }
     topUpMutation.mutate(amount)
@@ -115,15 +247,15 @@ export default function WalletScreen() {
     if (!data) return
     const amount = Number.parseInt(withdrawAmount, 10)
     if (!amount || amount < data.min_withdraw_fcfa) {
-      Alert.alert('Montant invalide', `Le montant minimum est ${formatMoney(data.min_withdraw_fcfa)}.`)
+      Alert.alert(copy.invalidAmountTitle, copy.minWithdrawBody(formatMoney(data.min_withdraw_fcfa, copy.locale)))
       return
     }
     if (amount > data.available) {
-      Alert.alert('Solde insuffisant', `Solde disponible : ${formatMoney(data.available)}.`)
+      Alert.alert(copy.insufficientBalanceTitle, copy.insufficientBalanceBody(formatMoney(data.available, copy.locale)))
       return
     }
     if (!withdrawAccount.trim()) {
-      Alert.alert('Compte requis', 'Renseigne le numero mobile money ou le compte bancaire.')
+      Alert.alert(copy.accountRequiredTitle, copy.accountRequiredBody)
       return
     }
     withdrawMutation.mutate()
@@ -134,9 +266,9 @@ export default function WalletScreen() {
       <View className="mb-5 flex-row items-center justify-between">
         <View>
           <Text className="text-xs font-extrabold uppercase tracking-widest text-airmess-red">
-            AirMess Pay
+            {copy.brand}
           </Text>
-          <Text className="mt-1 text-3xl font-extrabold text-ink">Wallet</Text>
+          <Text className="mt-1 text-3xl font-extrabold text-ink">{copy.title}</Text>
         </View>
         <View className="h-12 w-12 items-center justify-center rounded-full bg-off-white border border-warm-200">
           <Ionicons name="wallet-outline" size={23} color="#1A1614" />
@@ -153,9 +285,9 @@ export default function WalletScreen() {
             <Card variant="warning" className="mb-4 flex-row items-start">
               <Ionicons name="warning-outline" size={22} color="#F59E0B" />
               <View className="ml-3 flex-1">
-                <Text className="font-extrabold text-ink">Solde faible</Text>
+                <Text className="font-extrabold text-ink">{copy.lowBalance}</Text>
                 <Text className="mt-1 text-sm leading-5 text-warm-600">
-                  Recharge recommandee : {formatMoney(data.min_recommended_fcfa)}.
+                  {copy.lowBalanceSubtitle(formatMoney(data.min_recommended_fcfa, copy.locale))}
                 </Text>
               </View>
             </Card>
@@ -164,15 +296,15 @@ export default function WalletScreen() {
           <Card variant="dark" padding="lg" className="mb-4">
             <View className="flex-row items-center justify-between">
               <Text className="text-xs font-extrabold uppercase tracking-widest text-warm-400">
-                Solde disponible
+                {copy.availableBalance}
               </Text>
               <Ionicons name="card-outline" size={22} color="#FFCC00" />
             </View>
             <Text className="mt-4 text-5xl font-extrabold text-white" numberOfLines={1}>
-              {formatMoney(data?.available)}
+              {formatMoney(data?.available, copy.locale)}
             </Text>
             <Text className="mt-2 text-sm font-semibold text-warm-300">
-              Solde total {formatMoney(data?.balance)} - Reserve {formatMoney(data?.pending_reserved)}
+              {copy.totalBalance(formatMoney(data?.balance, copy.locale), formatMoney(data?.pending_reserved, copy.locale))}
             </Text>
 
             <View className="mt-5 flex-row gap-3 border-t border-warm-600/40 pt-5">
@@ -182,7 +314,7 @@ export default function WalletScreen() {
                 accessibilityRole="button"
               >
                 <Ionicons name="add-circle-outline" size={18} color="#1A1614" />
-                <Text className="ml-2 text-base font-extrabold text-ink">Recharger</Text>
+                <Text className="ml-2 text-base font-extrabold text-ink">{copy.topUp}</Text>
               </Pressable>
               <Pressable
                 onPress={() => setWithdrawOpen(true)}
@@ -194,7 +326,7 @@ export default function WalletScreen() {
                 accessibilityRole="button"
               >
                 <Ionicons name="arrow-up-circle-outline" size={18} color="#1A1614" />
-                <Text className="ml-2 text-base font-extrabold text-ink">Retirer</Text>
+                <Text className="ml-2 text-base font-extrabold text-ink">{copy.withdraw}</Text>
               </Pressable>
             </View>
           </Card>
@@ -206,11 +338,12 @@ export default function WalletScreen() {
               account={data.pending_withdraw_request.target_account}
               createdAt={data.pending_withdraw_request.created_at}
               cancelling={cancelWithdrawMutation.isPending}
+              copy={copy}
               onCancel={() =>
-                Alert.alert('Annuler le retrait ?', 'Cette demande de retrait sera annulee.', [
-                  { text: 'Non', style: 'cancel' },
+                Alert.alert(copy.confirmCancelTitle, copy.confirmCancelBody, [
+                  { text: copy.no, style: 'cancel' },
                   {
-                    text: 'Annuler',
+                    text: copy.cancel,
                     style: 'destructive',
                     onPress: () => cancelWithdrawMutation.mutate(data.pending_withdraw_request!.id),
                   },
@@ -220,26 +353,26 @@ export default function WalletScreen() {
           ) : null}
 
           <View className="mb-4 flex-row gap-3">
-            <MiniBalance label="Depose" value={data?.total_deposited ?? 0} icon="arrow-down-circle" />
-            <MiniBalance label="Depense" value={data?.total_spent ?? 0} icon="arrow-up-circle" />
+            <MiniBalance label={copy.deposited} value={data?.total_deposited ?? 0} icon="arrow-down-circle" locale={copy.locale} />
+            <MiniBalance label={copy.spent} value={data?.total_spent ?? 0} icon="arrow-up-circle" locale={copy.locale} />
           </View>
 
-          <Text className="mb-3 text-xl font-extrabold text-ink">Transactions recentes</Text>
+          <Text className="mb-3 text-xl font-extrabold text-ink">{copy.recentTransactions}</Text>
           {(data?.recent_transactions ?? []).length === 0 ? (
             <Card className="items-center py-8">
               <View className="mb-3 h-12 w-12 items-center justify-center rounded-full bg-warm-100">
                 <Ionicons name="receipt-outline" size={22} color="#6B6250" />
               </View>
-              <Text className="text-center text-base font-extrabold text-ink">Aucun mouvement</Text>
+              <Text className="text-center text-base font-extrabold text-ink">{copy.noMovement}</Text>
               <Text className="mt-1 text-center text-sm text-warm-600">
-                Tes recharges et paiements de courses apparaitront ici.
+                {copy.noMovementSubtitle}
               </Text>
             </Card>
           ) : (
             <Card padding="none">
               {(data?.recent_transactions ?? []).slice(0, 6).map((transaction, index, items) => (
                 <View key={transaction.id}>
-                  <TransactionRow transaction={transaction} />
+                  <TransactionRow transaction={transaction} copy={copy} />
                   {index < items.length - 1 ? <View className="ml-16 h-px bg-warm-200" /> : null}
                 </View>
               ))}
@@ -254,6 +387,7 @@ export default function WalletScreen() {
             open={topUpOpen}
             amount={topUpAmount}
             loading={topUpMutation.isPending}
+            copy={copy}
             onAmountChange={setTopUpAmount}
             onClose={() => setTopUpOpen(false)}
             onSubmit={submitTopUp}
@@ -266,6 +400,7 @@ export default function WalletScreen() {
             available={data.available}
             minWithdraw={data.min_withdraw_fcfa}
             loading={withdrawMutation.isPending}
+            copy={copy}
             onAmountChange={setWithdrawAmount}
             onMethodChange={setWithdrawMethod}
             onAccountChange={setWithdrawAccount}
@@ -284,6 +419,7 @@ function PendingWithdrawCard({
   account,
   createdAt,
   cancelling,
+  copy,
   onCancel,
 }: {
   amount: number
@@ -291,6 +427,7 @@ function PendingWithdrawCard({
   account: string
   createdAt: string
   cancelling: boolean
+  copy: WalletCopy
   onCancel: () => void
 }) {
   return (
@@ -300,12 +437,12 @@ function PendingWithdrawCard({
           <Ionicons name="time-outline" size={21} color="#0284C7" />
         </View>
         <View className="ml-3 flex-1">
-          <Text className="text-base font-extrabold text-ink">Retrait en attente</Text>
+          <Text className="text-base font-extrabold text-ink">{copy.pendingWithdraw}</Text>
           <Text className="mt-1 text-sm font-semibold text-warm-600">
-            {formatMoney(amount)} vers {method.toUpperCase()} - {account}
+            {copy.pendingWithdrawSubtitle(formatMoney(amount, copy.locale), method.toUpperCase(), account)}
           </Text>
           <Text className="mt-1 text-xs font-semibold text-warm-500">
-            Cree le {formatDateTime(createdAt)}
+            {copy.createdOn} {formatDateTime(createdAt, copy.locale)}
           </Text>
           <Pressable
             onPress={onCancel}
@@ -314,7 +451,7 @@ function PendingWithdrawCard({
             accessibilityRole="button"
           >
             <Text className="text-sm font-extrabold text-airmess-red">
-              {cancelling ? 'Annulation...' : 'Annuler'}
+              {cancelling ? copy.cancelling : copy.cancel}
             </Text>
           </Pressable>
         </View>
@@ -327,6 +464,7 @@ function TopUpModal({
   open,
   amount,
   loading,
+  copy,
   onAmountChange,
   onClose,
   onSubmit,
@@ -334,6 +472,7 @@ function TopUpModal({
   open: boolean
   amount: string
   loading: boolean
+  copy: WalletCopy
   onAmountChange: (value: string) => void
   onClose: () => void
   onSubmit: () => void
@@ -344,9 +483,9 @@ function TopUpModal({
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
             <Card padding="lg" className="bg-cream">
-          <Text className="text-2xl font-extrabold text-ink">Recharger le wallet</Text>
+          <Text className="text-2xl font-extrabold text-ink">{copy.topUpTitle}</Text>
           <Text className="mt-1 text-sm leading-5 text-warm-600">
-            Choisis un montant puis continue vers le paiement securise.
+            {copy.topUpSubtitle}
           </Text>
 
           <View className="mt-5 flex-row flex-wrap gap-2">
@@ -360,13 +499,13 @@ function TopUpModal({
                 ].join(' ')}
                 accessibilityRole="button"
               >
-                <Text className="text-sm font-extrabold text-ink">{formatMoney(item)}</Text>
+                <Text className="text-sm font-extrabold text-ink">{formatMoney(item, copy.locale)}</Text>
               </Pressable>
             ))}
           </View>
 
           <Text className="mb-1.5 mt-5 text-xs font-extrabold uppercase tracking-widest text-warm-500">
-            Montant personnalise
+            {copy.customAmount}
           </Text>
           <TextInput
             value={amount}
@@ -378,7 +517,8 @@ function TopUpModal({
           />
 
           <ModalActions
-            primaryLabel={loading ? 'Paiement...' : 'Payer'}
+            primaryLabel={loading ? copy.paying : copy.pay}
+            cancelLabel={copy.cancel}
             disabled={loading}
             onCancel={onClose}
             onSubmit={onSubmit}
@@ -399,6 +539,7 @@ function WithdrawModal({
   available,
   minWithdraw,
   loading,
+  copy,
   onAmountChange,
   onMethodChange,
   onAccountChange,
@@ -412,6 +553,7 @@ function WithdrawModal({
   available: number
   minWithdraw: number
   loading: boolean
+  copy: WalletCopy
   onAmountChange: (value: string) => void
   onMethodChange: (value: WithdrawMethod) => void
   onAccountChange: (value: string) => void
@@ -424,13 +566,13 @@ function WithdrawModal({
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
             <Card padding="lg" className="bg-cream">
-          <Text className="text-2xl font-extrabold text-ink">Retirer du wallet</Text>
+          <Text className="text-2xl font-extrabold text-ink">{copy.withdrawTitle}</Text>
           <Text className="mt-1 text-sm leading-5 text-warm-600">
-            Le retrait est envoye au service de paiement. Selon la configuration, il peut etre traite automatiquement.
+            {copy.withdrawSubtitle}
           </Text>
 
           <Text className="mb-1.5 mt-5 text-xs font-extrabold uppercase tracking-widest text-warm-500">
-            Montant - min {formatMoney(minWithdraw)}
+            {copy.amountMin(formatMoney(minWithdraw, copy.locale))}
           </Text>
           <TextInput
             value={amount}
@@ -442,14 +584,14 @@ function WithdrawModal({
           />
 
           <Text className="mb-2 mt-4 text-xs font-extrabold uppercase tracking-widest text-warm-500">
-            Methode
+            {copy.method}
           </Text>
           <View className="flex-row gap-2">
-            <MethodChip label="Mobile Money" active={method === 'momo'} onPress={() => onMethodChange('momo')} />
+            <MethodChip label={copy.mobileMoney} active={method === 'momo'} onPress={() => onMethodChange('momo')} />
           </View>
 
           <Text className="mb-1.5 mt-4 text-xs font-extrabold uppercase tracking-widest text-warm-500">
-            Numero mobile money
+            {copy.mobileMoneyNumber}
           </Text>
           <TextInput
             value={account}
@@ -460,11 +602,12 @@ function WithdrawModal({
           />
 
           <Text className="mt-2 text-xs font-semibold text-warm-500">
-            Solde disponible : {formatMoney(available)}
+            {copy.availableBalanceLine(formatMoney(available, copy.locale))}
           </Text>
 
           <ModalActions
-            primaryLabel={loading ? 'Envoi...' : 'Envoyer'}
+            primaryLabel={loading ? copy.sending : copy.send}
+            cancelLabel={copy.cancel}
             disabled={loading}
             onCancel={onClose}
             onSubmit={onSubmit}
@@ -494,11 +637,13 @@ function MethodChip({ label, active, onPress }: { label: string; active: boolean
 
 function ModalActions({
   primaryLabel,
+  cancelLabel,
   disabled,
   onCancel,
   onSubmit,
 }: {
   primaryLabel: string
+  cancelLabel: string
   disabled: boolean
   onCancel: () => void
   onSubmit: () => void
@@ -510,7 +655,7 @@ function ModalActions({
         className="h-14 flex-1 items-center justify-center rounded-2xl bg-off-white border border-warm-200"
         accessibilityRole="button"
       >
-        <Text className="text-base font-extrabold text-ink">Annuler</Text>
+        <Text className="text-base font-extrabold text-ink">{cancelLabel}</Text>
       </Pressable>
       <Pressable
         onPress={onSubmit}
@@ -528,23 +673,25 @@ function MiniBalance({
   label,
   value,
   icon,
+  locale,
 }: {
   label: string
   value: number
   icon: keyof typeof Ionicons.glyphMap
+  locale: string
 }) {
   return (
     <Card className="flex-1">
       <Ionicons name={icon} size={22} color="#D40511" />
       <Text className="mt-3 text-lg font-extrabold text-ink" numberOfLines={1}>
-        {formatCompactMoney(value)}
+        {formatCompactMoney(value, locale)}
       </Text>
       <Text className="mt-1 text-xs font-bold uppercase tracking-widest text-warm-500">{label}</Text>
     </Card>
   )
 }
 
-function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
+function TransactionRow({ transaction, copy }: { transaction: WalletTransaction; copy: WalletCopy }) {
   const isCredit = transaction.amount_fcfa >= 0
 
   return (
@@ -557,64 +704,41 @@ function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
         />
       </View>
       <View className="ml-4 flex-1">
-        <Text className="text-base font-extrabold text-ink">{transactionLabel(transaction.type)}</Text>
+        <Text className="text-base font-extrabold text-ink">{copy.transactionLabels[transaction.type] ?? transaction.type}</Text>
         <Text className="mt-0.5 text-xs font-semibold text-warm-500">
-          {transaction.course?.reference ?? formatDate(transaction.created_at)}
+          {transaction.course?.reference ?? formatDate(transaction.created_at, copy.locale)}
         </Text>
       </View>
       <Text className={['text-base font-extrabold', isCredit ? 'text-success' : 'text-airmess-red'].join(' ')}>
-        {isCredit ? '+' : '-'}{formatMoney(Math.abs(transaction.amount_fcfa))}
+        {isCredit ? '+' : '-'}{formatMoney(Math.abs(transaction.amount_fcfa), copy.locale)}
       </Text>
     </View>
   )
 }
 
-function transactionLabel(type: WalletTransaction['type']) {
-  const labels: Record<WalletTransaction['type'], string> = {
-    deposit: 'Recharge',
-    course_charge: 'Paiement course',
-    refund: 'Remboursement',
-    adjustment_credit: 'Ajustement credit',
-    adjustment_debit: 'Ajustement debit',
-    withdraw: 'Retrait',
-    collection_credit: 'Encaissement',
-    adjustment_incident: 'Incident',
-  }
-  return labels[type] ?? type
-}
-
-function formatMoney(value?: number) {
+function formatMoney(value: number | undefined, locale: string) {
   if (value == null) return '-- FCFA'
-  return `${value.toLocaleString('fr-FR')} FCFA`
+  return `${value.toLocaleString(locale)} FCFA`
 }
 
-function formatCompactMoney(value: number) {
+function formatCompactMoney(value: number, locale: string) {
   if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}M`
   if (value >= 1_000) return `${Math.round(value / 1_000)}k`
-  return value.toLocaleString('fr-FR')
+  return value.toLocaleString(locale)
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('fr-FR', {
+function formatDate(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     day: '2-digit',
     month: 'short',
   }).format(new Date(value))
 }
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat('fr-FR', {
+function formatDateTime(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
-}
-
-function getApiErrorMessage(error: unknown) {
-  if (isAxiosError(error)) {
-    const data = error.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
-    return data?.message ?? Object.values(data?.errors ?? {})[0]?.[0] ?? 'Verifie ta connexion puis reessaie.'
-  }
-
-  return 'Verifie ta connexion puis reessaie.'
 }

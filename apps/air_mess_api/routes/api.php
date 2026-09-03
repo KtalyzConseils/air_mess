@@ -37,6 +37,9 @@ Route::prefix('auth')->group(function () {
     Route::post('/phone/otp/send',   [\App\Http\Controllers\Api\PhoneOtpController::class, 'send'])->middleware('throttle:auth-otp-send');
     Route::post('/phone/otp/verify', [\App\Http\Controllers\Api\PhoneOtpController::class, 'verify'])->middleware('throttle:auth-otp-verify');
     Route::post('/login',            [AuthController::class, 'login'])->middleware('throttle:auth-login');
+    // Login par SMS (sans mot de passe) — pour les comptes créés via l'inscription rapide.
+    Route::post('/login/sms/send',   [AuthController::class, 'sendLoginCode'])->middleware('throttle:auth-otp-send');
+    Route::post('/login/sms/verify', [AuthController::class, 'verifyLoginCode'])->middleware('throttle:auth-otp-verify');
     Route::post('/password/forgot',  [AuthController::class, 'forgotPassword'])->middleware('throttle:auth-password-forgot');
     Route::post('/password/reset',   [AuthController::class, 'resetPassword'])->middleware('throttle:auth-password-forgot');
 });
@@ -109,6 +112,9 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('throttle:auth-register');
     });
     Route::patch('/profile/marchant', [ProfileController::class, 'updateMarchant']);
+    // Active l'accès au site web (email + mot de passe choisis par l'utilisateur)
+    // pour un compte créé via l'inscription rapide / login SMS.
+    Route::post('/profile/web-access', [ProfileController::class, 'setWebAccess']);
 
     // Courses
     Route::prefix('courses')->group(function () {

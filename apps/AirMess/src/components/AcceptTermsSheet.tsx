@@ -5,6 +5,32 @@ import { Ionicons } from '@expo/vector-icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { acceptTerms, PRIVACY_URL, TERMS_URL } from '../api/terms'
 import Button from './ui/Button'
+import { useLanguageStore } from '../stores/languageStore'
+
+const ACCEPT_TERMS_COPY = {
+  fr: {
+    title: 'Conditions et confidentialite',
+    subtitle: "Avant de continuer, lis et accepte les conditions generales et la politique de confidentialite d'Air Mess.",
+    termsTitle: 'Conditions generales',
+    termsSubtitle: "Regles d'utilisation du service",
+    privacyTitle: 'Politique de confidentialite',
+    privacySubtitle: 'Donnees collectees et usage de la position',
+    checkbox: "J'ai lu et j'accepte les conditions generales et la politique de confidentialite d'Air Mess.",
+    error: "Impossible d'enregistrer ton acceptation. Reessaie dans un instant.",
+    submit: "J'accepte et continue",
+  },
+  en: {
+    title: 'Terms and privacy',
+    subtitle: "Before continuing, read and accept Air Mess' terms of service and privacy policy.",
+    termsTitle: 'Terms of service',
+    termsSubtitle: 'Rules for using the service',
+    privacyTitle: 'Privacy policy',
+    privacySubtitle: 'Data collected and use of location',
+    checkbox: "I have read and accept Air Mess' terms of service and privacy policy.",
+    error: 'Unable to save your acceptance. Try again in a moment.',
+    submit: 'I accept and continue',
+  },
+} as const
 
 interface Props {
   visible: boolean
@@ -13,6 +39,8 @@ interface Props {
 
 export default function AcceptTermsSheet({ visible, onAccepted }: Props) {
   const queryClient = useQueryClient()
+  const language = useLanguageStore((state) => state.language)
+  const copy = ACCEPT_TERMS_COPY[language]
   const [checked, setChecked] = useState(false)
 
   const mutation = useMutation({
@@ -38,16 +66,16 @@ export default function AcceptTermsSheet({ visible, onAccepted }: Props) {
               <Ionicons name="document-text-outline" size={30} color="#1A1614" />
             </View>
             <Text className="text-center text-2xl font-extrabold text-ink">
-              Conditions et confidentialite
+              {copy.title}
             </Text>
             <Text className="mt-2 text-center text-sm font-semibold leading-5 text-warm-600">
-              Avant de continuer, lis et accepte les conditions generales et la politique de confidentialite d'Air Mess.
+              {copy.subtitle}
             </Text>
           </View>
 
           <View className="my-5 gap-2">
-            <LegalLink title="Conditions generales" subtitle="Regles d'utilisation du service" url={TERMS_URL} />
-            <LegalLink title="Politique de confidentialite" subtitle="Donnees collectees et usage de la position" url={PRIVACY_URL} />
+            <LegalLink title={copy.termsTitle} subtitle={copy.termsSubtitle} url={TERMS_URL} />
+            <LegalLink title={copy.privacyTitle} subtitle={copy.privacySubtitle} url={PRIVACY_URL} />
           </View>
 
           <Pressable
@@ -68,14 +96,14 @@ export default function AcceptTermsSheet({ visible, onAccepted }: Props) {
               {checked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
             </View>
             <Text className="ml-3 flex-1 text-sm font-semibold leading-5 text-ink">
-              J'ai lu et j'accepte les conditions generales et la politique de confidentialite d'Air Mess.
+              {copy.checkbox}
             </Text>
           </Pressable>
 
           {mutation.isError && (
             <View className="mt-3 rounded-xl border border-airmess-red/30 bg-danger-bg px-4 py-3">
               <Text className="text-sm font-bold text-airmess-red">
-                Impossible d'enregistrer ton acceptation. Reessaie dans un instant.
+                {copy.error}
               </Text>
             </View>
           )}
@@ -87,7 +115,7 @@ export default function AcceptTermsSheet({ visible, onAccepted }: Props) {
               disabled={!checked || mutation.isPending}
               onPress={() => mutation.mutate()}
             >
-              J'accepte et continue
+              {copy.submit}
             </Button>
           </View>
         </ScrollView>

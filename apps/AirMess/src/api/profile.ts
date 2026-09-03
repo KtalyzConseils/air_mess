@@ -13,3 +13,14 @@ export async function updateMarchantProfile(payload: UpdateMarchantProfilePayloa
   const { data } = await api.patch<{ user: User }>('/profile/marchant', payload)
   return data.user
 }
+
+export interface SetWebAccessPayload {
+  email: string
+  password: string
+  password_confirmation: string
+}
+
+export async function setWebAccess(payload: SetWebAccessPayload): Promise<User> {
+  const { data } = await api.post<{ user: User }>('/profile/web-access', payload)
+  return data.user
+}

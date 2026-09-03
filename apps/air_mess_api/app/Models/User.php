@@ -43,6 +43,7 @@ class User extends Authenticatable
         'email',
         'phone',
         'password',
+        'password_set_at',
         'type',
         'is_active',
         'email_verified_at',
@@ -63,6 +64,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'password_set_at' => 'datetime',
             'accepted_terms_at' => 'datetime',
             'accepted_terms_version' => 'integer',
             'is_active' => 'boolean',
@@ -80,6 +82,17 @@ class User extends Authenticatable
             return true;
         }
         return ((int) $this->accepted_terms_version) < self::TERMS_VERSION;
+    }
+
+    /**
+     * True si l'utilisateur connaît son mot de passe (inscription classique, reset,
+     * ou activation volontaire de l'accès web) — false pour un compte créé via
+     * l'inscription rapide, où le mot de passe est un secret aléatoire jamais vu.
+     * Condition nécessaire pour se connecter sur le site web (email + mot de passe).
+     */
+    public function hasWebAccess(): bool
+    {
+        return $this->password_set_at !== null;
     }
 
     // ===== Relations vers les profils =====

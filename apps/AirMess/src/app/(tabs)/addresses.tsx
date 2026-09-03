@@ -13,7 +13,6 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { isAxiosError } from 'axios'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
@@ -25,6 +24,69 @@ import {
   type Address,
   type AddressPayload,
 } from '../../api/addresses'
+import { useLanguageStore, type AppLanguage } from '../../stores/languageStore'
+import { getApiErrorMessage } from '../../lib/apiError'
+
+const ADDRESSES_COPY = {
+  fr: {
+    back: 'Retour',
+    add: 'Ajouter',
+    title: 'Adresses',
+    subtitle: 'Enregistre les destinations frequentes du commerce et reutilise-les pour creer une course.',
+    searchPlaceholder: 'Rechercher une adresse',
+    loading: 'Chargement...',
+    noAddress: 'Aucune adresse',
+    noAddressSubtitle: 'Ajoute une adresse frequente pour la retrouver rapidement au moment de creer une course.',
+    addAddress: 'Ajouter une adresse',
+    noResult: 'Aucun resultat',
+    noResultSubtitle: 'Essaie un autre mot-cle.',
+    use: 'Utiliser',
+    edit: 'Modifier',
+    delete: 'Supprimer',
+    deleteConfirmTitle: 'Supprimer cette adresse ?',
+    cancel: 'Annuler',
+    landmark: 'Repere:',
+    editAddress: 'Modifier l adresse',
+    newAddress: 'Nouvelle adresse',
+    businessBook: 'Carnet du commerce',
+    close: 'Fermer',
+    recipientName: 'Nom destinataire',
+    fullName: 'Nom complet',
+    phone: 'Telephone',
+    save: 'Enregistrer',
+    addressAlertTitle: 'Adresse',
+    defaultQuartier: 'Adresse client',
+  },
+  en: {
+    back: 'Back',
+    add: 'Add',
+    title: 'Addresses',
+    subtitle: 'Save your business frequent destinations and reuse them to create a delivery.',
+    searchPlaceholder: 'Search an address',
+    loading: 'Loading...',
+    noAddress: 'No address',
+    noAddressSubtitle: 'Add a frequent address to find it quickly when creating a delivery.',
+    addAddress: 'Add an address',
+    noResult: 'No results',
+    noResultSubtitle: 'Try another keyword.',
+    use: 'Use',
+    edit: 'Edit',
+    delete: 'Delete',
+    deleteConfirmTitle: 'Delete this address?',
+    cancel: 'Cancel',
+    landmark: 'Landmark:',
+    editAddress: 'Edit address',
+    newAddress: 'New address',
+    businessBook: 'Business address book',
+    close: 'Close',
+    recipientName: 'Recipient name',
+    fullName: 'Full name',
+    phone: 'Phone',
+    save: 'Save',
+    addressAlertTitle: 'Address',
+    defaultQuartier: 'Customer address',
+  },
+} as const
 
 const EMPTY_FORM: AddressPayload = {
   recipient_name: '',
@@ -36,6 +98,8 @@ const EMPTY_FORM: AddressPayload = {
 export default function AddressesScreen() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const language = useLanguageStore((state) => state.language)
+  const copy = ADDRESSES_COPY[language]
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<Address | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -73,13 +137,13 @@ export default function AddressesScreen() {
       queryClient.invalidateQueries({ queryKey: ['addresses'] })
       closeModal()
     },
-    onError: (error) => setFormError(getApiErrorMessage(error)),
+    onError: (error) => setFormError(getApiErrorMessage(error, language)),
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteAddress,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['addresses'] }),
-    onError: (error) => Alert.alert('Adresse', getApiErrorMessage(error)),
+    onError: (error) => Alert.alert(copy.addressAlertTitle, getApiErrorMessage(error, language)),
   })
 
   const openCreate = () => {
@@ -109,17 +173,17 @@ export default function AddressesScreen() {
   }
 
   const confirmDelete = (address: Address) => {
-    Alert.alert('Supprimer cette adresse ?', address.recipient_name, [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(copy.deleteConfirmTitle, address.recipient_name, [
+      { text: copy.cancel, style: 'cancel' },
       {
-        text: 'Supprimer',
+        text: copy.delete,
         style: 'destructive',
         onPress: () => deleteMutation.mutate(address.id),
       },
     ])
   }
 
-  const useAddress = (address: Address) => {
+  const useAddressForCourse = (address: Address) => {
     router.push({
       pathname: '/(tabs)/new-course',
       params: { addressId: String(address.id) },
@@ -137,7 +201,7 @@ export default function AddressesScreen() {
     saveMutation.mutate({
       recipient_name: form.recipient_name.trim(),
       recipient_phone: form.recipient_phone.trim(),
-      quartier: form.quartier.trim() || 'Adresse client',
+      quartier: form.quartier.trim() || copy.defaultQuartier,
       city: form.city.trim() || 'Cotonou',
     })
   }
@@ -150,7 +214,7 @@ export default function AddressesScreen() {
             onPress={() => router.back()}
             className="h-11 w-11 items-center justify-center rounded-full bg-off-white"
             accessibilityRole="button"
-            accessibilityLabel="Retour"
+            accessibilityLabel={copy.back}
           >
             <Ionicons name="arrow-back" size={24} color="#1A1614" />
           </Pressable>
@@ -160,13 +224,13 @@ export default function AddressesScreen() {
             accessibilityRole="button"
           >
             <Ionicons name="add" size={20} color="#1A1614" />
-            <Text className="ml-1 text-sm font-extrabold text-ink">Ajouter</Text>
+            <Text className="ml-1 text-sm font-extrabold text-ink">{copy.add}</Text>
           </Pressable>
         </View>
 
-        <Text className="text-3xl font-extrabold text-ink">Adresses</Text>
+        <Text className="text-3xl font-extrabold text-ink">{copy.title}</Text>
         <Text className="mt-2 text-sm font-semibold leading-5 text-warm-500">
-          Enregistre les destinations frequentes du commerce et reutilise-les pour creer une course.
+          {copy.subtitle}
         </Text>
 
         <View className="mt-5 h-14 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4">
@@ -175,7 +239,7 @@ export default function AddressesScreen() {
             value={search}
             onChangeText={setSearch}
             className="ml-3 h-full flex-1 text-base font-semibold text-ink"
-            placeholder="Rechercher une adresse"
+            placeholder={copy.searchPlaceholder}
             placeholderTextColor="#A89F95"
           />
           {search.length > 0 && (
@@ -192,27 +256,27 @@ export default function AddressesScreen() {
         >
           {isLoading ? (
             <Card className="items-center py-8">
-              <Text className="text-sm font-bold text-warm-500">Chargement...</Text>
+              <Text className="text-sm font-bold text-warm-500">{copy.loading}</Text>
             </Card>
           ) : addresses.length === 0 ? (
             <Card className="items-center py-8">
               <View className="mb-3 h-14 w-14 items-center justify-center rounded-full bg-airmess-yellow">
                 <Ionicons name="location-outline" size={28} color="#1A1614" />
               </View>
-              <Text className="text-lg font-extrabold text-ink">Aucune adresse</Text>
+              <Text className="text-lg font-extrabold text-ink">{copy.noAddress}</Text>
               <Text className="mt-2 text-center text-sm font-semibold leading-5 text-warm-500">
-                Ajoute une adresse frequente pour la retrouver rapidement au moment de creer une course.
+                {copy.noAddressSubtitle}
               </Text>
               <View className="mt-5 w-full">
                 <Button onPress={openCreate} rightIcon={<Ionicons name="add" size={20} color="#1A1614" />}>
-                  Ajouter une adresse
+                  {copy.addAddress}
                 </Button>
               </View>
             </Card>
           ) : filtered.length === 0 ? (
             <Card className="items-center py-8">
-              <Text className="text-base font-extrabold text-ink">Aucun resultat</Text>
-              <Text className="mt-1 text-sm font-semibold text-warm-500">Essaie un autre mot-cle.</Text>
+              <Text className="text-base font-extrabold text-ink">{copy.noResult}</Text>
+              <Text className="mt-1 text-sm font-semibold text-warm-500">{copy.noResultSubtitle}</Text>
             </Card>
           ) : (
             <View className="gap-3 pb-8">
@@ -220,7 +284,8 @@ export default function AddressesScreen() {
                 <AddressCard
                   key={address.id}
                   address={address}
-                  onUse={() => useAddress(address)}
+                  copy={copy}
+                  onUse={() => useAddressForCourse(address)}
                   onEdit={() => openEdit(address)}
                   onDelete={() => confirmDelete(address)}
                 />
@@ -237,6 +302,7 @@ export default function AddressesScreen() {
         formError={formError}
         canSave={canSave}
         saving={saveMutation.isPending}
+        copy={copy}
         onClose={closeModal}
         onSave={saveAddress}
         onChange={setForm}
@@ -245,13 +311,17 @@ export default function AddressesScreen() {
   )
 }
 
+type AddressesCopy = (typeof ADDRESSES_COPY)[AppLanguage]
+
 function AddressCard({
   address,
+  copy,
   onUse,
   onEdit,
   onDelete,
 }: {
   address: Address
+  copy: AddressesCopy
   onUse: () => void
   onEdit: () => void
   onDelete: () => void
@@ -281,7 +351,7 @@ function AddressCard({
           </Text>
           {address.landmark && (
             <Text className="mt-1 text-xs font-semibold text-warm-500" numberOfLines={1}>
-              Repere: {address.landmark}
+              {copy.landmark} {address.landmark}
             </Text>
           )}
         </View>
@@ -294,10 +364,10 @@ function AddressCard({
           accessibilityRole="button"
         >
           <Ionicons name="cube-outline" size={18} color="#1A1614" />
-          <Text className="ml-2 text-sm font-extrabold text-ink">Utiliser</Text>
+          <Text className="ml-2 text-sm font-extrabold text-ink">{copy.use}</Text>
         </Pressable>
-        <IconButton icon="create-outline" label="Modifier" onPress={onEdit} />
-        <IconButton icon="trash-outline" label="Supprimer" danger onPress={onDelete} />
+        <IconButton icon="create-outline" label={copy.edit} onPress={onEdit} />
+        <IconButton icon="trash-outline" label={copy.delete} danger onPress={onDelete} />
       </View>
     </Card>
   )
@@ -310,6 +380,7 @@ function AddressFormModal({
   formError,
   canSave,
   saving,
+  copy,
   onClose,
   onSave,
   onChange,
@@ -320,6 +391,7 @@ function AddressFormModal({
   formError: string | null
   canSave: boolean
   saving: boolean
+  copy: AddressesCopy
   onClose: () => void
   onSave: () => void
   onChange: (form: AddressPayload) => void
@@ -343,31 +415,31 @@ function AddressFormModal({
               </View>
               <View>
                 <Text className="text-xl font-extrabold text-ink">
-                  {editing ? 'Modifier l adresse' : 'Nouvelle adresse'}
+                  {editing ? copy.editAddress : copy.newAddress}
                 </Text>
-                <Text className="mt-0.5 text-sm font-semibold text-warm-500">Carnet du commerce</Text>
+                <Text className="mt-0.5 text-sm font-semibold text-warm-500">{copy.businessBook}</Text>
               </View>
             </View>
             <Pressable
               onPress={onClose}
               className="h-10 w-10 items-center justify-center rounded-full bg-off-white"
               accessibilityRole="button"
-              accessibilityLabel="Fermer"
+              accessibilityLabel={copy.close}
             >
               <Ionicons name="close" size={22} color="#1A1614" />
             </Pressable>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <FieldLabel>Nom destinataire</FieldLabel>
+            <FieldLabel>{copy.recipientName}</FieldLabel>
             <AddressInput
               value={form.recipient_name}
               onChangeText={(value) => updateField('recipient_name', value)}
-              placeholder="Nom complet"
+              placeholder={copy.fullName}
               textContentType="name"
             />
 
-            <FieldLabel>Telephone</FieldLabel>
+            <FieldLabel>{copy.phone}</FieldLabel>
             <AddressInput
               value={form.recipient_phone}
               onChangeText={(value) => updateField('recipient_phone', value)}
@@ -381,7 +453,7 @@ function AddressFormModal({
             <View className="mt-5 flex-row gap-3">
               <View className="flex-1">
                 <Button variant="outline" onPress={onClose} disabled={saving}>
-                  Annuler
+                  {copy.cancel}
                 </Button>
               </View>
               <View className="flex-1">
@@ -391,7 +463,7 @@ function AddressFormModal({
                   disabled={!canSave}
                   rightIcon={<Ionicons name="checkmark" size={20} color="#1A1614" />}
                 >
-                  Enregistrer
+                  {copy.save}
                 </Button>
               </View>
             </View>
@@ -459,13 +531,4 @@ function IconButton({
       <Ionicons name={icon} size={20} color={danger ? '#D40511' : '#1A1614'} />
     </Pressable>
   )
-}
-
-function getApiErrorMessage(error: unknown) {
-  if (isAxiosError(error)) {
-    const data = error.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
-    return data?.message ?? Object.values(data?.errors ?? {})[0]?.[0] ?? 'Impossible de traiter la demande.'
-  }
-
-  return 'Impossible de traiter la demande.'
 }

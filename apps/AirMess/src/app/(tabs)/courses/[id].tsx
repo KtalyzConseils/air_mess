@@ -5,10 +5,70 @@ import { useQuery } from '@tanstack/react-query'
 import Card from '../../../components/ui/Card'
 import Screen from '../../../components/ui/Screen'
 import { fetchCourse, type Course } from '../../../api/courses'
+import { useLanguageStore, type AppLanguage } from '../../../stores/languageStore'
+
+const COURSE_DETAIL_COPY = {
+  fr: {
+    locale: 'fr-FR',
+    back: 'Retour',
+    title: 'Detail course',
+    loadError: 'Impossible de charger cette course.',
+    createdOn: 'Creee le',
+    trip: 'Trajet',
+    departure: 'Depart',
+    arrival: 'Arrivee',
+    departureAddress: 'Adresse de depart',
+    toDestination: 'vers',
+    price: 'Prix',
+    urgency: 'Urgence',
+    express: 'Express',
+    standard: 'Standard',
+    package: 'Colis',
+    noDescription: 'Description non renseignee',
+    size: 'Taille',
+    recipient: 'Destinataire',
+    name: 'Nom',
+    phone: 'Telephone',
+    driver: 'Livreur',
+    noDriver: 'Aucun livreur assigne pour le moment.',
+    pickup: 'Retrait',
+    delivery: 'Livraison',
+  },
+  en: {
+    locale: 'en-US',
+    back: 'Back',
+    title: 'Delivery detail',
+    loadError: 'Unable to load this delivery.',
+    createdOn: 'Created on',
+    trip: 'Trip',
+    departure: 'Pickup',
+    arrival: 'Drop-off',
+    departureAddress: 'Pickup address',
+    toDestination: 'to',
+    price: 'Price',
+    urgency: 'Urgency',
+    express: 'Express',
+    standard: 'Standard',
+    package: 'Package',
+    noDescription: 'No description provided',
+    size: 'Size',
+    recipient: 'Recipient',
+    name: 'Name',
+    phone: 'Phone',
+    driver: 'Driver',
+    noDriver: 'No driver assigned yet.',
+    pickup: 'Pickup',
+    delivery: 'Delivery',
+  },
+} as const
+
+type CourseDetailCopy = (typeof COURSE_DETAIL_COPY)[AppLanguage]
 
 export default function CourseDetailScreen() {
   const router = useRouter()
   const { id } = useLocalSearchParams<{ id: string }>()
+  const language = useLanguageStore((state) => state.language)
+  const copy = COURSE_DETAIL_COPY[language]
 
   const courseQuery = useQuery({
     queryKey: ['course', id],
@@ -23,11 +83,11 @@ export default function CourseDetailScreen() {
           onPress={() => router.replace('/(tabs)/dashboard')}
           className="h-11 w-11 items-center justify-center rounded-full bg-off-white"
           accessibilityRole="button"
-          accessibilityLabel="Retour"
+          accessibilityLabel={copy.back}
         >
           <Ionicons name="arrow-back" size={24} color="#1A1614" />
         </Pressable>
-        <Text className="text-base font-extrabold text-ink">Detail course</Text>
+        <Text className="text-base font-extrabold text-ink">{copy.title}</Text>
         <View className="h-11 w-11" />
       </View>
 
@@ -37,16 +97,16 @@ export default function CourseDetailScreen() {
         </Card>
       ) : courseQuery.isError || !courseQuery.data ? (
         <Card variant="danger">
-          <Text className="font-bold text-airmess-red">Impossible de charger cette course.</Text>
+          <Text className="font-bold text-airmess-red">{copy.loadError}</Text>
         </Card>
       ) : (
-        <CourseDetail course={courseQuery.data} />
+        <CourseDetail course={courseQuery.data} copy={copy} />
       )}
     </Screen>
   )
 }
 
-function CourseDetail({ course }: { course: Course }) {
+function CourseDetail({ course, copy }: { course: Course; copy: CourseDetailCopy }) {
   return (
     <>
       <Card variant="dark" padding="lg" className="mb-4">
@@ -56,59 +116,59 @@ function CourseDetail({ course }: { course: Course }) {
               {course.reference}
             </Text>
             <Text className="mt-2 text-2xl font-extrabold text-white" numberOfLines={2}>
-              {course.origin_quartier} vers {course.destination_quartier}
+              {course.origin_quartier} {copy.toDestination} {course.destination_quartier}
             </Text>
           </View>
           <StatusPill status={course.status} label={course.status_label} />
         </View>
         <Text className="text-sm font-semibold text-warm-300">
-          Creee le {formatDate(course.created_at)}
+          {copy.createdOn} {formatDate(course.created_at, copy.locale)}
         </Text>
       </Card>
 
       <Card className="mb-4">
-        <SectionTitle icon="navigate-outline" title="Trajet" />
-        <RoutePoint label="Depart" title={course.origin_name ?? 'Adresse de depart'} subtitle={`${course.origin_quartier}, ${course.origin_city}`} />
+        <SectionTitle icon="navigate-outline" title={copy.trip} />
+        <RoutePoint label={copy.departure} title={course.origin_name ?? copy.departureAddress} subtitle={`${course.origin_quartier}, ${course.origin_city}`} />
         <View className="ml-5 h-6 w-px bg-warm-300" />
-        <RoutePoint label="Arrivee" title={course.destination_name} subtitle={`${course.destination_quartier}, ${course.destination_city}`} />
+        <RoutePoint label={copy.arrival} title={course.destination_name} subtitle={`${course.destination_quartier}, ${course.destination_city}`} />
       </Card>
 
       <View className="mb-4 flex-row gap-3">
-        <InfoTile icon="cash-outline" label="Prix" value={`${course.delivery_fee.toLocaleString('fr-FR')} FCFA`} />
-        <InfoTile icon="flash-outline" label="Urgence" value={course.urgency === 'express' ? 'Express' : 'Standard'} />
+        <InfoTile icon="cash-outline" label={copy.price} value={`${course.delivery_fee.toLocaleString(copy.locale)} FCFA`} />
+        <InfoTile icon="flash-outline" label={copy.urgency} value={course.urgency === 'express' ? copy.express : copy.standard} />
       </View>
 
       <Card className="mb-4">
-        <SectionTitle icon="cube-outline" title="Colis" />
+        <SectionTitle icon="cube-outline" title={copy.package} />
         <Text className="text-base font-extrabold text-ink">
-          {course.package_description ?? 'Description non renseignee'}
+          {course.package_description ?? copy.noDescription}
         </Text>
         <Text className="mt-1 text-sm font-semibold text-warm-500">
-          Taille {course.package_size ?? '--'}
+          {copy.size} {course.package_size ?? '--'}
         </Text>
       </Card>
 
       <Card className="mb-4">
-        <SectionTitle icon="person-outline" title="Destinataire" />
-        <InfoRow label="Nom" value={course.destination_name} />
-        <InfoRow label="Telephone" value={course.destination_phone ?? '--'} />
+        <SectionTitle icon="person-outline" title={copy.recipient} />
+        <InfoRow label={copy.name} value={course.destination_name} />
+        <InfoRow label={copy.phone} value={course.destination_phone ?? '--'} />
       </Card>
 
       <Card className="mb-4">
-        <SectionTitle icon="bicycle-outline" title="Livreur" />
+        <SectionTitle icon="bicycle-outline" title={copy.driver} />
         {course.driver ? (
           <>
-            <InfoRow label="Nom" value={course.driver.user.name} />
-            <InfoRow label="Telephone" value={course.driver.user.phone} />
+            <InfoRow label={copy.name} value={course.driver.user.name} />
+            <InfoRow label={copy.phone} value={course.driver.user.phone} />
           </>
         ) : (
-          <Text className="text-sm font-semibold text-warm-500">Aucun livreur assigne pour le moment.</Text>
+          <Text className="text-sm font-semibold text-warm-500">{copy.noDriver}</Text>
         )}
       </Card>
 
       <View className="mb-4 flex-row gap-3">
-        <CodeTile label="Retrait" value={course.pickup_code ?? '--'} />
-        <CodeTile label="Livraison" value={course.delivery_code ?? '--'} />
+        <CodeTile label={copy.pickup} value={course.pickup_code ?? '--'} />
+        <CodeTile label={copy.delivery} value={course.delivery_code ?? '--'} />
       </View>
     </>
   )
@@ -187,8 +247,8 @@ function StatusPill({ status, label }: { status: string; label?: string }) {
   )
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('fr-FR', {
+function formatDate(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     day: '2-digit',
     month: 'long',
     hour: '2-digit',
