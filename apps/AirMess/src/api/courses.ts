@@ -49,6 +49,14 @@ export async function fetchCourse(id: number | string): Promise<Course> {
   return data.course
 }
 
+export async function cancelCourse(
+  id: number | string,
+  payload: { reason?: string; confirm_post_pickup?: boolean } = {},
+): Promise<Course> {
+  const { data } = await api.post<{ course: Course }>(`/courses/${id}/cancel`, payload)
+  return data.course
+}
+
 export interface PackageCategory {
   id: number
   code: string

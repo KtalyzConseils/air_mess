@@ -1,10 +1,11 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import Card from '../../../components/ui/Card'
 import Screen from '../../../components/ui/Screen'
-import { fetchCourse, type Course } from '../../../api/courses'
+import { cancelCourse, fetchCourse, type Course } from '../../../api/courses'
 import { useLanguageStore, type AppLanguage } from '../../../stores/languageStore'
 
 const COURSE_DETAIL_COPY = {
@@ -33,6 +34,17 @@ const COURSE_DETAIL_COPY = {
     noDriver: 'Aucun livreur assigne pour le moment.',
     pickup: 'Retrait',
     delivery: 'Livraison',
+    cancelCourse: 'Annuler la course',
+    cancelling: 'Annulation...',
+    cancelConfirmTitle: 'Annuler cette course ?',
+    cancelConfirmBody: "La course sera annulee et le livreur sera libere si elle n'a pas encore ete recuperee.",
+    cancelConfirmAction: 'Annuler la course',
+    cancelPostPickupTitle: 'Colis deja recupere',
+    cancelPostPickupBody: 'Le livreur a deja le colis. Confirmer annulera la course et declenchera le retour vers vous.',
+    keepCourse: 'Garder',
+    cancelFailedTitle: 'Annulation impossible',
+    cancelSuccessTitle: 'Course annulee',
+    cancelSuccessBody: 'La course a bien ete annulee.',
   },
   en: {
     locale: 'en-US',
@@ -59,6 +71,17 @@ const COURSE_DETAIL_COPY = {
     noDriver: 'No driver assigned yet.',
     pickup: 'Pickup',
     delivery: 'Delivery',
+    cancelCourse: 'Cancel delivery',
+    cancelling: 'Cancelling...',
+    cancelConfirmTitle: 'Cancel this delivery?',
+    cancelConfirmBody: 'The delivery will be cancelled and the driver will be released if it has not been picked up yet.',
+    cancelConfirmAction: 'Cancel delivery',
+    cancelPostPickupTitle: 'Package already picked up',
+    cancelPostPickupBody: 'The driver already has the package. Confirming will cancel the delivery and start the return to you.',
+    keepCourse: 'Keep',
+    cancelFailedTitle: 'Cancellation failed',
+    cancelSuccessTitle: 'Delivery cancelled',
+    cancelSuccessBody: 'The delivery was cancelled.',
   },
 } as const
 
@@ -66,6 +89,7 @@ type CourseDetailCopy = (typeof COURSE_DETAIL_COPY)[AppLanguage]
 
 export default function CourseDetailScreen() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { id } = useLocalSearchParams<{ id: string }>()
   const language = useLanguageStore((state) => state.language)
   const copy = COURSE_DETAIL_COPY[language]
@@ -75,6 +99,43 @@ export default function CourseDetailScreen() {
     queryFn: () => fetchCourse(id),
     enabled: !!id,
   })
+
+  const cancelMutation = useMutation({
+    mutationFn: (payload: { confirm_post_pickup?: boolean } = {}) => cancelCourse(id, payload),
+    onSuccess: async (course) => {
+      queryClient.setQueryData(['course', id], course)
+      await queryClient.invalidateQueries({ queryKey: ['courses'] })
+      Alert.alert(copy.cancelSuccessTitle, copy.cancelSuccessBody)
+    },
+    onError: (error) => {
+      if (isAxiosError(error) && error.response?.data?.requires_post_pickup_confirm) {
+        Alert.alert(copy.cancelPostPickupTitle, copy.cancelPostPickupBody, [
+          { text: copy.keepCourse, style: 'cancel' },
+          {
+            text: copy.cancelConfirmAction,
+            style: 'destructive',
+            onPress: () => cancelMutation.mutate({ confirm_post_pickup: true }),
+          },
+        ])
+        return
+      }
+
+      Alert.alert(copy.cancelFailedTitle, getApiErrorMessage(error))
+    },
+  })
+
+  const confirmCancelCourse = () => {
+    if (cancelMutation.isPending || !courseQuery.data || !canCancelCourse(courseQuery.data.status)) return
+
+    Alert.alert(copy.cancelConfirmTitle, copy.cancelConfirmBody, [
+      { text: copy.keepCourse, style: 'cancel' },
+      {
+        text: copy.cancelConfirmAction,
+        style: 'destructive',
+        onPress: () => cancelMutation.mutate({}),
+      },
+    ])
+  }
 
   return (
     <Screen scroll py={14} className="px-5">
@@ -100,13 +161,30 @@ export default function CourseDetailScreen() {
           <Text className="font-bold text-airmess-red">{copy.loadError}</Text>
         </Card>
       ) : (
-        <CourseDetail course={courseQuery.data} copy={copy} />
+        <CourseDetail
+          course={courseQuery.data}
+          copy={copy}
+          cancelling={cancelMutation.isPending}
+          onCancel={confirmCancelCourse}
+        />
       )}
     </Screen>
   )
 }
 
-function CourseDetail({ course, copy }: { course: Course; copy: CourseDetailCopy }) {
+function CourseDetail({
+  course,
+  copy,
+  cancelling,
+  onCancel,
+}: {
+  course: Course
+  copy: CourseDetailCopy
+  cancelling: boolean
+  onCancel: () => void
+}) {
+  const cancellable = canCancelCourse(course.status)
+
   return (
     <>
       <Card variant="dark" padding="lg" className="mb-4">
@@ -170,6 +248,27 @@ function CourseDetail({ course, copy }: { course: Course; copy: CourseDetailCopy
         <CodeTile label={copy.pickup} value={course.pickup_code ?? '--'} />
         <CodeTile label={copy.delivery} value={course.delivery_code ?? '--'} />
       </View>
+
+      {cancellable && (
+        <Pressable
+          onPress={onCancel}
+          disabled={cancelling}
+          className={[
+            'mb-4 min-h-14 flex-row items-center justify-center rounded-2xl border border-airmess-red/30 bg-danger-bg px-5 py-3 dark:bg-[#2A1518]',
+            cancelling ? 'opacity-60' : '',
+          ].join(' ')}
+          accessibilityRole="button"
+        >
+          {cancelling ? (
+            <ActivityIndicator color="#D40511" />
+          ) : (
+            <Ionicons name="close-circle-outline" size={21} color="#D40511" />
+          )}
+          <Text className="ml-2 text-base font-extrabold text-airmess-red">
+            {cancelling ? copy.cancelling : copy.cancelCourse}
+          </Text>
+        </Pressable>
+      )}
     </>
   )
 }
@@ -254,4 +353,17 @@ function formatDate(value: string, locale: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function canCancelCourse(status: string) {
+  return !['cancelled', 'failed', 'delivered', 'disputed', 'returning_to_sender', 'returned_to_sender'].includes(status)
+}
+
+function getApiErrorMessage(error: unknown) {
+  if (isAxiosError(error)) {
+    const data = error.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
+    return data?.message ?? Object.values(data?.errors ?? {})[0]?.[0] ?? COURSE_DETAIL_COPY.fr.cancelFailedTitle
+  }
+
+  return COURSE_DETAIL_COPY.fr.cancelFailedTitle
 }
