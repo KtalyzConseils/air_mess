@@ -9,6 +9,7 @@ use App\Models\UserWallet;
 use App\Models\UserWalletTransaction;
 use App\Models\WalletWithdrawRequest;
 use App\Services\FedapayService;
+use App\Services\NotificationService;
 use App\Services\UserWalletService;
 use App\Services\WalletWithdrawPayoutInitiator;
 use Illuminate\Http\JsonResponse;
@@ -87,6 +88,7 @@ class UserWalletController extends Controller
         Request $request,
         UserWalletService $userWalletService,
         WalletWithdrawPayoutInitiator $payoutInitiator,
+        NotificationService $notifier,
     ): JsonResponse
     {
         $user = $request->user();
@@ -195,10 +197,27 @@ class UserWalletController extends Controller
 
             // Initie le payout Fedapay HORS transaction (le webhook confirmera ou refund).
             $payoutInitiator->initiate($req->fresh());
+            $req = $req->fresh();
+
+            $notifier->sendToUser(
+                $user->id,
+                'wallet.withdraw_initiated',
+                'Retrait en cours',
+                'Votre retrait de ' . number_format($req->amount_fcfa, 0, ',', ' ') . ' FCFA est lance. Vous serez notifie apres confirmation.',
+                [
+                    'app'         => 'merchant',
+                    'screen'      => 'wallet',
+                    'icon'        => 'wallet-outline',
+                    'withdraw_id' => $req->id,
+                    'amount'      => (int) $req->amount_fcfa,
+                    'status'      => $req->status,
+                ],
+                null,
+            );
 
             return response()->json([
                 'message' => 'Retrait initié. Le paiement sera confirmé sous quelques minutes.',
-                'request' => $req->fresh(),
+                'request' => $req,
             ], 201);
         }
 
@@ -210,6 +229,22 @@ class UserWalletController extends Controller
             'target_account' => $data['target_account'],
             'status'         => WalletWithdrawRequest::STATUS_PENDING,
         ]);
+
+        $notifier->sendToUser(
+            $user->id,
+            'wallet.withdraw_requested',
+            'Demande de retrait recue',
+            'Votre demande de retrait de ' . number_format($req->amount_fcfa, 0, ',', ' ') . ' FCFA est en attente de traitement.',
+            [
+                'app'         => 'merchant',
+                'screen'      => 'wallet',
+                'icon'        => 'wallet-outline',
+                'withdraw_id' => $req->id,
+                'amount'      => (int) $req->amount_fcfa,
+                'status'      => $req->status,
+            ],
+            null,
+        );
 
         return response()->json([
             'message' => 'Demande de retrait créée. Un admin la traitera sous 24h ouvrées.',

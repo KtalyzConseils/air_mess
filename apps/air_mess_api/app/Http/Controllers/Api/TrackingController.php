@@ -179,7 +179,12 @@ class TrackingController extends Controller
             'course.disputed',
             'Contestation reçue',
             "Le destinataire de la course {$course->reference} a contesté la livraison. L'ops est en train d'enquêter.",
-            ['reference' => $course->reference],
+            [
+                'app'       => 'merchant',
+                'screen'    => 'course_detail',
+                'icon'      => 'alert-circle-outline',
+                'reference' => $course->reference,
+            ],
             $course->id,
         );
 

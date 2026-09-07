@@ -201,7 +201,13 @@ class SubscriptionController extends Controller
                             'wallet.deposited',
                             '💰 Caution rechargée',
                             'Votre caution a été créditée de ' . number_format($payment->amount_fcfa, 0, ',', ' ') . ' FCFA.',
-                            ['payment_id' => $payment->id, 'amount' => $payment->amount_fcfa],
+                            [
+                                'app'        => 'driver',
+                                'screen'     => 'wallet',
+                                'icon'       => 'wallet-outline',
+                                'payment_id' => $payment->id,
+                                'amount'     => (int) $payment->amount_fcfa,
+                            ],
                             null,
                         );
                     } else {
@@ -253,7 +259,13 @@ class SubscriptionController extends Controller
                             'wallet.deposited',
                             '💰 Wallet rechargé',
                             'Votre wallet a été crédité de ' . number_format($payment->amount_fcfa, 0, ',', ' ') . ' FCFA.',
-                            ['payment_id' => $payment->id, 'amount' => $payment->amount_fcfa],
+                            [
+                                'app'        => 'merchant',
+                                'screen'     => 'wallet',
+                                'icon'       => 'wallet-outline',
+                                'payment_id' => $payment->id,
+                                'amount'     => (int) $payment->amount_fcfa,
+                            ],
                             null,
                         );
                     } else {
@@ -321,7 +333,14 @@ class SubscriptionController extends Controller
                     'wallet.withdraw_paid',
                     'Virement effectué',
                     "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA a été viré automatiquement.",
-                    ['withdraw_id' => $withdraw->id, 'reference' => $withdraw->external_payout_reference],
+                    [
+                        'app'         => $withdraw->isForDriver() ? 'driver' : 'merchant',
+                        'screen'      => 'wallet',
+                        'icon'        => 'wallet-outline',
+                        'withdraw_id' => $withdraw->id,
+                        'reference'   => $withdraw->external_payout_reference,
+                        'amount'      => (int) $withdraw->amount_fcfa,
+                    ],
                     null,
                 );
             });
@@ -346,7 +365,14 @@ class SubscriptionController extends Controller
                     'wallet.withdraw_refunded',
                     'Virement échoué',
                     "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA n'a pas pu être effectué. La somme a été remise sur votre solde. Vérifiez votre numéro et réessayez.",
-                    ['withdraw_id' => $withdraw->id, 'failure_reason' => $withdraw->payout_failure_reason],
+                    [
+                        'app'            => $withdraw->isForDriver() ? 'driver' : 'merchant',
+                        'screen'         => 'wallet',
+                        'icon'           => 'alert-circle-outline',
+                        'withdraw_id'    => $withdraw->id,
+                        'failure_reason' => $withdraw->payout_failure_reason,
+                        'amount'         => (int) $withdraw->amount_fcfa,
+                    ],
                     null,
                 );
             });

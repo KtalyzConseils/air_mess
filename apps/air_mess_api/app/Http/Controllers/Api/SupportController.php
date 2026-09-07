@@ -148,7 +148,13 @@ class SupportController extends Controller
             'course.cancelled_by_support',
             '↩️ Course annulée par le support',
             "Votre course {$course->reference} a été annulée à votre demande. Motif : {$data['reason']}",
-            ['reference' => $course->reference],
+            [
+                'app'       => 'merchant',
+                'screen'    => 'course_detail',
+                'icon'      => 'close-circle-outline',
+                'reference' => $course->reference,
+                'status'    => Course::STATUS_CANCELLED,
+            ],
             $course->id,
         );
 

@@ -146,10 +146,32 @@ class CourseController extends Controller
                 'Course en prise en charge premium',
                 "Votre course {$course->reference} dépasse le seuil grand public. "
                 . "Notre équipe va vous contacter pour assigner un livreur dédié.",
-                ['reference' => $course->reference],
+                [
+                    'app'           => 'merchant',
+                    'screen'        => 'course_detail',
+                    'icon'          => 'shield-checkmark-outline',
+                    'reference'     => $course->reference,
+                    'status'        => $course->status,
+                    'is_high_value' => true,
+                ],
                 $course->id,
             );
         } else {
+            $notifier->sendToUser(
+                $course->sender_id,
+                'course.created',
+                'Course creee',
+                "Votre course {$course->reference} est enregistree. Nous cherchons un livreur disponible.",
+                [
+                    'app'       => 'merchant',
+                    'screen'    => 'course_detail',
+                    'icon'      => 'cube-outline',
+                    'reference' => $course->reference,
+                    'status'    => $course->status,
+                ],
+                $course->id,
+            );
+
             // Flow normal : PUSH aux livreurs disponibles dans un rayon de 8 km
             $driverUserIds = Driver::availableNear($course->origin_lat, $course->origin_lng, 8.0)
             ->pluck('user_id')
@@ -553,7 +575,14 @@ class CourseController extends Controller
             'course.return_initiated',
             'Retour du colis en cours',
             "Le livreur revient. Code à lui donner à la remise : {$course->return_code}",
-            ['reference' => $course->reference, 'return_code' => $course->return_code],
+            [
+                'app'         => 'merchant',
+                'screen'      => 'course_detail',
+                'icon'        => 'return-up-back-outline',
+                'reference'   => $course->reference,
+                'status'      => Course::STATUS_RETURNING_TO_SENDER,
+                'return_code' => $course->return_code,
+            ],
             $course->id,
         );
 
