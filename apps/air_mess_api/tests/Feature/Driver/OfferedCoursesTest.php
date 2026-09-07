@@ -122,6 +122,34 @@ class OfferedCoursesTest extends TestCase
         $this->assertEquals($standard->id, $courses[1]['id']);
     }
 
+    public function test_express_course_disappears_after_fifteen_minutes_when_ignored(): void
+    {
+        [$user] = $this->makeAvailableDriverAt(6.3703, 2.3912);
+        $visible = $this->makeAwaitingCourseAt(6.3710, 2.3920, 'express');
+        $expired = $this->makeAwaitingCourseAt(6.3711, 2.3921, 'express');
+        $expired->update(['created_at' => now()->subMinutes(16)]);
+
+        Sanctum::actingAs($user);
+        $ids = collect($this->getJson('/api/driver/offered-courses')->json('courses'))->pluck('id');
+
+        $this->assertContains($visible->id, $ids);
+        $this->assertNotContains($expired->id, $ids);
+    }
+
+    public function test_standard_course_disappears_after_twenty_four_hours_when_ignored(): void
+    {
+        [$user] = $this->makeAvailableDriverAt(6.3703, 2.3912);
+        $visible = $this->makeAwaitingCourseAt(6.3710, 2.3920, 'standard');
+        $expired = $this->makeAwaitingCourseAt(6.3711, 2.3921, 'standard');
+        $expired->update(['created_at' => now()->subHours(25)]);
+
+        Sanctum::actingAs($user);
+        $ids = collect($this->getJson('/api/driver/offered-courses')->json('courses'))->pluck('id');
+
+        $this->assertContains($visible->id, $ids);
+        $this->assertNotContains($expired->id, $ids);
+    }
+
     public function test_closer_courses_appear_first_within_same_urgency(): void
     {
         [$user] = $this->makeAvailableDriverAt(6.3703, 2.3912);

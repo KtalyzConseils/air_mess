@@ -111,6 +111,21 @@ class DriverController extends Controller
             ->whereNull('driver_id')
             ->with('packageCategory');
 
+        // Une proposition ignorée ne doit pas rester indéfiniment dans le flux livreur.
+        // La course reste disponible côté marchand/ops : seul son affichage dans les
+        // propositions expire, après 15 min en express et 24 h en standard.
+        $expressCutoff = now()->subMinutes(15);
+        $standardCutoff = now()->subHours(24);
+        $query->where(function ($q) use ($expressCutoff, $standardCutoff) {
+            $q->where(function ($express) use ($expressCutoff) {
+                $express->where('urgency', 'express')
+                    ->where('created_at', '>=', $expressCutoff);
+            })->orWhere(function ($standard) use ($standardCutoff) {
+                $standard->where('urgency', 'standard')
+                    ->where('created_at', '>=', $standardCutoff);
+            });
+        });
+
         // Filtre premium (>= high_value_threshold_fcfa) + filtre "aux frais du destinataire"
         // + filtre caution : réservés aux drivers Airmess. Un driver indépendant ne voit
         // JAMAIS ces courses — l'ops ou un Airmess les prend.
