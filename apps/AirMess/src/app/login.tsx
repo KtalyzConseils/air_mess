@@ -21,7 +21,10 @@ const LOGIN_COPY = {
     tagline: 'Espace marchand',
     welcome: 'Bienvenue',
     subtitle: 'Connecte-toi avec ton numero de telephone.',
+    codeTitle: 'Verification',
+    codeSubtitle: (phone: string) => `Entre le code envoye au ${phone}.`,
     phone: 'Telephone',
+    back: 'Retour',
     edit: 'Modifier',
     editLabel: 'Modifier le numero',
     codeLabel: 'Code recu par SMS',
@@ -35,7 +38,10 @@ const LOGIN_COPY = {
     tagline: 'Merchant space',
     welcome: 'Welcome',
     subtitle: 'Sign in with your phone number.',
+    codeTitle: 'Verification',
+    codeSubtitle: (phone: string) => `Enter the code sent to ${phone}.`,
     phone: 'Phone',
+    back: 'Back',
     edit: 'Edit',
     editLabel: 'Edit phone number',
     codeLabel: 'Code received by SMS',
@@ -126,39 +132,47 @@ export default function LoginScreen() {
         </View>
 
         <View className="mx-5 rounded-3xl bg-cream p-6 shadow-cta-dark">
-          <Text className="mb-1 text-xl font-extrabold text-ink">{copy.welcome}</Text>
-          <Text className="mb-5 text-sm text-warm-500">{copy.subtitle}</Text>
+          {step === 'phone' ? (
+            <>
+              <Text className="mb-1 text-xl font-extrabold text-ink">{copy.welcome}</Text>
+              <Text className="mb-5 text-sm text-warm-500">{copy.subtitle}</Text>
 
-          <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
-            {copy.phone}
-          </Text>
-          <View className="relative mb-4">
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              editable={step === 'phone'}
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              placeholder="+229..."
-              placeholderTextColor="#B8AF9F"
-              className="h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink"
-              style={step === 'code' ? { opacity: 0.5 } : undefined}
-            />
-            {step === 'code' && (
+              <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
+                {copy.phone}
+              </Text>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+                placeholder="+229..."
+                placeholderTextColor="#B8AF9F"
+                className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink"
+              />
+            </>
+          ) : (
+            <>
               <Pressable
                 onPress={editPhone}
-                className="absolute right-3 top-0 h-14 items-center justify-center"
-                hitSlop={8}
+                className="mb-4 h-10 flex-row items-center self-start rounded-full bg-off-white px-3"
                 accessibilityRole="button"
                 accessibilityLabel={copy.editLabel}
               >
-                <Text className="text-xs font-extrabold text-airmess-red">{copy.edit}</Text>
+                <Ionicons name="arrow-back" size={17} color="#1A1614" />
+                <Text className="ml-1.5 text-xs font-extrabold text-ink">{copy.back}</Text>
               </Pressable>
-            )}
-          </View>
 
-          {step === 'code' && (
-            <>
+              <Text className="mb-1 text-xl font-extrabold text-ink">{copy.codeTitle}</Text>
+              <Text className="mb-4 text-sm text-warm-500">{copy.codeSubtitle(trimmedPhone)}</Text>
+
+              <View className="mb-4 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4 py-3">
+                <Ionicons name="call-outline" size={18} color="#8A7E68" />
+                <Text className="ml-2 flex-1 text-sm font-extrabold text-ink">{trimmedPhone}</Text>
+                <Pressable onPress={editPhone} accessibilityRole="button" hitSlop={8}>
+                  <Text className="text-xs font-extrabold text-airmess-red">{copy.edit}</Text>
+                </Pressable>
+              </View>
+
               {debugCode && (
                 <Text className="mb-3 rounded-2xl bg-airmess-yellow/20 px-3 py-2 text-center text-sm font-extrabold text-ink">
                   {copy.debugCode} {debugCode}

@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import Constants from 'expo-constants'
 import { Link, useFocusEffect, useRouter } from 'expo-router'
 import { isAxiosError } from 'axios'
 import Card from '../../components/ui/Card'
@@ -23,6 +24,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { DRIVER_APK_URL, getDriverRegisterUrl } from '../../lib/webUrl'
+import { PRIVACY_URL, TERMS_URL } from '../../api/terms'
 import type { Marchant } from '../../types/auth'
 
 const SECTOR_OPTIONS: { value: Marchant['secteur_activite']; label: string }[] = [
@@ -79,6 +81,13 @@ const PROFILE_COPY = {
     securitySubtitle: 'Compte et sessions',
     information: 'Informations',
     informationSubtitle: 'A propos de AirMess',
+    informationTitle: 'AirMess Marchand',
+    informationBody: 'AirMess aide les commerces a creer, suivre et payer leurs courses depuis une seule application.',
+    informationVersion: 'Version',
+    informationLegal: 'Documents legaux',
+    informationTerms: 'Conditions generales',
+    informationPrivacy: 'Confidentialite',
+    informationSupport: 'Contacter le support',
     deleteAccount: 'Supprimer mon compte',
     deleteAccountSubtitle: 'Demande definitive de suppression',
     deleteAccountConfirmTitle: 'Supprimer le compte ?',
@@ -154,6 +163,13 @@ const PROFILE_COPY = {
     securitySubtitle: 'Account and sessions',
     information: 'Information',
     informationSubtitle: 'About AirMess',
+    informationTitle: 'AirMess Merchant',
+    informationBody: 'AirMess helps businesses create, track and pay for deliveries from one app.',
+    informationVersion: 'Version',
+    informationLegal: 'Legal documents',
+    informationTerms: 'Terms of service',
+    informationPrivacy: 'Privacy',
+    informationSupport: 'Contact support',
     deleteAccount: 'Delete my account',
     deleteAccountSubtitle: 'Permanent deletion request',
     deleteAccountConfirmTitle: 'Delete account?',
@@ -201,6 +217,7 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false)
   const [supportContext, setSupportContext] = useState('Profil marchand')
   const [driverSheetOpen, setDriverSheetOpen] = useState(false)
+  const [infoSheetOpen, setInfoSheetOpen] = useState(false)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [form, setForm] = useState<UpdateMarchantProfilePayload>({
     name: '',
@@ -549,7 +566,12 @@ export default function ProfileScreen() {
           onPress={openWebAccessModal}
         />
         <Divider />
-        <MenuRow icon="information-circle" title={copy.information} subtitle={copy.informationSubtitle} />
+        <MenuRow
+          icon="information-circle"
+          title={copy.information}
+          subtitle={copy.informationSubtitle}
+          onPress={() => setInfoSheetOpen(true)}
+        />
       </Card>
 
       <Pressable
@@ -830,6 +852,47 @@ export default function ProfileScreen() {
         <DriverStep icon="phone-portrait-outline" label={copy.becomeDriverStepApp} />
       </View>
     </BottomSheet>
+    <BottomSheet
+      visible={infoSheetOpen}
+      onClose={() => setInfoSheetOpen(false)}
+      title={copy.informationTitle}
+      subtitle={copy.informationSubtitle}
+      footer={
+        <Button variant="outline" onPress={() => setInfoSheetOpen(false)}>
+          {copy.cancel}
+        </Button>
+      }
+    >
+      <View className="rounded-2xl bg-airmess-dark p-4">
+        <View className="mb-3 h-12 w-12 items-center justify-center rounded-full bg-airmess-yellow">
+          <Ionicons name="cube-outline" size={24} color="#1A1614" />
+        </View>
+        <Text className="text-sm font-semibold leading-5 text-cream">{copy.informationBody}</Text>
+      </View>
+
+      <View className="mt-4 rounded-2xl border border-warm-200 bg-off-white px-4 py-3 dark:border-[#343A46] dark:bg-[#181B24]">
+        <Text className="text-xs font-extrabold uppercase text-warm-500 dark:text-[#AEB6C5]">{copy.informationVersion}</Text>
+        <Text className="mt-1 text-lg font-extrabold text-ink dark:text-white">
+          {Constants.expoConfig?.version ?? '1.0.0'}
+        </Text>
+      </View>
+
+      <Text className="mb-2 mt-5 text-xs font-extrabold uppercase text-warm-500 dark:text-[#AEB6C5]">
+        {copy.informationLegal}
+      </Text>
+      <View className="gap-2">
+        <InfoAction icon="document-text-outline" label={copy.informationTerms} onPress={() => void Linking.openURL(TERMS_URL)} />
+        <InfoAction icon="lock-closed-outline" label={copy.informationPrivacy} onPress={() => void Linking.openURL(PRIVACY_URL)} />
+        <InfoAction
+          icon="headset-outline"
+          label={copy.informationSupport}
+          onPress={() => {
+            setInfoSheetOpen(false)
+            openSupport(copy.information)
+          }}
+        />
+      </View>
+    </BottomSheet>
     <SupportContactSheet visible={supportOpen} onClose={() => setSupportOpen(false)} context={supportContext} />
     </>
   )
@@ -877,6 +940,31 @@ function DriverStep({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; lab
       </View>
       <Text className="flex-1 text-sm font-extrabold leading-5 text-ink dark:text-white">{label}</Text>
     </View>
+  )
+}
+
+function InfoAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  label: string
+  onPress: () => void
+}) {
+  const theme = useThemeStore((state) => state.theme)
+  const iconColor = theme === 'dark' ? '#FDFCF9' : '#1A1614'
+
+  return (
+    <Pressable
+      onPress={onPress}
+      className="min-h-14 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4 py-3 dark:border-[#343A46] dark:bg-[#181B24]"
+      accessibilityRole="button"
+    >
+      <Ionicons name={icon} size={21} color={iconColor} />
+      <Text className="ml-3 flex-1 text-sm font-extrabold text-ink dark:text-white">{label}</Text>
+      <Ionicons name="chevron-forward" size={18} color={iconColor} />
+    </Pressable>
   )
 }
 
