@@ -25,7 +25,7 @@ export default function AdminTabs<K extends string>({ tabs, value, onChange }: A
             type="button"
             onClick={() => onChange(t.key)}
             className={[
-              'inline-flex items-center gap-1.5 h-8 px-3 rounded text-body-s font-medium transition-colors',
+              'inline-flex shrink-0 items-center gap-1.5 h-8 px-3 rounded text-body-s font-medium whitespace-nowrap transition-colors',
               active
                 ? 'bg-airmess-dark text-white shadow-sm'
                 : 'text-warm-600 hover:text-ink',

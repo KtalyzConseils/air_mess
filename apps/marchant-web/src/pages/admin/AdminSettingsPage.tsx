@@ -4,6 +4,7 @@ import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminTabs from '../../components/admin/AdminTabs'
 import { AdminButton } from '../../components/admin/AdminToolbar'
 import {
   AlertTriangleIcon,
@@ -13,6 +14,8 @@ import {
   CheckIcon,
   DashboardIcon,
   MenuIcon,
+  BankIcon,
+  HelpCircleIcon,
   type IconProps,
 } from '../../components/ui/icons'
 import { fetchSettings, updateSetting, type AppSetting, type SettingChoice } from '../../api/admin/settings'
@@ -52,14 +55,49 @@ const GROUP_META_CONFIG: Record<string, GroupMetaConfig> = {
     descKey: 'admin.settings.groupConflictsDesc',
     Icon: AlertTriangleIcon,
   },
+  wallet: {
+    labelKey: 'admin.settings.groupWalletLabel',
+    descKey: 'admin.settings.groupWalletDesc',
+    Icon: BankIcon,
+  },
+  support: {
+    labelKey: 'admin.settings.groupSupportLabel',
+    descKey: 'admin.settings.groupSupportDesc',
+    Icon: HelpCircleIcon,
+  },
 }
+
+const PLANS_TAB = '__plans'
+const INTERFACE_TAB = '__interface'
 
 export default function AdminSettingsPage() {
   const { t } = useTranslation()
+  const [activeTab, setActiveTab] = useState<string | null>(null)
+
   const { data: settings, isLoading, isError } = useQuery({
     queryKey: ['admin', 'settings'],
     queryFn: fetchSettings,
   })
+  const { data: plans, isLoading: plansLoading, isError: plansError } = useQuery({
+    queryKey: ['admin', 'plans'],
+    queryFn: fetchAdminPlans,
+  })
+
+  const groupKeys = settings ? Object.keys(settings) : []
+  const ready = !!settings
+
+  // Onglet actif résolu : le choix explicite de l'utilisateur, sinon le premier
+  // groupe disponible — évite un état "aucun onglet sélectionné" au chargement.
+  const currentTab = activeTab ?? groupKeys[0] ?? PLANS_TAB
+
+  const tabs = [
+    ...groupKeys.map((g) => {
+      const cfg = GROUP_META_CONFIG[g]
+      return { key: g, label: cfg ? t(cfg.labelKey) : g, count: settings![g].length }
+    }),
+    { key: PLANS_TAB, label: t('admin.settings.plansSectionLabel'), count: plans?.length },
+    { key: INTERFACE_TAB, label: t('admin.settings.navPrefsLabel') },
+  ]
 
   return (
     <AdminPageShell>
@@ -68,10 +106,7 @@ export default function AdminSettingsPage() {
         subtitle={t('admin.settings.subtitleShort')}
       />
 
-      <div className="px-4 md:px-8 lg:px-12 py-6 max-w-4xl mx-auto space-y-8">
-        {/* Préférences UI — locale (par-device), pas un setting serveur */}
-        <NavPreferenceSection />
-
+      <div className="px-4 md:px-8 lg:px-12 py-6 max-w-4xl mx-auto space-y-5">
         {isLoading && (
           <p className="text-body-s text-warm-500">{t('admin.settings.loadingLabel')}</p>
         )}
@@ -79,35 +114,51 @@ export default function AdminSettingsPage() {
           <p className="text-body-s text-airmess-red">{t('admin.settings.loadingError')}</p>
         )}
 
-        {settings &&
-          Object.entries(settings).map(([group, items]) => {
-            const cfg = GROUP_META_CONFIG[group]
-            const meta: GroupMeta = cfg
-              ? { label: t(cfg.labelKey), description: t(cfg.descKey), Icon: cfg.Icon }
-              : { label: group, description: '', Icon: SettingsIcon }
-            return (
-              <SettingsGroup key={group} meta={meta}>
+        {ready && (
+          <>
+            <div className="-mx-4 md:-mx-8 lg:-mx-12 overflow-x-auto px-4 md:px-8 lg:px-12">
+              <AdminTabs tabs={tabs} value={currentTab} onChange={setActiveTab} />
+            </div>
+
+            {groupKeys.includes(currentTab) && (
+              <SettingsPanel
+                meta={
+                  GROUP_META_CONFIG[currentTab]
+                    ? {
+                        label: t(GROUP_META_CONFIG[currentTab].labelKey),
+                        description: t(GROUP_META_CONFIG[currentTab].descKey),
+                        Icon: GROUP_META_CONFIG[currentTab].Icon,
+                      }
+                    : { label: currentTab, description: '', Icon: SettingsIcon }
+                }
+              >
                 <ul className="divide-y divide-warm-200">
-                  {items.map((s) => (
+                  {settings![currentTab].map((s) => (
                     <SettingRow key={s.key} setting={s} />
                   ))}
                 </ul>
-              </SettingsGroup>
-            )
-          })}
+              </SettingsPanel>
+            )}
 
-        <PlansSection />
+            {currentTab === PLANS_TAB && (
+              <PlansPanel plans={plans} isLoading={plansLoading} isError={plansError} />
+            )}
+
+            {currentTab === INTERFACE_TAB && <NavPreferencePanel />}
+          </>
+        )}
       </div>
     </AdminPageShell>
   )
 }
 
 /* ============================================================
-   Groupe de paramètres : en-tête avec icône + description,
-   puis liste de rows. Le visuel principal vient du contraste
-   entre l'en-tête (jaune subtil) et le corps (off-white).
+   Panneau de paramètres — même langage visuel que les Panel des
+   autres pages admin (dashboard, listes) : en-tête sobre à bordure,
+   pas de bandeau coloré. Un seul panneau visible à la fois grâce
+   aux onglets, au lieu d'empiler toutes les sections au scroll.
    ============================================================ */
-function SettingsGroup({
+function SettingsPanel({
   meta,
   children,
 }: {
@@ -116,13 +167,15 @@ function SettingsGroup({
 }) {
   return (
     <section className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
-      <header className="flex items-start gap-3 px-6 py-4 bg-airmess-yellow/8 border-b border-warm-200">
-        <span className="shrink-0 w-9 h-9 rounded-md bg-airmess-yellow text-ink flex items-center justify-center">
-          <meta.Icon size={18} />
+      <header className="flex items-center gap-2 px-4 py-2.5 border-b border-warm-200">
+        <span className="shrink-0 text-warm-600">
+          <meta.Icon size={16} />
         </span>
         <div className="min-w-0">
-          <h2 className="text-body font-bold text-ink leading-tight">{meta.label}</h2>
-          <p className="text-caption text-warm-600 mt-0.5">{meta.description}</p>
+          <h2 className="text-body-s font-bold text-ink truncate">{meta.label}</h2>
+          {meta.description && (
+            <p className="text-caption text-warm-500 truncate">{meta.description}</p>
+          )}
         </div>
       </header>
       {children}
@@ -131,17 +184,21 @@ function SettingsGroup({
 }
 
 /* ============================================================
-   Section plans abonnements — pareil mais sans data dynamique
+   Panneau plans abonnements — même structure que SettingsPanel
    ============================================================ */
-function PlansSection() {
+function PlansPanel({
+  plans,
+  isLoading,
+  isError,
+}: {
+  plans?: AdminPlan[]
+  isLoading: boolean
+  isError: boolean
+}) {
   const { t } = useTranslation()
-  const { data: plans, isLoading, isError } = useQuery({
-    queryKey: ['admin', 'plans'],
-    queryFn: fetchAdminPlans,
-  })
 
   return (
-    <SettingsGroup
+    <SettingsPanel
       meta={{
         label: t('admin.settings.plansSectionLabel'),
         description: t('admin.settings.plansSectionDesc'),
@@ -149,12 +206,12 @@ function PlansSection() {
       }}
     >
       {isLoading && (
-        <p className="text-body-s text-warm-500 px-6 py-4">
+        <p className="text-body-s text-warm-500 px-4 py-4">
           {t('admin.settings.loadingPlans')}
         </p>
       )}
       {isError && (
-        <p className="text-body-s text-airmess-red px-6 py-4">
+        <p className="text-body-s text-airmess-red px-4 py-4">
           {t('admin.settings.loadingError')}
         </p>
       )}
@@ -166,7 +223,7 @@ function PlansSection() {
           ))}
         </ul>
       )}
-    </SettingsGroup>
+    </SettingsPanel>
   )
 }
 
@@ -588,7 +645,10 @@ function parseValue(raw: string, type: AppSetting['type']) {
 }
 
 /* ============================================================
-   Préférence de navigation — store local (par-device).
+   Préférence de navigation — store local (par-device), pas un
+   setting serveur. Isolée dans son propre onglet "Interface" pour
+   ne pas mélanger visuellement réglages plateforme et préférence
+   perso, tout en gardant le même langage visuel de panneau.
    ============================================================ */
 
 interface NavOption {
@@ -619,13 +679,13 @@ const NAV_OPTIONS: NavOption[] = [
   },
 ]
 
-function NavPreferenceSection() {
+function NavPreferencePanel() {
   const { t } = useTranslation()
   const navMode = useUiPrefsStore((s) => s.navMode)
   const setNavMode = useUiPrefsStore((s) => s.setNavMode)
 
   return (
-    <SettingsGroup
+    <SettingsPanel
       meta={{
         label: t('admin.settings.navPrefsLabel'),
         description: t('admin.settings.navPrefsDesc'),
@@ -676,6 +736,6 @@ function NavPreferenceSection() {
           )
         })}
       </ul>
-    </SettingsGroup>
+    </SettingsPanel>
   )
 }

@@ -430,7 +430,11 @@ function AddressFormModal({
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 28 }}
+          >
             <FieldLabel>{copy.recipientName}</FieldLabel>
             <AddressInput
               value={form.recipient_name}

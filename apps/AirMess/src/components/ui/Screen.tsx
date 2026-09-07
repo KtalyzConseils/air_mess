@@ -48,8 +48,8 @@ export default function Screen({
       {scroll ? (
         <KeyboardAwareScrollView
           className={['flex-1', className].join(' ')}
-          contentContainerStyle={{ paddingTop: py, paddingBottom: py + 24 }}
-          bottomOffset={96}
+          contentContainerStyle={{ paddingTop: py, paddingBottom: py + 128 }}
+          bottomOffset={140}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}

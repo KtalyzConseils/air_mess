@@ -581,7 +581,11 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 28 }}
+          >
             <FieldLabel>{copy.responsibleName}</FieldLabel>
             <ProfileInput
               value={form.name}
@@ -687,7 +691,11 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 28 }}
+          >
             <FieldLabel>{copy.webAccessEmail}</FieldLabel>
             <TextInput
               value={webAccessForm.email}

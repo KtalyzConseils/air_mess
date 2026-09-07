@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ActivityIndicator, Alert, Modal, Pressable, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { KeyboardAvoidingView, KeyboardProvider } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -482,7 +482,12 @@ function TopUpModal({
       <KeyboardProvider navigationBarTranslucent statusBarTranslucent>
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
-            <Card padding="lg" className="bg-cream">
+            <Card padding="lg" className="max-h-[88%] bg-cream">
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 24 }}
+              >
           <Text className="text-2xl font-extrabold text-ink">{copy.topUpTitle}</Text>
           <Text className="mt-1 text-sm leading-5 text-warm-600">
             {copy.topUpSubtitle}
@@ -523,6 +528,7 @@ function TopUpModal({
             onCancel={onClose}
             onSubmit={onSubmit}
           />
+              </ScrollView>
             </Card>
           </View>
         </KeyboardAvoidingView>
@@ -565,7 +571,12 @@ function WithdrawModal({
       <KeyboardProvider navigationBarTranslucent statusBarTranslucent>
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
-            <Card padding="lg" className="bg-cream">
+            <Card padding="lg" className="max-h-[88%] bg-cream">
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 24 }}
+              >
           <Text className="text-2xl font-extrabold text-ink">{copy.withdrawTitle}</Text>
           <Text className="mt-1 text-sm leading-5 text-warm-600">
             {copy.withdrawSubtitle}
@@ -612,6 +623,7 @@ function WithdrawModal({
             onCancel={onClose}
             onSubmit={onSubmit}
           />
+              </ScrollView>
             </Card>
           </View>
         </KeyboardAvoidingView>
