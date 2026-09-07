@@ -24,3 +24,7 @@ export async function setWebAccess(payload: SetWebAccessPayload): Promise<User> 
   const { data } = await api.post<{ user: User }>('/profile/web-access', payload)
   return data.user
 }
+
+export async function deleteAccount(): Promise<void> {
+  await api.delete('/auth/me')
+}

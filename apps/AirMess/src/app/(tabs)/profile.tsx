@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  Alert,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -15,12 +16,13 @@ import { isAxiosError } from 'axios'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import Button from '../../components/ui/Button'
+import BottomSheet from '../../components/ui/BottomSheet'
 import SupportContactSheet from '../../components/SupportContactSheet'
-import { setWebAccess, updateMarchantProfile, type UpdateMarchantProfilePayload } from '../../api/profile'
+import { deleteAccount, setWebAccess, updateMarchantProfile, type UpdateMarchantProfilePayload } from '../../api/profile'
 import { useAuthStore } from '../../stores/authStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { useThemeStore } from '../../stores/themeStore'
-import { getWebLoginUrl } from '../../lib/webUrl'
+import { DRIVER_APK_URL, getDriverRegisterUrl } from '../../lib/webUrl'
 import type { Marchant } from '../../types/auth'
 
 const SECTOR_OPTIONS: { value: Marchant['secteur_activite']; label: string }[] = [
@@ -65,12 +67,24 @@ const PROFILE_COPY = {
     paymentMethods: 'Modes de paiement',
     paymentSubtitle: 'Wallet AirMess et especes',
     becomeDriver: 'Devenez livreur',
+    becomeDriverTitle: 'Devenir livreur Air Mess',
+    becomeDriverSubtitle: "Candidature, validation, puis application livreur.",
+    becomeDriverBody: "L'inscription livreur se fait sur le formulaire web Air Mess. Notre equipe verifie ensuite les documents sous 24-48h.",
+    becomeDriverStepApply: 'Remplis le formulaire de candidature',
+    becomeDriverStepValidate: "Attends la validation de l'equipe Air Mess",
+    becomeDriverStepApp: "Installe l'app livreur pour recevoir les courses",
+    becomeDriverApply: 'Envoyer ma candidature',
+    becomeDriverDownload: "Telecharger l'app livreur",
     security: 'Securite',
     securitySubtitle: 'Compte et sessions',
     information: 'Informations',
     informationSubtitle: 'A propos de AirMess',
     deleteAccount: 'Supprimer mon compte',
     deleteAccountSubtitle: 'Demande definitive de suppression',
+    deleteAccountConfirmTitle: 'Supprimer le compte ?',
+    deleteAccountConfirmBody: "Cette action supprimera definitivement ton compte si aucune course n'est en cours.",
+    deleteAccountConfirmAction: 'Supprimer',
+    deleteAccountFailed: 'Suppression impossible.',
     logout: 'Se deconnecter',
     editBusiness: 'Modifier le commerce',
     editBusinessSubtitle: 'Informations visibles aux livreurs',
@@ -93,8 +107,8 @@ const PROFILE_COPY = {
     webAccessPassword: 'Mot de passe',
     webAccessPasswordConfirm: 'Confirmer le mot de passe',
     webAccessSubmit: "Activer l'acces web",
+    webAccessUpdate: 'Enregistrer',
     webAccessSuccess: 'Acces web active.',
-    webAccessOpenSite: 'Ouvrir le site web',
   },
   en: {
     profileFallback: 'Profile',
@@ -128,12 +142,24 @@ const PROFILE_COPY = {
     paymentMethods: 'Payment methods',
     paymentSubtitle: 'AirMess wallet and cash',
     becomeDriver: 'Become a driver',
+    becomeDriverTitle: 'Become an Air Mess driver',
+    becomeDriverSubtitle: 'Application, approval, then courier app.',
+    becomeDriverBody: 'Driver registration is handled on the Air Mess web form. Our team then verifies your documents within 24-48h.',
+    becomeDriverStepApply: 'Fill in the driver application form',
+    becomeDriverStepValidate: 'Wait for Air Mess approval',
+    becomeDriverStepApp: 'Install the driver app to receive deliveries',
+    becomeDriverApply: 'Send my application',
+    becomeDriverDownload: 'Download driver app',
     security: 'Security',
     securitySubtitle: 'Account and sessions',
     information: 'Information',
     informationSubtitle: 'About AirMess',
     deleteAccount: 'Delete my account',
     deleteAccountSubtitle: 'Permanent deletion request',
+    deleteAccountConfirmTitle: 'Delete account?',
+    deleteAccountConfirmBody: 'This will permanently delete your account if no delivery is in progress.',
+    deleteAccountConfirmAction: 'Delete',
+    deleteAccountFailed: 'Unable to delete account.',
     logout: 'Log out',
     editBusiness: 'Edit business',
     editBusinessSubtitle: 'Information visible to drivers',
@@ -156,8 +182,8 @@ const PROFILE_COPY = {
     webAccessPassword: 'Password',
     webAccessPasswordConfirm: 'Confirm password',
     webAccessSubmit: 'Activate web access',
+    webAccessUpdate: 'Save',
     webAccessSuccess: 'Web access activated.',
-    webAccessOpenSite: 'Open the website',
   },
 } as const
 
@@ -173,6 +199,9 @@ export default function ProfileScreen() {
   const isDark = theme === 'dark'
   const iconColor = isDark ? '#FDFCF9' : '#1A1614'
   const [editing, setEditing] = useState(false)
+  const [supportContext, setSupportContext] = useState('Profil marchand')
+  const [driverSheetOpen, setDriverSheetOpen] = useState(false)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [form, setForm] = useState<UpdateMarchantProfilePayload>({
     name: '',
     phone: '',
@@ -287,6 +316,37 @@ export default function ProfileScreen() {
     setWebAccessOpen(false)
   }
 
+  const openSupport = (context: string) => {
+    setSupportContext(context)
+    setSupportOpen(true)
+  }
+
+  const confirmDeleteAccount = () => {
+    Alert.alert(copy.deleteAccountConfirmTitle, copy.deleteAccountConfirmBody, [
+      { text: copy.cancel, style: 'cancel' },
+      {
+        text: copy.deleteAccountConfirmAction,
+        style: 'destructive',
+        onPress: () => {
+          void handleDeleteAccount()
+        },
+      },
+    ])
+  }
+
+  const handleDeleteAccount = async () => {
+    if (isDeletingAccount) return
+    setIsDeletingAccount(true)
+    try {
+      await deleteAccount()
+      await logout()
+    } catch (error) {
+      Alert.alert(copy.deleteAccountFailed, getApiErrorMessage(error))
+    } finally {
+      setIsDeletingAccount(false)
+    }
+  }
+
   const handleSaveWebAccess = async () => {
     if (!canSaveWebAccess) return
 
@@ -339,7 +399,7 @@ export default function ProfileScreen() {
 
       <View className="mt-7 flex-row justify-between">
         <QuickAction href="/(tabs)/courses" icon="time" label={copy.history} />
-        <QuickAction icon="headset" label={copy.support} onPress={() => setSupportOpen(true)} />
+        <QuickAction icon="headset" label={copy.support} onPress={() => openSupport('Profil marchand')} />
         <QuickAction href="/(tabs)/addresses" icon="people" label={copy.addresses} />
         <QuickAction href="/settings" icon="settings" label={copy.settings} />
       </View>
@@ -423,44 +483,6 @@ export default function ProfileScreen() {
         </Card>
       )}
 
-      <Card variant={hasWebAccess ? 'success' : undefined} className="mt-5">
-        <View className="flex-row items-start">
-          <View className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-off-white dark:bg-[#11141B]">
-            <Ionicons
-              name={hasWebAccess ? 'desktop' : 'desktop-outline'}
-              size={24}
-              color={hasWebAccess ? '#16A34A' : '#8A7E68'}
-            />
-          </View>
-          <View className="flex-1">
-            <Text className="text-lg font-extrabold text-ink dark:text-white">{copy.webAccessTitle}</Text>
-            <Text className="text-sm leading-5 text-warm-600 dark:text-[#AEB6C5]">
-              {hasWebAccess ? copy.webAccessSubtitleDone : copy.webAccessSubtitleMissing}
-            </Text>
-          </View>
-        </View>
-
-        {!hasWebAccess ? (
-          <Pressable
-            onPress={openWebAccessModal}
-            className="mt-4 h-12 flex-row items-center justify-center rounded-2xl bg-airmess-dark px-4 dark:bg-airmess-yellow"
-            accessibilityRole="button"
-          >
-            <Text className="text-base font-extrabold text-white dark:text-ink">{copy.webAccessActivate}</Text>
-            <Ionicons name="arrow-forward" size={18} color={isDark ? '#1A1614' : '#FFFFFF'} style={{ marginLeft: 8 }} />
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={() => void Linking.openURL(getWebLoginUrl())}
-            className="mt-4 h-12 flex-row items-center justify-center rounded-2xl bg-off-white px-4 dark:bg-[#11141B]"
-            accessibilityRole="button"
-          >
-            <Text className="text-base font-extrabold text-ink dark:text-white">{copy.webAccessOpenSite}</Text>
-            <Ionicons name="open-outline" size={18} color={iconColor} style={{ marginLeft: 8 }} />
-          </Pressable>
-        )}
-      </Card>
-
       <Card className="mt-5" padding="lg">
         <View className="mb-4 flex-row items-center justify-between">
           <View className="flex-1 flex-row items-center">
@@ -508,6 +530,7 @@ export default function ProfileScreen() {
       </Card>
 
       <Pressable
+        onPress={() => setDriverSheetOpen(true)}
         className="mt-5 h-16 flex-row items-center rounded-2xl bg-airmess-dark px-5"
         accessibilityRole="button"
       >
@@ -519,12 +542,19 @@ export default function ProfileScreen() {
       </Pressable>
 
       <Card className="mt-5" padding="none">
-        <MenuRow icon="shield-checkmark" title={copy.security} subtitle={copy.securitySubtitle} />
+        <MenuRow
+          icon="shield-checkmark"
+          title={copy.security}
+          subtitle={hasWebAccess ? copy.webAccessSubtitleDone : copy.webAccessSubtitleMissing}
+          onPress={openWebAccessModal}
+        />
         <Divider />
         <MenuRow icon="information-circle" title={copy.information} subtitle={copy.informationSubtitle} />
       </Card>
 
       <Pressable
+        onPress={confirmDeleteAccount}
+        disabled={isDeletingAccount}
         className="mt-5 min-h-14 flex-row items-center rounded-2xl border border-airmess-red/30 bg-off-white px-5 py-3 dark:bg-[#181B24]"
         accessibilityRole="button"
       >
@@ -751,7 +781,7 @@ export default function ProfileScreen() {
                   disabled={!canSaveWebAccess}
                   rightIcon={<Ionicons name="checkmark" size={20} color="#1A1614" />}
                 >
-                  {copy.webAccessSubmit}
+                  {hasWebAccess ? copy.webAccessUpdate : copy.webAccessSubmit}
                 </Button>
               </View>
             </View>
@@ -759,7 +789,48 @@ export default function ProfileScreen() {
         </View>
       </KeyboardAvoidingView>
     </Modal>
-    <SupportContactSheet visible={supportOpen} onClose={() => setSupportOpen(false)} context="Profil marchand" />
+    <BottomSheet
+      visible={driverSheetOpen}
+      onClose={() => setDriverSheetOpen(false)}
+      title={copy.becomeDriverTitle}
+      subtitle={copy.becomeDriverSubtitle}
+      footer={
+        <View className="gap-2">
+          <Button
+            onPress={() => {
+              setDriverSheetOpen(false)
+              void Linking.openURL(getDriverRegisterUrl())
+            }}
+            rightIcon={<Ionicons name="arrow-forward" size={18} color="#1A1614" />}
+          >
+            {copy.becomeDriverApply}
+          </Button>
+          <Button
+            variant="outline"
+            onPress={() => {
+              void Linking.openURL(DRIVER_APK_URL)
+            }}
+            rightIcon={<Ionicons name="download-outline" size={18} color={iconColor} />}
+          >
+            {copy.becomeDriverDownload}
+          </Button>
+        </View>
+      }
+    >
+      <View className="rounded-2xl bg-airmess-dark p-4">
+        <View className="mb-3 h-12 w-12 items-center justify-center rounded-full bg-airmess-yellow">
+          <Ionicons name="bicycle" size={24} color="#1A1614" />
+        </View>
+        <Text className="text-sm font-semibold leading-5 text-cream">{copy.becomeDriverBody}</Text>
+      </View>
+
+      <View className="mt-4 gap-3">
+        <DriverStep icon="create-outline" label={copy.becomeDriverStepApply} />
+        <DriverStep icon="shield-checkmark-outline" label={copy.becomeDriverStepValidate} />
+        <DriverStep icon="phone-portrait-outline" label={copy.becomeDriverStepApp} />
+      </View>
+    </BottomSheet>
+    <SupportContactSheet visible={supportOpen} onClose={() => setSupportOpen(false)} context={supportContext} />
     </>
   )
 }
@@ -795,22 +866,38 @@ function QuickAction({
   )
 }
 
+function DriverStep({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
+  const theme = useThemeStore((state) => state.theme)
+  const isDark = theme === 'dark'
+
+  return (
+    <View className="flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4 py-3 dark:border-[#343A46] dark:bg-[#181B24]">
+      <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-airmess-yellow/25">
+        <Ionicons name={icon} size={20} color={isDark ? '#FFCC00' : '#1A1614'} />
+      </View>
+      <Text className="flex-1 text-sm font-extrabold leading-5 text-ink dark:text-white">{label}</Text>
+    </View>
+  )
+}
+
 function MenuRow({
   icon,
   title,
   subtitle,
   href,
+  onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap
   title: string
   subtitle: string
   href?: '/(tabs)/wallet'
+  onPress?: () => void
 }) {
   const theme = useThemeStore((state) => state.theme)
   const iconColor = theme === 'dark' ? '#FDFCF9' : '#1A1614'
 
   const content = (
-    <Pressable className="min-h-20 flex-row items-center px-5 py-3" accessibilityRole="button">
+    <Pressable onPress={onPress} className="min-h-20 flex-row items-center px-5 py-3" accessibilityRole="button">
       <Ionicons name={icon} size={25} color={iconColor} />
       <View className="ml-4 flex-1">
         <Text className="text-xl font-extrabold text-ink dark:text-white">{title}</Text>

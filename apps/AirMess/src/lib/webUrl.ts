@@ -17,6 +17,8 @@
 
 const PROD_WEB_BASE = 'https://app.airmess-logistics.com'
 const DEV_WEB_BASE = 'https://dev.app.airmess-logistics.com'
+export const DRIVER_APK_URL =
+  'https://expo.dev/artifacts/eas/oJPb6g6nH13FGy08U2lQ893OL-I52H0yNJ8AQRMIsZs.apk'
 
 function getWebBase(): string {
   const apiUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? ''
@@ -28,4 +30,8 @@ export const WEB_BASE_URL = getWebBase()
 
 export function getWebLoginUrl(): string {
   return `${WEB_BASE_URL}/login`
+}
+
+export function getDriverRegisterUrl(): string {
+  return `${WEB_BASE_URL}/register/driver`
 }
