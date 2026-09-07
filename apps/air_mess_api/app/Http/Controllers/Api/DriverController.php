@@ -171,7 +171,9 @@ class DriverController extends Controller
         }
 
 
-        $courses = $query->limit(10)->get()->makeHidden(['pickup_code', 'delivery_code']);
+        $perPage = min(max((int) $request->query('per_page', 30), 1), 100);
+
+        $courses = $query->limit($perPage)->get()->makeHidden(['pickup_code', 'delivery_code']);
 
         return response()->json(['courses' => $courses]);
     }
@@ -216,11 +218,15 @@ class DriverController extends Controller
        //PUSH au marchand expéditeur
         $notifier->sendToUser(
             $course->sender_id,
-            'course.accepted',
+            'course.assigned',
             '✅ Votre course est acceptée',
             "{$driver->first_name} arrive. 🔑 Code de retrait : {$course->pickup_code}",
             [
+                'app'               => 'merchant',
+                'screen'            => 'course_detail',
+                'icon'              => 'person-circle-outline',
                 'reference'         => $course->reference,
+                'status'            => Course::STATUS_ASSIGNED,
                 'driver_first_name' => $driver->first_name,
                 'pickup_code'       => $course->pickup_code,
             ],
@@ -594,6 +600,10 @@ class DriverController extends Controller
 
         //PUSH au marchand sur les transitions visibles côté client
         $isReturnConfirmation = $data['action'] === 'return_confirmed';
+        $skipMerchantPushStatuses = [
+            Course::STATUS_TO_PICKUP,
+            Course::STATUS_PICKED_UP,
+        ];
         $messages = [
             Course::STATUS_TO_PICKUP   => ['🚀 Le livreur est en route',  'Il se dirige vers le point de retrait.'],
             Course::STATUS_AT_PICKUP   => ['📍 Le livreur est arrivé',    'Il prépare le retrait du colis.'],
@@ -605,13 +615,19 @@ class DriverController extends Controller
                 : ['⚠️ Livraison échouée',    'Le livreur signale un problème. Voir détails.'],
         ];
 
-        if (isset($messages[$nextStatus])) {
+        if (! in_array($nextStatus, $skipMerchantPushStatuses, true) && isset($messages[$nextStatus])) {
             [$title, $body] = $messages[$nextStatus];
             $notifier->sendToUser(
                 $course->sender_id,
                 "course.{$nextStatus}",
                 $title, $body,
-                ['reference' => $course->reference],
+                [
+                    'app'       => 'merchant',
+                    'screen'    => 'course_detail',
+                    'icon'      => $nextStatus === Course::STATUS_DELIVERED ? 'checkmark-circle-outline' : 'cube-outline',
+                    'reference' => $course->reference,
+                    'status'    => $nextStatus,
+                ],
                 $course->id,
             );
         }
@@ -1220,7 +1236,14 @@ class DriverController extends Controller
                 'course.return_initiated',
                 '🔄 Colis refusé — retour en cours',
                 "Le client a refusé le colis. Le livreur revient. Code à lui donner : {$course->return_code}",
-                ['reference' => $course->reference, 'return_code' => $course->return_code],
+                [
+                    'app'         => 'merchant',
+                    'screen'      => 'course_detail',
+                    'icon'        => 'return-up-back-outline',
+                    'reference'   => $course->reference,
+                    'status'      => Course::STATUS_RETURNING_TO_SENDER,
+                    'return_code' => $course->return_code,
+                ],
                 $course->id,
             );
         } else {
@@ -1230,7 +1253,13 @@ class DriverController extends Controller
                 'course.incident',
                 '⚠️ Incident signalé',
                 "Un incident a été signalé sur votre course {$course->reference}.",
-                ['reference' => $course->reference, 'incident_type' => $data['type']],
+                [
+                    'app'           => 'merchant',
+                    'screen'        => 'course_detail',
+                    'icon'          => 'warning-outline',
+                    'reference'     => $course->reference,
+                    'incident_type' => $data['type'],
+                ],
                 $course->id,
             );
         }

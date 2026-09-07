@@ -14,7 +14,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/plus-jakarta-sans'
 import BrandSplash from '../components/BrandSplash'
-import { registerPushNotifications } from '../lib/notifications'
+import { installNotificationRouting, registerPushNotifications } from '../lib/notifications'
 import { useAuthStore } from '../stores/authStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { useThemeStore } from '../stores/themeStore'
@@ -66,6 +66,10 @@ export default function RootLayout() {
       console.warn('[push] Enregistrement impossible :', error)
     })
   }, [user])
+
+  useEffect(() => {
+    return installNotificationRouting()
+  }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => setMinElapsed(true), MIN_SPLASH_MS)

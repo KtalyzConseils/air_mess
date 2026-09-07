@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
+import { router } from 'expo-router'
 import Screen from '../../components/ui/Screen'
 import {
   fetchNotifications,
@@ -156,7 +157,7 @@ function NotificationRow({ item }: { item: NotificationItem }) {
   const theme = useThemeStore((state) => state.theme)
   const isDark = theme === 'dark'
   const isRead = item.read_at !== null
-  const meta = iconMetaFor(item.type, item.title, item.body)
+  const meta = iconMetaFor(item.type, item.title, item.body, item.data)
 
   const mutation = useMutation({
     mutationFn: () => markNotificationRead(item.id),
@@ -170,6 +171,7 @@ function NotificationRow({ item }: { item: NotificationItem }) {
     <Pressable
       onPress={() => {
         if (!isRead) mutation.mutate()
+        openNotification(item)
       }}
       className="overflow-hidden rounded-2xl border border-warm-200 bg-off-white dark:border-[#2A2F3A] dark:bg-[#181B24]"
       style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
@@ -214,7 +216,11 @@ interface IconMeta {
   bg: string
 }
 
-function iconMetaFor(type: string, title = '', body = ''): IconMeta {
+function iconMetaFor(type: string, title = '', body = '', data?: Record<string, unknown> | null): IconMeta {
+  if (data && typeof data.icon === 'string' && data.icon in Ionicons.glyphMap) {
+    return { icon: data.icon as keyof typeof Ionicons.glyphMap, color: '#1A1614', bg: 'rgba(255,204,0,0.25)' }
+  }
+
   const text = `${type} ${title} ${body}`.toLowerCase()
   if (text.includes('wallet') || text.includes('paiement') || text.includes('payment')) {
     return { icon: 'wallet', color: '#0284C7', bg: '#E0F2FE' }
@@ -229,6 +235,17 @@ function iconMetaFor(type: string, title = '', body = ''): IconMeta {
     return { icon: 'warning', color: '#B45309', bg: '#FEF3C7' }
   }
   return { icon: 'notifications', color: '#1A1614', bg: '#F4EFE4' }
+}
+
+function openNotification(item: NotificationItem) {
+  if (item.course_id) {
+    router.push({ pathname: '/courses/[id]', params: { id: String(item.course_id) } })
+    return
+  }
+
+  if (item.data?.screen === 'wallet') {
+    router.push('/(tabs)/wallet')
+  }
 }
 
 function formatRelative(iso: string, language: 'fr' | 'en'): string {
