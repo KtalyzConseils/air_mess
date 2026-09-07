@@ -112,6 +112,7 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('throttle:auth-register');
     });
     Route::patch('/profile/marchant', [ProfileController::class, 'updateMarchant']);
+    Route::patch('/profile/individual', [ProfileController::class, 'updateIndividual']);
     // Active l'accès au site web (email + mot de passe choisis par l'utilisateur)
     // pour un compte créé via l'inscription rapide / login SMS.
     Route::post('/profile/web-access', [ProfileController::class, 'setWebAccess']);

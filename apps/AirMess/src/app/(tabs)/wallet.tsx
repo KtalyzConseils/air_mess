@@ -268,9 +268,9 @@ export default function WalletScreen() {
           <Text className="text-xs font-extrabold uppercase tracking-widest text-airmess-red">
             {copy.brand}
           </Text>
-          <Text className="mt-1 text-3xl font-extrabold text-ink">{copy.title}</Text>
+          <Text className="mt-1 text-3xl font-extrabold text-ink dark:text-white">{copy.title}</Text>
         </View>
-        <View className="h-12 w-12 items-center justify-center rounded-full bg-off-white border border-warm-200">
+        <View className="h-12 w-12 items-center justify-center rounded-full bg-off-white border border-warm-200 dark:border-[#343A46] dark:bg-[#181B24]">
           <Ionicons name="wallet-outline" size={23} color="#1A1614" />
         </View>
       </View>
@@ -285,8 +285,8 @@ export default function WalletScreen() {
             <Card variant="warning" className="mb-4 flex-row items-start">
               <Ionicons name="warning-outline" size={22} color="#F59E0B" />
               <View className="ml-3 flex-1">
-                <Text className="font-extrabold text-ink">{copy.lowBalance}</Text>
-                <Text className="mt-1 text-sm leading-5 text-warm-600">
+                <Text className="font-extrabold text-ink dark:text-white">{copy.lowBalance}</Text>
+                <Text className="mt-1 text-sm leading-5 text-warm-600 dark:text-[#AEB6C5]">
                   {copy.lowBalanceSubtitle(formatMoney(data.min_recommended_fcfa, copy.locale))}
                 </Text>
               </View>
@@ -357,14 +357,14 @@ export default function WalletScreen() {
             <MiniBalance label={copy.spent} value={data?.total_spent ?? 0} icon="arrow-up-circle" locale={copy.locale} />
           </View>
 
-          <Text className="mb-3 text-xl font-extrabold text-ink">{copy.recentTransactions}</Text>
+          <Text className="mb-3 text-xl font-extrabold text-ink dark:text-white">{copy.recentTransactions}</Text>
           {(data?.recent_transactions ?? []).length === 0 ? (
             <Card className="items-center py-8">
-              <View className="mb-3 h-12 w-12 items-center justify-center rounded-full bg-warm-100">
+              <View className="mb-3 h-12 w-12 items-center justify-center rounded-full bg-warm-100 dark:bg-[#11141B]">
                 <Ionicons name="receipt-outline" size={22} color="#6B6250" />
               </View>
-              <Text className="text-center text-base font-extrabold text-ink">{copy.noMovement}</Text>
-              <Text className="mt-1 text-center text-sm text-warm-600">
+              <Text className="text-center text-base font-extrabold text-ink dark:text-white">{copy.noMovement}</Text>
+              <Text className="mt-1 text-center text-sm text-warm-600 dark:text-[#AEB6C5]">
                 {copy.noMovementSubtitle}
               </Text>
             </Card>
@@ -373,7 +373,7 @@ export default function WalletScreen() {
               {(data?.recent_transactions ?? []).slice(0, 6).map((transaction, index, items) => (
                 <View key={transaction.id}>
                   <TransactionRow transaction={transaction} copy={copy} />
-                  {index < items.length - 1 ? <View className="ml-16 h-px bg-warm-200" /> : null}
+                  {index < items.length - 1 ? <View className="ml-16 h-px bg-warm-200 dark:bg-[#2A2F3A]" /> : null}
                 </View>
               ))}
             </Card>
@@ -437,11 +437,11 @@ function PendingWithdrawCard({
           <Ionicons name="time-outline" size={21} color="#0284C7" />
         </View>
         <View className="ml-3 flex-1">
-          <Text className="text-base font-extrabold text-ink">{copy.pendingWithdraw}</Text>
-          <Text className="mt-1 text-sm font-semibold text-warm-600">
+          <Text className="text-base font-extrabold text-ink dark:text-white">{copy.pendingWithdraw}</Text>
+          <Text className="mt-1 text-sm font-semibold text-warm-600 dark:text-[#AEB6C5]">
             {copy.pendingWithdrawSubtitle(formatMoney(amount, copy.locale), method.toUpperCase(), account)}
           </Text>
-          <Text className="mt-1 text-xs font-semibold text-warm-500">
+          <Text className="mt-1 text-xs font-semibold text-warm-500 dark:text-[#AEB6C5]">
             {copy.createdOn} {formatDateTime(createdAt, copy.locale)}
           </Text>
           <Pressable
@@ -482,14 +482,14 @@ function TopUpModal({
       <KeyboardProvider navigationBarTranslucent statusBarTranslucent>
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
-            <Card padding="lg" className="max-h-[88%] bg-cream">
+            <Card padding="lg" className="max-h-[88%] bg-cream dark:bg-[#0F1115]">
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={{ paddingBottom: 24 }}
               >
-          <Text className="text-2xl font-extrabold text-ink">{copy.topUpTitle}</Text>
-          <Text className="mt-1 text-sm leading-5 text-warm-600">
+          <Text className="text-2xl font-extrabold text-ink dark:text-white">{copy.topUpTitle}</Text>
+          <Text className="mt-1 text-sm leading-5 text-warm-600 dark:text-[#AEB6C5]">
             {copy.topUpSubtitle}
           </Text>
 
@@ -500,11 +500,13 @@ function TopUpModal({
                 onPress={() => onAmountChange(String(item))}
                 className={[
                   'h-11 min-w-[104px] items-center justify-center rounded-2xl border px-4',
-                  amount === String(item) ? 'bg-airmess-yellow border-airmess-yellow' : 'bg-off-white border-warm-200',
+                  amount === String(item) ? 'bg-airmess-yellow border-airmess-yellow' : 'bg-off-white border-warm-200 dark:border-[#343A46] dark:bg-[#181B24]',
                 ].join(' ')}
                 accessibilityRole="button"
               >
-                <Text className="text-sm font-extrabold text-ink">{formatMoney(item, copy.locale)}</Text>
+                <Text className={['text-sm font-extrabold', amount === String(item) ? 'text-ink' : 'text-ink dark:text-white'].join(' ')}>
+                  {formatMoney(item, copy.locale)}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -518,7 +520,7 @@ function TopUpModal({
             keyboardType="number-pad"
             placeholder="5000"
             placeholderTextColor="#B8AF9F"
-            className="h-14 rounded-2xl border border-warm-200 bg-off-white px-4 text-base font-extrabold text-ink"
+            className="h-14 rounded-2xl border border-warm-200 bg-off-white px-4 text-base font-extrabold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
           />
 
           <ModalActions
@@ -571,14 +573,14 @@ function WithdrawModal({
       <KeyboardProvider navigationBarTranslucent statusBarTranslucent>
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <View className="flex-1 justify-end bg-ink/60 px-5 pb-5">
-            <Card padding="lg" className="max-h-[88%] bg-cream">
+            <Card padding="lg" className="max-h-[88%] bg-cream dark:bg-[#0F1115]">
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={{ paddingBottom: 24 }}
               >
-          <Text className="text-2xl font-extrabold text-ink">{copy.withdrawTitle}</Text>
-          <Text className="mt-1 text-sm leading-5 text-warm-600">
+          <Text className="text-2xl font-extrabold text-ink dark:text-white">{copy.withdrawTitle}</Text>
+          <Text className="mt-1 text-sm leading-5 text-warm-600 dark:text-[#AEB6C5]">
             {copy.withdrawSubtitle}
           </Text>
 
@@ -591,7 +593,7 @@ function WithdrawModal({
             keyboardType="number-pad"
             placeholder={String(minWithdraw)}
             placeholderTextColor="#B8AF9F"
-            className="h-14 rounded-2xl border border-warm-200 bg-off-white px-4 text-base font-extrabold text-ink"
+            className="h-14 rounded-2xl border border-warm-200 bg-off-white px-4 text-base font-extrabold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
           />
 
           <Text className="mb-2 mt-4 text-xs font-extrabold uppercase tracking-widest text-warm-500">
@@ -609,10 +611,10 @@ function WithdrawModal({
             onChangeText={onAccountChange}
             placeholder="+229 90 12 34 56"
             placeholderTextColor="#B8AF9F"
-            className="h-14 rounded-2xl border border-warm-200 bg-off-white px-4 text-base font-extrabold text-ink"
+            className="h-14 rounded-2xl border border-warm-200 bg-off-white px-4 text-base font-extrabold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
           />
 
-          <Text className="mt-2 text-xs font-semibold text-warm-500">
+          <Text className="mt-2 text-xs font-semibold text-warm-500 dark:text-[#AEB6C5]">
             {copy.availableBalanceLine(formatMoney(available, copy.locale))}
           </Text>
 
@@ -638,11 +640,11 @@ function MethodChip({ label, active, onPress }: { label: string; active: boolean
       onPress={onPress}
       className={[
         'h-12 flex-1 items-center justify-center rounded-2xl border',
-        active ? 'bg-airmess-yellow border-airmess-yellow' : 'bg-off-white border-warm-200',
+        active ? 'bg-airmess-yellow border-airmess-yellow' : 'bg-off-white border-warm-200 dark:border-[#343A46] dark:bg-[#181B24]',
       ].join(' ')}
       accessibilityRole="button"
     >
-      <Text className="text-sm font-extrabold text-ink">{label}</Text>
+      <Text className={['text-sm font-extrabold', active ? 'text-ink' : 'text-ink dark:text-white'].join(' ')}>{label}</Text>
     </Pressable>
   )
 }
@@ -664,10 +666,10 @@ function ModalActions({
     <View className="mt-6 flex-row gap-3">
       <Pressable
         onPress={onCancel}
-        className="h-14 flex-1 items-center justify-center rounded-2xl bg-off-white border border-warm-200"
+        className="h-14 flex-1 items-center justify-center rounded-2xl bg-off-white border border-warm-200 dark:border-[#343A46] dark:bg-[#181B24]"
         accessibilityRole="button"
       >
-        <Text className="text-base font-extrabold text-ink">{cancelLabel}</Text>
+        <Text className="text-base font-extrabold text-ink dark:text-white">{cancelLabel}</Text>
       </Pressable>
       <Pressable
         onPress={onSubmit}
@@ -695,10 +697,10 @@ function MiniBalance({
   return (
     <Card className="flex-1">
       <Ionicons name={icon} size={22} color="#D40511" />
-      <Text className="mt-3 text-lg font-extrabold text-ink" numberOfLines={1}>
+      <Text className="mt-3 text-lg font-extrabold text-ink dark:text-white" numberOfLines={1}>
         {formatCompactMoney(value, locale)}
       </Text>
-      <Text className="mt-1 text-xs font-bold uppercase tracking-widest text-warm-500">{label}</Text>
+      <Text className="mt-1 text-xs font-bold uppercase tracking-widest text-warm-500 dark:text-[#AEB6C5]">{label}</Text>
     </Card>
   )
 }
@@ -716,8 +718,8 @@ function TransactionRow({ transaction, copy }: { transaction: WalletTransaction;
         />
       </View>
       <View className="ml-4 flex-1">
-        <Text className="text-base font-extrabold text-ink">{copy.transactionLabels[transaction.type] ?? transaction.type}</Text>
-        <Text className="mt-0.5 text-xs font-semibold text-warm-500">
+        <Text className="text-base font-extrabold text-ink dark:text-white">{copy.transactionLabels[transaction.type] ?? transaction.type}</Text>
+        <Text className="mt-0.5 text-xs font-semibold text-warm-500 dark:text-[#AEB6C5]">
           {transaction.course?.reference ?? formatDate(transaction.created_at, copy.locale)}
         </Text>
       </View>

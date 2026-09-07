@@ -212,7 +212,7 @@ export default function AddressesScreen() {
         <View className="mb-5 flex-row items-center justify-between">
           <Pressable
             onPress={() => router.back()}
-            className="h-11 w-11 items-center justify-center rounded-full bg-off-white"
+            className="h-11 w-11 items-center justify-center rounded-full bg-off-white dark:bg-[#181B24]"
             accessibilityRole="button"
             accessibilityLabel={copy.back}
           >
@@ -228,17 +228,17 @@ export default function AddressesScreen() {
           </Pressable>
         </View>
 
-        <Text className="text-3xl font-extrabold text-ink">{copy.title}</Text>
+        <Text className="text-3xl font-extrabold text-ink dark:text-white">{copy.title}</Text>
         <Text className="mt-2 text-sm font-semibold leading-5 text-warm-500">
           {copy.subtitle}
         </Text>
 
-        <View className="mt-5 h-14 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4">
+        <View className="mt-5 h-14 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4 dark:border-[#343A46] dark:bg-[#181B24]">
           <Ionicons name="search" size={21} color="#6F665D" />
           <TextInput
             value={search}
             onChangeText={setSearch}
-            className="ml-3 h-full flex-1 text-base font-semibold text-ink"
+            className="ml-3 h-full flex-1 text-base font-semibold text-ink dark:text-white"
             placeholder={copy.searchPlaceholder}
             placeholderTextColor="#A89F95"
           />
@@ -263,7 +263,7 @@ export default function AddressesScreen() {
               <View className="mb-3 h-14 w-14 items-center justify-center rounded-full bg-airmess-yellow">
                 <Ionicons name="location-outline" size={28} color="#1A1614" />
               </View>
-              <Text className="text-lg font-extrabold text-ink">{copy.noAddress}</Text>
+              <Text className="text-lg font-extrabold text-ink dark:text-white">{copy.noAddress}</Text>
               <Text className="mt-2 text-center text-sm font-semibold leading-5 text-warm-500">
                 {copy.noAddressSubtitle}
               </Text>
@@ -275,7 +275,7 @@ export default function AddressesScreen() {
             </Card>
           ) : filtered.length === 0 ? (
             <Card className="items-center py-8">
-              <Text className="text-base font-extrabold text-ink">{copy.noResult}</Text>
+              <Text className="text-base font-extrabold text-ink dark:text-white">{copy.noResult}</Text>
               <Text className="mt-1 text-sm font-semibold text-warm-500">{copy.noResultSubtitle}</Text>
             </Card>
           ) : (
@@ -327,14 +327,14 @@ function AddressCard({
   onDelete: () => void
 }) {
   return (
-    <Card className="bg-off-white">
+    <Card className="bg-off-white dark:bg-[#181B24]">
       <View className="flex-row items-start">
         <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
           <Ionicons name="location-outline" size={23} color="#1A1614" />
         </View>
         <View className="flex-1">
           <View className="flex-row items-center">
-            <Text className="flex-1 text-lg font-extrabold text-ink" numberOfLines={1}>
+            <Text className="flex-1 text-lg font-extrabold text-ink dark:text-white" numberOfLines={1}>
               {address.label || address.recipient_name}
             </Text>
             {address.usage_count > 0 && (
@@ -407,14 +407,14 @@ function AddressFormModal({
         className="flex-1 justify-end bg-black/40"
       >
         <Pressable className="flex-1" onPress={onClose} />
-        <View className="max-h-[90%] rounded-t-[28px] bg-cream px-5 pb-6 pt-4">
+        <View className="max-h-[90%] rounded-t-[28px] bg-cream px-5 pb-6 pt-4 dark:bg-[#0F1115]">
           <View className="mb-4 flex-row items-center justify-between">
             <View className="flex-row items-center">
               <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
                 <Ionicons name="location-outline" size={23} color="#1A1614" />
               </View>
               <View>
-                <Text className="text-xl font-extrabold text-ink">
+                <Text className="text-xl font-extrabold text-ink dark:text-white">
                   {editing ? copy.editAddress : copy.newAddress}
                 </Text>
                 <Text className="mt-0.5 text-sm font-semibold text-warm-500">{copy.businessBook}</Text>
@@ -422,7 +422,7 @@ function AddressFormModal({
             </View>
             <Pressable
               onPress={onClose}
-              className="h-10 w-10 items-center justify-center rounded-full bg-off-white"
+              className="h-10 w-10 items-center justify-center rounded-full bg-off-white dark:bg-[#181B24]"
               accessibilityRole="button"
               accessibilityLabel={copy.close}
             >
@@ -504,7 +504,7 @@ function AddressInput({
       keyboardType={keyboardType}
       textContentType={textContentType}
       autoCapitalize={autoCapitalize}
-      className="h-14 rounded-2xl border border-warm-200 bg-white px-4 text-base font-semibold text-ink"
+      className="h-14 rounded-2xl border border-warm-200 bg-white px-4 text-base font-semibold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
       placeholder={placeholder}
       placeholderTextColor="#A89F95"
     />
@@ -527,7 +527,7 @@ function IconButton({
       onPress={onPress}
       className={[
         'h-11 w-11 items-center justify-center rounded-xl border',
-        danger ? 'border-airmess-red/30 bg-danger-bg' : 'border-warm-200 bg-off-white',
+        danger ? 'border-airmess-red/30 bg-danger-bg dark:bg-[#2A1518]' : 'border-warm-200 bg-off-white dark:border-[#343A46] dark:bg-[#181B24]',
       ].join(' ')}
       accessibilityRole="button"
       accessibilityLabel={label}

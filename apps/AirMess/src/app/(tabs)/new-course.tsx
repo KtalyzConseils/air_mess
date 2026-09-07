@@ -523,7 +523,7 @@ export default function NewCourseScreen() {
   return (
     <Screen scroll py={16} className="px-5">
       <View className="mb-4">
-        <Text className="text-2xl font-extrabold text-ink">{copy.title}</Text>
+        <Text className="text-2xl font-extrabold text-ink dark:text-white">{copy.title}</Text>
         <View className="mt-3 flex-row items-center">
           <StepDot active={step === 'package'} done={!!selectedPackage} label={copy.stepPackage} />
           <View className="mx-2 h-0.5 flex-1 bg-warm-200" />
@@ -537,7 +537,7 @@ export default function NewCourseScreen() {
 
       {step === 'package' ? (
         <View>
-          <Text className="mb-3 text-base font-extrabold text-ink">{copy.whatAreWeDelivering}</Text>
+          <Text className="mb-3 text-base font-extrabold text-ink dark:text-white">{copy.whatAreWeDelivering}</Text>
           <View className="flex-row flex-wrap gap-3">
             {copy.packageTypes.map((item) => (
               <PackageCard
@@ -554,11 +554,11 @@ export default function NewCourseScreen() {
           <View className="mb-4 flex-row items-center justify-between">
             <Pressable
               onPress={() => setStep('package')}
-              className="h-10 flex-row items-center rounded-full bg-off-white px-3"
+              className="h-10 flex-row items-center rounded-full bg-off-white px-3 dark:bg-[#181B24]"
               accessibilityRole="button"
             >
               <Ionicons name="chevron-back" size={18} color="#1A1614" />
-              <Text className="ml-1 text-sm font-extrabold text-ink">{copy.stepPackage}</Text>
+              <Text className="ml-1 text-sm font-extrabold text-ink dark:text-white">{copy.stepPackage}</Text>
             </Pressable>
             {selectedPackage && (
               <View className="flex-row items-center rounded-full bg-airmess-yellow px-3 py-2">
@@ -597,7 +597,7 @@ export default function NewCourseScreen() {
                       <Ionicons name="checkmark-circle" size={15} color="#16A34A" style={{ marginLeft: 6 }} />
                     )}
                   </View>
-                  <Text className="mt-0.5 text-xl font-extrabold text-ink" numberOfLines={1}>
+                  <Text className="mt-0.5 text-xl font-extrabold text-ink dark:text-white" numberOfLines={1}>
                     {formatCompactPlace(draft.originQuartier, draft.originCity) || copy.currentPosition}
                   </Text>
                 </Pressable>
@@ -644,7 +644,7 @@ export default function NewCourseScreen() {
                       <Ionicons name="checkmark-circle" size={15} color="#16A34A" style={{ marginLeft: 6 }} />
                     )}
                   </View>
-                  <Text className="mt-0.5 text-xl font-extrabold text-ink" numberOfLines={2}>
+                  <Text className="mt-0.5 text-xl font-extrabold text-ink dark:text-white" numberOfLines={2}>
                     {draft.destinationAddress ||
                       formatCompactPlace(draft.destinationQuartier, draft.destinationCity) ||
                       copy.whereToDeliver}
@@ -671,7 +671,7 @@ export default function NewCourseScreen() {
           {locationTarget === 'destination' ? (
             <Card className="mb-4" padding="md">
               <View className="flex-row items-center justify-between">
-                <Text className="text-base font-extrabold text-ink">{copy.reception}</Text>
+                <Text className="text-base font-extrabold text-ink dark:text-white">{copy.reception}</Text>
                 <Pressable
                   onPress={() => setShowAddressBook((value) => !value)}
                   className="h-9 flex-row items-center rounded-full bg-warm-100 px-3"
@@ -683,7 +683,7 @@ export default function NewCourseScreen() {
               </View>
 
               {showAddressBook && (
-                <View className="mt-3 overflow-hidden rounded-2xl border border-warm-200 bg-white">
+                <View className="mt-3 overflow-hidden rounded-2xl border border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]">
                   {addresses.length === 0 ? (
                     <Text className="px-4 py-3 text-sm font-semibold text-warm-500">
                       {copy.noAddressSaved}
@@ -700,7 +700,7 @@ export default function NewCourseScreen() {
                           <Ionicons name="person" size={18} color="#1A1614" />
                         </View>
                         <View className="ml-3 flex-1">
-                          <Text className="text-sm font-extrabold text-ink" numberOfLines={1}>
+                          <Text className="text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
                             {address.label || address.recipient_name}
                           </Text>
                           <Text className="mt-0.5 text-xs font-bold text-warm-600" numberOfLines={1}>
@@ -752,7 +752,7 @@ export default function NewCourseScreen() {
             </Card>
           ) : (
             <Card className="mb-4" padding="md">
-              <Text className="text-base font-extrabold text-ink">{copy.sender}</Text>
+              <Text className="text-base font-extrabold text-ink dark:text-white">{copy.sender}</Text>
               <FieldLabel required>{copy.pickup}</FieldLabel>
               <CourseInput
                 value={draft.originAddress}
@@ -793,11 +793,11 @@ export default function NewCourseScreen() {
           <View className="mb-4 flex-row items-center justify-between">
             <Pressable
               onPress={() => setStep('location')}
-              className="h-10 flex-row items-center rounded-full bg-off-white px-3"
+              className="h-10 flex-row items-center rounded-full bg-off-white px-3 dark:bg-[#181B24]"
               accessibilityRole="button"
             >
               <Ionicons name="chevron-back" size={18} color="#1A1614" />
-              <Text className="ml-1 text-sm font-extrabold text-ink">{copy.stepTrip}</Text>
+              <Text className="ml-1 text-sm font-extrabold text-ink dark:text-white">{copy.stepTrip}</Text>
             </Pressable>
             {selectedPackage && (
               <View className="flex-row items-center rounded-full bg-airmess-yellow px-3 py-2">
@@ -808,7 +808,7 @@ export default function NewCourseScreen() {
           </View>
 
           <Card className="mb-4" padding="md">
-            <Text className="text-base font-extrabold text-ink">{copy.usefulDetails}</Text>
+            <Text className="text-base font-extrabold text-ink dark:text-white">{copy.usefulDetails}</Text>
             <FieldLabel required>{copy.urgency}</FieldLabel>
             <View className="flex-row gap-3">
               <OptionCard
@@ -831,7 +831,7 @@ export default function NewCourseScreen() {
             <TextInput
               value={draft.packageDescription}
               onChangeText={(value) => setDraft((current) => ({ ...current, packageDescription: value }))}
-              className="min-h-20 rounded-2xl border border-warm-200 bg-white px-4 py-3 text-sm font-semibold text-ink"
+              className="min-h-20 rounded-2xl border border-warm-200 bg-white px-4 py-3 text-sm font-semibold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
               placeholder={copy.packageDescriptionPlaceholder}
               placeholderTextColor="#A89F95"
               multiline
@@ -854,7 +854,7 @@ export default function NewCourseScreen() {
                 <Ionicons name="options-outline" size={20} color="#1A1614" />
               </View>
               <View className="flex-1">
-                <Text className="text-base font-extrabold text-ink">{copy.advancedOptions}</Text>
+                <Text className="text-base font-extrabold text-ink dark:text-white">{copy.advancedOptions}</Text>
                 <Text className="mt-0.5 text-xs font-semibold text-warm-500">
                   {copy.advancedOptionsSubtitle}
                 </Text>
@@ -901,11 +901,11 @@ export default function NewCourseScreen() {
           <View className="mb-4 flex-row items-center justify-between">
             <Pressable
               onPress={() => setStep('details')}
-              className="h-10 flex-row items-center rounded-full bg-off-white px-3"
+              className="h-10 flex-row items-center rounded-full bg-off-white px-3 dark:bg-[#181B24]"
               accessibilityRole="button"
             >
               <Ionicons name="chevron-back" size={18} color="#1A1614" />
-              <Text className="ml-1 text-sm font-extrabold text-ink">{copy.stepDetails}</Text>
+              <Text className="ml-1 text-sm font-extrabold text-ink dark:text-white">{copy.stepDetails}</Text>
             </Pressable>
           </View>
 
@@ -915,7 +915,7 @@ export default function NewCourseScreen() {
                 <Ionicons name="receipt-outline" size={22} color="#1A1614" />
               </View>
               <View className="flex-1">
-                <Text className="text-xl font-extrabold text-ink">{copy.summary}</Text>
+                <Text className="text-xl font-extrabold text-ink dark:text-white">{copy.summary}</Text>
                 <Text className="mt-0.5 text-sm font-semibold text-warm-500">{copy.verifyBeforeCreating}</Text>
               </View>
             </View>
@@ -977,7 +977,7 @@ export default function NewCourseScreen() {
 
             {(!hasOriginCoords || !hasDestinationCoords) && (
               <View className="mt-4 rounded-2xl border border-warning/30 bg-warning-bg p-3">
-                <Text className="text-sm font-bold text-ink">{copy.missingPositionTitle}</Text>
+                <Text className="text-sm font-bold text-ink dark:text-white">{copy.missingPositionTitle}</Text>
                 <Text className="mt-1 text-xs font-semibold leading-5 text-warm-600">
                   {copy.missingPositionSubtitle(missingPositionLabel)}
                 </Text>
@@ -1017,14 +1017,14 @@ function PackageCard({
       onPress={onPress}
       className={[
         'min-h-[96px] w-[47%] rounded-2xl border p-3',
-        selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-off-white',
+        selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-off-white dark:border-[#343A46] dark:bg-[#181B24]',
       ].join(' ')}
       accessibilityRole="button"
     >
-      <View className="mb-2 h-9 w-9 items-center justify-center rounded-full bg-white">
+      <View className="mb-2 h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-[#11141B]">
         <Ionicons name={item.icon} size={20} color="#1A1614" />
       </View>
-      <Text className="text-sm font-extrabold text-ink">{item.title}</Text>
+      <Text className={['text-sm font-extrabold', selected ? 'text-ink' : 'text-ink dark:text-white'].join(' ')}>{item.title}</Text>
       <Text className="mt-0.5 text-[11px] font-semibold leading-4 text-warm-600">{item.subtitle}</Text>
     </Pressable>
   )
@@ -1107,7 +1107,7 @@ function PlaceSearchBox({
 
   return (
     <View>
-      <View className="h-12 flex-row items-center rounded-2xl border border-warm-200 bg-white px-4">
+      <View className="h-12 flex-row items-center rounded-2xl border border-warm-200 bg-white px-4 dark:border-[#343A46] dark:bg-[#181B24]">
         <Ionicons name="search" size={19} color="#6F665D" />
         <TextInput
           value={query}
@@ -1115,7 +1115,7 @@ function PlaceSearchBox({
             onSearchChange?.()
             setQuery(value)
           }}
-          className="ml-3 h-full flex-1 text-sm font-semibold text-ink"
+          className="ml-3 h-full flex-1 text-sm font-semibold text-ink dark:text-white"
           placeholder={placeholder}
           placeholderTextColor="#A89F95"
         />
@@ -1129,7 +1129,7 @@ function PlaceSearchBox({
       )}
 
       {debounced.length >= 2 && suggestions.length > 0 && (
-        <View className="mt-2 overflow-hidden rounded-2xl border border-warm-200 bg-off-white">
+        <View className="mt-2 overflow-hidden rounded-2xl border border-warm-200 bg-off-white dark:border-[#343A46] dark:bg-[#181B24]">
           {suggestions.slice(0, 5).map((suggestion, index) => (
             <Pressable
               key={suggestion.place_id}
@@ -1139,7 +1139,7 @@ function PlaceSearchBox({
             >
               <Ionicons name="location-outline" size={17} color="#6F665D" />
               <View className="ml-3 flex-1">
-                <Text className="text-sm font-extrabold text-ink" numberOfLines={1}>
+                <Text className="text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
                   {suggestion.main_text}
                 </Text>
                 {!!suggestion.secondary && (
@@ -1185,7 +1185,7 @@ function CourseInput({
       onChangeText={onChangeText}
       keyboardType={keyboardType}
       textContentType={textContentType}
-      className="h-12 rounded-2xl border border-warm-200 bg-white px-4 text-sm font-semibold text-ink"
+      className="h-12 rounded-2xl border border-warm-200 bg-white px-4 text-sm font-semibold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
       placeholder={placeholder}
       placeholderTextColor="#A89F95"
     />
@@ -1210,12 +1210,12 @@ function OptionCard({
       onPress={onPress}
       className={[
         'min-h-20 flex-1 rounded-2xl border p-3',
-        selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-white',
+        selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]',
       ].join(' ')}
       accessibilityRole="button"
     >
       <Ionicons name={icon} size={20} color="#1A1614" />
-      <Text className="mt-2 text-sm font-extrabold text-ink">{title}</Text>
+      <Text className={['mt-2 text-sm font-extrabold', selected ? 'text-ink' : 'text-ink dark:text-white'].join(' ')}>{title}</Text>
       <Text className="mt-0.5 text-[11px] font-semibold text-warm-600">{subtitle}</Text>
     </Pressable>
   )
@@ -1237,7 +1237,7 @@ function PaymentOption({
       onPress={onPress}
       className={[
         'min-h-14 flex-row items-center rounded-2xl border px-4 py-2',
-        selected ? 'border-airmess-yellow bg-airmess-yellow/20' : 'border-warm-200 bg-white',
+        selected ? 'border-airmess-yellow bg-airmess-yellow/20' : 'border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]',
       ].join(' ')}
       accessibilityRole="button"
     >
@@ -1247,7 +1247,7 @@ function PaymentOption({
         color={selected ? '#1A1614' : '#8A7E68'}
       />
       <View className="ml-3 flex-1">
-        <Text className="text-sm font-extrabold text-ink">{title}</Text>
+        <Text className="text-sm font-extrabold text-ink dark:text-white">{title}</Text>
         <Text className="mt-0.5 text-xs font-semibold text-warm-500">{subtitle}</Text>
       </View>
     </Pressable>
@@ -1270,7 +1270,7 @@ function RecapRow({
       </View>
       <View className="flex-1">
         <Text className="text-xs font-extrabold uppercase text-warm-500">{label}</Text>
-        <Text className="mt-0.5 text-sm font-extrabold leading-5 text-ink">{value}</Text>
+        <Text className="mt-0.5 text-sm font-extrabold leading-5 text-ink dark:text-white">{value}</Text>
       </View>
     </View>
   )

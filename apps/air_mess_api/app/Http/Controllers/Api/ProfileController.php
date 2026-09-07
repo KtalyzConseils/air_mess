@@ -59,6 +59,48 @@ class ProfileController extends Controller
         ]);
     }
 
+    public function updateIndividual(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $individual = $user->individual;
+
+        if (! $individual) {
+            return response()->json(['message' => 'Profil particulier introuvable.'], 404);
+        }
+
+        $data = $request->validate([
+            'name'  => ['required', 'string', 'max:150'],
+            'phone' => [
+                'nullable',
+                'string',
+                'max:20',
+                Rule::unique('users', 'phone')->ignore($user->id),
+            ],
+        ]);
+
+        $name = trim($data['name']);
+        $parts = preg_split('/\s+/', $name, 2) ?: [$name];
+
+        DB::transaction(function () use ($user, $individual, $data, $name, $parts) {
+            $user->update([
+                'name'  => $name,
+                'phone' => isset($data['phone']) && trim($data['phone']) !== ''
+                    ? trim($data['phone'])
+                    : null,
+            ]);
+
+            $individual->update([
+                'first_name' => $parts[0] ?? $name,
+                'last_name'  => $parts[1] ?? '',
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Profil particulier mis Ã  jour.',
+            'user'    => $user->fresh()->load(['marchant', 'individual', 'driver', 'admin']),
+        ]);
+    }
+
     /**
      * Active l'accès au site web pour un compte créé via l'inscription rapide
      * (mot de passe aléatoire, inconnu de l'utilisateur, jamais utilisable pour

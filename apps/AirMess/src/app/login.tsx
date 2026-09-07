@@ -131,10 +131,10 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        <View className="mx-5 rounded-3xl bg-cream p-6 shadow-cta-dark">
+        <View className="mx-5 rounded-3xl bg-cream p-6 shadow-cta-dark dark:bg-[#181B24]">
           {step === 'phone' ? (
             <>
-              <Text className="mb-1 text-xl font-extrabold text-ink">{copy.welcome}</Text>
+              <Text className="mb-1 text-xl font-extrabold text-ink dark:text-white">{copy.welcome}</Text>
               <Text className="mb-5 text-sm text-warm-500">{copy.subtitle}</Text>
 
               <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
@@ -147,27 +147,27 @@ export default function LoginScreen() {
                 textContentType="telephoneNumber"
                 placeholder="+229..."
                 placeholderTextColor="#B8AF9F"
-                className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink"
+                className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink dark:border-[#343A46] dark:bg-[#11141B] dark:text-white"
               />
             </>
           ) : (
             <>
               <Pressable
                 onPress={editPhone}
-                className="mb-4 h-10 flex-row items-center self-start rounded-full bg-off-white px-3"
+                className="mb-4 h-10 flex-row items-center self-start rounded-full bg-off-white px-3 dark:bg-[#11141B]"
                 accessibilityRole="button"
                 accessibilityLabel={copy.editLabel}
               >
                 <Ionicons name="arrow-back" size={17} color="#1A1614" />
-                <Text className="ml-1.5 text-xs font-extrabold text-ink">{copy.back}</Text>
+                <Text className="ml-1.5 text-xs font-extrabold text-ink dark:text-white">{copy.back}</Text>
               </Pressable>
 
-              <Text className="mb-1 text-xl font-extrabold text-ink">{copy.codeTitle}</Text>
+              <Text className="mb-1 text-xl font-extrabold text-ink dark:text-white">{copy.codeTitle}</Text>
               <Text className="mb-4 text-sm text-warm-500">{copy.codeSubtitle(trimmedPhone)}</Text>
 
-              <View className="mb-4 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4 py-3">
+              <View className="mb-4 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4 py-3 dark:border-[#343A46] dark:bg-[#11141B]">
                 <Ionicons name="call-outline" size={18} color="#8A7E68" />
-                <Text className="ml-2 flex-1 text-sm font-extrabold text-ink">{trimmedPhone}</Text>
+                <Text className="ml-2 flex-1 text-sm font-extrabold text-ink dark:text-white">{trimmedPhone}</Text>
                 <Pressable onPress={editPhone} accessibilityRole="button" hitSlop={8}>
                   <Text className="text-xs font-extrabold text-airmess-red">{copy.edit}</Text>
                 </Pressable>
@@ -188,7 +188,7 @@ export default function LoginScreen() {
                 textContentType="oneTimeCode"
                 placeholder="123456"
                 placeholderTextColor="#B8AF9F"
-                className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink"
+                className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink dark:border-[#343A46] dark:bg-[#11141B] dark:text-white"
               />
             </>
           )}

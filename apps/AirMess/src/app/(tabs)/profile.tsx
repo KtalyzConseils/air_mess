@@ -19,7 +19,13 @@ import Screen from '../../components/ui/Screen'
 import Button from '../../components/ui/Button'
 import BottomSheet from '../../components/ui/BottomSheet'
 import SupportContactSheet from '../../components/SupportContactSheet'
-import { deleteAccount, setWebAccess, updateMarchantProfile, type UpdateMarchantProfilePayload } from '../../api/profile'
+import {
+  deleteAccount,
+  setWebAccess,
+  updateIndividualProfile,
+  updateMarchantProfile,
+  type UpdateMarchantProfilePayload,
+} from '../../api/profile'
 import { useAuthStore } from '../../stores/authStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { useThemeStore } from '../../stores/themeStore'
@@ -61,8 +67,10 @@ const PROFILE_COPY = {
       sector: "Secteur d'activite",
       businessId: 'IFU / RCCM',
     },
-    businessInfo: 'Informations du commerce',
+    businessInfo: 'Informations du compte',
     businessIdentity: 'Identite visible pendant les courses',
+    personalInfo: 'Informations personnelles',
+    personalIdentity: 'Identite visible pendant les courses',
     edit: 'Modifier',
     merchantOnly: 'Cette section est reservee aux comptes marchands.',
     profileUpdated: 'Profil mis a jour.',
@@ -97,6 +105,8 @@ const PROFILE_COPY = {
     logout: 'Se deconnecter',
     editBusiness: 'Modifier le commerce',
     editBusinessSubtitle: 'Informations visibles aux livreurs',
+    editPersonal: 'Modifier le profil',
+    editPersonalSubtitle: 'Informations visibles aux livreurs',
     responsibleName: 'Nom du responsable',
     fullName: 'Nom complet',
     phone: 'Telephone',
@@ -143,8 +153,10 @@ const PROFILE_COPY = {
       sector: 'Business sector',
       businessId: 'Tax / registration ID',
     },
-    businessInfo: 'Business information',
+    businessInfo: 'Account information',
     businessIdentity: 'Identity shown during deliveries',
+    personalInfo: 'Personal information',
+    personalIdentity: 'Identity shown during deliveries',
     edit: 'Edit',
     merchantOnly: 'This section is reserved for merchant accounts.',
     profileUpdated: 'Profile updated.',
@@ -179,6 +191,8 @@ const PROFILE_COPY = {
     logout: 'Log out',
     editBusiness: 'Edit business',
     editBusinessSubtitle: 'Information visible to drivers',
+    editPersonal: 'Edit profile',
+    editPersonalSubtitle: 'Information visible to drivers',
     responsibleName: 'Manager name',
     fullName: 'Full name',
     phone: 'Phone',
@@ -236,14 +250,18 @@ export default function ProfileScreen() {
   const [webAccessError, setWebAccessError] = useState<string | null>(null)
 
   const fillFormFromUser = () => {
-    if (!user?.marchant) return
+    if (!user) return
+
+    const individualName = [user.individual?.first_name, user.individual?.last_name]
+      .filter(Boolean)
+      .join(' ')
 
     setForm({
-      name: user.name ?? '',
+      name: user.name ?? individualName,
       phone: user.phone ?? '',
-      raison_sociale: user.marchant.raison_sociale ?? '',
-      ifu_rccm: user.marchant.ifu_rccm ?? '',
-      secteur_activite: user.marchant.secteur_activite ?? 'autre',
+      raison_sociale: user.marchant?.raison_sociale ?? '',
+      ifu_rccm: user.marchant?.ifu_rccm ?? '',
+      secteur_activite: user.marchant?.secteur_activite ?? 'autre',
     })
   }
 
@@ -265,6 +283,11 @@ export default function ProfileScreen() {
 
   const subtitle = user?.phone ?? user?.email ?? ''
   const marchant = user?.marchant
+  const individual = user?.individual
+  const canEditProfileInfo = !!marchant || !!individual
+  const profileInfoTitle = marchant ? copy.businessInfo : copy.personalInfo
+  const profileInfoSubtitle = marchant ? copy.businessIdentity : copy.personalIdentity
+  const profileInfoIcon: keyof typeof Ionicons.glyphMap = marchant ? 'storefront-outline' : 'person-circle-outline'
   const isCertifiedMarchant = !!marchant?.validated_at
   const certificationItems = [
     { label: copy.checklist.manager, done: (user?.name ?? '').trim().length >= 2 },
@@ -277,9 +300,9 @@ export default function ProfileScreen() {
   const remainingCertificationItems = certificationItems.length - completedCertificationItems
   const isCertificationProfileComplete = remainingCertificationItems === 0
   const canSaveProfile =
-    !!marchant &&
+    canEditProfileInfo &&
     form.name.trim().length >= 2 &&
-    form.raison_sociale.trim().length >= 2 &&
+    (!marchant || form.raison_sociale.trim().length >= 2) &&
     !isSavingProfile
 
   const handleSaveProfile = async () => {
@@ -290,13 +313,18 @@ export default function ProfileScreen() {
     setProfileSuccess(null)
 
     try {
-      const updatedUser = await updateMarchantProfile({
-        name: form.name.trim(),
-        phone: form.phone?.trim() || null,
-        raison_sociale: form.raison_sociale.trim(),
-        ifu_rccm: form.ifu_rccm?.trim() || null,
-        secteur_activite: form.secteur_activite,
-      })
+      const updatedUser = marchant
+        ? await updateMarchantProfile({
+            name: form.name.trim(),
+            phone: form.phone?.trim() || null,
+            raison_sociale: form.raison_sociale.trim(),
+            ifu_rccm: form.ifu_rccm?.trim() || null,
+            secteur_activite: form.secteur_activite,
+          })
+        : await updateIndividualProfile({
+            name: form.name.trim(),
+            phone: form.phone?.trim() || null,
+          })
       setUser(updatedUser)
       setEditing(false)
       setProfileSuccess(copy.profileUpdated)
@@ -504,16 +532,16 @@ export default function ProfileScreen() {
         <View className="mb-4 flex-row items-center justify-between">
           <View className="flex-1 flex-row items-center">
             <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
-              <Ionicons name="storefront-outline" size={22} color="#1A1614" />
+              <Ionicons name={profileInfoIcon} size={22} color="#1A1614" />
             </View>
             <View className="flex-1">
-              <Text className="text-xl font-extrabold text-ink dark:text-white">{copy.businessInfo}</Text>
+              <Text className="text-xl font-extrabold text-ink dark:text-white">{profileInfoTitle}</Text>
               <Text className="mt-0.5 text-sm font-semibold text-warm-500 dark:text-[#AEB6C5]" numberOfLines={1}>
-                {copy.businessIdentity}
+                {profileInfoSubtitle}
               </Text>
             </View>
           </View>
-          {marchant && (
+          {canEditProfileInfo && (
             <Pressable
               onPress={() => {
                 fillFormFromUser()
@@ -529,16 +557,8 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {!marchant ? (
-            <Text className="text-sm font-semibold leading-5 text-warm-600 dark:text-[#AEB6C5]">
-            {copy.merchantOnly}
-          </Text>
-        ) : (
-          <>
-            {profileSuccess && (
-              <Text className="text-sm font-bold text-success">{profileSuccess}</Text>
-            )}
-          </>
+        {profileSuccess && (
+          <Text className="text-sm font-bold text-success">{profileSuccess}</Text>
         )}
       </Card>
 
@@ -614,12 +634,14 @@ export default function ProfileScreen() {
           <View className="mb-4 flex-row items-center justify-between">
             <View className="flex-row items-center">
               <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
-                <Ionicons name="storefront-outline" size={22} color="#1A1614" />
+                <Ionicons name={profileInfoIcon} size={22} color="#1A1614" />
               </View>
               <View>
-                <Text className="text-xl font-extrabold text-ink dark:text-white">{copy.editBusiness}</Text>
+                <Text className="text-xl font-extrabold text-ink dark:text-white">
+                  {marchant ? copy.editBusiness : copy.editPersonal}
+                </Text>
                 <Text className="mt-0.5 text-sm font-semibold text-warm-500 dark:text-[#AEB6C5]">
-                  {copy.editBusinessSubtitle}
+                  {marchant ? copy.editBusinessSubtitle : copy.editPersonalSubtitle}
                 </Text>
               </View>
             </View>
@@ -655,41 +677,45 @@ export default function ProfileScreen() {
               textContentType="telephoneNumber"
             />
 
-            <FieldLabel>{copy.businessName}</FieldLabel>
-            <ProfileInput
-              value={form.raison_sociale}
-              onChangeText={(value) => setForm((current) => ({ ...current, raison_sociale: value }))}
-              placeholder={copy.businessPlaceholder}
-            />
+            {marchant && (
+              <>
+                <FieldLabel>{copy.businessName}</FieldLabel>
+                <ProfileInput
+                  value={form.raison_sociale}
+                  onChangeText={(value) => setForm((current) => ({ ...current, raison_sociale: value }))}
+                  placeholder={copy.businessPlaceholder}
+                />
 
-            <FieldLabel>{copy.businessId}</FieldLabel>
-            <ProfileInput
-              value={form.ifu_rccm ?? ''}
-              onChangeText={(value) => setForm((current) => ({ ...current, ifu_rccm: value }))}
-              placeholder={copy.optional}
-            />
+                <FieldLabel>{copy.businessId}</FieldLabel>
+                <ProfileInput
+                  value={form.ifu_rccm ?? ''}
+                  onChangeText={(value) => setForm((current) => ({ ...current, ifu_rccm: value }))}
+                  placeholder={copy.optional}
+                />
 
-            <FieldLabel>{copy.sector}</FieldLabel>
-            <View className="flex-row flex-wrap gap-2">
-              {SECTOR_OPTIONS.map((option) => {
-                const selected = option.value === form.secteur_activite
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => setForm((current) => ({ ...current, secteur_activite: option.value }))}
-                    className={[
-                      'min-h-10 items-center justify-center rounded-full border px-4',
-                      selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]',
-                    ].join(' ')}
-                    accessibilityRole="button"
-                  >
-                    <Text className={['text-sm font-extrabold', selected ? 'text-ink' : 'text-ink dark:text-white'].join(' ')}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
+                <FieldLabel>{copy.sector}</FieldLabel>
+                <View className="flex-row flex-wrap gap-2">
+                  {SECTOR_OPTIONS.map((option) => {
+                    const selected = option.value === form.secteur_activite
+                    return (
+                      <Pressable
+                        key={option.value}
+                        onPress={() => setForm((current) => ({ ...current, secteur_activite: option.value }))}
+                        className={[
+                          'min-h-10 items-center justify-center rounded-full border px-4',
+                          selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]',
+                        ].join(' ')}
+                        accessibilityRole="button"
+                      >
+                        <Text className={['text-sm font-extrabold', selected ? 'text-ink' : 'text-ink dark:text-white'].join(' ')}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </>
+            )}
 
             {profileError && (
               <Text className="mt-3 text-sm font-bold text-airmess-red">{profileError}</Text>

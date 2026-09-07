@@ -5,6 +5,7 @@ import {
 } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import { useThemeStore } from '../../stores/themeStore'
 
 /**
  * BottomSheet — modal qui glisse depuis le bas de l'écran.
@@ -42,6 +43,9 @@ export default function BottomSheet({
   footer,
   children,
 }: Props) {
+  const theme = useThemeStore((state) => state.theme)
+  const iconColor = theme === 'dark' ? '#FDFCF9' : '#1A1614'
+
   const insets = useSafeAreaInsets()
   // Marge basse : dégage la barre de navigation système (gestes / 3 boutons).
   const bottomPad = Math.max(16, insets.bottom + 12)
@@ -88,7 +92,7 @@ export default function BottomSheet({
                   style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
                   hitSlop={8}
                 >
-                  <Ionicons name="close" size={18} color="#1A1614" />
+                  <Ionicons name="close" size={18} color={iconColor} />
                 </Pressable>
               </View>
 

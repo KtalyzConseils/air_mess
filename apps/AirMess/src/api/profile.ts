@@ -14,6 +14,16 @@ export async function updateMarchantProfile(payload: UpdateMarchantProfilePayloa
   return data.user
 }
 
+export interface UpdateIndividualProfilePayload {
+  name: string
+  phone: string | null
+}
+
+export async function updateIndividualProfile(payload: UpdateIndividualProfilePayload): Promise<User> {
+  const { data } = await api.patch<{ user: User }>('/profile/individual', payload)
+  return data.user
+}
+
 export interface SetWebAccessPayload {
   email: string
   password: string

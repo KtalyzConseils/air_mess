@@ -59,16 +59,16 @@ export default function AcceptTermsSheet({ visible, onAccepted }: Props) {
       statusBarTranslucent
       onRequestClose={() => undefined}
     >
-      <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right', 'bottom']}>
+      <SafeAreaView className="flex-1 bg-cream dark:bg-[#0F1115]" edges={['top', 'left', 'right', 'bottom']}>
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
           <View className="items-center">
             <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-airmess-yellow">
               <Ionicons name="document-text-outline" size={30} color="#1A1614" />
             </View>
-            <Text className="text-center text-2xl font-extrabold text-ink">
+            <Text className="text-center text-2xl font-extrabold text-ink dark:text-white">
               {copy.title}
             </Text>
-            <Text className="mt-2 text-center text-sm font-semibold leading-5 text-warm-600">
+            <Text className="mt-2 text-center text-sm font-semibold leading-5 text-warm-600 dark:text-[#AEB6C5]">
               {copy.subtitle}
             </Text>
           </View>
@@ -82,7 +82,7 @@ export default function AcceptTermsSheet({ visible, onAccepted }: Props) {
             onPress={() => setChecked((value) => !value)}
             className={[
               'flex-row items-start rounded-2xl border px-4 py-3',
-              checked ? 'border-success/30 bg-success-bg' : 'border-warm-200 bg-white',
+              checked ? 'border-success/30 bg-success-bg dark:bg-[#12281A]' : 'border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]',
             ].join(' ')}
             accessibilityRole="checkbox"
             accessibilityState={{ checked }}
@@ -95,7 +95,7 @@ export default function AcceptTermsSheet({ visible, onAccepted }: Props) {
             >
               {checked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
             </View>
-            <Text className="ml-3 flex-1 text-sm font-semibold leading-5 text-ink">
+            <Text className="ml-3 flex-1 text-sm font-semibold leading-5 text-ink dark:text-white">
               {copy.checkbox}
             </Text>
           </Pressable>
@@ -128,15 +128,15 @@ function LegalLink({ title, subtitle, url }: { title: string; subtitle: string; 
   return (
     <Pressable
       onPress={() => void Linking.openURL(url)}
-      className="min-h-16 flex-row items-center rounded-2xl border border-warm-200 bg-white px-4 py-3"
+      className="min-h-16 flex-row items-center rounded-2xl border border-warm-200 bg-white px-4 py-3 dark:border-[#343A46] dark:bg-[#181B24]"
       accessibilityRole="link"
     >
-      <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-warm-100">
+      <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-warm-100 dark:bg-[#11141B]">
         <Ionicons name="open-outline" size={19} color="#1A1614" />
       </View>
       <View className="flex-1">
-        <Text className="text-base font-extrabold text-ink">{title}</Text>
-        <Text className="mt-0.5 text-xs font-semibold text-warm-500">{subtitle}</Text>
+        <Text className="text-base font-extrabold text-ink dark:text-white">{title}</Text>
+        <Text className="mt-0.5 text-xs font-semibold text-warm-500 dark:text-[#AEB6C5]">{subtitle}</Text>
       </View>
     </Pressable>
   )

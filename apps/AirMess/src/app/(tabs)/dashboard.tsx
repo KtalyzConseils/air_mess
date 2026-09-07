@@ -86,7 +86,7 @@ export default function DashboardScreen() {
   const latestCourses = courses.slice(0, 5)
 
   return (
-    <View className="flex-1 bg-cream">
+    <View className="flex-1 bg-cream dark:bg-[#0F1115]">
       <Screen scroll py={18} className="px-5">
         <Header />
 
@@ -119,7 +119,7 @@ export default function DashboardScreen() {
             <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-ink">
               <Ionicons name="cube-outline" size={20} color="#FFCC00" />
             </View>
-            <Text className="text-lg font-extrabold text-ink">{copy.whatAreWeDelivering}</Text>
+          <Text className="text-lg font-extrabold text-ink">{copy.whatAreWeDelivering}</Text>
           </View>
           <Ionicons name="arrow-forward" size={22} color="#1A1614" />
         </Pressable>
@@ -217,7 +217,9 @@ function Header() {
         onPress={() => void detectPosition()}
         className={[
           'max-w-[82%] self-start flex-row items-center rounded-full border px-3 py-2.5 shadow-card',
-          locationError ? 'border-airmess-red/30 bg-danger-bg' : 'border-airmess-yellow/40 bg-white',
+          locationError
+            ? 'border-airmess-red/30 bg-danger-bg dark:bg-[#2A1518]'
+            : 'border-airmess-yellow/40 bg-white dark:bg-[#181B24]',
         ].join(' ')}
         accessibilityRole="button"
         accessibilityLabel={copy.detectPosition}
@@ -225,7 +227,7 @@ function Header() {
         <View
           className={[
             'mr-2 h-8 w-8 items-center justify-center rounded-full',
-            locationError ? 'bg-white' : 'bg-airmess-yellow',
+            locationError ? 'bg-white dark:bg-[#11141B]' : 'bg-airmess-yellow',
           ].join(' ')}
         >
           {locating ? (
@@ -238,7 +240,7 @@ function Header() {
             />
           )}
         </View>
-        <Text className="flex-shrink text-sm font-extrabold text-ink" numberOfLines={1}>
+        <Text className="flex-shrink text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
           {locating ? copy.detecting : positionLabel}
         </Text>
         <Ionicons name="chevron-forward" size={15} color="#8A7E68" style={{ marginLeft: 4 }} />
@@ -276,21 +278,21 @@ function LatestCourses({ courses }: { courses: Course[] }) {
   return (
     <View className="mb-5">
       <View className="mb-3 flex-row items-end justify-between">
-        <Text className="text-xl font-extrabold text-ink">{copy.latestCourses}</Text>
+        <Text className="text-xl font-extrabold text-ink dark:text-white">{copy.latestCourses}</Text>
         <Link href="/(tabs)/courses" asChild>
           <Pressable hitSlop={8}>
-            <Text className="text-sm font-bold text-warm-600">{copy.seeAll}</Text>
+            <Text className="text-sm font-bold text-warm-600 dark:text-[#AEB6C5]">{copy.seeAll}</Text>
           </Pressable>
         </Link>
       </View>
 
       {courses.length === 0 ? (
         <Card className="items-center py-8">
-          <View className="mb-3 h-12 w-12 items-center justify-center rounded-full bg-warm-100">
+          <View className="mb-3 h-12 w-12 items-center justify-center rounded-full bg-warm-100 dark:bg-[#11141B]">
             <Ionicons name="receipt-outline" size={22} color="#6B6250" />
           </View>
-          <Text className="text-center text-base font-extrabold text-ink">{copy.noCourses}</Text>
-          <Text className="mt-1 text-center text-sm leading-5 text-warm-600">
+          <Text className="text-center text-base font-extrabold text-ink dark:text-white">{copy.noCourses}</Text>
+          <Text className="mt-1 text-center text-sm leading-5 text-warm-600 dark:text-[#AEB6C5]">
             {copy.noCoursesSubtitle}
           </Text>
         </Card>
@@ -313,7 +315,7 @@ function CourseRow({ course }: { course: Course }) {
     <Pressable accessibilityRole="button">
     <Card padding="md">
       <View className="flex-row items-center justify-between gap-3">
-        <View className="h-11 w-11 items-center justify-center rounded-2xl bg-warm-100">
+        <View className="h-11 w-11 items-center justify-center rounded-2xl bg-warm-100 dark:bg-[#11141B]">
           <Ionicons name={getCourseIcon(course.status)} size={20} color="#1A1614" />
         </View>
 
@@ -322,10 +324,10 @@ function CourseRow({ course }: { course: Course }) {
             <Text className="font-mono text-xs font-bold text-warm-500">{course.reference}</Text>
             <StatusPill status={course.status} label={course.status_label} />
           </View>
-          <Text className="text-base font-extrabold text-ink" numberOfLines={1}>
+          <Text className="text-base font-extrabold text-ink dark:text-white" numberOfLines={1}>
             {course.origin_quartier} {copy.toDestination} {course.destination_quartier}
           </Text>
-          <Text className="mt-0.5 text-sm text-warm-600" numberOfLines={1}>
+          <Text className="mt-0.5 text-sm text-warm-600 dark:text-[#AEB6C5]" numberOfLines={1}>
             {course.destination_name}, {course.destination_city}
           </Text>
         </View>
@@ -341,7 +343,7 @@ function StatsGrid({ stats }: { stats: ReturnType<typeof getCourseStats> }) {
   const copy = DASHBOARD_COPY[language]
   return (
     <View>
-      <Text className="mb-3 text-xl font-extrabold text-ink">{copy.someStats}</Text>
+      <Text className="mb-3 text-xl font-extrabold text-ink dark:text-white">{copy.someStats}</Text>
       <View className="flex-row gap-3">
         <StatTile label={copy.active} value={stats.active} icon="navigate-outline" />
         <StatTile label={copy.deliveredMonth} value={stats.deliveredMonth} icon="checkmark-done-outline" />
@@ -366,10 +368,10 @@ function StatTile({
   return (
     <Card className="flex-1">
       <Ionicons name={icon} size={20} color="#D40511" />
-      <Text className="mt-3 text-2xl font-extrabold text-ink" numberOfLines={1}>
+      <Text className="mt-3 text-2xl font-extrabold text-ink dark:text-white" numberOfLines={1}>
         {value}
       </Text>
-      <Text className="mt-1 text-xs font-bold uppercase tracking-widest text-warm-500" numberOfLines={2}>
+      <Text className="mt-1 text-xs font-bold uppercase tracking-widest text-warm-500 dark:text-[#AEB6C5]" numberOfLines={2}>
         {label}
       </Text>
     </Card>

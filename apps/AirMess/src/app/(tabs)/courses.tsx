@@ -154,8 +154,8 @@ export default function CoursesScreen() {
           <Text className="text-xs font-extrabold uppercase tracking-widest text-airmess-red">
             {copy.historyLabel}
           </Text>
-          <Text className="mt-1 text-3xl font-extrabold text-ink">{copy.title}</Text>
-          <Text className="mt-1 text-sm font-semibold text-warm-500">
+          <Text className="mt-1 text-3xl font-extrabold text-ink dark:text-white">{copy.title}</Text>
+          <Text className="mt-1 text-sm font-semibold text-warm-500 dark:text-[#AEB6C5]">
             {copy.subtitle}
           </Text>
         </View>
@@ -170,14 +170,14 @@ export default function CoursesScreen() {
         </Link>
       </View>
 
-      <View className="mb-4 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4">
+      <View className="mb-4 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4 dark:border-[#343A46] dark:bg-[#181B24]">
         <Ionicons name="search" size={18} color="#8A7E68" />
         <TextInput
           value={search}
           onChangeText={setSearch}
           placeholder={copy.searchPlaceholder}
           placeholderTextColor="#B8AF9F"
-          className="ml-3 h-13 flex-1 text-base font-semibold text-ink"
+          className="ml-3 h-13 flex-1 text-base font-semibold text-ink dark:text-white"
           autoCapitalize="none"
         />
         {search.length > 0 ? (
@@ -243,11 +243,11 @@ function FilterChip({
       onPress={onPress}
       className={[
         'h-11 flex-row items-center rounded-full px-4',
-        active ? 'bg-airmess-dark' : 'bg-off-white border border-warm-200',
+        active ? 'bg-airmess-dark' : 'bg-off-white border border-warm-200 dark:border-[#343A46] dark:bg-[#181B24]',
       ].join(' ')}
       accessibilityRole="button"
     >
-      <Text className={['text-sm font-extrabold', active ? 'text-white' : 'text-warm-600'].join(' ')}>
+      <Text className={['text-sm font-extrabold', active ? 'text-white' : 'text-warm-600 dark:text-[#AEB6C5]'].join(' ')}>
         {label}
       </Text>
       <View className={['ml-2 min-w-6 items-center rounded-full px-1.5 py-0.5', active ? 'bg-airmess-yellow' : 'bg-warm-100'].join(' ')}>
@@ -263,7 +263,7 @@ function SummaryTile({ label, value, accent = false }: { label: string; value: n
       <Text className="text-[10px] font-extrabold uppercase tracking-widest text-warm-600">
         {label}
       </Text>
-      <Text className="mt-2 text-2xl font-extrabold text-ink">{value}</Text>
+      <Text className="mt-2 text-2xl font-extrabold text-ink dark:text-white">{value}</Text>
     </Card>
   )
 }
@@ -286,17 +286,17 @@ function CourseHistoryCard({ course, copy }: { course: Course; copy: CoursesCopy
         <StatusPill status={course.status} label={course.status_label} copy={copy} />
       </View>
 
-      <Text className="text-lg font-extrabold text-ink" numberOfLines={1}>
+      <Text className="text-lg font-extrabold text-ink dark:text-white" numberOfLines={1}>
         {course.origin_quartier} {copy.toDestination} {course.destination_quartier}
       </Text>
-      <Text className="mt-1 text-sm font-semibold text-warm-600" numberOfLines={1}>
+      <Text className="mt-1 text-sm font-semibold text-warm-600 dark:text-[#AEB6C5]" numberOfLines={1}>
         {course.destination_name}, {course.destination_city}
       </Text>
 
-      <View className="mt-4 flex-row items-center justify-between border-t border-warm-200 pt-3">
+      <View className="mt-4 flex-row items-center justify-between border-t border-warm-200 pt-3 dark:border-[#2A2F3A]">
         <View className="flex-row items-center">
           <Ionicons name="cash-outline" size={16} color="#8A7E68" />
-          <Text className="ml-1.5 text-sm font-extrabold text-ink">
+          <Text className="ml-1.5 text-sm font-extrabold text-ink dark:text-white">
             {course.delivery_fee.toLocaleString(copy.locale)} FCFA
           </Text>
         </View>
@@ -326,13 +326,13 @@ function StatusPill({ status, label, copy }: { status: string; label?: string; c
 function EmptyState({ hasSearch, copy }: { hasSearch: boolean; copy: CoursesCopy }) {
   return (
     <Card className="items-center py-10">
-      <View className="mb-3 h-14 w-14 items-center justify-center rounded-full bg-warm-100">
+      <View className="mb-3 h-14 w-14 items-center justify-center rounded-full bg-warm-100 dark:bg-[#11141B]">
         <Ionicons name={hasSearch ? 'filter-outline' : 'cube-outline'} size={24} color="#6B6250" />
       </View>
-      <Text className="text-center text-lg font-extrabold text-ink">
+      <Text className="text-center text-lg font-extrabold text-ink dark:text-white">
         {hasSearch ? copy.noCourseFound : copy.noCourse}
       </Text>
-      <Text className="mt-1 text-center text-sm leading-5 text-warm-600">
+      <Text className="mt-1 text-center text-sm leading-5 text-warm-600 dark:text-[#AEB6C5]">
         {hasSearch ? copy.tryOtherFilter : copy.coursesAppearHere}
       </Text>
     </Card>

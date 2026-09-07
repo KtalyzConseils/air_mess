@@ -81,13 +81,13 @@ export default function CourseDetailScreen() {
       <View className="mb-4 flex-row items-center justify-between">
         <Pressable
           onPress={() => router.replace('/(tabs)/dashboard')}
-          className="h-11 w-11 items-center justify-center rounded-full bg-off-white"
+          className="h-11 w-11 items-center justify-center rounded-full bg-off-white dark:bg-[#181B24]"
           accessibilityRole="button"
           accessibilityLabel={copy.back}
         >
           <Ionicons name="arrow-back" size={24} color="#1A1614" />
         </Pressable>
-        <Text className="text-base font-extrabold text-ink">{copy.title}</Text>
+        <Text className="text-base font-extrabold text-ink dark:text-white">{copy.title}</Text>
         <View className="h-11 w-11" />
       </View>
 
@@ -140,10 +140,10 @@ function CourseDetail({ course, copy }: { course: Course; copy: CourseDetailCopy
 
       <Card className="mb-4">
         <SectionTitle icon="cube-outline" title={copy.package} />
-        <Text className="text-base font-extrabold text-ink">
+        <Text className="text-base font-extrabold text-ink dark:text-white">
           {course.package_description ?? copy.noDescription}
         </Text>
-        <Text className="mt-1 text-sm font-semibold text-warm-500">
+        <Text className="mt-1 text-sm font-semibold text-warm-500 dark:text-[#AEB6C5]">
           {copy.size} {course.package_size ?? '--'}
         </Text>
       </Card>
@@ -162,7 +162,7 @@ function CourseDetail({ course, copy }: { course: Course; copy: CourseDetailCopy
             <InfoRow label={copy.phone} value={course.driver.user.phone} />
           </>
         ) : (
-          <Text className="text-sm font-semibold text-warm-500">{copy.noDriver}</Text>
+          <Text className="text-sm font-semibold text-warm-500 dark:text-[#AEB6C5]">{copy.noDriver}</Text>
         )}
       </Card>
 
@@ -177,10 +177,10 @@ function CourseDetail({ course, copy }: { course: Course; copy: CourseDetailCopy
 function SectionTitle({ icon, title }: { icon: keyof typeof Ionicons.glyphMap; title: string }) {
   return (
     <View className="mb-3 flex-row items-center">
-      <View className="mr-2 h-8 w-8 items-center justify-center rounded-full bg-warm-100">
+      <View className="mr-2 h-8 w-8 items-center justify-center rounded-full bg-warm-100 dark:bg-[#11141B]">
         <Ionicons name={icon} size={17} color="#D40511" />
       </View>
-      <Text className="text-lg font-extrabold text-ink">{title}</Text>
+      <Text className="text-lg font-extrabold text-ink dark:text-white">{title}</Text>
     </View>
   )
 }
@@ -192,9 +192,9 @@ function RoutePoint({ label, title, subtitle }: { label: string; title: string; 
         <Ionicons name="location" size={18} color="#1A1614" />
       </View>
       <View className="flex-1">
-        <Text className="text-xs font-extrabold uppercase tracking-widest text-warm-500">{label}</Text>
-        <Text className="mt-0.5 text-base font-extrabold text-ink">{title}</Text>
-        <Text className="mt-0.5 text-sm font-semibold text-warm-600">{subtitle}</Text>
+        <Text className="text-xs font-extrabold uppercase tracking-widest text-warm-500 dark:text-[#AEB6C5]">{label}</Text>
+        <Text className="mt-0.5 text-base font-extrabold text-ink dark:text-white">{title}</Text>
+        <Text className="mt-0.5 text-sm font-semibold text-warm-600 dark:text-[#AEB6C5]">{subtitle}</Text>
       </View>
     </View>
   )
@@ -204,17 +204,17 @@ function InfoTile({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap
   return (
     <Card className="flex-1">
       <Ionicons name={icon} size={20} color="#D40511" />
-      <Text className="mt-3 text-xs font-extrabold uppercase tracking-widest text-warm-500">{label}</Text>
-      <Text className="mt-1 text-base font-extrabold text-ink" numberOfLines={1}>{value}</Text>
+      <Text className="mt-3 text-xs font-extrabold uppercase tracking-widest text-warm-500 dark:text-[#AEB6C5]">{label}</Text>
+      <Text className="mt-1 text-base font-extrabold text-ink dark:text-white" numberOfLines={1}>{value}</Text>
     </Card>
   )
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <View className="flex-row items-center justify-between border-t border-warm-200 py-3 first:border-t-0">
-      <Text className="text-sm font-semibold text-warm-500">{label}</Text>
-      <Text className="ml-4 flex-1 text-right text-sm font-extrabold text-ink" numberOfLines={1}>{value}</Text>
+    <View className="flex-row items-center justify-between border-t border-warm-200 py-3 first:border-t-0 dark:border-[#2A2F3A]">
+      <Text className="text-sm font-semibold text-warm-500 dark:text-[#AEB6C5]">{label}</Text>
+      <Text className="ml-4 flex-1 text-right text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>{value}</Text>
     </View>
   )
 }
@@ -222,8 +222,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function CodeTile({ label, value }: { label: string; value: string }) {
   return (
     <Card className="flex-1 items-center">
-      <Text className="text-xs font-extrabold uppercase tracking-widest text-warm-500">{label}</Text>
-      <Text className="mt-2 font-mono text-2xl font-extrabold text-ink">{value}</Text>
+      <Text className="text-xs font-extrabold uppercase tracking-widest text-warm-500 dark:text-[#AEB6C5]">{label}</Text>
+      <Text className="mt-2 font-mono text-2xl font-extrabold text-ink dark:text-white">{value}</Text>
     </Card>
   )
 }
