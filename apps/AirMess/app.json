@@ -40,7 +40,13 @@
       "expo-router",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#FFCC00"
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -57,7 +63,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#1A1614",
-          "image": "./assets/icon.png",
+          "image": "./assets/splash-icon.png",
           "imageWidth": 220,
           "resizeMode": "contain"
         }
