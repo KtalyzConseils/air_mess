@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Jobs\CheckExpoPushReceipts;
+use App\Models\DeviceToken;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -52,9 +54,33 @@ class ExpoPushClient
         }, $tokens);
 
         try {
-            $response = Http::acceptJson()->asJson()->post(self::ENDPOINT, $messages);
+            $response = Http::acceptJson()
+                ->asJson()
+                ->retry(3, 1000, throw: false)
+                ->post(self::ENDPOINT, $messages);
             if (! $response->successful()) {
                 Log::warning('Expo push failed', ['status' => $response->status(), 'body' => $response->body()]);
+                return;
+            }
+
+            $tickets = (array) $response->json('data', []);
+            $receiptTokens = [];
+            foreach ($tickets as $index => $ticket) {
+                $token = $tokens[$index] ?? null;
+                if (($ticket['status'] ?? null) === 'ok' && isset($ticket['id']) && $token) {
+                    $receiptTokens[(string) $ticket['id']] = $token;
+                    continue;
+                }
+
+                $error = $ticket['details']['error'] ?? 'unknown';
+                Log::warning('Expo push ticket failed', compact('token', 'error'));
+                if ($token && $error === 'DeviceNotRegistered') {
+                    DeviceToken::where('token', $token)->delete();
+                }
+            }
+
+            if ($receiptTokens !== []) {
+                CheckExpoPushReceipts::dispatch($receiptTokens)->delay(now()->addMinutes(3));
             }
         } catch (\Throwable $e) {
             // On ne casse JAMAIS le flux métier si le push échoue

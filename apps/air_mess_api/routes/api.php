@@ -98,6 +98,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
         Route::delete('/me', [AuthController::class, 'deleteAccount']);
+        // Mise à jour du profil du marchand / particulier connecté.
+        Route::post('/profile', [AuthController::class, 'updateProfile']);
         // Enregistre l'acceptation des CGU + politique confidentialité par l'utilisateur connecté.
         // Requis pour les utilisateurs pré-existant à la mise en place (accepted_terms_at IS NULL)
         // ET pour tout bump de TERMS_VERSION.
@@ -213,9 +215,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/',           [NotificationController::class, 'index']);
         Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
         Route::post('/{notification}/read', [NotificationController::class, 'markRead']);
+        Route::post('/{notification}/received', [NotificationController::class, 'acknowledgePush']);
     });
 
     Route::post('/device-tokens', [NotificationController::class, 'registerToken']);
+    Route::post('/device-tokens/check', [NotificationController::class, 'currentToken']);
     Route::delete('/device-tokens', [NotificationController::class, 'deleteToken']);
 
     // Abonnements (payement et tout) — masqués côté UI mais conservés pour réversibilité

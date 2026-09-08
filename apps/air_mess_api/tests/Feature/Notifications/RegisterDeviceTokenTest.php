@@ -19,13 +19,31 @@ class RegisterDeviceTokenTest extends TestCase
         $response = $this->postJson('/api/device-tokens', [
             'token'    => 'ExponentPushToken[abc123]',
             'platform' => 'android',
+            'manufacturer' => 'Samsung',
+            'model_name' => 'SM-A042F',
+            'os_version' => '14',
+            'app_version' => '1.1.2',
         ]);
 
         $response->assertStatus(201);
         $this->assertDatabaseHas('device_tokens', [
             'token'   => 'ExponentPushToken[abc123]',
             'user_id' => $user->id,
+            'manufacturer' => 'Samsung',
+            'model_name' => 'SM-A042F',
         ]);
+    }
+
+    public function test_user_can_check_its_current_token(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+        $token = 'ExponentPushToken[current]';
+        $this->postJson('/api/device-tokens', ['token' => $token, 'platform' => 'android']);
+
+        $this->postJson('/api/device-tokens/check', ['token' => $token])
+            ->assertOk()
+            ->assertJson(['registered' => true]);
     }
 
     public function test_token_is_upserted_not_duplicated(): void

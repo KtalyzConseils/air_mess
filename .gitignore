@@ -1,7 +1,29 @@
+# Temporary files / build logs
+debug.log
+profile_backup.txt
+*.log
+
 # Local Firebase configuration and private service-account credentials
+.env
+.env.*
+*.env
+google-services.json
+google-services.dev.json
+*-firebase-adminsdk-*.json
 apps/AirMess/google-services.json
 apps/merchant-app/google-services.json
 apps/merchant-app/*firebase-adminsdk*.json
 
 # Local Android build artifacts
 apps/driver-app/releases/
+apps/driver-app/build_run_log.txt
+apps/driver-app/build_stderr.txt
+apps/driver-app/build_stdout.txt
+apps/driver-app/expo_kotlin_err2.txt
+apps/driver-app/expo_kotlin_log.txt
+apps/driver-app/expo_kotlin_log2.txt
+apps/driver-app/82befdf4-6997-4a5f-bff2-1d7ca585f59f.json
+
+# Separate local apps not versioned here
+apps/landing/
+apps/merchant-app/

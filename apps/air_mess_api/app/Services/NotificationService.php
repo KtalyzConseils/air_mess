@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SendExpoPushFallback;
 use App\Models\DeviceToken;
 use App\Models\Notification;
 
@@ -92,6 +93,18 @@ class NotificationService
             }
             // Android : push data-only Expo (la tâche de fond affiche l'appel Notifee).
             $this->expo->push($tokens, '', '', $payload, 'default', null, dataOnly: true);
+            // Si aucun appareil n'accuse réception du push headless, une notification
+            // visible classique prend le relais. Le délai évite le doublon lorsque
+            // Notifee a correctement affiché l'appel entrant.
+            if ($tokens !== [] && config('queue.default') !== 'sync') {
+                SendExpoPushFallback::dispatch(
+                    $notif->id,
+                    $tokens,
+                    $title !== '' ? $title : 'Nouvelle course',
+                    $body !== '' ? $body : 'Une nouvelle course est disponible.',
+                    $payload,
+                )->delay(now()->addSeconds(20));
+            }
             // iOS : push VoIP APNs (PushKit → CallKit). Seule voie pour réveiller un
             // iPhone fermé/verrouillé et présenter un appel entrant.
             $this->apnsVoip->push($voipTokens, $payload);

@@ -65,7 +65,7 @@ return [
     ],
 
     'fedapay' => [
-        'env'            => env('FEDAPAY_ENV', 'sandbox'),
+        'env'            => env('FEDAPAY_ENV', 'live'),
         'public_key'     => env('FEDAPAY_PUBLIC_KEY'),
         'secret_key'     => env('FEDAPAY_SECRET_KEY'),
         'webhook_secret' => env('FEDAPAY_WEBHOOK_SECRET'),
