@@ -230,7 +230,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Compte */}
+                {/* Compte */}
         <View className="mx-5 mt-5">
           <SectionLabel>Compte</SectionLabel>
           <View className="bg-off-white border border-warm-200 rounded-2xl overflow-hidden">

@@ -69,7 +69,7 @@ export async function updatePosition(lat: number, lng: number) {
 }
 
 export async function fetchOfferedCourses(): Promise<DriverCourseSummary[]> {
-  const { data } = await api.get('/driver/offered-courses')
+  const { data } = await api.get('/driver/offered-courses', { params: { per_page: 50 } })
   return data.courses
 }
 

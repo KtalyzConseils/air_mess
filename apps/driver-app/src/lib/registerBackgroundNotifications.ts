@@ -7,6 +7,7 @@ import notifee, {
 } from './notifeeSafe'
 import { IS_EXPO_GO } from './notifications'
 import { acceptCourse, declineCourse, declineReassignment } from '../api/driver'
+import { acknowledgePushReceipt } from '../api/notifications'
 
 // expo-notifications et expo-task-manager NE DOIVENT PAS être importés en Expo Go :
 // depuis SDK 53, expo-notifications a des side-effects de module (auto push register)
@@ -359,6 +360,9 @@ if (!IS_EXPO_GO) {
       const payload = extractCoursePayload(data)
       if (payload && isCallType(payload.type)) {
         await showIncomingCourseNotification(payload)
+        if (payload.notification_id != null) {
+          await acknowledgePushReceipt(payload.notification_id).catch(() => {})
+        }
       }
     } catch (e) {
       console.warn('[bg-notif] handling failed:', String(e))
