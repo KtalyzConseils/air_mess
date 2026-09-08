@@ -1,6 +1,6 @@
 import '../global.css'
 import { useEffect, useState } from 'react'
-import { Stack, useRouter, useSegments } from 'expo-router'
+import { Stack, useRouter, useSegments, type Href } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -16,6 +16,7 @@ import {
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import { useIosVoipCall } from '../hooks/useIosVoipCall'
+import { acknowledgePushReceipt, markNotificationRead } from '../api/notifications'
 import BrandSplash from '../components/BrandSplash'
 import { hasCompletedOnboarding } from '../lib/onboarding'
 import BackgroundLocationDisclosure from '../components/BackgroundLocationDisclosure'
@@ -35,6 +36,8 @@ const queryClient = new QueryClient()
  * d'être vue même si l'hydratation du store est instantanée (cas fréquent).
  */
 const MIN_SPLASH_MS = 1200
+const HOME_ROUTE = '/' as Href
+const ONBOARDING_ROUTE = '/onboarding' as Href
 
 export default function RootLayout() {
   const { user, hydrated, hydrate, onboardingSeen, setOnboardingSeen } = useAuthStore()
@@ -63,7 +66,16 @@ export default function RootLayout() {
     import('expo-notifications').then((Notifications) => {
       sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data as any
-        if (data?.course_id) {
+        const notificationId = getString(data?.notification_id)
+        if (notificationId) {
+          void markNotificationRead(notificationId).catch(() => undefined)
+        }
+        if (isCallType(data?.type) && data?.course_id) {
+          if (notificationId) {
+            void acknowledgePushReceipt(notificationId).catch(() => undefined)
+          }
+          setPendingCourseId(Number(data.course_id))
+        } else {
           router.push('/(tabs)/notifications')
         }
       })
@@ -135,6 +147,10 @@ export default function RootLayout() {
       sub = Notifications.addNotificationReceivedListener(async (notif) => {
         const data = notif.request.content.data as any
         if (isCallType(data?.type) && data?.course_id != null) {
+          const notificationId = getString(data?.notification_id)
+          if (notificationId) {
+            void acknowledgePushReceipt(notificationId).catch(() => undefined)
+          }
           const head = await enqueueCourseFromPush(data)
           setPendingCourseId(head ?? Number(data.course_id))
         }
@@ -198,13 +214,13 @@ export default function RootLayout() {
     if (!user && !inAuthRoute) {
       router.replace('/login')
     } else if (user && onboardingSeen === false && !inOnboardingRoute) {
-      router.replace('/onboarding')
+      router.replace(ONBOARDING_ROUTE)
     } else if (user && onboardingSeen === true && inOnboardingRoute) {
-      router.replace('/')
+      router.replace(HOME_ROUTE)
     } else if (user && (first === 'login' || first === 'register')) {
       // Un utilisateur connecté ne doit pas rester sur login/register, mais on
       // le LAISSE sur forgot/reset s'il a suivi un lien mail (cas rare mais valide).
-      router.replace(onboardingSeen === false ? '/onboarding' : '/')
+      router.replace(onboardingSeen === false ? ONBOARDING_ROUTE : HOME_ROUTE)
     }
   }, [hydrated, onboardingSeen, user, segments, router])
 
@@ -223,4 +239,10 @@ export default function RootLayout() {
       </KeyboardProvider>
     </GestureHandlerRootView>
   )
+}
+
+function getString(value: unknown) {
+  if (typeof value === 'string' && value.length > 0) return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return null
 }

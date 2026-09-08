@@ -98,6 +98,68 @@ class FcmClient
     }
 
     /**
+     * Envoie une notification directement aux tokens FCM natifs Android.
+     */
+    public function sendAndroid(array $tokens, string $title, string $body, array $data = []): void
+    {
+        $tokens = array_values(array_unique(array_filter($tokens)));
+        if (empty($tokens)) {
+            return;
+        }
+
+        $credentials = $this->credentials();
+        if ($credentials === null) {
+            return;
+        }
+
+        $accessToken = $this->accessToken($credentials);
+        if ($accessToken === null) {
+            return;
+        }
+
+        $endpoint = "https://fcm.googleapis.com/v1/projects/{$credentials['project_id']}/messages:send";
+        $stringData = [];
+        foreach ($data as $key => $value) {
+            if ($value !== null) {
+                $stringData[$key] = is_scalar($value) ? (string) $value : json_encode($value);
+            }
+        }
+
+        foreach ($tokens as $token) {
+            try {
+                $response = Http::withToken($accessToken)->timeout(10)->post($endpoint, [
+                    'message' => [
+                        'token' => $token,
+                        'notification' => ['title' => $title, 'body' => $body],
+                        'data' => $stringData,
+                        'android' => [
+                            'priority' => 'high',
+                            'notification' => [
+                                'channel_id' => 'default',
+                                'sound' => 'default',
+                                'color' => '#FFCC00',
+                            ],
+                        ],
+                    ],
+                ]);
+
+                if ($response->successful()) {
+                    continue;
+                }
+
+                $error = $response->json('error.status');
+                if (in_array($error, ['UNREGISTERED', 'NOT_FOUND', 'INVALID_ARGUMENT'], true)) {
+                    DeviceToken::where('token', $token)->where('platform', 'android')->delete();
+                } else {
+                    Log::warning('FCM Android push failed', ['status' => $response->status(), 'error' => $error]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('FCM Android push exception', ['err' => $e->getMessage()]);
+            }
+        }
+    }
+
+    /**
      * Contenu du fichier de compte de service, ou null si non configuré.
      *
      * @return array{project_id: string, client_email: string, private_key: string, token_uri: string}|null

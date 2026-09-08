@@ -71,7 +71,9 @@ export default function DriverDashboard() {
     isNetworkError(activeQuery.error) ||
     isNetworkError(offeredQuery.error)
 
-  useNewCourseAlert(availability === 'available' ? (offeredQuery.data?.length ?? 0) : 0)
+  useNewCourseAlert(
+    availability === 'available' ? (offeredQuery.data ?? []).map((course) => course.id) : [],
+  )
 
   const [bannedSupportOpen, setBannedSupportOpen] = useState(false)
   const [activeModalOpen, setActiveModalOpen] = useState(false)

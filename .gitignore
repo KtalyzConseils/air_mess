@@ -1,0 +1,16 @@
+# Local/generated data
+_fixtures/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Native/mobile credentials
+google-services.json
+GoogleService-Info.plist
+credentials.json
+*.jks
+*.p8
+*.p12
+*.key

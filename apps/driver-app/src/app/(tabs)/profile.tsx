@@ -59,6 +59,7 @@ const RESPONSE_CHANNEL_OPTIONS: {
 ]
 
 const STATS_ROUTE = '/stats' as Href
+const PUSH_DIAGNOSTICS_ROUTE = '/push-diagnostics' as Href
 
 /**
  * Profile driver — carte hero (identité + stats) conservée telle quelle, puis
@@ -376,6 +377,12 @@ export default function ProfileScreen() {
                 onPress={() => { void openFullScreenIntentSettings() }}
               />
             )}
+            <ProfileRow
+              icon="pulse-outline"
+              title="Diagnostic notifications"
+              subtitle="Verifier ce telephone"
+              onPress={() => router.push(PUSH_DIAGNOSTICS_ROUTE)}
+            />
             <ProfileRow icon="card-outline" title="Moyen de paiement" subtitle="Mobile Money" />
             <ProfileRow
               icon="shield-checkmark-outline"

@@ -78,6 +78,8 @@
       [
         "expo-notifications",
         {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#FFCC00",
           "sounds": [
             "./assets/sounds/new_course.wav",
             "./assets/sounds/new_course_ring.wav"
@@ -94,7 +96,8 @@
         }
       ],
       "./plugins/withFullScreenNotifications",
-      "./plugins/withIosVoip"
+      "./plugins/withIosVoip",
+      "./plugins/withLocalMavenRepos"
     ],
 
     "experiments": {
