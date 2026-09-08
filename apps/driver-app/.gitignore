@@ -44,6 +44,7 @@ android/signing.properties
 # build. Un template avec placeholders est versionné dans google-services.json.example.
 google-services.json
 GoogleService-Info.plist
+credentials.json
 
 # build logs
 build-android.log
