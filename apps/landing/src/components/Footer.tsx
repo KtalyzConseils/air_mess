@@ -39,7 +39,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-14 flex flex-col gap-2 border-t border-white/10 pt-6 text-sm text-white/50 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {year} AirMess. {c.footer.rights}</p>
+          <p>© {year} Airmess. {c.footer.rights}</p>
           <p className="data-label">{c.footer.madeBy}</p>
         </div>
       </div>

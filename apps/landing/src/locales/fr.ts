@@ -15,12 +15,12 @@ const fr: Translation = {
     titleHighlight: 'Nous livrons.',
     titleLine2: '',
     subtitle:
-      'AirMess orchestre la livraison de vos commandes à Cotonou. Vos clients suivent chaque course en direct, jusqu’à leur porte. Vous, vous vous concentrez sur la vente.',
+      'Airmess gère la livraison de vos commandes à Cotonou. Vos clients suivent chaque course en direct, jusqu’à leur porte. Vous, vous vous concentrez sur la vente.',
     ctaSender: 'Créer une livraison',
     ctaDriver: 'Devenir livreur',
     price: 'Livraison à partir de 500 FCFA',
     example:
-      'Vous vendez un produit ? Créez une course, partagez le lien de suivi avec votre client, AirMess gère la livraison.',
+      'Vous vendez un produit ? Créez une course, partagez le lien de suivi avec votre client, Airmess gère la livraison.',
     stats: {
       deliveries: 'Livraisons effectuées',
       pickup: 'Délai de prise en charge',
@@ -84,7 +84,7 @@ const fr: Translation = {
     senders: {
       tag: 'Vous vendez',
       title: 'Marchands',
-      body: 'Boutique en ligne ou étal au marché ? Créez une livraison, AirMess gère la course, et vous êtes payé via votre portefeuille.',
+      body: 'Boutique en ligne ou étal au marché ? Créez une livraison, Airmess gère la course, et vous êtes payé via votre portefeuille.',
       bullets: ['Livraison en ville le jour même', 'Lien de suivi en direct pour votre client', 'Encaissement à la livraison, crédité sur votre wallet'],
       cta: 'Créer une livraison',
     },
@@ -97,7 +97,7 @@ const fr: Translation = {
     },
   },
   driverCta: {
-    eyebrow: 'Roulez avec AirMess',
+    eyebrow: 'Roulez avec Airmess',
     title: 'Sillonnez la ville. Soyez payé pour ça.',
     subtitle:
       'Rejoignez le réseau de livreurs et commencez à accepter des livraisons près de chez vous. L’inscription se fait en ligne, en quelques minutes.',
@@ -115,7 +115,7 @@ const fr: Translation = {
     title: 'Vos questions, nos réponses.',
     items: [
       {
-        q: 'Où AirMess livre-t-il ?',
+        q: 'Où Airmess livre-t-il ?',
         a: 'Nous opérons à Cotonou et ses environs, avec de nouvelles zones régulièrement. Saisissez vos adresses pour vérifier la disponibilité immédiatement.',
       },
       {
@@ -138,7 +138,7 @@ const fr: Translation = {
   },
   whatsapp: {
     label: 'Discuter sur WhatsApp',
-    message: 'Bonjour, je souhaite organiser une livraison avec AirMess.',
+    message: 'Bonjour, je souhaite organiser une livraison avec Airmess.',
   },
   footer: {
     tagline: 'Vous vendez, nous livrons — à Cotonou, suivi de bout en bout.',

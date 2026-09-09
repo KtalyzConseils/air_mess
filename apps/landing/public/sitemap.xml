@@ -3,22 +3,23 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://airmess-logistics.com/</loc>
+    <lastmod>2026-09-09</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <image:image>
       <image:loc>https://airmess-logistics.com/airmess-logo.png</image:loc>
-      <image:title>AIR MESS — logo</image:title>
-      <image:caption>Logo AIR MESS, livraison le jour même à Cotonou</image:caption>
+      <image:title>Airmess — logo</image:title>
+      <image:caption>Logo Airmess, livraison le jour même à Cotonou</image:caption>
     </image:image>
     <image:image>
       <image:loc>https://airmess-logistics.com/og.png</image:loc>
-      <image:title>AIR MESS — Vous vendez. Nous livrons.</image:title>
-      <image:caption>AIR MESS, livraison et encaissement pour marchands à Cotonou (MTN MoMo, Moov Money)</image:caption>
+      <image:title>Airmess — Vous vendez. Nous livrons.</image:title>
+      <image:caption>Airmess, livraison et encaissement pour marchands à Cotonou (MTN MoMo, Moov Money)</image:caption>
     </image:image>
     <image:image>
       <image:loc>https://airmess-logistics.com/icon-512.png</image:loc>
-      <image:title>AIR MESS — icône</image:title>
-      <image:caption>Icône AIR MESS</image:caption>
+      <image:title>Airmess — icône</image:title>
+      <image:caption>Icône Airmess</image:caption>
     </image:image>
   </url>
 </urlset>

@@ -13,12 +13,12 @@ const en = {
     titleHighlight: 'We deliver.',
     titleLine2: '',
     subtitle:
-      'AirMess orchestrates the delivery of your orders across Cotonou. Your customers track every run live, all the way to their door. You focus on selling.',
+      'Airmess handles the delivery of your orders across Cotonou. Your customers track every run live, all the way to their door. You focus on selling.',
     ctaSender: 'Create a delivery',
     ctaDriver: 'Become a courier',
     price: 'Delivery from 500 FCFA',
     example:
-      'You sell a product? Create a run, share the tracking link with your customer — AirMess handles the delivery.',
+      'You sell a product? Create a run, share the tracking link with your customer — Airmess handles the delivery.',
     stats: {
       deliveries: 'Deliveries completed',
       pickup: 'Avg. pickup time',
@@ -82,7 +82,7 @@ const en = {
     senders: {
       tag: 'You sell',
       title: 'Merchants',
-      body: 'Run an online shop or a market stall? Create a delivery, let AirMess handle the run, and get paid through your wallet.',
+      body: 'Run an online shop or a market stall? Create a delivery, let Airmess handle the run, and get paid through your wallet.',
       bullets: ['Same-day city delivery', 'Live tracking link for your customer', 'Cash-in on delivery, credited to your wallet'],
       cta: 'Create a delivery',
     },
@@ -95,7 +95,7 @@ const en = {
     },
   },
   driverCta: {
-    eyebrow: 'Drive with AirMess',
+    eyebrow: 'Drive with Airmess',
     title: 'Ride the city. Get paid for it.',
     subtitle:
       'Join the courier network and start accepting deliveries near you. Sign up online — it takes a few minutes.',
@@ -113,7 +113,7 @@ const en = {
     title: 'Questions, answered.',
     items: [
       {
-        q: 'Where does AirMess deliver?',
+        q: 'Where does Airmess deliver?',
         a: 'We operate across Cotonou and nearby areas, with new zones opening regularly. Enter your addresses to check availability instantly.',
       },
       {
@@ -136,7 +136,7 @@ const en = {
   },
   whatsapp: {
     label: 'Chat on WhatsApp',
-    message: "Hello, I'd like to arrange a delivery with AirMess.",
+    message: "Hello, I'd like to arrange a delivery with Airmess.",
   },
   footer: {
     tagline: 'You sell, we deliver — across Cotonou, tracked end to end.',
