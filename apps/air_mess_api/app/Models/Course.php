@@ -58,9 +58,12 @@ class Course extends Model
             'has_collection' => 'boolean',
             'scheduled_for' => 'datetime',
             'assigned_at' => 'datetime',
+            'offer_broadcasted_at' => 'datetime',
+            'offer_alerts_sent' => 'array',
             'picked_up_at' => 'datetime',
             'delivered_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'archived_at' => 'datetime',
             'last_contact_attempt_at' => 'datetime',
             'is_return_trip' => 'boolean',
             'return_confirmed_at' => 'datetime',
@@ -140,6 +143,11 @@ class Course extends Model
         return $this->belongsTo(User::class, 'sender_id');
     }
 
+    public function offerAdminActions()
+    {
+        return $this->hasMany(CourseOfferAdminAction::class)->latest();
+    }
+
     /**
      * Application API qui a créé la course (null si course interne).
      * Utile pour le reporting et le décompte de quota.
@@ -177,6 +185,11 @@ class Course extends Model
     public function cancelledBy()
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function archivedBy()
+    {
+        return $this->belongsTo(User::class, 'archived_by');
     }
 
     // ===== Helpers métier =====

@@ -301,6 +301,54 @@ export async function fetchAdminCourses(params: {
   return data
 }
 
+export interface OfferAdminAction {
+  id: number
+  action: 'viewed' | 'rebroadcasted' | 'assigned'
+  created_at: string
+  admin_user?: { id: number; name: string } | null
+}
+
+export interface UnassignedCourse extends Course {
+  offer_age_seconds: number
+  offer_broadcasted_at?: string | null
+  offer_admin_actions?: OfferAdminAction[]
+  assignment_diagnostic: {
+    code: 'none_available_nearby' | 'all_nearby_busy' | 'broadcast_no_response' | 'all_contacted_declined'
+    warning: string
+    nearest_available_outside_km: number | null
+    available_within_radius: number
+    busy_within_radius: number
+    contacted_count: number
+    declined_count: number
+  }
+}
+
+export async function fetchUnassignedCourses(): Promise<{ count: number; courses: UnassignedCourse[] }> {
+  const { data } = await api.get('/admin/courses-unassigned')
+  return data
+}
+
+export interface ArchivedCourse extends Course {
+  archived_at: string
+  archived_released_amount: number
+  cancellation_reason: string | null
+  sender?: { id: number; name: string; email: string; phone: string | null; type: string }
+  archived_by?: { id: number; name: string; email: string } | null
+}
+
+export async function fetchArchivedCourses(params: { q?: string; page?: number; per_page?: number } = {}): Promise<Paginated<ArchivedCourse>> {
+  const { data } = await api.get('/admin/courses-archived', { params })
+  return data
+}
+
+export async function markOfferViewed(courseId: number): Promise<void> {
+  await api.post(`/admin/courses/${courseId}/offer-viewed`)
+}
+
+export async function rebroadcastCourse(courseId: number): Promise<void> {
+  await api.post(`/admin/courses/${courseId}/rebroadcast`)
+}
+
 export type MarchantWithUser = Marchant & {
   user: { id: number; name: string; email: string; phone: string | null; wallet?: UserWallet | null }
 }

@@ -116,13 +116,17 @@ class SupportController extends Controller
 
         $previousStatus = $course->status;
         $admin = $request->user()->admin;
+        $releasedAmount = $course->paid_from_wallet ? (int) $course->delivery_fee : 0;
 
-        DB::transaction(function () use ($course, $data, $previousStatus, $admin, $walletService) {
+        DB::transaction(function () use ($course, $data, $previousStatus, $admin, $walletService, $releasedAmount) {
             $course->update([
                 'status'              => Course::STATUS_CANCELLED,
                 'cancelled_at'        => now(),
                 'cancellation_reason' => '[Support] ' . $data['reason'],
                 'cancelled_by'        => $admin->user_id,
+                'archived_at'         => now(),
+                'archived_by'         => $admin->user_id,
+                'archived_released_amount' => $releasedAmount,
             ]);
 
             if ($course->paid_from_wallet) {
@@ -133,21 +137,23 @@ class SupportController extends Controller
                 );
             }
 
-            CourseStatusHistory::create([
-                'course_id'       => $course->id,
-                'from_status'     => $previousStatus,
-                'to_status'       => Course::STATUS_CANCELLED,
-                'changed_by_id'   => $admin->user_id,
-                'changed_by_type' => 'admin',
-                'reason'          => '[Support] ' . $data['reason'],
-            ]);
+            // CourseObserver a déjà créé la ligne d'historique avec le type
+            // autorisé `user`. On complète cette ligne avec le motif au lieu
+            // d'en créer une seconde avec l'ancien type invalide `admin`.
+            CourseStatusHistory::query()
+                ->where('course_id', $course->id)
+                ->where('from_status', $previousStatus)
+                ->where('to_status', Course::STATUS_CANCELLED)
+                ->latest('id')
+                ->first()
+                ?->update(['reason' => '[Support] ' . $data['reason']]);
         });
 
         $notifier->sendToUser(
             $course->sender_id,
             'course.cancelled_by_support',
             '↩️ Course annulée par le support',
-            "Votre course {$course->reference} a été annulée à votre demande. Motif : {$data['reason']}",
+            "Votre course {$course->reference} a été annulée par notre équipe. Motif : {$data['reason']}",
             [
                 'app'       => 'merchant',
                 'screen'    => 'course_detail',

@@ -9,6 +9,8 @@ import CourseDetailPage from './pages/CourseDetailPage'
 import AddressesPage from './pages/AddressesPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminCoursesPage from './pages/admin/AdminCoursesPage'
+import AdminUnassignedCoursesPage from './pages/admin/AdminUnassignedCoursesPage'
+import AdminArchivedCoursesPage from './pages/admin/AdminArchivedCoursesPage'
 import AdminMarchantsPage from './pages/admin/AdminMarchantsPage'
 import AdminIndividualsPage from './pages/admin/AdminIndividualsPage'
 import AdminIndividualDetailPage from './pages/admin/AdminIndividualDetailPage'
@@ -122,6 +124,12 @@ function App() {
             <Route path="/admin/drivers/:id" element={<AdminDriverDetailPage />} />
             <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
             <Route path="/admin/api-apps" element={<AdminApiApplicationsPage />} />
+          </Route>
+
+          {/* File sans livreur : visible uniquement par super, ops et support. */}
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['ops', 'support']} />}>
+            <Route path="/admin/courses-unassigned" element={<AdminUnassignedCoursesPage />} />
+            <Route path="/admin/courses-archived" element={<AdminArchivedCoursesPage />} />
           </Route>
 
 

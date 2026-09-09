@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 import { fetchUnreadCount } from '../../api/notifications'
+import { fetchUnassignedCourses } from '../../api/admin'
 import {
   DashboardIcon,
   StoreIcon,
@@ -45,11 +46,18 @@ export function useAdminNav() {
   const canBrowseEntities = hasAdminRole(user, 'commercial', 'ops', 'support')
   const isSuperAdmin = hasAdminRole(user, 'super')
   const canOps = hasAdminRole(user, 'ops')
+  const canMonitorUnassigned = hasAdminRole(user, 'ops', 'support')
 
   const { data: unread = 0 } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: fetchUnreadCount,
     refetchInterval: 20_000,
+  })
+  const { data: unassigned } = useQuery({
+    queryKey: ['admin', 'courses-unassigned'],
+    queryFn: fetchUnassignedCourses,
+    refetchInterval: 20_000,
+    enabled: canMonitorUnassigned,
   })
 
   const sections: AdminNavSection[] = [
@@ -58,6 +66,8 @@ export function useAdminNav() {
       items: filterItems([
         { to: '/admin/dashboard', label: t('admin.nav.overview'), Icon: DashboardIcon, visible: true },
         { to: '/admin/courses', label: t('admin.nav.courses'), Icon: PackageIcon, visible: canBrowseEntities },
+        { to: '/admin/courses-unassigned', label: t('admin.nav.unassignedCourses'), Icon: AlertTriangleIcon, visible: canMonitorUnassigned, badge: unassigned?.count ?? 0 },
+        { to: '/admin/courses-archived', label: 'Courses archivées', Icon: PackageIcon, visible: canMonitorUnassigned },
         { to: '/admin/incidents', label: t('admin.nav.incidents'), Icon: AlertTriangleIcon, visible: canOps },
       ]),
     },

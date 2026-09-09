@@ -320,6 +320,14 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/api-apps/{app}',      [AdminApiApplicationController::class, 'show']);
     });
 
+    // === SUIVI DES COURSES SANS LIVREUR (super + ops + support) ===
+    Route::middleware('admin:ops,support')->group(function () {
+        Route::get('/courses-unassigned', [AdminController::class, 'unassignedCourses']);
+        Route::get('/courses-archived', [AdminController::class, 'archivedCourses']);
+        Route::post('/courses/{course}/offer-viewed', [AdminController::class, 'markOfferViewed']);
+        Route::post('/courses/{course}/cancel-support', [SupportController::class, 'cancelCourse']);
+    });
+
     // === ÉCRITURE COMMERCIALE (validation/suspension marchands & particuliers) ===
     Route::middleware('admin:commercial')->group(function () {
         Route::post('/marchants/{marchant}/validate',   [AdminController::class, 'validateMarchant']);
@@ -340,6 +348,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // Les retraits (argent) restent strictement ops — pas accessibles au support.
     Route::middleware('admin:ops')->group(function () {
         Route::post('/courses/{course}/reassign',      [AdminController::class, 'reassignCourse']);
+        Route::post('/courses/{course}/rebroadcast',   [AdminController::class, 'rebroadcastCourse']);
         Route::post('/courses/{course}/dispute',       [AdminController::class, 'disputeCourse']);
         Route::post('/drivers/{driver}/validate',      [AdminController::class, 'validateDriver']);
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
@@ -367,7 +376,6 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::middleware('admin:support')->group(function () {
         Route::post('/users/{user}/send-password-reset', [SupportController::class, 'sendPasswordReset']);
         Route::post('/users/{user}/send-notification',   [SupportController::class, 'sendNotificationToUser']);
-        Route::post('/courses/{course}/cancel-support',  [SupportController::class, 'cancelCourse']);
     });
 
     // === NOTES INTERNES (ouvertes à tous les rôles admin) ===

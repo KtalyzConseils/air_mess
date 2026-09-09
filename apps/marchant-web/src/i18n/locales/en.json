@@ -1119,6 +1119,7 @@
     "nav": {
       "overview": "Overview",
       "courses": "Deliveries",
+      "unassignedCourses": "Unassigned deliveries",
       "incidents": "Incidents",
       "marchants": "Merchants",
       "individuals": "Individuals",

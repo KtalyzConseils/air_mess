@@ -119,10 +119,10 @@ class DriverController extends Controller
         $query->where(function ($q) use ($expressCutoff, $standardCutoff) {
             $q->where(function ($express) use ($expressCutoff) {
                 $express->where('urgency', 'express')
-                    ->where('created_at', '>=', $expressCutoff);
+                    ->whereRaw('COALESCE(offer_broadcasted_at, created_at) >= ?', [$expressCutoff]);
             })->orWhere(function ($standard) use ($standardCutoff) {
                 $standard->where('urgency', 'standard')
-                    ->where('created_at', '>=', $standardCutoff);
+                    ->whereRaw('COALESCE(offer_broadcasted_at, created_at) >= ?', [$standardCutoff]);
             });
         });
 

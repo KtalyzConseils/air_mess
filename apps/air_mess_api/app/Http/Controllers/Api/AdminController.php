@@ -20,6 +20,10 @@ use Illuminate\Validation\Rule;
 use App\Services\NotificationService;
 use App\Services\DriverWalletService;
 use App\Models\CourseIncident;
+use App\Models\CourseOfferAdminAction;
+use App\Models\CourseDeclineRecord;
+use App\Models\Notification;
+use App\Services\CourseCreationService;
 
 
 class AdminController extends Controller
@@ -73,6 +77,7 @@ class AdminController extends Controller
     {
         $query = Course::query()
             ->with(['sender', 'driver.user', 'packageCategory'])
+            ->whereNull('archived_at')
             ->latest();
 
         if ($status = $request->query('status')) {
@@ -89,6 +94,123 @@ class AdminController extends Controller
         }
 
         return response()->json($query->paginate(min((int) $request->query('per_page', 20), 100)));
+    }
+
+    public function archivedCourses(Request $request): JsonResponse
+    {
+        $query = Course::query()
+            ->whereNotNull('archived_at')
+            ->with(['sender:id,name,email,phone,type', 'archivedBy:id,name,email'])
+            ->latest('archived_at');
+
+        if ($q = trim((string) $request->query('q', ''))) {
+            $query->where(function ($builder) use ($q) {
+                $builder->where('reference', 'ILIKE', "%{$q}%")
+                    ->orWhere('origin_name', 'ILIKE', "%{$q}%")
+                    ->orWhere('destination_name', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        return response()->json($query->paginate(min((int) $request->query('per_page', 30), 100)));
+    }
+
+    public function unassignedCourses(): JsonResponse
+    {
+        $courses = Course::query()->where('status', Course::STATUS_AWAITING)->whereNull('driver_id')
+            ->with(['sender:id,name,phone', 'offerAdminActions.adminUser:id,name'])
+            ->orderByRaw("CASE WHEN urgency = 'express' THEN 0 ELSE 1 END")
+            ->orderByRaw('COALESCE(offer_broadcasted_at, created_at) ASC')->get();
+
+        $courseIds = $courses->pluck('id');
+        $drivers = Driver::query()
+            ->where('activation_status', 'active')
+            ->whereIn('availability_status', ['available', 'busy'])
+            ->whereNotNull('current_lat')->whereNotNull('current_lng')
+            ->get(['id', 'availability_status', 'current_lat', 'current_lng']);
+        $offeredCounts = Notification::query()
+            ->whereIn('course_id', $courseIds)->where('type', 'course.offered')
+            ->selectRaw('course_id, COUNT(DISTINCT user_id) AS total')
+            ->groupBy('course_id')->pluck('total', 'course_id');
+        $declineCounts = CourseDeclineRecord::query()
+            ->whereIn('course_id', $courseIds)
+            ->selectRaw('course_id, COUNT(DISTINCT driver_id) AS total')
+            ->groupBy('course_id')->pluck('total', 'course_id');
+
+        $distanceKm = static function (float $latA, float $lngA, float $latB, float $lngB): float {
+            $latDelta = deg2rad($latB - $latA);
+            $lngDelta = deg2rad($lngB - $lngA);
+            $a = sin($latDelta / 2) ** 2
+                + cos(deg2rad($latA)) * cos(deg2rad($latB)) * sin($lngDelta / 2) ** 2;
+
+            return 2 * 6371 * asin(min(1, sqrt($a)));
+        };
+
+        $courses->each(function (Course $course) use ($drivers, $offeredCounts, $declineCounts, $distanceKm) {
+            $start = $course->offer_broadcasted_at ?? $course->created_at;
+            $course->setAttribute('offer_age_seconds', $start->diffInSeconds(now()));
+
+            $distances = $drivers->mapWithKeys(fn (Driver $driver) => [
+                $driver->id => $distanceKm(
+                    (float) $course->origin_lat,
+                    (float) $course->origin_lng,
+                    (float) $driver->current_lat,
+                    (float) $driver->current_lng,
+                ),
+            ]);
+            $availableIds = $drivers->where('availability_status', 'available')->pluck('id');
+            $busyIds = $drivers->where('availability_status', 'busy')->pluck('id');
+            $availableWithin = $availableIds->filter(fn ($id) => $distances[$id] <= 8.0)->count();
+            $busyWithin = $busyIds->filter(fn ($id) => $distances[$id] <= 8.0)->count();
+            $nearestOutside = $availableIds->map(fn ($id) => $distances[$id])
+                ->filter(fn ($distance) => $distance > 8.0)->min();
+            $offered = (int) ($offeredCounts[$course->id] ?? 0);
+            $declined = (int) ($declineCounts[$course->id] ?? 0);
+
+            if ($offered > 0 && $declined >= $offered) {
+                $code = 'all_contacted_declined';
+                $warning = 'Tous les livreurs contactés ont refusé';
+            } elseif ($availableWithin === 0 && $busyWithin > 0) {
+                $code = 'all_nearby_busy';
+                $warning = 'Livreurs présents, mais tous occupés';
+            } elseif ($availableWithin === 0) {
+                $code = 'none_available_nearby';
+                $warning = 'Aucun livreur disponible dans un rayon de 8 km';
+            } else {
+                $code = 'broadcast_no_response';
+                $warning = 'Diffusion envoyée, aucune réponse';
+            }
+
+            $course->setAttribute('assignment_diagnostic', [
+                'code' => $code,
+                'warning' => $warning,
+                'nearest_available_outside_km' => $nearestOutside === null ? null : round($nearestOutside, 1),
+                'available_within_radius' => $availableWithin,
+                'busy_within_radius' => $busyWithin,
+                'contacted_count' => $offered,
+                'declined_count' => $declined,
+            ]);
+        });
+
+        return response()->json(['count' => $courses->count(), 'courses' => $courses]);
+    }
+
+    public function markOfferViewed(Request $request, Course $course): JsonResponse
+    {
+        CourseOfferAdminAction::create([
+            'course_id' => $course->id, 'admin_user_id' => $request->user()->id, 'action' => 'viewed',
+        ]);
+        return response()->json(['ok' => true]);
+    }
+
+    public function rebroadcastCourse(Request $request, Course $course, CourseCreationService $courses): JsonResponse
+    {
+        abort_unless($course->status === Course::STATUS_AWAITING && $course->driver_id === null, 422, 'Cette course ne peut plus être relancée.');
+        $course->forceFill(['offer_broadcasted_at' => now(), 'offer_alerts_sent' => []])->save();
+        CourseOfferAdminAction::create([
+            'course_id' => $course->id, 'admin_user_id' => $request->user()->id, 'action' => 'rebroadcasted',
+        ]);
+        $courses->dispatchToAvailableDrivers($course);
+        return response()->json(['course' => $course->fresh()]);
     }
 
     // ===== 3. RÉAFFECTER UNE COURSE =====
@@ -190,6 +312,13 @@ class AdminController extends Controller
                     'transfer_lat'                 => $wantsTransfer ? $transferLat : null,
                     'transfer_lng'                 => $wantsTransfer ? $transferLng : null,
                 ],
+            ]);
+
+            CourseOfferAdminAction::create([
+                'course_id' => $course->id,
+                'admin_user_id' => $request->user()->id,
+                'action' => 'assigned',
+                'metadata' => ['driver_id' => $newDriver->id],
             ]);
         });
 
