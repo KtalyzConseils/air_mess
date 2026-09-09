@@ -1,3 +1,4 @@
+import { AxiosError } from 'axios'
 import api from './client'
 
 export type CourseIncidentStatus = 'open' | 'resolved' | 'cancelled'
@@ -110,6 +111,10 @@ export interface CourseFeeEstimate {
   multiplier: number
   urgency: 'standard' | 'express'
   fee_before_round: number
+  /** Tarif avant application d'une éventuelle offre de bienvenue. */
+  original_fee: number
+  discount_amount: number
+  discount_code: 'FIRST_COURSE_500' | null
   fee: number
   /** Vrai quand le plafond haut a écrasé le fee calculé. */
   capped: boolean
@@ -186,9 +191,9 @@ export async function createCourse(
   try {
     const { data } = await api.post('/courses', payload)
     return data as CreateCourseResult
-  } catch (err: any) {
+  } catch (err: unknown) {
     // 402 Payment Required : on remonte le payload structuré, pas une exception
-    if (err?.response?.status === 402) {
+    if (err instanceof AxiosError && err.response?.status === 402) {
       return err.response.data as CreateCourseResult
     }
     throw err

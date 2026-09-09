@@ -53,6 +53,8 @@ class Course extends Model
             'package_weight_kg' => 'float',
             'package_declared_value' => 'float',
             'delivery_fee' => 'float',
+            'original_delivery_fee' => 'integer',
+            'discount_amount' => 'integer',
             'driver_earnings' => 'float',
             'collection_amount' => 'float',
             'has_collection' => 'boolean',

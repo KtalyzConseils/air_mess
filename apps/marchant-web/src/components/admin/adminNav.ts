@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 import { fetchUnreadCount } from '../../api/notifications'
-import { fetchUnassignedCourses } from '../../api/admin'
+import { fetchUnassignedCourses, fetchWaitlist } from '../../api/admin'
 import {
   DashboardIcon,
   StoreIcon,
@@ -59,6 +59,12 @@ export function useAdminNav() {
     refetchInterval: 20_000,
     enabled: canMonitorUnassigned,
   })
+  const { data: waitlist } = useQuery({
+    queryKey: ['admin', 'waitlist', 'nav-count'],
+    queryFn: () => fetchWaitlist({ status: 'waiting', per_page: 1 }),
+    refetchInterval: 30_000,
+    enabled: canBrowseEntities,
+  })
 
   const sections: AdminNavSection[] = [
     {
@@ -76,6 +82,7 @@ export function useAdminNav() {
       items: filterItems([
         { to: '/admin/marchants', label: t('admin.nav.marchants'), Icon: StoreIcon, visible: canBrowseEntities },
         { to: '/admin/individuals', label: t('admin.nav.individuals'), Icon: UsersIcon, visible: canBrowseEntities },
+        { to: '/admin/waitlist', label: 'Liste d’attente', Icon: UsersIcon, visible: canBrowseEntities, badge: waitlist?.total ?? 0 },
         { to: '/admin/drivers', label: t('admin.nav.drivers'), Icon: BikeIcon, visible: canBrowseEntities },
         { to: '/admin/api-apps', label: t('admin.nav.apiApps'), Icon: CodeIcon, visible: canBrowseEntities },
       ]),
@@ -122,5 +129,10 @@ interface RawItem extends AdminNavItem {
 function filterItems(items: RawItem[]): AdminNavItem[] {
   return items
     .filter((i) => i.visible)
-    .map(({ visible: _v, ...rest }) => rest)
+    .map((item) => ({
+      to: item.to,
+      label: item.label,
+      Icon: item.Icon,
+      ...(item.badge !== undefined ? { badge: item.badge } : {}),
+    }))
 }

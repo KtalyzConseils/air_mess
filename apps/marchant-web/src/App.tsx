@@ -13,12 +13,14 @@ import AdminUnassignedCoursesPage from './pages/admin/AdminUnassignedCoursesPage
 import AdminArchivedCoursesPage from './pages/admin/AdminArchivedCoursesPage'
 import AdminMarchantsPage from './pages/admin/AdminMarchantsPage'
 import AdminIndividualsPage from './pages/admin/AdminIndividualsPage'
+import AdminWaitlistPage from './pages/admin/AdminWaitlistPage'
 import AdminIndividualDetailPage from './pages/admin/AdminIndividualDetailPage'
 import TrackingPage from './pages/TrackingPage'
 import NotificationsPage from './pages/NotificationsPage'
 import ProfilePage from './pages/ProfilePage'
 import MarchantDetailPage from './pages/admin/MarchantDetailPage'
 import RegisterPage from './pages/RegisterPage'
+import RegisterSuccessPage from './pages/RegisterSuccessPage'
 import DriverRegisterPage from './pages/DriverRegisterPage'
 import DriverRegisterSuccessPage from './pages/DriverRegisterSuccessPage'
 import MarchantFromDriverPage from './pages/MarchantFromDriverPage'
@@ -60,6 +62,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register/success" element={<RegisterSuccessPage />} />
           <Route path="/register/driver" element={<DriverRegisterPage />} />
           <Route path="/register/driver/success" element={<DriverRegisterSuccessPage />} />
           {/* Ajout d'un profil marchand à un compte existant. Ouverte via deep-link
@@ -114,6 +117,7 @@ function App() {
             <Route path="/admin/marchants" element={<AdminMarchantsPage />} />
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
             <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
+            <Route path="/admin/waitlist" element={<AdminWaitlistPage />} />
             <Route path="/admin/individuals/:id" element={<AdminIndividualDetailPage />} />
           </Route>
 

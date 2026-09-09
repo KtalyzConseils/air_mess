@@ -25,6 +25,7 @@ class CourseController extends Controller
         \App\Services\CourseBillingService $billing,
         \App\Services\UserWalletService $walletService,
         \App\Services\PriceCalculator $priceCalculator,
+        \App\Services\FirstCourseDiscountService $firstCourseDiscount,
     ): JsonResponse {
         $data = $request->validated();
         $user = $request->user();
@@ -39,9 +40,13 @@ class CourseController extends Controller
             (float) $data['destination_lng'],
             $urgency,
         );
-        $deliveryFee    = $estimate['fee'];
+        $originalDeliveryFee = $estimate['fee'];
+        $discountQuote = $firstCourseDiscount->quote($user, $originalDeliveryFee);
+        $deliveryFee    = $discountQuote['fee'];
         $driverPercent  = (int) \App\Models\AppSetting::get('driver_commission_percent', 75);
-        $driverEarnings = (int) round($deliveryFee * $driverPercent / 100);
+        // Le cadeau est financé par Airmess : le gain du livreur reste calculé
+        // sur le tarif normal, jamais sur le prix remisé.
+        $driverEarnings = (int) round($originalDeliveryFee * $driverPercent / 100);
 
         // ===== Modèle de paiement (cf. project_wallet_user) =====
         // Tout expéditeur peut être payeur : marchand ET particulier. Plus de quota
@@ -61,7 +66,7 @@ class CourseController extends Controller
         if ($isPayer) {
             $wallet = $user->wallet;
             if (! $wallet || ! $wallet->canReserve($deliveryFee)) {
-                return $billing->initiateOneShotCheckout($user, $data, $deliveryFee, $driverEarnings);
+                return $billing->initiateOneShotCheckout($user, $data, $originalDeliveryFee, $driverEarnings);
             }
         }
 
@@ -76,13 +81,22 @@ class CourseController extends Controller
         $isHighValue = $threshold > 0 && $exposure >= $threshold;
 
         try {
-            $course = DB::transaction(function () use ($data, $user, $deliveryFee, $driverEarnings, $isPayer, $walletService, $isHighValue) {
+            $course = DB::transaction(function () use ($data, $user, $originalDeliveryFee, $driverEarnings, $isPayer, $walletService, $isHighValue, $firstCourseDiscount) {
+                // Sérialise deux créations simultanées du même compte : une seule
+                // peut constater qu'aucune première course n'existe encore.
+                $lockedUser = \App\Models\User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                $discountQuote = $firstCourseDiscount->quote($lockedUser, $originalDeliveryFee);
+                $deliveryFee = $discountQuote['fee'];
+
                 $course = Course::create(array_merge($data, [
                     'sender_id'       => $user->id,
                     'status'          => isset($data['scheduled_for'])
                         ? Course::STATUS_PENDING_PREP
                         : Course::STATUS_AWAITING,
                     'delivery_fee'    => $deliveryFee,
+                    'original_delivery_fee' => $discountQuote['original_fee'],
+                    'discount_amount' => $discountQuote['discount_amount'],
+                    'discount_code'   => $discountQuote['discount_code'],
                     'driver_earnings' => $driverEarnings,
                     'has_collection'  => $data['has_collection'] ?? false,
                     'urgency'         => $data['urgency'] ?? 'standard',
@@ -113,7 +127,7 @@ class CourseController extends Controller
             });
         } catch (\DomainException $e) {
             // Race : wallet vidé entre le pre-check et le hold → fallback pay-as-you-go.
-            return $billing->initiateOneShotCheckout($user, $data, $deliveryFee, $driverEarnings);
+            return $billing->initiateOneShotCheckout($user, $data, $originalDeliveryFee, $driverEarnings);
         }
 
         if ($course->is_high_value) {
@@ -204,6 +218,7 @@ class CourseController extends Controller
     public function estimate(
         \Illuminate\Http\Request $request,
         \App\Services\PriceCalculator $priceCalculator,
+        \App\Services\FirstCourseDiscountService $firstCourseDiscount,
     ): JsonResponse {
         $data = $request->validate([
             'origin_lat'      => ['required', 'numeric', 'between:-90,90'],
@@ -221,7 +236,14 @@ class CourseController extends Controller
             $data['urgency'] ?? 'standard',
         );
 
-        return response()->json($breakdown);
+        $discount = $firstCourseDiscount->quote($request->user(), (int) $breakdown['fee']);
+
+        return response()->json(array_merge($breakdown, [
+            'original_fee' => $discount['original_fee'],
+            'discount_amount' => $discount['discount_amount'],
+            'discount_code' => $discount['discount_code'],
+            'fee' => $discount['fee'],
+        ]));
     }
 
     /**

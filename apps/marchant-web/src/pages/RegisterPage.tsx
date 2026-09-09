@@ -131,7 +131,7 @@ export default function RegisterPage() {
           accepted_terms: true,
         })
       }
-      navigate('/dashboard')
+      navigate('/register/success', { replace: true })
     } catch (err) {
       // Messages toujours en FR : cohérence avec les messages Laravel côté API.
       if (err instanceof AxiosError) {

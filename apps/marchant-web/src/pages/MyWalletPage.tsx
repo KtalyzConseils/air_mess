@@ -61,6 +61,7 @@ export default function MyWalletPage() {
     mutationFn: (amount: number) =>
       requestTopUp(amount, `${window.location.origin}/billing/return`),
     onSuccess: (res) => {
+      sessionStorage.setItem('airmess_pending_payment_id', String(res.payment_id))
       window.location.href = res.checkout_url
     },
     onError: (err) => {

@@ -102,15 +102,15 @@ export const useAuthStore = create<AuthState>()(
       },
       
       registerIndividual: async (payload) => {
-        const { data } = await api.post('/auth/register/individual', payload)
-        localStorage.setItem('airmess_token', data.token)
-        set({ user: data.user, token: data.token, isAuthenticated: true })
+        await api.post('/auth/register/individual', { ...payload, defer_login: true })
+        localStorage.removeItem('airmess_token')
+        set({ user: null, token: null, isAuthenticated: false })
       },
 
       registerMarchant: async (payload) => {
-        const { data } = await api.post('/auth/register/marchant', payload)
-        localStorage.setItem('airmess_token', data.token)
-        set({ user: data.user, token: data.token, isAuthenticated: true })
+        await api.post('/auth/register/marchant', { ...payload, defer_login: true })
+        localStorage.removeItem('airmess_token')
+        set({ user: null, token: null, isAuthenticated: false })
       },
 
       // Inscription driver : POST multipart (3 documents), ne logue PAS le user dans marchant-web.

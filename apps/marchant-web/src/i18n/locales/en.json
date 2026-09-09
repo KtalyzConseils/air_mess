@@ -194,6 +194,15 @@
         "subtext": "Follow every delivery live, collect payments automatically, withdraw funds whenever you want."
       }
     },
+    "registerSuccess": {
+      "eyebrow": "Registration confirmed",
+      "title": "Congratulations, you’re on the waiting list!",
+      "message": "Your Airmess account has been created. We’ll notify you by email as soon as the service is live.",
+      "giftLabel": "Your welcome gift",
+      "giftBody": "500 FCFA will automatically be deducted from your first delivery.",
+      "login": "Back to sign in",
+      "loginHint": "We’ll contact you by email as soon as the service launches."
+    },
     "register": {
       "title": "Create an account.",
       "subtitle": "Join Air Mess in under 2 minutes.",
@@ -542,7 +551,9 @@
         "showMapHint": "Click the price to see the map",
         "breakdown": "{{distance}} km × {{perKm}} + {{min}} FCFA (rounded up to 100)",
         "breakdownExpress": "× {{multiplier}} for express",
-        "breakdownCapped": "{{distance}} km — {{max}} FCFA cap reached"
+        "breakdownCapped": "{{distance}} km — {{max}} FCFA cap reached",
+        "firstCourseDiscount": "First delivery gift: −{{amount}} FCFA",
+        "welcomeDiscountShort": "Welcome discount applied"
       },
       "errors": {
         "title_one": "1 required field to complete",

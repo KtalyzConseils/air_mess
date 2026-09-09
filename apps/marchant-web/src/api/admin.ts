@@ -2,6 +2,41 @@ import api from './client'
 import type { Course, Paginated } from './courses'
 import type { Marchant, Individual } from '../types/auth'
 
+export interface WaitlistUser {
+  id: number
+  name: string
+  email: string
+  phone: string | null
+  type: 'marchant' | 'individual'
+  is_active: boolean
+  waitlisted_at: string
+  waitlist_notified_at: string | null
+  marchant?: { raison_sociale: string } | null
+  waitlist_notifier?: { user?: { name: string } | null } | null
+}
+
+export interface WaitlistParams {
+  q?: string
+  status?: 'waiting' | 'notified' | 'all'
+  type?: 'marchant' | 'individual'
+  page?: number
+  per_page?: number
+}
+
+export async function fetchWaitlist(params: WaitlistParams = {}): Promise<Paginated<WaitlistUser>> {
+  const { data } = await api.get('/admin/waitlist', { params })
+  return data
+}
+
+export async function notifyWaitlistedUser(userId: number): Promise<void> {
+  await api.post(`/admin/waitlist/${userId}/notify`)
+}
+
+export async function notifyWaitlistedUsers(userIds: number[]): Promise<{ notified_count: number }> {
+  const { data } = await api.post('/admin/waitlist/notify-bulk', { user_ids: userIds })
+  return data
+}
+
 export interface DashboardKpi {
   courses_today: number
   courses_in_progress: number

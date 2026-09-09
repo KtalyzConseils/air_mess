@@ -194,6 +194,15 @@
         "subtext": "Suivez chaque course en direct, encaissez automatiquement, retirez vos fonds quand vous voulez."
       }
     },
+    "registerSuccess": {
+      "eyebrow": "Inscription confirmée",
+      "title": "Félicitations, vous êtes sur la liste d’attente !",
+      "message": "Votre compte Airmess a bien été créé. Nous vous préviendrons par e-mail dès que le service sera opérationnel.",
+      "giftLabel": "Votre cadeau de bienvenue",
+      "giftBody": "500 FCFA seront automatiquement déduits de votre première course.",
+      "login": "Retour à la connexion",
+      "loginHint": "Nous vous contacterons par e-mail dès l’ouverture du service."
+    },
     "register": {
       "title": "Créer un compte.",
       "subtitle": "Rejoignez Air Mess en moins de 2 minutes.",
@@ -542,7 +551,9 @@
         "showMapHint": "Clic sur le prix pour voir la carte",
         "breakdown": "{{distance}} km × {{perKm}} + {{min}} FCFA (arrondi au 100 sup.)",
         "breakdownExpress": "× {{multiplier}} pour l'express",
-        "breakdownCapped": "{{distance}} km — plafond {{max}} FCFA atteint"
+        "breakdownCapped": "{{distance}} km — plafond {{max}} FCFA atteint",
+        "firstCourseDiscount": "Cadeau première course : −{{amount}} FCFA",
+        "welcomeDiscountShort": "Bon de bienvenue appliqué"
       },
       "errors": {
         "title_one": "1 champ obligatoire à compléter",

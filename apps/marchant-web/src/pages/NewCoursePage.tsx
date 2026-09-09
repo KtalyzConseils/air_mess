@@ -239,6 +239,9 @@ export default function NewCoursePage() {
         return
       }
       if (result.payment_required && result.checkout_url) {
+        if (result.payment_id) {
+          sessionStorage.setItem('airmess_pending_payment_id', String(result.payment_id))
+        }
         window.location.href = result.checkout_url
         return
       }

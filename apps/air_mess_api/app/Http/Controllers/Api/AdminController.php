@@ -3256,6 +3256,104 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         return response()->json($logs);
     }
 
+    public function waitlist(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:150'],
+            'status' => ['nullable', Rule::in(['waiting', 'notified', 'all'])],
+            'type' => ['nullable', Rule::in([User::TYPE_MARCHANT, User::TYPE_INDIVIDUAL])],
+            'per_page' => ['nullable', 'integer', 'between:1,100'],
+        ]);
+
+        $query = User::query()
+            ->with(['marchant:id,user_id,raison_sociale', 'waitlistNotifier.user:id,name'])
+            ->whereNotNull('waitlisted_at')
+            ->whereIn('type', [User::TYPE_MARCHANT, User::TYPE_INDIVIDUAL]);
+
+        if (($data['status'] ?? 'waiting') === 'waiting') {
+            $query->whereNull('waitlist_notified_at');
+        } elseif (($data['status'] ?? null) === 'notified') {
+            $query->whereNotNull('waitlist_notified_at');
+        }
+        if (! empty($data['type'])) {
+            $query->where('type', $data['type']);
+        }
+        if (! empty($data['q'])) {
+            $search = $data['q'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'ilike', "%{$search}%")
+                    ->orWhere('email', 'ilike', "%{$search}%")
+                    ->orWhere('phone', 'ilike', "%{$search}%")
+                    ->orWhereHas('marchant', fn ($m) => $m->where('raison_sociale', 'ilike', "%{$search}%"));
+            });
+        }
+
+        return response()->json($query->latest('waitlisted_at')->paginate($data['per_page'] ?? 25));
+    }
+
+    public function notifyWaitlistedUser(Request $request, User $user): JsonResponse
+    {
+        $result = $this->activateWaitlistedUser($request, $user);
+        return response()->json($result);
+    }
+
+    public function notifyWaitlistedUsers(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'user_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'user_ids.*' => ['integer', 'distinct', 'exists:users,id'],
+        ]);
+
+        $results = [];
+        foreach (User::whereIn('id', $data['user_ids'])->get() as $user) {
+            try {
+                $results[] = ['user_id' => $user->id] + $this->activateWaitlistedUser($request, $user);
+            } catch (\Throwable $e) {
+                report($e);
+                $results[] = ['user_id' => $user->id, 'status' => 'failed'];
+            }
+        }
+
+        return response()->json([
+            'results' => $results,
+            'notified_count' => collect($results)->where('status', 'notified')->count(),
+        ]);
+    }
+
+    private function activateWaitlistedUser(Request $request, User $user): array
+    {
+        if ($user->waitlisted_at === null) {
+            abort(422, "Ce compte n'est pas inscrit sur la liste d'attente.");
+        }
+
+        return DB::transaction(function () use ($request, $user) {
+            $fresh = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            if ($fresh->waitlist_notified_at !== null) {
+                return ['status' => 'already_notified', 'message' => 'Ce compte a déjà été informé.'];
+            }
+
+            \Illuminate\Support\Facades\Mail::to($fresh->email)
+                ->send(new \App\Mail\WaitlistOpenedMail($fresh));
+
+            $actor = $request->user()->admin;
+            $fresh->update([
+                'is_active' => true,
+                'waitlist_notified_at' => now(),
+                'waitlist_notified_by' => $actor?->id,
+            ]);
+            $this->recordAdminActivity(
+                $request,
+                $actor,
+                null,
+                'waitlist.user_notified',
+                "Compte #{$fresh->id} activé et informé par e-mail.",
+                ['user_id' => $fresh->id, 'email' => $fresh->email],
+            );
+
+            return ['status' => 'notified', 'message' => 'Compte activé et e-mail envoyé.'];
+        });
+    }
+
     private function recordAdminActivity(
         Request $request,
         ?Admin $actor,

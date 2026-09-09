@@ -309,6 +309,9 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/marchants/{marchant}',      [AdminController::class, 'showMarchant']);
         Route::get('/individuals',               [AdminController::class, 'individuals']);
         Route::get('/individuals/{individual}',  [AdminController::class, 'showIndividual']);
+        Route::get('/waitlist',                   [AdminController::class, 'waitlist']);
+        Route::post('/waitlist/{user}/notify',    [AdminController::class, 'notifyWaitlistedUser']);
+        Route::post('/waitlist/notify-bulk',      [AdminController::class, 'notifyWaitlistedUsers']);
         Route::get('/courses',                   [AdminController::class, 'courses']);
         Route::get('/drivers',                   [AdminController::class, 'drivers']);
         Route::get('/drivers/{driver}',          [AdminController::class, 'showDriver']);

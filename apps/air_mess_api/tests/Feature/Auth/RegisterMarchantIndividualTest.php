@@ -56,6 +56,22 @@ class RegisterMarchantIndividualTest extends TestCase
         $this->assertNull($user->email_verified_at); // pas de Google ici
     }
 
+    public function test_web_registration_can_defer_login_without_creating_a_token(): void
+    {
+        $this->postJson('/api/auth/register/individual', $this->individualPayload([
+            'defer_login' => true,
+        ]))
+            ->assertStatus(201)
+            ->assertJsonPath('token', null);
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $user = User::firstOrFail();
+        $this->assertFalse($user->is_active);
+        $this->assertNotNull($user->waitlisted_at);
+        $this->assertNull($user->waitlist_notified_at);
+    }
+
     public function test_individual_register_with_google_marks_email_verified(): void
     {
         $this->mockGoogleVerifier('ama@example.com');

@@ -60,6 +60,32 @@ class CreateCourseTest extends TestCase
         $this->assertDatabaseCount('courses', 1);
     }
 
+    public function test_first_course_gets_500_fcfa_discount_without_reducing_driver_earnings(): void
+    {
+        $user = User::factory()->create(['type' => 'marchant']);
+        Marchant::factory()->create(['user_id' => $user->id]);
+        $cat = PackageCategory::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/courses', $this->validPayload($cat->id))->assertStatus(201);
+        $first = Course::firstOrFail();
+
+        $this->assertSame(500, (int) $first->discount_amount);
+        $this->assertSame('FIRST_COURSE_500', $first->discount_code);
+        $this->assertSame(500, (int) $first->original_delivery_fee - (int) $first->delivery_fee);
+        $this->assertSame(
+            (int) round((int) $first->original_delivery_fee * 0.75),
+            (int) $first->driver_earnings,
+        );
+
+        $this->postJson('/api/courses', $this->validPayload($cat->id))->assertStatus(201);
+        $second = Course::latest('id')->firstOrFail();
+
+        $this->assertSame(0, (int) $second->discount_amount);
+        $this->assertNull($second->discount_code);
+        $this->assertSame((int) $second->original_delivery_fee, (int) $second->delivery_fee);
+    }
+
     public function test_description_is_optional_and_secondary_phones_are_stored(): void
     {
         $user = User::factory()->create(['type' => 'marchant']);

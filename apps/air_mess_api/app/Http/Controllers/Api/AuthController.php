@@ -225,6 +225,7 @@ class AuthController extends Controller
             ])],
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms'   => ['required', 'accepted'],
+            'defer_login'      => ['nullable', 'boolean'],
         ]);
 
         // Vérification Google (optionnelle) : si un token Google est fourni, on vérifie
@@ -248,6 +249,8 @@ class AuthController extends Controller
                 'password'               => $data['password'], // hashé via cast 'hashed'
                 'password_set_at'        => now(),
                 'type'                   => User::TYPE_MARCHANT,
+                'is_active'              => ! ($data['defer_login'] ?? false),
+                'waitlisted_at'          => ($data['defer_login'] ?? false) ? now() : null,
                 'phone_verified_at'      => now(),
                 'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
@@ -266,12 +269,16 @@ class AuthController extends Controller
             return $user;
         });
 
-        $token = $user->createToken('marchant-' . $user->id)->plainTextToken;
+        $token = ($data['defer_login'] ?? false)
+            ? null
+            : $user->createToken('marchant-' . $user->id)->plainTextToken;
 
         // Email de bienvenue (best-effort : on n'échoue pas l'inscription si SMTP plante)
         try {
-            \Illuminate\Support\Facades\Mail::to($user->email)
-                ->send(new \App\Mail\WelcomeUserMail($user));
+            if (! ($data['defer_login'] ?? false)) {
+                \Illuminate\Support\Facades\Mail::to($user->email)
+                    ->send(new \App\Mail\WelcomeUserMail($user));
+            }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('WelcomeUserMail failed', ['err' => $e->getMessage(), 'user_id' => $user->id]);
         }
@@ -303,6 +310,7 @@ class AuthController extends Controller
             'firebase_google_id_token' => ['nullable', 'string'],
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms' => ['required', 'accepted'],
+            'defer_login'    => ['nullable', 'boolean'],
         ]);
 
         // Vérification Google (optionnelle) : si un token Google est fourni, on vérifie
@@ -326,6 +334,8 @@ class AuthController extends Controller
                 'password'               => $data['password'],
                 'password_set_at'        => now(),
                 'type'                   => User::TYPE_INDIVIDUAL,
+                'is_active'              => ! ($data['defer_login'] ?? false),
+                'waitlisted_at'          => ($data['defer_login'] ?? false) ? now() : null,
                 'phone_verified_at'      => now(),
                 'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
@@ -344,12 +354,16 @@ class AuthController extends Controller
             return $user;
         });
 
-        $token = $user->createToken('individual-' . $user->id)->plainTextToken;
+        $token = ($data['defer_login'] ?? false)
+            ? null
+            : $user->createToken('individual-' . $user->id)->plainTextToken;
 
         // Email de bienvenue
         try {
-            \Illuminate\Support\Facades\Mail::to($user->email)
-                ->send(new \App\Mail\WelcomeUserMail($user));
+            if (! ($data['defer_login'] ?? false)) {
+                \Illuminate\Support\Facades\Mail::to($user->email)
+                    ->send(new \App\Mail\WelcomeUserMail($user));
+            }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('WelcomeUserMail failed', ['err' => $e->getMessage(), 'user_id' => $user->id]);
         }
@@ -617,7 +631,9 @@ class AuthController extends Controller
 
         if (! $user->is_active) {
             return response()->json([
-                'message' => 'Ce compte est désactivé. Contactez le support.',
+                'message' => $user->waitlisted_at && ! $user->waitlist_notified_at
+                    ? 'Votre compte est sur la liste d’attente. Nous vous informerons par e-mail dès l’ouverture du service.'
+                    : 'Ce compte est désactivé. Contactez le support.',
             ], 403);
         }
 
@@ -737,7 +753,9 @@ class AuthController extends Controller
 
         if (! $user->is_active) {
             return response()->json([
-                'message' => 'Ce compte est désactivé. Contactez le support.',
+                'message' => $user->waitlisted_at && ! $user->waitlist_notified_at
+                    ? 'Votre compte est sur la liste d’attente. Nous vous informerons par e-mail dès l’ouverture du service.'
+                    : 'Ce compte est désactivé. Contactez le support.',
             ], 403);
         }
 
