@@ -3,11 +3,14 @@ import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator } fr
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import {
   fetchNotifications,
   markNotificationRead,
   type NotificationItem,
 } from '../../api/notifications'
+
+const COURSE_DETAILS_ROUTE = '/course-details'
 
 /**
  * Notifications driver.
@@ -130,6 +133,7 @@ export default function NotificationsScreen() {
 
 function NotificationRow({ item }: { item: NotificationItem }) {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const mut = useMutation({
     mutationFn: () => markNotificationRead(item.id),
     onSuccess: () => {
@@ -143,7 +147,15 @@ function NotificationRow({ item }: { item: NotificationItem }) {
 
   return (
     <Pressable
-      onPress={() => !isRead && mut.mutate()}
+      onPress={() => {
+        if (!isRead) mut.mutate()
+        if (item.course_id) {
+          router.push({
+            pathname: COURSE_DETAILS_ROUTE,
+            params: { id: String(item.course_id) },
+          } as never)
+        }
+      }}
       style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
       className="rounded-2xl overflow-hidden flex-row bg-off-white border border-warm-200"
     >

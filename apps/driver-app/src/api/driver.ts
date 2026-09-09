@@ -148,6 +148,11 @@ export async function fetchMyActiveCourses(): Promise<DriverCourseSummary[]> {
   return data.data
 }
 
+export async function fetchDriverCourse(courseId: number): Promise<DriverCourseSummary> {
+  const { data } = await api.get(`/courses/${courseId}`)
+  return data.course
+}
+
 export type StatPeriod = 'today' | 'last_7' | 'last_30' | 'all_time'
 
 export interface PeriodStat {
