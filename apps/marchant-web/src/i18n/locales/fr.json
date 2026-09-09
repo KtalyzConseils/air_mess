@@ -1893,6 +1893,8 @@
       "groupConflictsDesc": "Pourcentages appliqués par l'ops lors de la résolution des cas de course problématiques (no-show, colis perdu/endommagé, retour marchand).",
       "groupWalletLabel": "Wallet & retraits",
       "groupWalletDesc": "Seuils de retrait, mode de paiement et plafonds anti-abus pour livreurs et marchands.",
+      "groupReferralLabel": "Parrainage livreur",
+      "groupReferralDesc": "Activation, seuil de courses livrées et montant des primes de parrainage.",
       "groupSupportLabel": "Contacts support",
       "groupSupportDesc": "Téléphone, WhatsApp et email affichés dans les modales \"Contacter le support\" des 3 apps.",
       "plansSectionLabel": "Plans d'abonnement marchands",

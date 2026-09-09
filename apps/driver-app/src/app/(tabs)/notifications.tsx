@@ -152,7 +152,10 @@ function NotificationRow({ item }: { item: NotificationItem }) {
       }
     }
     if (item.course_id) {
-      router.push({ pathname: '/course-details', params: { course_id: String(item.course_id) } })
+      router.push({
+        pathname: '/course-details' as never,
+        params: { course_id: String(item.course_id) } as never,
+      })
     }
   }
 

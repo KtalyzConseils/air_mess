@@ -13,6 +13,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Services\NotificationService;
 use App\Services\DriverWalletService;
+use App\Services\DriverReferralService;
 use App\Models\CourseIncident;
 use App\Models\Admin;
 
@@ -451,6 +452,7 @@ class DriverController extends Controller
         Course $course,
         NotificationService $notifier,
         DriverWalletService $walletService,
+        DriverReferralService $referralService,
         \App\Services\UserWalletService $userWalletService,
     ): JsonResponse
     {
@@ -642,6 +644,26 @@ class DriverController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        if ($nextStatus === Course::STATUS_DELIVERED) {
+            $rewardedReferral = $referralService->evaluateForReferredDriver($driver);
+            if ($rewardedReferral?->sponsor?->user_id) {
+                $amount = (int) $rewardedReferral->reward_amount_fcfa;
+                $notifier->sendToUser(
+                    $rewardedReferral->sponsor->user_id,
+                    'driver.referral_rewarded',
+                    'Prime parrainage créditée',
+                    "Ton parrainage a rapporté {$amount} FCFA dans ton wallet.",
+                    [
+                        'app' => 'driver',
+                        'screen' => 'wallet',
+                        'icon' => 'gift-outline',
+                        'amount_fcfa' => $amount,
+                        'referral_id' => $rewardedReferral->id,
+                    ],
+                );
+            }
+        }
+
         //PUSH au marchand sur les transitions visibles côté client
         $isReturnConfirmation = $data['action'] === 'return_confirmed';
         $skipMerchantPushStatuses = [
@@ -681,6 +703,15 @@ class DriverController extends Controller
             'course'  => $course->fresh()->makeHidden(['pickup_code', 'delivery_code']),
         ]);
 
+    }
+
+    public function referral(Request $request, DriverReferralService $referralService): JsonResponse
+    {
+        $driver = $this->currentDriver($request);
+
+        return response()->json([
+            'referral' => $referralService->summary($driver),
+        ]);
     }
 
     // ===== Helper =====

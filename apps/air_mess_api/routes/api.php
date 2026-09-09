@@ -141,6 +141,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/response-channel', [DriverController::class, 'setResponseChannel']);
         Route::get('/offered-courses', [DriverController::class, 'offeredCourses']);
         Route::get('/stats', [DriverController::class, 'stats']);
+        Route::get('/referral', [DriverController::class, 'referral']);
 
         // Wallet driver (unique source de vérité pour la caution + gains + retraits)
         // top-up + withdraw-request : rate limit court terme en plus des plafonds

@@ -9,6 +9,7 @@ use App\Models\Individual;
 use App\Models\Marchant;
 use App\Models\User;
 use App\Mail\QuickRegistrationCodeMail;
+use App\Services\DriverReferralService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -367,6 +368,7 @@ class AuthController extends Controller
     public function registerDriver(
         Request $request,
         NotificationService $notifier,
+        DriverReferralService $referrals,
     ): JsonResponse {
         // Le numéro est normalisé en E.164 AVANT validation pour que l'unicité
         // users.phone porte sur un format canonique (+2290190123456) et que la
@@ -422,6 +424,7 @@ class AuthController extends Controller
 
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms' => ['required', 'accepted'],
+            'referral_code'  => ['nullable', 'string', 'max:24'],
         ]);
 
         // Stockage des documents AVANT la transaction (les fichiers sont indépendants de la DB).
@@ -430,7 +433,7 @@ class AuthController extends Controller
         $paths = $this->storeDriverFiles($request);
 
         try {
-            $driver = DB::transaction(function () use ($data, $paths) {
+            $driver = DB::transaction(function () use ($data, $paths, $referrals) {
                 $user = User::create([
                     'name'                   => $data['first_name'] . ' ' . $data['last_name'],
                     'email'                  => $data['email'],
@@ -474,6 +477,9 @@ class AuthController extends Controller
                 \App\Models\DriverWallet::create([
                     'driver_id' => $driver->id,
                 ]);
+
+                $referrals->ensureReferralCode($driver);
+                $referrals->attachReferral($driver, $data['referral_code'] ?? null);
 
                 return $driver;
             });

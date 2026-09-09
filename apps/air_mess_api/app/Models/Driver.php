@@ -48,6 +48,7 @@ class Driver extends Model
         'activation_status',
         'availability_status',
         'kind',
+        'referral_code',
         'current_lat',
         'current_lng',
         'last_position_at',
@@ -137,6 +138,16 @@ class Driver extends Model
     public function withdrawRequests()
     {
         return $this->hasMany(WalletWithdrawRequest::class);
+    }
+
+    public function sponsoredReferrals()
+    {
+        return $this->hasMany(DriverReferral::class, 'sponsor_driver_id');
+    }
+
+    public function receivedReferral()
+    {
+        return $this->hasOne(DriverReferral::class, 'referred_driver_id');
     }
 
     /**

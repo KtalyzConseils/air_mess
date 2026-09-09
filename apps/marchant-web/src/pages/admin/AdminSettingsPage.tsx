@@ -15,6 +15,7 @@ import {
   DashboardIcon,
   MenuIcon,
   BankIcon,
+  BikeIcon,
   HelpCircleIcon,
   type IconProps,
 } from '../../components/ui/icons'
@@ -59,6 +60,11 @@ const GROUP_META_CONFIG: Record<string, GroupMetaConfig> = {
     labelKey: 'admin.settings.groupWalletLabel',
     descKey: 'admin.settings.groupWalletDesc',
     Icon: BankIcon,
+  },
+  referral: {
+    labelKey: 'admin.settings.groupReferralLabel',
+    descKey: 'admin.settings.groupReferralDesc',
+    Icon: BikeIcon,
   },
   support: {
     labelKey: 'admin.settings.groupSupportLabel',

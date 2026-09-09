@@ -150,6 +150,23 @@ export async function fetchDriverStats(): Promise<DriverStats> {
   return data
 }
 
+export interface DriverReferralSummary {
+  enabled: boolean
+  code: string
+  share_url: string
+  share_message: string
+  required_delivered_courses: number
+  reward_amount_fcfa: number
+  sponsored_count: number
+  rewarded_count: number
+  pending_count: number
+}
+
+export async function fetchDriverReferral(): Promise<DriverReferralSummary> {
+  const { data } = await api.get('/driver/referral')
+  return data.referral
+}
+
 // NB : fetchDriverBalance / fetchDriverEarnings / fetchDriverPayouts ont été supprimées
 // le 2026-06-23. Les gains sont désormais crédités directement dans le wallet.
 

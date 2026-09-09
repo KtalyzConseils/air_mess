@@ -1893,6 +1893,8 @@
       "groupConflictsDesc": "Percentages applied by ops when resolving problematic courses (no-show, lost/damaged package, return to merchant).",
       "groupWalletLabel": "Wallet & withdrawals",
       "groupWalletDesc": "Withdrawal thresholds, payout mode and anti-abuse caps for drivers and merchants.",
+      "groupReferralLabel": "Driver referral",
+      "groupReferralDesc": "Activation, delivered-course threshold and referral reward amount.",
       "groupSupportLabel": "Support contacts",
       "groupSupportDesc": "Phone, WhatsApp and email shown in the \"Contact support\" dialogs across all apps.",
       "plansSectionLabel": "Merchant subscription plans",
