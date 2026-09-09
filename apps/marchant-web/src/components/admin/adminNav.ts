@@ -88,6 +88,7 @@ export function useAdminNav() {
           visible: true,
           badge: unread,
         },
+        { to: '/admin/admins', label: 'Admins', Icon: UsersIcon, visible: isSuperAdmin },
         { to: '/admin/settings', label: t('admin.nav.settings'), Icon: SettingsIcon, visible: isSuperAdmin },
       ]),
     },

@@ -26,6 +26,11 @@ class Admin extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function activityLogs()
+    {
+        return $this->hasMany(AdminActivityLog::class, 'target_admin_id');
+    }
+
     public function isSuper(): bool      { return $this->sub_role === self::ROLE_SUPER; }
     public function isOps(): bool        { return $this->sub_role === self::ROLE_OPS; }
     public function isCommercial(): bool { return $this->sub_role === self::ROLE_COMMERCIAL; }

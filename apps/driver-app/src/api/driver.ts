@@ -78,6 +78,11 @@ export async function acceptCourse(courseId: number): Promise<DriverCourseSummar
   return data.course
 }
 
+export async function fetchDriverCourse(courseId: number): Promise<DriverCourseSummary> {
+  const { data } = await api.get(`/driver/courses/${courseId}`)
+  return data.course
+}
+
 export type DeclineReason =
   | 'too_far'
   | 'wrong_quartier'

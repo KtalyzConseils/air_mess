@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseStatusHistory;
+use App\Models\Admin;
+use App\Models\AdminActivityLog;
 use App\Models\Driver;
 use App\Models\Individual;
 use App\Models\Marchant;
 use App\Models\Payment;
 use App\Models\SupportNote;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -2824,6 +2827,202 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         return response()->json([
             'message'    => 'Particulier réactivé.',
             'individual' => $individual->fresh()->load('user'),
+        ]);
+    }
+
+    // ===== 15. GESTION DES ADMINISTRATEURS (SUPER-ADMIN) =====
+    public function adminUsers(Request $request): JsonResponse
+    {
+        $query = Admin::query()
+            ->with('user:id,name,email,phone,is_active,last_login_at,created_at')
+            ->withCount('activityLogs')
+            ->withMax('activityLogs', 'created_at')
+            ->latest();
+
+        if ($role = $request->query('role')) {
+            $query->where('sub_role', $role);
+        }
+
+        if (($active = $request->query('active')) !== null && $active !== '') {
+            $query->whereHas('user', fn ($q) => $q->where('is_active', filter_var($active, FILTER_VALIDATE_BOOLEAN)));
+        }
+
+        if ($q = trim((string) $request->query('q', ''))) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('first_name', 'ILIKE', "%{$q}%")
+                    ->orWhere('last_name', 'ILIKE', "%{$q}%")
+                    ->orWhereHas('user', function ($u) use ($q) {
+                        $u->where('name', 'ILIKE', "%{$q}%")
+                            ->orWhere('email', 'ILIKE', "%{$q}%")
+                            ->orWhere('phone', 'ILIKE', "%{$q}%");
+                    });
+            });
+        }
+
+        return response()->json($query->paginate(min((int) $request->query('per_page', 20), 100)));
+    }
+
+    public function createAdminUser(Request $request): JsonResponse
+    {
+        $roles = [Admin::ROLE_SUPER, Admin::ROLE_OPS, Admin::ROLE_COMMERCIAL, Admin::ROLE_SUPPORT];
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name'  => ['required', 'string', 'max:100'],
+            'email'      => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone'      => ['nullable', 'string', 'max:20', 'unique:users,phone'],
+            'password'   => ['required', 'string', 'min:8'],
+            'sub_role'   => ['required', Rule::in($roles)],
+        ]);
+
+        $actor = $request->user()->admin;
+        $admin = DB::transaction(function () use ($data, $actor, $request) {
+            $name = trim($data['first_name'] . ' ' . $data['last_name']);
+            $user = User::create([
+                'name'            => $name,
+                'email'           => mb_strtolower($data['email']),
+                'phone'           => $data['phone'] ?? null,
+                'password'        => $data['password'],
+                'password_set_at' => now(),
+                'type'            => User::TYPE_ADMIN,
+                'is_active'       => true,
+            ]);
+
+            $admin = Admin::create([
+                'user_id'    => $user->id,
+                'first_name' => $data['first_name'],
+                'last_name'  => $data['last_name'],
+                'sub_role'   => $data['sub_role'],
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $actor,
+                $admin,
+                'admin.created',
+                "Création de l'admin {$name} ({$data['sub_role']}).",
+                ['created' => ['email' => $user->email, 'sub_role' => $admin->sub_role]],
+            );
+
+            return $admin;
+        });
+
+        return response()->json([
+            'message' => 'Administrateur créé.',
+            'admin'   => $admin->fresh()->load('user'),
+        ], 201);
+    }
+
+    public function updateAdminUser(Request $request, Admin $admin): JsonResponse
+    {
+        $roles = [Admin::ROLE_SUPER, Admin::ROLE_OPS, Admin::ROLE_COMMERCIAL, Admin::ROLE_SUPPORT];
+        $data = $request->validate([
+            'first_name' => ['sometimes', 'required', 'string', 'max:100'],
+            'last_name'  => ['sometimes', 'required', 'string', 'max:100'],
+            'phone'      => ['nullable', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($admin->user_id)],
+            'password'   => ['nullable', 'string', 'min:8'],
+            'sub_role'   => ['sometimes', 'required', Rule::in($roles)],
+            'is_active'  => ['sometimes', 'boolean'],
+        ]);
+
+        $actor = $request->user()->admin;
+        if (($data['is_active'] ?? true) === false && $actor->id === $admin->id) {
+            return response()->json(['message' => 'Vous ne pouvez pas désactiver votre propre compte admin.'], 422);
+        }
+
+        $before = [
+            'first_name' => $admin->first_name,
+            'last_name'  => $admin->last_name,
+            'sub_role'   => $admin->sub_role,
+            'is_active'  => $admin->user->is_active,
+            'phone'      => $admin->user->phone,
+        ];
+
+        DB::transaction(function () use ($admin, $data, $before, $actor, $request) {
+            $adminUpdates = [];
+            foreach (['first_name', 'last_name', 'sub_role'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $adminUpdates[$field] = $data[$field];
+                }
+            }
+            if ($adminUpdates) {
+                $admin->update($adminUpdates);
+            }
+
+            $userUpdates = [];
+            if (array_key_exists('first_name', $data) || array_key_exists('last_name', $data)) {
+                $userUpdates['name'] = trim(($data['first_name'] ?? $admin->first_name) . ' ' . ($data['last_name'] ?? $admin->last_name));
+            }
+            if (array_key_exists('phone', $data)) {
+                $userUpdates['phone'] = $data['phone'];
+            }
+            if (array_key_exists('is_active', $data)) {
+                $userUpdates['is_active'] = (bool) $data['is_active'];
+            }
+            if (! empty($data['password'])) {
+                $userUpdates['password'] = $data['password'];
+                $userUpdates['password_set_at'] = now();
+            }
+            if ($userUpdates) {
+                $admin->user->update($userUpdates);
+            }
+
+            $admin->refresh()->load('user');
+            $after = [
+                'first_name' => $admin->first_name,
+                'last_name'  => $admin->last_name,
+                'sub_role'   => $admin->sub_role,
+                'is_active'  => $admin->user->is_active,
+                'phone'      => $admin->user->phone,
+            ];
+
+            $changes = array_filter($after, fn ($value, $key) => ($before[$key] ?? null) !== $value, ARRAY_FILTER_USE_BOTH);
+            if (! empty($data['password'])) {
+                $changes['password'] = 'updated';
+            }
+
+            $this->recordAdminActivity(
+                $request,
+                $actor,
+                $admin,
+                'admin.updated',
+                "Modification de l'admin {$admin->user->name}.",
+                ['before' => $before, 'after' => $after, 'changed' => array_keys($changes)],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Administrateur mis à jour.',
+            'admin'   => $admin->fresh()->load('user'),
+        ]);
+    }
+
+    public function adminUserActivity(Request $request, Admin $admin): JsonResponse
+    {
+        $logs = AdminActivityLog::query()
+            ->with('admin.user:id,name,email')
+            ->where('target_admin_id', $admin->id)
+            ->latest()
+            ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        return response()->json($logs);
+    }
+
+    private function recordAdminActivity(
+        Request $request,
+        ?Admin $actor,
+        ?Admin $target,
+        string $action,
+        string $summary,
+        ?array $changes = null,
+    ): void {
+        AdminActivityLog::create([
+            'admin_id'        => $actor?->id,
+            'target_admin_id' => $target?->id,
+            'action'          => $action,
+            'summary'         => $summary,
+            'changes'         => $changes,
+            'ip_address'      => $request->ip(),
+            'user_agent'      => mb_substr((string) $request->userAgent(), 0, 500),
         ]);
     }
 }

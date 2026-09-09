@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import {
   fetchNotifications,
@@ -129,6 +130,7 @@ export default function NotificationsScreen() {
 }
 
 function NotificationRow({ item }: { item: NotificationItem }) {
+  const router = useRouter()
   const queryClient = useQueryClient()
   const mut = useMutation({
     mutationFn: () => markNotificationRead(item.id),
@@ -141,9 +143,22 @@ function NotificationRow({ item }: { item: NotificationItem }) {
   const isRead = item.read_at !== null
   const meta = iconMetaFor(item.type, item.title, item.body)
 
+  async function handlePress() {
+    if (!isRead) {
+      try {
+        await mut.mutateAsync()
+      } catch {
+        /* la navigation reste prioritaire si la notification porte une course */
+      }
+    }
+    if (item.course_id) {
+      router.push({ pathname: '/course-details', params: { course_id: String(item.course_id) } })
+    }
+  }
+
   return (
     <Pressable
-      onPress={() => !isRead && mut.mutate()}
+      onPress={handlePress}
       style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
       className="rounded-2xl overflow-hidden flex-row bg-off-white border border-warm-200"
     >

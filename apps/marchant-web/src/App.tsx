@@ -29,6 +29,7 @@ import BillingReturnPage from './pages/BillingReturnPage'
 import MyWalletPage from './pages/MyWalletPage'
 import DevPage from './pages/DevPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
+import AdminUsersPage from './pages/admin/AdminUsersPage'
 import AdminWithdrawRequestsPage from './pages/admin/AdminWithdrawRequestsPage'
 import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDetailPage'
 import AdminWalletReportingPage from './pages/admin/AdminWalletReportingPage'
@@ -98,6 +99,7 @@ function App() {
           {/* admin — paramètres + retraits caution réservés au super-admin */}
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['super']} />}>
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/admins" element={<AdminUsersPage />} />
             <Route path="/admin/withdraw-requests" element={<AdminWithdrawRequestsPage />} />
             <Route path="/admin/withdraw-requests/:id" element={<AdminWithdrawRequestDetailPage />} />
             <Route path="/admin/reporting/wallets" element={<AdminWalletReportingPage />} />

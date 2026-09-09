@@ -161,6 +161,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/wallet/withdraw-requests/{withdraw}/cancel', [DriverController::class, 'cancelWithdraw']);
 
         Route::post('/courses/{course}/accept',    [DriverController::class, 'acceptCourse']);
+        Route::get('/courses/{course}',            [DriverController::class, 'showCourse']);
         Route::post('/courses/{course}/decline',   [DriverController::class, 'declineCourse']);
         // Refus d'une réaffectation admin : la course lui est DÉJÀ attribuée, la refuser
         // la détache et la remet en attente (cf. declineReassignment).
@@ -383,6 +384,12 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::patch('/settings/{key}', [AdminController::class, 'updateSetting']);
         Route::get('/plans',            [AdminController::class, 'listPlans']);
         Route::patch('/plans/{plan}',   [AdminController::class, 'updatePlan']);
+
+        // Gestion des comptes admin — création, rôles, activité et dernière connexion.
+        Route::get('/admins',                    [AdminController::class, 'adminUsers']);
+        Route::post('/admins',                   [AdminController::class, 'createAdminUser']);
+        Route::patch('/admins/{admin}',          [AdminController::class, 'updateAdminUser']);
+        Route::get('/admins/{admin}/activity',   [AdminController::class, 'adminUserActivity']);
 
         // Ajustement manuel des wallets (driver + user) — action comptable très sensible
         Route::post('/drivers/{driver}/wallet-adjustment', [AdminController::class, 'adjustDriverWallet']);

@@ -193,6 +193,35 @@ class DriverController extends Controller
         return response()->json(['courses' => $courses]);
     }
 
+    public function showCourse(Request $request, Course $course): JsonResponse
+    {
+        $driver = $this->currentDriver($request, requireActive: true);
+
+        $isAssignedToDriver = $course->driver_id === $driver->id;
+        $isVisibleOffer = $course->status === Course::STATUS_AWAITING
+            && $course->driver_id === null
+            && ! \App\Models\CourseDeclineRecord::where('course_id', $course->id)
+                ->where('driver_id', $driver->id)
+                ->exists();
+
+        if ($isVisibleOffer && ! $driver->isAirmess()) {
+            $isHighValue = (bool) $course->is_high_value;
+            $paidByRecipient = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
+            $collectionCovered = ! $course->has_collection
+                || (int) ($course->collection_amount ?? 0) <= (int) ($driver->wallet?->balance ?? 0);
+
+            $isVisibleOffer = ! $isHighValue && ! $paidByRecipient && $collectionCovered;
+        }
+
+        if (! $isAssignedToDriver && ! $isVisibleOffer) {
+            return response()->json(['message' => 'Cette course n\'est plus disponible pour vous.'], 403);
+        }
+
+        $course->load(['sender', 'driver.user', 'packageCategory']);
+
+        return response()->json(['course' => $course->makeHidden(['pickup_code', 'delivery_code'])]);
+    }
+
 
     // ===== 4. ACCEPTER UNE COURSE =====
     public function acceptCourse(Request $request, Course $course, NotificationService $notifier): JsonResponse
