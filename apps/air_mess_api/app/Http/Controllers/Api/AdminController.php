@@ -403,6 +403,20 @@ class AdminController extends Controller
             );
         }
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'course.reassigned',
+            ($wantsTransfer ? 'Transfert physique' : 'Réaffectation') . " de la course {$course->reference} vers {$newDriver->first_name} {$newDriver->last_name}.",
+            [
+                'course_id' => $course->id,
+                'old_driver_id' => $oldDriver?->id,
+                'new_driver_id' => $newDriver->id,
+                'pickup_from_previous_driver' => $wantsTransfer,
+            ],
+        );
+
         return response()->json([
             'message' => $wantsTransfer ? 'Course transférée physiquement.' : 'Course réaffectée.',
             'course'  => $course->fresh()->load('driver.user'),
@@ -431,6 +445,15 @@ class AdminController extends Controller
                 'reason'          => $data['reason'],
             ]);
         });
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'course.disputed',
+            "Course {$course->reference} marquée en litige.",
+            ['course_id' => $course->id, 'reason' => $data['reason']],
+        );
 
         return response()->json(['message' => 'Course en litige.', 'course' => $course->fresh()]);
     }
@@ -619,6 +642,20 @@ class AdminController extends Controller
             );
         }
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'course.fraud_marked',
+            "Course {$course->reference} marquee comme fraude.",
+            [
+                'course_id' => $course->id,
+                'driver_id' => $course->driver_id,
+                'refund_owed' => $refundOwed,
+                'note' => $data['note'],
+            ],
+        );
+
         return response()->json([
             'message' => 'Course marquée comme fraude. Driver banni, caution saisie, marchand remboursé.',
             'course'  => $course->fresh(),
@@ -731,6 +768,15 @@ class AdminController extends Controller
                 'marchant_id' => $marchant->id,
             ]);
         }
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'marchant.validated',
+            "Marchand {$marchant->raison_sociale} valide.",
+            ['marchant_id' => $marchant->id, 'user_id' => $marchant->user_id],
+        );
 
         return response()->json([
             'message'  => 'Marchand validé.',
@@ -913,7 +959,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     }
 
     // ===== 7ter. ACTIVER / DÉSACTIVER LE COMPTE D'UN LIVREUR =====
-    public function toggleDriverActive(Driver $driver): JsonResponse
+    public function toggleDriverActive(Request $request, Driver $driver): JsonResponse
     {
         // On active si le compte n'est pas déjà 'active', sinon on désactive.
         $activate = $driver->activation_status !== 'active';
@@ -951,6 +997,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 $driver->user->tokens()->delete();
             }
         });
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            $activate ? 'driver.activated' : 'driver.deactivated',
+            ($activate ? 'Activation' : 'Desactivation') . " du livreur {$driver->first_name} {$driver->last_name}.",
+            ['driver_id' => $driver->id, 'user_id' => $driver->user_id],
+        );
 
         return response()->json([
             'message' => $activate ? 'Compte livreur activé.' : 'Compte livreur désactivé.',
@@ -1001,6 +1056,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         });
 
         $label = $newKind === Driver::KIND_AIRMESS ? 'Airmess' : 'indépendant';
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.kind_updated',
+            "Type du livreur {$driver->first_name} {$driver->last_name} modifie.",
+            ['driver_id' => $driver->id, 'before' => $previousKind, 'after' => $newKind],
+        );
 
         return response()->json([
             'message' => "Livreur passé en {$label}.",
@@ -1076,6 +1140,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 'escalated_to' => null,
             ]);
         });
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.withdraw_limits_updated',
+            "Plafonds de retrait du livreur {$driver->first_name} {$driver->last_name} modifies.",
+            ['driver_id' => $driver->id, 'changes' => $updates],
+        );
 
         return response()->json([
             'message' => 'Plafonds mis à jour.',
@@ -1155,6 +1228,20 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             default                => 'non vérifié',
         };
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.kyc_updated',
+            "KYC du livreur {$driver->first_name} {$driver->last_name} modifie.",
+            [
+                'driver_id' => $driver->id,
+                'before' => $previousStatus,
+                'after' => $newStatus,
+                'provider' => $data['provider'] ?? 'manual',
+            ],
+        );
+
         return response()->json([
             'message' => "Statut KYC : {$label}.",
             'driver'  => $driver->fresh()->load('user'),
@@ -1168,7 +1255,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      * d'un driver fraîchement inscrit, après vérification de ses documents par l'admin.
      * Envoie un email "Compte activé" au driver.
      */
-    public function validateDriver(Driver $driver, \App\Services\BrevoSmsService $sms): JsonResponse
+    public function validateDriver(Request $request, Driver $driver, \App\Services\BrevoSmsService $sms): JsonResponse
     {
         if ($driver->activation_status !== 'pending') {
             return response()->json([
@@ -1203,6 +1290,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 'Air Mess : votre compte livreur est activé ! Connectez-vous sur l\'app Air Mess Livreur.',
             );
         }
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.validated',
+            "Livreur {$driver->first_name} {$driver->last_name} valide.",
+            ['driver_id' => $driver->id, 'user_id' => $driver->user_id],
+        );
 
         return response()->json([
             'message' => 'Livreur validé. Email envoyé.',
@@ -2150,7 +2246,17 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         }
         $data = $request->validate($rules);
 
+        $before = \App\Models\AppSetting::get($key);
         \App\Models\AppSetting::set($key, $data['value'], $request->user()->id);
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'setting.updated',
+            "Parametre {$key} mis a jour.",
+            ['key' => $key, 'before' => $before, 'after' => \App\Models\AppSetting::get($key)],
+        );
 
         return response()->json([
             'message' => 'Paramètre mis à jour.',
@@ -2176,7 +2282,21 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             'is_active'          => ['nullable', 'boolean'],
         ]);
 
+        $before = $plan->only(['monthly_price_fcfa', 'included_courses', 'is_active']);
         $plan->update($data);
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'plan.updated',
+            "Plan {$plan->code} mis a jour.",
+            [
+                'plan_id' => $plan->id,
+                'before' => $before,
+                'after' => $plan->fresh()->only(['monthly_price_fcfa', 'included_courses', 'is_active']),
+            ],
+        );
 
         return response()->json([
             'message' => 'Plan mis à jour.',
@@ -2964,8 +3084,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     {
         $query = Admin::query()
             ->with('user:id,name,email,phone,is_active,last_login_at,created_at')
-            ->withCount('activityLogs')
-            ->withMax('activityLogs', 'created_at')
+            ->withCount('performedActivityLogs')
+            ->withMax('performedActivityLogs', 'created_at')
             ->latest();
 
         if ($role = $request->query('role')) {
@@ -3128,8 +3248,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     public function adminUserActivity(Request $request, Admin $admin): JsonResponse
     {
         $logs = AdminActivityLog::query()
-            ->with('admin.user:id,name,email')
-            ->where('target_admin_id', $admin->id)
+            ->with('targetAdmin.user:id,name,email')
+            ->where('admin_id', $admin->id)
             ->latest()
             ->paginate(min((int) $request->query('per_page', 20), 100));
 

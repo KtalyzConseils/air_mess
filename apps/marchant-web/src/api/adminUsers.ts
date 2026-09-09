@@ -9,8 +9,8 @@ export interface ManagedAdmin {
   first_name: string
   last_name: string
   sub_role: AdminRole
-  activity_logs_count?: number
-  activity_logs_max_created_at?: string | null
+  performed_activity_logs_count?: number
+  performed_activity_logs_max_created_at?: string | null
   created_at: string
   updated_at: string
   user: {
@@ -32,7 +32,11 @@ export interface AdminActivityLog {
   ip_address: string | null
   user_agent: string | null
   created_at: string
-  admin: {
+  admin?: {
+    id: number
+    user: { id: number; name: string; email: string }
+  } | null
+  target_admin?: {
     id: number
     user: { id: number; name: string; email: string }
   } | null

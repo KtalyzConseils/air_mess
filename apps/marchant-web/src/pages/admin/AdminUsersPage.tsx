@@ -66,7 +66,7 @@ export default function AdminUsersPage() {
     <AdminPageShell>
       <AdminPageHeader
         title="Gestion des admins"
-        subtitle="Création, rôles, accès et suivi des dernières actions."
+        subtitle="Création, rôles, accès et historique des actions effectuées."
         toolbar={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full">
             <div className="flex flex-wrap items-center gap-2 flex-1">
@@ -150,9 +150,9 @@ export default function AdminUsersPage() {
                           {formatDate(admin.user.last_login_at)}
                         </td>
                         <td className="px-5 py-3 text-warm-600">
-                          <p>{admin.activity_logs_count ?? 0} action(s)</p>
+                          <p>{admin.performed_activity_logs_count ?? 0} action(s)</p>
                           <p className="text-caption text-warm-500">
-                            {formatDate(admin.activity_logs_max_created_at ?? null)}
+                            {formatDate(admin.performed_activity_logs_max_created_at ?? null)}
                           </p>
                         </td>
                         <td className="px-5 py-3 text-center">
@@ -314,7 +314,7 @@ function AdminActivityPanel({
         </div>
         <h2 className="text-body font-bold text-ink">Sélectionnez un admin</h2>
         <p className="text-body-s text-warm-500 mt-1">
-          Ouvrez une ligne pour modifier son rôle, son accès et consulter ses dernières actions.
+          Ouvrez une ligne pour modifier son rôle, son accès et consulter les actions qu'il a effectuées.
         </p>
       </aside>
     )
@@ -362,7 +362,7 @@ function AdminActivityPanel({
       <div className="px-5 py-4">
         <div className="flex items-center gap-2 mb-3">
           <ClockIcon size={16} className="text-warm-600" />
-          <h3 className="text-body-s font-bold text-ink">Dernières modifications</h3>
+          <h3 className="text-body-s font-bold text-ink">Actions effectuées</h3>
         </div>
         <div className="space-y-3">
           {(activity?.data ?? []).length === 0 ? (
@@ -372,7 +372,7 @@ function AdminActivityPanel({
               <div key={log.id} className="border-l-2 border-airmess-yellow pl-3">
                 <p className="text-body-s font-semibold text-ink">{log.summary}</p>
                 <p className="text-caption text-warm-500">
-                  {formatDate(log.created_at)} · {log.admin?.user.name ?? 'Système'}
+                  {formatDate(log.created_at)} · {log.target_admin?.user.name ? `Cible: ${log.target_admin.user.name}` : log.action}
                 </p>
               </div>
             ))
