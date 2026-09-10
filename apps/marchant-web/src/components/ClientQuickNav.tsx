@@ -19,6 +19,7 @@ export default function ClientQuickNav() {
 
   if (!user) return null
   if (user.type === 'admin') return null
+  if (user.type === 'marchant' && !user.marchant?.validated_at) return null
   if (mode !== 'fab') return null
 
   return <QuickNav items={items} positionKey="client.quicknav.position" />

@@ -131,7 +131,10 @@ export default function RegisterPage() {
           accepted_terms: true,
         })
       }
-      navigate('/register/success', { replace: true })
+      navigate('/dashboard', {
+        replace: true,
+        state: { showWelcomeBonus: type === 'individual' },
+      })
     } catch (err) {
       // Messages toujours en FR : cohérence avec les messages Laravel côté API.
       if (err instanceof AxiosError) {

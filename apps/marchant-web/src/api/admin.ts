@@ -7,18 +7,19 @@ export interface WaitlistUser {
   name: string
   email: string
   phone: string | null
-  type: 'marchant' | 'individual'
+  type: 'marchant' | 'driver'
   is_active: boolean
-  waitlisted_at: string
+  waitlisted_at: string | null
   waitlist_notified_at: string | null
   marchant?: { raison_sociale: string } | null
+  driver?: { first_name: string; last_name: string; activation_status: string } | null
   waitlist_notifier?: { user?: { name: string } | null } | null
 }
 
 export interface WaitlistParams {
   q?: string
   status?: 'waiting' | 'notified' | 'all'
-  type?: 'marchant' | 'individual'
+  type?: 'marchant' | 'driver'
   page?: number
   per_page?: number
 }

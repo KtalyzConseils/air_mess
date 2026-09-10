@@ -15,7 +15,7 @@ export default function AdminWaitlistPage() {
   const queryClient = useQueryClient()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<'waiting' | 'notified' | 'all'>('waiting')
-  const [type, setType] = useState<'' | 'marchant' | 'individual'>('')
+  const [type, setType] = useState<'' | 'marchant' | 'driver'>('')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<number[]>([])
 
@@ -58,7 +58,7 @@ export default function AdminWaitlistPage() {
             disabled={selected.length === 0 || busy}
             onClick={() => bulkMutation.mutate(selected)}
           >
-            Informer la sélection ({selected.length})
+            Valider la sélection ({selected.length})
           </AdminButton>
         }
         toolbar={
@@ -76,7 +76,7 @@ export default function AdminWaitlistPage() {
             <AdminSelect value={type} onChange={(event) => { setType(event.target.value as typeof type); setPage(1) }}>
               <option value="">Tous les comptes</option>
               <option value="marchant">Marchands</option>
-              <option value="individual">Particuliers</option>
+              <option value="driver">Livreurs</option>
             </AdminSelect>
           </div>
         }
@@ -129,19 +129,19 @@ export default function AdminWaitlistPage() {
                         </td>
                         <td className="px-4 py-3">
                           <p className="font-semibold text-ink">{user.marchant?.raison_sociale ?? user.name}</p>
-                          <p className="text-caption text-warm-500">{user.type === 'marchant' ? 'Marchand' : 'Particulier'} · {user.name}</p>
+                          <p className="text-caption text-warm-500">{user.type === 'marchant' ? 'Marchand' : 'Livreur'} · {user.name}</p>
                         </td>
                         <td className="px-4 py-3"><p>{user.email}</p><p className="text-caption text-warm-500">{user.phone ?? '—'}</p></td>
-                        <td className="px-4 py-3 text-warm-600">{new Date(user.waitlisted_at).toLocaleString('fr-FR')}</td>
+                        <td className="px-4 py-3 text-warm-600">{user.waitlisted_at ? new Date(user.waitlisted_at).toLocaleString('fr-FR') : 'Inscription antérieure'}</td>
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-2.5 py-1 text-caption font-semibold ${notified ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
-                            {notified ? 'Informé et activé' : 'En attente'}
+                            {notified ? 'Validé et informé' : 'En attente'}
                           </span>
                           {notified && <p className="mt-1 text-caption text-warm-500">par {user.waitlist_notifier?.user?.name ?? 'un admin'}</p>}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <AdminButton variant="primary" size="sm" disabled={notified || busy} onClick={() => singleMutation.mutate(user.id)}>
-                            {notified ? 'Déjà informé' : 'Informer par e-mail'}
+                            {notified ? 'Déjà validé' : 'Valider et informer'}
                           </AdminButton>
                         </td>
                       </tr>

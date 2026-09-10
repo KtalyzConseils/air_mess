@@ -122,6 +122,11 @@ class CourseController extends Controller
                     }
                 }
 
+                // Une course créée depuis le wallet compte aussi dans l'usage mensuel
+                // du particulier, comme c'est déjà le cas après un paiement direct.
+                if ($lockedUser->isIndividual()) {
+                    $lockedUser->individual->increment('monthly_courses_used');
+                }
 
                 return $course;
             });

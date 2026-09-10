@@ -56,19 +56,19 @@ class RegisterMarchantIndividualTest extends TestCase
         $this->assertNull($user->email_verified_at); // pas de Google ici
     }
 
-    public function test_web_registration_can_defer_login_without_creating_a_token(): void
+    public function test_individual_always_gets_direct_access_even_when_defer_login_is_sent(): void
     {
         $this->postJson('/api/auth/register/individual', $this->individualPayload([
             'defer_login' => true,
         ]))
             ->assertStatus(201)
-            ->assertJsonPath('token', null);
+            ->assertJsonStructure(['token']);
 
         $this->assertDatabaseCount('users', 1);
-        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
         $user = User::firstOrFail();
-        $this->assertFalse($user->is_active);
-        $this->assertNotNull($user->waitlisted_at);
+        $this->assertTrue($user->is_active);
+        $this->assertNull($user->waitlisted_at);
         $this->assertNull($user->waitlist_notified_at);
     }
 
@@ -105,6 +105,9 @@ class RegisterMarchantIndividualTest extends TestCase
         $user = User::where('email', 'shop@example.com')->firstOrFail();
         $this->assertSame('+2290191223344', $user->phone);
         $this->assertNotNull($user->phone_verified_at);
+        $this->assertTrue($user->is_active);
+        $this->assertNotNull($user->waitlisted_at);
+        $this->assertNull($user->marchant->validated_at);
     }
 
     public function test_marchant_register_succeeds_with_google(): void

@@ -249,8 +249,10 @@ class AuthController extends Controller
                 'password'               => $data['password'], // hashé via cast 'hashed'
                 'password_set_at'        => now(),
                 'type'                   => User::TYPE_MARCHANT,
-                'is_active'              => ! ($data['defer_login'] ?? false),
-                'waitlisted_at'          => ($data['defer_login'] ?? false) ? now() : null,
+                // Connexion autorisée pendant la validation ; l'accès métier reste
+                // verrouillé par Marchant.validated_at.
+                'is_active'              => true,
+                'waitlisted_at'          => now(),
                 'phone_verified_at'      => now(),
                 'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
@@ -269,19 +271,9 @@ class AuthController extends Controller
             return $user;
         });
 
-        $token = ($data['defer_login'] ?? false)
-            ? null
-            : $user->createToken('marchant-' . $user->id)->plainTextToken;
+        $token = $user->createToken('marchant-' . $user->id)->plainTextToken;
 
-        // Email de bienvenue (best-effort : on n'échoue pas l'inscription si SMTP plante)
-        try {
-            if (! ($data['defer_login'] ?? false)) {
-                \Illuminate\Support\Facades\Mail::to($user->email)
-                    ->send(new \App\Mail\WelcomeUserMail($user));
-            }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('WelcomeUserMail failed', ['err' => $e->getMessage(), 'user_id' => $user->id]);
-        }
+        // L'e-mail d'ouverture sera envoyé par l'admin lors de la validation.
 
         return response()->json([
             'message' => 'Compte marchand créé. Validation par un administrateur sous 24h.',
@@ -334,8 +326,9 @@ class AuthController extends Controller
                 'password'               => $data['password'],
                 'password_set_at'        => now(),
                 'type'                   => User::TYPE_INDIVIDUAL,
-                'is_active'              => ! ($data['defer_login'] ?? false),
-                'waitlisted_at'          => ($data['defer_login'] ?? false) ? now() : null,
+                // Les particuliers restent entièrement en libre-service.
+                'is_active'              => true,
+                'waitlisted_at'          => null,
                 'phone_verified_at'      => now(),
                 'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
@@ -354,16 +347,12 @@ class AuthController extends Controller
             return $user;
         });
 
-        $token = ($data['defer_login'] ?? false)
-            ? null
-            : $user->createToken('individual-' . $user->id)->plainTextToken;
+        $token = $user->createToken('individual-' . $user->id)->plainTextToken;
 
         // Email de bienvenue
         try {
-            if (! ($data['defer_login'] ?? false)) {
-                \Illuminate\Support\Facades\Mail::to($user->email)
-                    ->send(new \App\Mail\WelcomeUserMail($user));
-            }
+            \Illuminate\Support\Facades\Mail::to($user->email)
+                ->send(new \App\Mail\WelcomeUserMail($user));
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('WelcomeUserMail failed', ['err' => $e->getMessage(), 'user_id' => $user->id]);
         }
@@ -455,6 +444,8 @@ class AuthController extends Controller
                     'password'               => $data['password'], // hashé via cast 'hashed' sur le model
                     'password_set_at'        => now(),
                     'type'                   => User::TYPE_DRIVER,
+                    'is_active'              => true,
+                    'waitlisted_at'          => now(),
                     'phone_verified_at'      => now(),
                     'accepted_terms_at'      => now(),
                     'accepted_terms_version' => User::TERMS_VERSION,
@@ -621,7 +612,7 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::where('email', $data['email'])->first();
+        $user = User::with(['marchant', 'driver'])->where('email', $data['email'])->first();
 
         if (! $user || ! Hash::check($data['password'], $user->password)) {
             return response()->json([
@@ -629,7 +620,11 @@ class AuthController extends Controller
             ], 401);
         }
 
-        if (! $user->is_active) {
+        $isAwaitingValidation = $user
+            && (($user->isMarchant() && $user->marchant?->validated_at === null)
+                || ($user->isDriver() && $user->driver?->activation_status === 'pending'));
+
+        if (! $user->is_active && ! $isAwaitingValidation) {
             return response()->json([
                 'message' => $user->waitlisted_at && ! $user->waitlist_notified_at
                     ? 'Votre compte est sur la liste d’attente. Nous vous informerons par e-mail dès l’ouverture du service.'

@@ -2,8 +2,11 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Mail\WaitlistOpenedMail;
+use App\Mail\DriverValidatedMail;
+use App\Mail\MarchantValidatedMail;
 use App\Models\Admin;
+use App\Models\Driver;
+use App\Models\Marchant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -14,9 +17,8 @@ class WaitlistTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_admin_can_inform_and_activate_a_waitlisted_user_once(): void
+    private function actingAsAdmin(): Admin
     {
-        Mail::fake();
         $adminUser = User::factory()->create(['type' => User::TYPE_ADMIN]);
         $admin = Admin::create([
             'user_id' => $adminUser->id,
@@ -24,26 +26,63 @@ class WaitlistTest extends TestCase
             'last_name' => 'Test',
             'sub_role' => Admin::ROLE_COMMERCIAL,
         ]);
-        $waiting = User::factory()->create([
-            'type' => User::TYPE_INDIVIDUAL,
-            'is_active' => false,
-            'waitlisted_at' => now(),
-        ]);
         Sanctum::actingAs($adminUser);
 
+        return $admin;
+    }
+
+    public function test_admin_can_validate_and_inform_a_waitlisted_marchant(): void
+    {
+        Mail::fake();
+        $admin = $this->actingAsAdmin();
+        $waiting = User::factory()->create([
+            'type' => User::TYPE_MARCHANT,
+            'is_active' => true,
+            'waitlisted_at' => now(),
+        ]);
+        $marchant = Marchant::factory()->create([
+            'user_id' => $waiting->id,
+            'validated_at' => null,
+        ]);
+
         $this->postJson("/api/admin/waitlist/{$waiting->id}/notify")
             ->assertOk()
-            ->assertJsonPath('status', 'notified');
+            ->assertJsonPath('status', 'validated');
 
         $waiting->refresh();
-        $this->assertTrue($waiting->is_active);
+        $this->assertNotNull($marchant->fresh()->validated_at);
         $this->assertNotNull($waiting->waitlist_notified_at);
         $this->assertSame($admin->id, $waiting->waitlist_notified_by);
-        Mail::assertSent(WaitlistOpenedMail::class, fn ($mail) => $mail->hasTo($waiting->email));
+        Mail::assertQueued(MarchantValidatedMail::class, fn ($mail) => $mail->hasTo($waiting->email));
 
         $this->postJson("/api/admin/waitlist/{$waiting->id}/notify")
             ->assertOk()
-            ->assertJsonPath('status', 'already_notified');
-        Mail::assertSentCount(1);
+            ->assertJsonPath('status', 'already_validated');
+        Mail::assertQueuedCount(1);
+    }
+
+    public function test_admin_can_validate_and_inform_a_pending_driver_from_waitlist(): void
+    {
+        Mail::fake();
+        $admin = $this->actingAsAdmin();
+        $waiting = User::factory()->create([
+            'type' => User::TYPE_DRIVER,
+            'is_active' => true,
+            'waitlisted_at' => now(),
+        ]);
+        $driver = Driver::factory()->create([
+            'user_id' => $waiting->id,
+            'activation_status' => 'pending',
+        ]);
+
+        $this->postJson("/api/admin/waitlist/{$waiting->id}/notify")
+            ->assertOk()
+            ->assertJsonPath('status', 'validated');
+
+        $this->assertSame('active', $driver->fresh()->activation_status);
+        $waiting->refresh();
+        $this->assertNotNull($waiting->waitlist_notified_at);
+        $this->assertSame($admin->id, $waiting->waitlist_notified_by);
+        Mail::assertQueued(DriverValidatedMail::class, fn ($mail) => $mail->hasTo($waiting->email));
     }
 }

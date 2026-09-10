@@ -3,14 +3,18 @@ import { useTranslation } from 'react-i18next'
 import LanguageToggle from '../components/ui/LanguageToggle'
 import AuthSupportFooter from '../components/AuthSupportFooter'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
+import Button from '../components/ui/Button'
+import { useAuthStore } from '../stores/authStore'
 
 export default function RegisterSuccessPage() {
   const { t } = useTranslation()
+  const user = useAuthStore((state) => state.user)
+  const logout = useAuthStore((state) => state.logout)
 
   return (
     <main className="min-h-screen bg-cream px-6 py-8 flex flex-col">
       <div className="flex items-center justify-between">
-        <Link to="/login" aria-label="Airmess">
+        <Link to={user ? '/dashboard' : '/login'} aria-label="Airmess">
           <img src={wordmark} alt="Airmess" className="h-8 w-auto" />
         </Link>
         <LanguageToggle variant="light" />
@@ -30,6 +34,11 @@ export default function RegisterSuccessPage() {
           </div>
 
           <p className="mt-4 text-caption text-warm-500">{t('auth.registerSuccess.loginHint')}</p>
+          {user && (
+            <Button variant="secondary" size="md" className="mt-6" onClick={() => void logout()}>
+              Se déconnecter
+            </Button>
+          )}
           <AuthSupportFooter context="Register success" />
         </div>
       </section>

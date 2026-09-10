@@ -13,6 +13,7 @@ interface AuthState {
   logout: () => Promise<void>
   deleteAccount: () => Promise<void>
   hydrate: () => Promise<void>
+  setUser: (user: User) => void
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -73,6 +74,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await SecureStore.deleteItemAsync('airmess_push_token').catch(() => {})
     set({ user: null, token: null })
   },
+
+  setUser: (user) => set({ user }),
 
 
   hydrate: async () => {

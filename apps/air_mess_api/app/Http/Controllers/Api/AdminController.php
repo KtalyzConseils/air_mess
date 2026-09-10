@@ -758,6 +758,12 @@ class AdminController extends Controller
             'subscription_status' => 'active',
         ]);
 
+        $marchant->user->update([
+            'is_active' => true,
+            'waitlist_notified_at' => now(),
+            'waitlist_notified_by' => $request->user()->admin?->id,
+        ]);
+
         // Email de validation au marchand
         try {
             \Illuminate\Support\Facades\Mail::to($marchant->user->email)
@@ -1267,6 +1273,11 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             $driver->update(['activation_status' => 'active']);
             $driver->user->update(['is_active' => true]);
         });
+
+        $driver->user->update([
+            'waitlist_notified_at' => now(),
+            'waitlist_notified_by' => $request->user()->admin?->id,
+        ]);
 
         // Email de validation au driver (queued) — envoyé quel que soit le canal préféré.
         try {
@@ -3261,14 +3272,22 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         $data = $request->validate([
             'q' => ['nullable', 'string', 'max:150'],
             'status' => ['nullable', Rule::in(['waiting', 'notified', 'all'])],
-            'type' => ['nullable', Rule::in([User::TYPE_MARCHANT, User::TYPE_INDIVIDUAL])],
+            'type' => ['nullable', Rule::in([User::TYPE_MARCHANT, User::TYPE_DRIVER])],
             'per_page' => ['nullable', 'integer', 'between:1,100'],
         ]);
 
         $query = User::query()
-            ->with(['marchant:id,user_id,raison_sociale', 'waitlistNotifier.user:id,name'])
-            ->whereNotNull('waitlisted_at')
-            ->whereIn('type', [User::TYPE_MARCHANT, User::TYPE_INDIVIDUAL]);
+            ->with([
+                'marchant:id,user_id,raison_sociale,validated_at',
+                'driver:id,user_id,first_name,last_name,activation_status',
+                'waitlistNotifier.user:id,name',
+            ])
+            ->whereIn('type', [User::TYPE_MARCHANT, User::TYPE_DRIVER])
+            ->where(function ($query) {
+                $query->whereNotNull('waitlisted_at')
+                    ->orWhereHas('marchant', fn ($marchant) => $marchant->whereNull('validated_at'))
+                    ->orWhereHas('driver', fn ($driver) => $driver->where('activation_status', 'pending'));
+            });
 
         if (($data['status'] ?? 'waiting') === 'waiting') {
             $query->whereNull('waitlist_notified_at');
@@ -3284,20 +3303,22 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 $q->where('name', 'ilike', "%{$search}%")
                     ->orWhere('email', 'ilike', "%{$search}%")
                     ->orWhere('phone', 'ilike', "%{$search}%")
-                    ->orWhereHas('marchant', fn ($m) => $m->where('raison_sociale', 'ilike', "%{$search}%"));
+                    ->orWhereHas('marchant', fn ($m) => $m->where('raison_sociale', 'ilike', "%{$search}%"))
+                    ->orWhereHas('driver', fn ($d) => $d
+                        ->where('first_name', 'ilike', "%{$search}%")
+                        ->orWhere('last_name', 'ilike', "%{$search}%"));
             });
         }
 
         return response()->json($query->latest('waitlisted_at')->paginate($data['per_page'] ?? 25));
     }
 
-    public function notifyWaitlistedUser(Request $request, User $user): JsonResponse
+    public function notifyWaitlistedUser(Request $request, User $user, \App\Services\BrevoSmsService $sms): JsonResponse
     {
-        $result = $this->activateWaitlistedUser($request, $user);
-        return response()->json($result);
+        return $this->validateWaitlistedUser($request, $user, $sms);
     }
 
-    public function notifyWaitlistedUsers(Request $request): JsonResponse
+    public function notifyWaitlistedUsers(Request $request, \App\Services\BrevoSmsService $sms): JsonResponse
     {
         $data = $request->validate([
             'user_ids' => ['required', 'array', 'min:1', 'max:100'],
@@ -3307,7 +3328,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         $results = [];
         foreach (User::whereIn('id', $data['user_ids'])->get() as $user) {
             try {
-                $results[] = ['user_id' => $user->id] + $this->activateWaitlistedUser($request, $user);
+                $response = $this->validateWaitlistedUser($request, $user, $sms);
+                $results[] = ['user_id' => $user->id] + $response->getData(true);
             } catch (\Throwable $e) {
                 report($e);
                 $results[] = ['user_id' => $user->id, 'status' => 'failed'];
@@ -3316,42 +3338,38 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         return response()->json([
             'results' => $results,
-            'notified_count' => collect($results)->where('status', 'notified')->count(),
+            'notified_count' => collect($results)->where('status', 'validated')->count(),
         ]);
     }
 
-    private function activateWaitlistedUser(Request $request, User $user): array
+    private function validateWaitlistedUser(
+        Request $request,
+        User $user,
+        \App\Services\BrevoSmsService $sms,
+    ): JsonResponse
     {
-        if ($user->waitlisted_at === null) {
-            abort(422, "Ce compte n'est pas inscrit sur la liste d'attente.");
-        }
-
-        return DB::transaction(function () use ($request, $user) {
-            $fresh = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
-            if ($fresh->waitlist_notified_at !== null) {
-                return ['status' => 'already_notified', 'message' => 'Ce compte a déjà été informé.'];
+        if ($user->type === User::TYPE_MARCHANT && $user->marchant) {
+            if ($user->marchant->validated_at !== null) {
+                return response()->json(['status' => 'already_validated', 'message' => 'Marchand déjà validé.']);
             }
 
-            \Illuminate\Support\Facades\Mail::to($fresh->email)
-                ->send(new \App\Mail\WaitlistOpenedMail($fresh));
+            $this->validateMarchant($request, $user->marchant);
 
-            $actor = $request->user()->admin;
-            $fresh->update([
-                'is_active' => true,
-                'waitlist_notified_at' => now(),
-                'waitlist_notified_by' => $actor?->id,
-            ]);
-            $this->recordAdminActivity(
-                $request,
-                $actor,
-                null,
-                'waitlist.user_notified',
-                "Compte #{$fresh->id} activé et informé par e-mail.",
-                ['user_id' => $fresh->id, 'email' => $fresh->email],
-            );
+            return response()->json(['status' => 'validated', 'message' => 'Marchand validé et informé.']);
+        }
 
-            return ['status' => 'notified', 'message' => 'Compte activé et e-mail envoyé.'];
-        });
+        if ($user->type === User::TYPE_DRIVER && $user->driver) {
+            if ($user->driver->activation_status !== 'pending') {
+                return response()->json(['status' => 'already_validated', 'message' => 'Livreur déjà traité.']);
+            }
+
+            $this->validateDriver($request, $user->driver, $sms);
+
+            return response()->json(['status' => 'validated', 'message' => 'Livreur validé et informé.']);
+        }
+
+        return response()->json(['message' => "Ce compte n'est pas éligible à la validation."], 422);
+
     }
 
     private function recordAdminActivity(

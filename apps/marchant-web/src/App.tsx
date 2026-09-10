@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import LoginPage from './pages/LoginPage'
@@ -44,6 +45,8 @@ import TermsPage from './pages/legal/TermsPage'
 import PrivacyPage from './pages/legal/PrivacyPage'
 import ClientQuickNav from './components/ClientQuickNav'
 import PwaReloadPrompt from './components/PwaReloadPrompt'
+import api from './api/client'
+import { useAuthStore } from './stores/authStore'
 
 
 const queryClient = new QueryClient({
@@ -55,10 +58,44 @@ const queryClient = new QueryClient({
   },
 })
 
+function AuthProfileRefresher() {
+  const userId = useAuthStore((state) => state.user?.id)
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const setUser = useAuthStore((state) => state.setUser)
+
+  useEffect(() => {
+    if (!isAuthenticated || !userId) return
+
+    let stopped = false
+    const refresh = async () => {
+      try {
+        const { data } = await api.get('/auth/me')
+        if (!stopped && data.user) setUser(data.user)
+      } catch {
+        // Une panne réseau temporaire ne doit pas déconnecter l'utilisateur.
+      }
+    }
+
+    void refresh()
+    const interval = window.setInterval(refresh, 15_000)
+    const onFocus = () => void refresh()
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      stopped = true
+      window.clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [isAuthenticated, userId, setUser])
+
+  return null
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <AuthProfileRefresher />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -77,9 +114,10 @@ function App() {
           <Route path="/billing/return" element={<BillingReturnPage />} />  {/* PUBLIQUE : retour Fedapay, le webhook fait foi */}
 
           {/* Routes protégées */}
-          <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} />}>
-            {/* marchant */}
+          <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} allowPendingMarchant />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} />}>
             <Route path="/courses" element={<MyCoursesPage />} />
             <Route path="/courses/new" element={<NewCoursePage />} />
             <Route path="/addresses" element={<AddressesPage />} />
