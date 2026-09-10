@@ -122,8 +122,8 @@ export default function AdminSettingsPage() {
 
         {ready && (
           <>
-            <div className="-mx-4 md:-mx-8 lg:-mx-12 overflow-x-auto px-4 md:px-8 lg:px-12">
-              <AdminTabs tabs={tabs} value={currentTab} onChange={setActiveTab} />
+            <div className="rounded-xl border border-warm-200 bg-white/70 p-3 shadow-soft">
+              <AdminTabs tabs={tabs} value={currentTab} onChange={setActiveTab} variant="pills" />
             </div>
 
             {groupKeys.includes(currentTab) && (
