@@ -250,3 +250,109 @@ workflows:
       - build/unsigned-ipa/AirMessDriver-unsigned.ipa
       - build/ios-device/Build/Products/Release-iphoneos/*.app
       - /tmp/xcodebuild_logs/*.log
+
+  # ---------------------------------------------------------------------------
+  # APP MARCHAND (apps/AirMess) - build SIGNÉ App Store + envoi TestFlight.
+  #
+  # Pour tester l'app marchand sur un iPhone via l'app TestFlight.
+  # Prérequis (détail : docs/codemagic-ios.md) :
+  #   - fiche app créée dans App Store Connect pour com.airmess.merchant
+  #   - groupe de variables Codemagic `ios_signing` (déjà utilisé par les
+  #     workflows Driver ci-dessus) complété par :
+  #       GOOGLE_SERVICE_INFO_PLIST_BASE64 = GoogleService-Info.plist encodé en base64
+  #     (le plugin @react-native-firebase/app déclaré dans apps/AirMess/app.json
+  #      refuse le prebuild iOS sans ce fichier)
+  #   - intégration `codemagic` (clé API App Store Connect) : déjà en place.
+  # ---------------------------------------------------------------------------
+  merchant-ios-testflight:
+    name: AIRMESS Merchant - Signed TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    working_directory: apps/AirMess
+
+    integrations:
+      app_store_connect: codemagic
+
+    environment:
+      node: 22
+      xcode: latest
+      cocoapods: default
+      groups:
+        - ios_signing
+      vars:
+        CI: "1"
+        BUNDLE_ID: com.airmess.merchant
+        EXPO_PUBLIC_API_BASE_URL: "https://api.airmess-logistics.com/api"
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          set -e
+          npm ci
+          test -d node_modules/expo
+
+      - name: Inject Firebase iOS config
+        script: |
+          set -e
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
+            echo "ERREUR: GOOGLE_SERVICE_INFO_PLIST_BASE64 absent du groupe ios_signing."
+            echo "Le plugin @react-native-firebase/app refuse le prebuild iOS sans plist."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICE_INFO_PLIST_BASE64" \
+            | tr -d '\r\n' \
+            | openssl base64 -d -A > GoogleService-Info.plist
+          if ! head -c 6 GoogleService-Info.plist | grep -qE '^(<\?xml|bplist)'; then
+            echo "ERREUR: le secret GOOGLE_SERVICE_INFO_PLIST_BASE64 n'est pas un plist valide."
+            exit 1
+          fi
+          echo "GoogleService-Info.plist injecté ($(wc -c < GoogleService-Info.plist) octets)."
+
+      - name: Generate iOS project
+        script: |
+          set -e
+          export CI=1
+          export RNFirebaseAsStaticFramework=true
+          export IOS_GOOGLE_SERVICES_FILE=./GoogleService-Info.plist
+          npx expo prebuild --platform ios --clean --no-install
+          cd ios
+          pod install --repo-update
+
+      - name: Set up code signing
+        script: |
+          set -e
+          keychain initialize
+          if [ -z "$CERTIFICATE_PRIVATE_KEY" ]; then
+            echo "ERREUR: variable CERTIFICATE_PRIVATE_KEY absente dans Codemagic."
+            exit 1
+          fi
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key @env:CERTIFICATE_PRIVATE_KEY \
+            --create
+          keychain add-certificates
+          # --project limité au projet de l'app : use-profiles ne doit pas scanner
+          # les *.xcodeproj des libs dans node_modules (cause d'échec connue).
+          xcode-project use-profiles --project "ios/*.xcodeproj"
+
+      - name: Bump build number (unique pour TestFlight)
+        script: |
+          set -e
+          cd ios
+          agvtool new-version -all "$BUILD_NUMBER"
+
+      - name: Build signed IPA
+        script: |
+          set -e
+          xcode-project build-ipa \
+            --workspace ios/AirMess.xcworkspace \
+            --scheme AirMess
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
