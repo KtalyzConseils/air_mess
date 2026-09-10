@@ -136,7 +136,7 @@ const NEW_COURSE_COPY = {
     missingPositionTitle: 'Position exacte manquante',
     missingPositionSubtitle: (missing: string) =>
       `Selectionne ${missing} dans les resultats de recherche pour permettre au livreur de trouver le trajet.`,
-    createFinal: 'Creer la course',
+    createFinal: 'Lancer la course',
     placesLanguage: 'fr',
   },
   en: {
