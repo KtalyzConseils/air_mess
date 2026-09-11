@@ -476,8 +476,10 @@ class CourseController extends Controller
         $previousStatus = $course->status;
         // Le livreur assigné (s'il y en a un) doit être libéré, sinon il reste bloqué en "busy".
         $driver = $course->driver_id ? Driver::find($course->driver_id) : null;
+        $directRefund = null;
+        $walletReleased = false;
 
-        DB::transaction(function () use ($course, $request, $previousStatus, $driver, $walletService) {
+        DB::transaction(function () use ($course, $request, $previousStatus, $driver, $walletService, &$directRefund, &$walletReleased) {
             $course->update([
                 'status'              => Course::STATUS_CANCELLED,
                 'cancelled_at'        => now(),
@@ -498,6 +500,13 @@ class CourseController extends Controller
                     $course,
                     (int) $course->delivery_fee,
                 );
+                $walletReleased = true;
+            } else {
+                $directRefund = $walletService->refundDirectPayment(
+                    $course->sender,
+                    $course,
+                    (int) $course->delivery_fee,
+                );
             }
 
             \App\Models\CourseStatusHistory::create([
@@ -509,6 +518,42 @@ class CourseController extends Controller
                 'reason'          => $request->input('reason'),
             ]);
         });
+
+        if ($directRefund && ! \App\Models\Notification::where('user_id', $course->sender_id)
+            ->where('course_id', $course->id)
+            ->where('type', 'wallet.course_refunded')
+            ->exists()) {
+            $notifier->sendToUser(
+                $course->sender_id,
+                'wallet.course_refunded',
+                'Remboursement effectué',
+                number_format((int) $directRefund->amount_fcfa, 0, ',', ' ') . " FCFA ont été crédités dans votre wallet.",
+                [
+                    'reference' => $course->reference,
+                    'amount'    => (int) $directRefund->amount_fcfa,
+                    'status'    => Course::STATUS_CANCELLED,
+                ],
+                $course->id,
+            );
+        }
+
+        if ($walletReleased && ! \App\Models\Notification::where('user_id', $course->sender_id)
+            ->where('course_id', $course->id)
+            ->where('type', 'wallet.course_hold_released')
+            ->exists()) {
+            $notifier->sendToUser(
+                $course->sender_id,
+                'wallet.course_hold_released',
+                'Fonds libérés',
+                number_format((int) $course->delivery_fee, 0, ',', ' ') . " FCFA ont été libérés dans votre wallet.",
+                [
+                    'reference' => $course->reference,
+                    'amount'    => (int) $course->delivery_fee,
+                    'status'    => Course::STATUS_CANCELLED,
+                ],
+                $course->id,
+            );
+        }
 
         // Prévenir le livreur assigné que la course lui est retirée (hors transaction).
         if ($driver) {
