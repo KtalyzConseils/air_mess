@@ -1,12 +1,12 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { AxiosError } from 'axios'
-import Button from '../../components/ui/Button'
-import Card from '../../components/ui/Card'
-import PageEyebrow from '../../components/ui/PageEyebrow'
-import SectionMarker from '../../components/ui/SectionMarker'
-import Highlight from '../../components/Highlight'
-import Input from '../../components/ui/Input'
+import Button from '../components/ui/Button'
+import Card from '../components/ui/Card'
+import PageEyebrow from '../components/ui/PageEyebrow'
+import SectionMarker from '../components/ui/SectionMarker'
+import Highlight from '../components/Highlight'
+import Input from '../components/ui/Input'
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -16,18 +16,17 @@ import {
   SparklesIcon,
   StoreIcon,
   WhatsappIcon,
-} from '../../components/ui/icons'
+} from '../components/ui/icons'
 import {
   submitMerchantWaitlist,
   type MerchantWaitlistPayload,
   type MerchantWaitlistResponse,
-} from '../../api/waitlist'
-import wordmarkWhite from '../../assets/logo/airmess-wordmark-white.svg'
+} from '../api/waitlist'
+import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
 
 type FormState = {
   commerce_type: string
   commerce_type_other: string
-  nda_partner: string
   zone: string
   zone_other: string
   weekly_orders: string
@@ -49,13 +48,13 @@ type FormState = {
   trial_interest: string
   shop_name: string
   contact_name: string
+  email: string
   whatsapp: string
 }
 
 const INITIAL_FORM: FormState = {
   commerce_type: '',
   commerce_type_other: '',
-  nda_partner: '',
   zone: '',
   zone_other: '',
   weekly_orders: '',
@@ -77,6 +76,7 @@ const INITIAL_FORM: FormState = {
   trial_interest: '',
   shop_name: '',
   contact_name: '',
+  email: '',
   whatsapp: '',
 }
 
@@ -86,12 +86,6 @@ const COMMERCE_TYPES = [
   'Produits frais (fruits, légumes, viande, poisson)',
   'Autre commerce de détail',
   'Autre',
-]
-
-const NDA_OPTIONS = [
-  'Oui',
-  'Non',
-  "Je ne sais pas ce qu'est NDA",
 ]
 
 const ZONES = ['Cotonou', 'Abomey-Calavi', 'Autre']
@@ -166,6 +160,7 @@ const MOBILE_MONEY_OPTIONS = [
 const TRIAL_OPTIONS = ['Oui', 'Non', "Peut-être, j'ai besoin d'en savoir plus"]
 
 const WHATSAPP_PATTERN = /^(\+229)?[0-9]{8}$/
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type StepDefinition = {
   id: string
@@ -216,6 +211,7 @@ const textareaClass =
 interface SingleChoiceProps {
   name: string
   label: string
+  number?: number
   options: string[]
   value: string
   onChange: (value: string) => void
@@ -230,6 +226,7 @@ interface SingleChoiceProps {
 function SingleChoice({
   name,
   label,
+  number,
   options,
   value,
   onChange,
@@ -243,6 +240,7 @@ function SingleChoice({
   return (
     <fieldset className="space-y-3">
       <legend className="text-body-s font-bold text-ink">
+        {number && <span className="mr-1.5 font-extrabold text-warm-500">{number}.</span>}
         {label}
         {required && <span className="text-airmess-red"> *</span>}
       </legend>
@@ -298,6 +296,7 @@ function SingleChoice({
 
 interface MultiChoiceProps {
   label: string
+  number?: number
   options: string[]
   values: string[]
   onToggle: (option: string) => void
@@ -310,6 +309,7 @@ interface MultiChoiceProps {
 
 function MultiChoice({
   label,
+  number,
   options,
   values,
   onToggle,
@@ -322,6 +322,7 @@ function MultiChoice({
   return (
     <fieldset className="space-y-3">
       <legend className="text-body-s font-bold text-ink">
+        {number && <span className="mr-1.5 font-extrabold text-warm-500">{number}.</span>}
         {label}
         {required && <span className="text-airmess-red"> *</span>}
       </legend>
@@ -376,6 +377,7 @@ function MultiChoice({
 
 function TextAreaField({
   label,
+  number,
   value,
   onChange,
   error,
@@ -385,6 +387,7 @@ function TextAreaField({
   required = true,
 }: {
   label: string
+  number?: number
   value: string
   onChange: (value: string) => void
   error?: string
@@ -396,6 +399,7 @@ function TextAreaField({
   return (
     <div>
       <label className="mb-2.5 block text-body-s font-bold text-ink">
+        {number && <span className="mr-1.5 font-extrabold text-warm-500">{number}.</span>}
         {label}
         {required && <span className="text-airmess-red"> *</span>}
       </label>
@@ -416,10 +420,12 @@ function TextAreaField({
 }
 
 function InterestScale({
+  number,
   value,
   onChange,
   error,
 }: {
+  number?: number
   value: number
   onChange: (value: number) => void
   error?: string
@@ -427,6 +433,7 @@ function InterestScale({
   return (
     <fieldset className="space-y-3">
       <legend className="text-body-s font-bold text-ink">
+        {number && <span className="mr-1.5 font-extrabold text-warm-500">{number}.</span>}
         Sur une échelle de 1 à 5, quel est votre niveau d'intérêt pour un service qui
         recrute des livreurs fiables, suit chaque commande en temps réel, et encaisse
         l'argent client en toute sécurité pour vous ?
@@ -553,7 +560,6 @@ export default function LandingCommercantsPage() {
       if (form.commerce_type === 'Autre' && !form.commerce_type_other.trim()) {
         nextErrors.commerce_type_other = 'Précisez votre type de commerce.'
       }
-      if (!form.nda_partner) nextErrors.nda_partner = 'Sélectionnez une réponse.'
       if (!form.zone) nextErrors.zone = 'Sélectionnez votre zone.'
       if (form.zone === 'Autre' && !form.zone_other.trim()) {
         nextErrors.zone_other = 'Précisez votre zone.'
@@ -599,6 +605,11 @@ export default function LandingCommercantsPage() {
     if (stepIndex === 3) {
       if (!form.shop_name.trim()) nextErrors.shop_name = 'Indiquez le nom du commerce.'
       if (!form.contact_name.trim()) nextErrors.contact_name = 'Indiquez le nom du contact.'
+      if (!form.email.trim()) {
+        nextErrors.email = 'Indiquez votre adresse email.'
+      } else if (!EMAIL_PATTERN.test(form.email.trim())) {
+        nextErrors.email = 'Format attendu : nom@exemple.com.'
+      }
       if (!form.whatsapp.trim()) {
         nextErrors.whatsapp = 'Indiquez votre numéro WhatsApp.'
       } else if (!WHATSAPP_PATTERN.test(form.whatsapp.trim())) {
@@ -631,7 +642,6 @@ export default function LandingCommercantsPage() {
   const buildPayload = (): MerchantWaitlistPayload => ({
     commerce_type: form.commerce_type,
     commerce_type_other: form.commerce_type === 'Autre' ? form.commerce_type_other.trim() : undefined,
-    nda_partner: form.nda_partner,
     zone: form.zone,
     zone_other: form.zone === 'Autre' ? form.zone_other.trim() : undefined,
     weekly_orders: form.weekly_orders,
@@ -655,6 +665,7 @@ export default function LandingCommercantsPage() {
     trial_interest: form.trial_interest,
     shop_name: form.shop_name.trim(),
     contact_name: form.contact_name.trim(),
+    email: form.email.trim(),
     whatsapp: form.whatsapp.trim(),
   })
 
@@ -789,6 +800,7 @@ export default function LandingCommercantsPage() {
                         <>
                           <SingleChoice
                             name="commerce_type"
+                            number={1}
                             label="Quel type de commerce gérez-vous ?"
                             options={COMMERCE_TYPES}
                             value={form.commerce_type}
@@ -799,15 +811,8 @@ export default function LandingCommercantsPage() {
                             otherError={errors.commerce_type_other}
                           />
                           <SingleChoice
-                            name="nda_partner"
-                            label="Êtes-vous déjà partenaire d'une enseigne NDA (Bénin SuperMarché, Cotonou Pizza, Cotonou Poulet Frit, gbandj00.com, VamiaDoo, etc.) ?"
-                            options={NDA_OPTIONS}
-                            value={form.nda_partner}
-                            onChange={(value) => update('nda_partner', value)}
-                            error={errors.nda_partner}
-                          />
-                          <SingleChoice
                             name="zone"
+                            number={2}
                             label="Dans quelle zone se trouve votre commerce ?"
                             options={ZONES}
                             value={form.zone}
@@ -819,6 +824,7 @@ export default function LandingCommercantsPage() {
                           />
                           <SingleChoice
                             name="weekly_orders"
+                            number={3}
                             label="Combien de commandes traitez-vous en moyenne par semaine ?"
                             options={WEEKLY_ORDERS}
                             value={form.weekly_orders}
@@ -827,6 +833,7 @@ export default function LandingCommercantsPage() {
                           />
                           <SingleChoice
                             name="source"
+                            number={4}
                             label="Comment avez-vous connu ce questionnaire ?"
                             options={SOURCE_OPTIONS}
                             value={form.source}
@@ -844,6 +851,7 @@ export default function LandingCommercantsPage() {
                             label="Comment livrez-vous actuellement vos commandes ?"
                             options={DELIVERY_METHODS}
                             values={form.delivery_methods}
+                            number={5}
                             onToggle={(value) => toggleValue('delivery_methods', value)}
                             error={errors.delivery_methods}
                             otherValue={form.delivery_methods_other}
@@ -854,6 +862,7 @@ export default function LandingCommercantsPage() {
                             label="Quels sont les principaux problèmes que vous rencontrez avec la livraison ?"
                             options={PROBLEMS}
                             values={form.problems}
+                            number={6}
                             onToggle={(value) => toggleValue('problems', value)}
                             error={errors.problems}
                             otherValue={form.problems_other}
@@ -863,6 +872,7 @@ export default function LandingCommercantsPage() {
                           <TextAreaField
                             label="Racontez-nous la pire expérience de livraison que vous ayez vécue avec un client, un livreur ou une plateforme."
                             value={form.worst_experience}
+                            number={7}
                             onChange={(value) => update('worst_experience', value)}
                             error={errors.worst_experience}
                             placeholder="Décrivez brièvement ce qui s'est passé..."
@@ -870,6 +880,7 @@ export default function LandingCommercantsPage() {
                           />
                           <SingleChoice
                             name="cash_collection_issue"
+                            number={8}
                             label="Vous est-il déjà arrivé de perdre de l'argent ou d'avoir un litige avec un livreur chargé d'encaisser un client ?"
                             options={CASH_ISSUES}
                             value={form.cash_collection_issue}
@@ -878,6 +889,7 @@ export default function LandingCommercantsPage() {
                           />
                           <SingleChoice
                             name="time_lost_weekly"
+                            number={9}
                             label="Combien de temps par semaine estimez-vous perdre à gérer les soucis de livraison (chercher un livreur, suivre une commande, gérer une réclamation client) ?"
                             options={TIME_LOST}
                             value={form.time_lost_weekly}
@@ -886,6 +898,7 @@ export default function LandingCommercantsPage() {
                           />
                           <SingleChoice
                             name="orders_lost_weekly"
+                            number={10}
                             label="Combien de commandes perdez-vous ou annulez-vous par semaine à cause d'un problème de livraison (pas de livreur disponible, client qui abandonne, etc.) ?"
                             options={ORDERS_LOST}
                             value={form.orders_lost_weekly}
@@ -900,6 +913,7 @@ export default function LandingCommercantsPage() {
                           <TextAreaField
                             label="Qu'est-ce qui vous ferait gagner le plus de temps ou de tranquillité d'esprit dans la gestion de vos livraisons ?"
                             value={form.expected_benefit}
+                            number={11}
                             onChange={(value) => update('expected_benefit', value)}
                             error={errors.expected_benefit}
                             placeholder="Ex. trouver un livreur fiable en quelques minutes..."
@@ -907,6 +921,7 @@ export default function LandingCommercantsPage() {
                           />
                           <SingleChoice
                             name="commission_acceptance"
+                            number={12}
                             label="Accepteriez-vous de payer une commission par livraison pour qu'un tiers gère à votre place tout le processus (recherche du livreur, suivi de la commande, encaissement sécurisé de l'argent client) ?"
                             options={COMMISSION_OPTIONS}
                             value={form.commission_acceptance}
@@ -915,6 +930,7 @@ export default function LandingCommercantsPage() {
                           />
                           <SingleChoice
                             name="reasonable_fee"
+                            number={13}
                             label="Quel montant par livraison vous semblerait raisonnable pour un tel service ?"
                             options={FEE_OPTIONS}
                             value={form.reasonable_fee}
@@ -923,6 +939,7 @@ export default function LandingCommercantsPage() {
                           />
                           <SingleChoice
                             name="mobile_money_trust"
+                            number={14}
                             label="Faites-vous confiance au Mobile Money (MTN MoMo / Moov Money) pour recevoir le paiement de vos ventes livrées ?"
                             options={MOBILE_MONEY_OPTIONS}
                             value={form.mobile_money_trust}
@@ -931,11 +948,13 @@ export default function LandingCommercantsPage() {
                           />
                           <InterestScale
                             value={form.interest_level}
+                            number={15}
                             onChange={(value) => update('interest_level', value)}
                             error={errors.interest_level}
                           />
                           <SingleChoice
                             name="trial_interest"
+                            number={16}
                             label="Seriez-vous intéressé pour tester ce service gratuitement pendant une période d'essai, dès son lancement ?"
                             options={TRIAL_OPTIONS}
                             value={form.trial_interest}
@@ -949,7 +968,7 @@ export default function LandingCommercantsPage() {
                         <>
                           <div className="grid gap-5 md:grid-cols-2">
                             <Input
-                              label="Nom du commerce"
+                              label="17. Nom du commerce"
                               value={form.shop_name}
                               onChange={(event) => update('shop_name', event.target.value)}
                               error={errors.shop_name}
@@ -957,7 +976,7 @@ export default function LandingCommercantsPage() {
                               leftIcon={<StoreIcon size={17} />}
                             />
                             <Input
-                              label="Nom du contact"
+                              label="18. Nom du contact"
                               value={form.contact_name}
                               onChange={(event) => update('contact_name', event.target.value)}
                               error={errors.contact_name}
@@ -965,7 +984,18 @@ export default function LandingCommercantsPage() {
                             />
                           </div>
                           <Input
-                            label="Numéro WhatsApp"
+                            label="19. Adresse email"
+                            type="email"
+                            value={form.email}
+                            onChange={(event) => update('email', event.target.value)}
+                            error={errors.email}
+                            helper="Ex. nom@exemple.com"
+                            placeholder="nom@exemple.com"
+                            autoComplete="email"
+                            inputMode="email"
+                          />
+                          <Input
+                            label="20. Numéro WhatsApp"
                             value={form.whatsapp}
                             onChange={(event) => update('whatsapp', event.target.value)}
                             error={errors.whatsapp}

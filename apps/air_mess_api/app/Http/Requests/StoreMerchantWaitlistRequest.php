@@ -24,12 +24,6 @@ class StoreMerchantWaitlistRequest extends FormRequest
             ])],
             'commerce_type_other' => ['nullable', 'string', 'max:160'],
 
-            'nda_partner' => ['required', 'string', Rule::in([
-                'Oui',
-                'Non',
-                "Je ne sais pas ce qu'est NDA",
-            ])],
-
             'zone' => ['required', 'string', Rule::in(['Cotonou', 'Abomey-Calavi', 'Autre'])],
             'zone_other' => ['nullable', 'string', 'max:160'],
 
@@ -134,6 +128,7 @@ class StoreMerchantWaitlistRequest extends FormRequest
 
             'shop_name' => ['nullable', 'string', 'max:160'],
             'contact_name' => ['nullable', 'string', 'max:160'],
+            'email' => ['required', 'string', 'email:rfc'],
             'whatsapp' => ['nullable', 'string', 'regex:/^(\+229)?[0-9]{8}$/'],
         ];
     }

@@ -11,7 +11,6 @@ class MerchantWaitlist extends Model
     protected $fillable = [
         'commerce_type',
         'commerce_type_other',
-        'nda_partner',
         'zone',
         'zone_other',
         'weekly_orders',
@@ -33,6 +32,7 @@ class MerchantWaitlist extends Model
         'trial_interest',
         'shop_name',
         'contact_name',
+        'email',
         'whatsapp',
         'status',
         'bonus_amount',

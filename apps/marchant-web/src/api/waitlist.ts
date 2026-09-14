@@ -3,7 +3,6 @@ import api from './client'
 export interface MerchantWaitlistPayload {
   commerce_type: string
   commerce_type_other?: string
-  nda_partner: string
   zone: string
   zone_other?: string
   weekly_orders: string
@@ -25,6 +24,7 @@ export interface MerchantWaitlistPayload {
   trial_interest: string
   shop_name?: string
   contact_name?: string
+  email?: string
   whatsapp?: string
 }
 
