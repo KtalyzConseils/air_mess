@@ -370,7 +370,7 @@ export default function LandingCommercantsPage() {
   }
 
   async function copyLandingLink() {
-    const landingUrl = `${window.location.origin}/landing/merchants`
+    const landingUrl = `${window.location.origin}/landing/merchants_learn`
     try {
       await navigator.clipboard.writeText(landingUrl)
       setLinkCopied(true)

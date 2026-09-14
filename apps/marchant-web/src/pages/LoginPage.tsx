@@ -79,7 +79,7 @@ export default function LoginPage() {
 
           {/* CTA enquête commerçants : inscription liste d'attente + bonus 500 F */}
           <Link
-            to="/landing/merchants"
+            to="/landing/merchants_learn"
             className="mb-8 flex items-center justify-between gap-3 rounded-xl border border-airmess-yellow/40 bg-airmess-yellow/10 px-4 py-3 text-left transition-colors hover:bg-airmess-yellow/20"
           >
             <span>

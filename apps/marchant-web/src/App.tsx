@@ -112,7 +112,8 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/legal/terms" element={<TermsPage />} />
           <Route path="/legal/privacy" element={<PrivacyPage />} />
-          <Route path="/landing/merchants" element={<LandingCommercantsPage />} />
+          <Route path="/landing/merchants" element={<Navigate to="/landing/merchants_learn" replace />} />
+          <Route path="/landing/merchants_learn" element={<LandingCommercantsPage />} />
           <Route path="/t/:token" element={<TrackingPage />} />  {/* PUBLIQUE POUR LE TRACKING */}
           <Route path="/billing/return" element={<BillingReturnPage />} />  {/* PUBLIQUE : retour Fedapay, le webhook fait foi */}
 
