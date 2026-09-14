@@ -179,6 +179,8 @@
       "forgotPassword": "Forgot password?",
       "submit": "Sign in",
       "createAccount": "Create a merchant account",
+      "merchantSurveyButton": "Merchant? Take our survey",
+      "merchantSurveyCta": "Automatic waitlist signup + 500 F CFA bonus",
       "loginError": "Sign-in failed.",
       "copyright": "© 2026 KTALYZ — Air Mess",
       "sidePanel": {

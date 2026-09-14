@@ -179,6 +179,8 @@
       "forgotPassword": "Mot de passe oublié ?",
       "submit": "Se connecter",
       "createAccount": "Créer un compte marchand",
+      "merchantSurveyButton": "Commerçant ? Répondre à notre enquête",
+      "merchantSurveyCta": "Inscription automatique à la liste d’attente + 500 F CFA offerts",
       "loginError": "Erreur de connexion.",
       "copyright": "© 2026 KTALYZ — Air Mess",
       "sidePanel": {

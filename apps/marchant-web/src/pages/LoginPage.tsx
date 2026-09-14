@@ -77,6 +77,22 @@ export default function LoginPage() {
               si le navigateur propose l'installation. */}
           <InstallPwaButton variant="light" className="mb-8" />
 
+          {/* CTA enquête commerçants : inscription liste d'attente + bonus 500 F */}
+          <Link
+            to="/landing/merchants"
+            className="mb-8 flex items-center justify-between gap-3 rounded-xl border border-airmess-yellow/40 bg-airmess-yellow/10 px-4 py-3 text-left transition-colors hover:bg-airmess-yellow/20"
+          >
+            <span>
+              <span className="block text-body-s font-semibold text-ink">
+                {t('auth.login.merchantSurveyButton')}
+              </span>
+              <span className="mt-0.5 block text-caption text-warm-500">
+                {t('auth.login.merchantSurveyCta')}
+              </span>
+            </span>
+            <ArrowRightIcon size={18} className="shrink-0 text-ink" />
+          </Link>
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
