@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
@@ -8,19 +8,17 @@ import AdminTabs from '../../components/admin/AdminTabs'
 import AdminPagination from '../../components/admin/AdminPagination'
 import { AdminSearchInput, AdminButton } from '../../components/admin/AdminToolbar'
 import MarchantStatusBadge from '../../components/MarchantStatusBadge'
-import { fetchMarchants, validateMarchant, type MarchantListParams } from '../../api/admin'
+import { fetchMarchants, type MarchantListParams } from '../../api/admin'
 
-type FilterKey = 'pending' | 'all' | 'active' | 'suspended'
+type FilterKey = 'all' | 'active' | 'suspended'
 
 export default function AdminMarchantsPage() {
   const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const [filterKey, setFilterKey] = useState<FilterKey>('pending')
+  const [filterKey, setFilterKey] = useState<FilterKey>('all')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
 
   const FILTERS: readonly { key: FilterKey; label: string; params: MarchantListParams }[] = [
-    { key: 'pending', label: t('admin.marchants.tabToValidate'), params: { validation: 'pending' } },
     { key: 'all', label: t('admin.marchants.tabAll'), params: {} },
     { key: 'active', label: t('admin.marchants.tabActive'), params: { subscription_status: 'active' } },
     { key: 'suspended', label: t('admin.marchants.tabSuspended'), params: { subscription_status: 'suspended' } },
@@ -38,14 +36,6 @@ export default function AdminMarchantsPage() {
     queryKey: ['admin', 'marchants', search ? `search:${search}` : filterKey, page],
     queryFn: () => fetchMarchants(params),
     placeholderData: keepPreviousData,
-  })
-
-  const mutation = useMutation({
-    mutationFn: validateMarchant,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'marchants'] })
-      queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
-    },
   })
 
   const marchants = data?.data ?? []
@@ -139,16 +129,6 @@ export default function AdminMarchantsPage() {
                       </td>
                       <td className="px-5 py-2.5 text-right whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
-                          {!m.validated_at && (
-                            <AdminButton
-                              variant="primary"
-                              size="sm"
-                              onClick={() => mutation.mutate(m.id)}
-                              disabled={mutation.isPending}
-                            >
-                              {t('admin.marchants.validateAction')}
-                            </AdminButton>
-                          )}
                           <Link to={`/admin/marchants/${m.id}`}>
                             <AdminButton variant="ghost" size="sm">
                               {t('admin.common.view')}

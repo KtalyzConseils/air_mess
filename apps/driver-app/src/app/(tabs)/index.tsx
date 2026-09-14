@@ -25,6 +25,7 @@ function initials(first?: string, last?: string, fallback?: string): string {
 
 export default function DriverDashboard() {
   const { user } = useAuthStore()
+  const setUser = useAuthStore((state) => state.setUser)
   const router = useRouter()
 
   const meQuery = useQuery({
@@ -37,6 +38,10 @@ export default function DriverDashboard() {
   })
 
   const me = meQuery.data?.user ?? user
+
+  useEffect(() => {
+    if (meQuery.data?.user) setUser(meQuery.data.user)
+  }, [meQuery.data?.user, setUser])
   const availability = (me?.driver?.availability_status ?? 'offline') as Availability | 'busy'
   const isBanned = me?.driver?.activation_status === 'banned'
   // Compte pas encore activé par l'admin : connexion OK, mais impossible de se rendre
@@ -50,6 +55,7 @@ export default function DriverDashboard() {
     queryKey: ['my-active'],
     queryFn: fetchMyActiveCourses,
     refetchInterval: 10_000,
+    enabled: !pendingValidation,
   })
 
   const activeCourse = activeQuery.data?.[0]
@@ -58,7 +64,7 @@ export default function DriverDashboard() {
   const offeredQuery = useQuery({
     queryKey: ['offered-courses'],
     queryFn: fetchOfferedCourses,
-    enabled: canSeeOffers,
+    enabled: canSeeOffers && !pendingValidation,
     refetchInterval: 8_000,
   })
 
@@ -84,10 +90,39 @@ export default function DriverDashboard() {
     offeredQuery.refetch()
   }
 
-  useDriverLocationTracker({ availability })
+  useDriverLocationTracker({ availability: pendingValidation ? 'offline' : availability })
 
   const firstName = me?.driver?.first_name ?? me?.name ?? ''
   const avatar = initials(me?.driver?.first_name, me?.driver?.last_name, me?.name)
+
+  if (pendingValidation) {
+    return (
+      <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right', 'bottom']}>
+        <View className="flex-1 items-center justify-center px-6">
+          <View className="w-20 h-20 rounded-full bg-airmess-yellow/25 items-center justify-center mb-5">
+            <Ionicons name="checkmark-circle" size={44} color="#1A1614" />
+          </View>
+          <Text className="text-xs font-jk-bold uppercase tracking-widest text-airmess-red text-center">
+            Inscription confirmée
+          </Text>
+          <Text className="text-2xl font-jk-extrabold text-ink text-center mt-2">
+            Félicitations, votre dossier est en cours de validation !
+          </Text>
+          <Text className="text-sm text-warm-600 text-center mt-4 leading-5 font-jk">
+            Vous pouvez vous connecter dès maintenant. Nous vous préviendrons par e-mail dès que votre compte livreur sera validé et que vous pourrez recevoir des courses.
+          </Text>
+          <Pressable
+            onPress={() => useAuthStore.getState().logout()}
+            className="h-12 w-full mt-7 rounded-2xl border-2 border-warm-300 items-center justify-center flex-row"
+            style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#6E6558" />
+            <Text className="text-warm-600 font-jk-bold ml-2">Se déconnecter</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    )
+  }
 
   // Cas 7 — Driver banni : écran de blocage complet.
   if (isBanned) {

@@ -331,6 +331,31 @@ class AppSettingSeeder extends Seeder
                 'description' => 'Cas 4/6 : part des gains versée au livreur qui doit refaire le trajet retour vers le marchand.',
                 'group'       => 'conflicts',
             ],
+            // ===== Parrainage livreur =====
+            [
+                'key'         => 'driver_referral_enabled',
+                'value'       => 'true',
+                'type'        => 'boolean',
+                'label'       => 'Parrainage livreur actif',
+                'description' => 'Active ou désactive le programme de parrainage dans l’app driver.',
+                'group'       => 'referral',
+            ],
+            [
+                'key'         => 'driver_referral_required_deliveries',
+                'value'       => '3',
+                'type'        => 'number',
+                'label'       => 'Courses livrées requises',
+                'description' => 'Nombre de premières courses livrées par le filleul avant de créditer la prime au parrain.',
+                'group'       => 'referral',
+            ],
+            [
+                'key'         => 'driver_referral_reward_fcfa',
+                'value'       => '1000',
+                'type'        => 'number',
+                'label'       => 'Prime parrainage (FCFA)',
+                'description' => 'Montant crédité dans le wallet du parrain lorsque le filleul atteint le seuil.',
+                'group'       => 'referral',
+            ],
             // ===== Contacts support (exposés côté public via /support-contact) =====
             [
                 'key'         => 'support_phone',

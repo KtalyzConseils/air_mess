@@ -56,6 +56,22 @@ class RegisterMarchantIndividualTest extends TestCase
         $this->assertNull($user->email_verified_at); // pas de Google ici
     }
 
+    public function test_individual_always_gets_direct_access_even_when_defer_login_is_sent(): void
+    {
+        $this->postJson('/api/auth/register/individual', $this->individualPayload([
+            'defer_login' => true,
+        ]))
+            ->assertStatus(201)
+            ->assertJsonStructure(['token']);
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+        $user = User::firstOrFail();
+        $this->assertTrue($user->is_active);
+        $this->assertNull($user->waitlisted_at);
+        $this->assertNull($user->waitlist_notified_at);
+    }
+
     public function test_individual_register_with_google_marks_email_verified(): void
     {
         $this->mockGoogleVerifier('ama@example.com');
@@ -89,6 +105,9 @@ class RegisterMarchantIndividualTest extends TestCase
         $user = User::where('email', 'shop@example.com')->firstOrFail();
         $this->assertSame('+2290191223344', $user->phone);
         $this->assertNotNull($user->phone_verified_at);
+        $this->assertTrue($user->is_active);
+        $this->assertNotNull($user->waitlisted_at);
+        $this->assertNull($user->marchant->validated_at);
     }
 
     public function test_marchant_register_succeeds_with_google(): void

@@ -46,6 +46,9 @@ class User extends Authenticatable
         'password_set_at',
         'type',
         'is_active',
+        'waitlisted_at',
+        'waitlist_notified_at',
+        'waitlist_notified_by',
         'email_verified_at',
         'phone_verified_at',
         'last_login_at',
@@ -68,6 +71,8 @@ class User extends Authenticatable
             'accepted_terms_at' => 'datetime',
             'accepted_terms_version' => 'integer',
             'is_active' => 'boolean',
+            'waitlisted_at' => 'datetime',
+            'waitlist_notified_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -117,6 +122,11 @@ class User extends Authenticatable
         return $this->hasOne(Admin::class);
     }
 
+    public function waitlistNotifier()
+    {
+        return $this->belongsTo(Admin::class, 'waitlist_notified_by');
+    }
+
     /**
      * Apps dev créées par ce user (mode développeur API).
      * Un marchand OU un particulier peut en avoir.
@@ -160,4 +170,3 @@ class User extends Authenticatable
         };
     }
 }
-

@@ -310,6 +310,69 @@ class UserWalletService
     }
 
     /**
+     * Rembourse dans le wallet un paiement direct d'une course annulée avant pickup.
+     * Idempotent via la transaction refund liée à la course.
+     */
+    public function refundDirectPayment(User $user, Course $course, int $amount): ?UserWalletTransaction
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException("Refund amount must be > 0, got {$amount}.");
+        }
+
+        return DB::transaction(function () use ($user, $course, $amount) {
+            $payment = Payment::where('user_id', $user->id)
+                ->where('type', Payment::TYPE_DELIVERY_FEE)
+                ->where('status', Payment::STATUS_PAID)
+                ->whereJsonContains('metadata->course_id', $course->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $payment) {
+                return null;
+            }
+
+            $existing = UserWalletTransaction::where('course_id', $course->id)
+                ->where('type', UserWalletTransaction::TYPE_REFUND)
+                ->first();
+            if ($existing) {
+                $payment->update(['status' => Payment::STATUS_REFUNDED]);
+                return $existing;
+            }
+
+            $wallet = UserWallet::where('user_id', $user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $wallet->balance += $amount;
+            $wallet->save();
+
+            $refund = UserWalletTransaction::create([
+                'user_id'       => $user->id,
+                'type'          => UserWalletTransaction::TYPE_REFUND,
+                'amount_fcfa'   => $amount,
+                'balance_after' => $wallet->balance,
+                'course_id'     => $course->id,
+                'payment_id'    => $payment->id,
+                'metadata'      => [
+                    'reason'  => 'course_cancelled_before_pickup',
+                    'channel' => 'user_wallet',
+                ],
+            ]);
+
+            $payment->update([
+                'status'   => Payment::STATUS_REFUNDED,
+                'metadata' => array_merge($payment->metadata ?? [], [
+                    'refunded_at'     => now()->toIso8601String(),
+                    'refund_channel'  => 'user_wallet',
+                    'refund_course_id'=> $course->id,
+                ]),
+            ]);
+
+            return $refund;
+        });
+    }
+
+    /**
      * Refund APRÈS débit (cas exceptionnel : litige, geste commercial post-livraison).
      * Idempotent via UNIQUE partielle (course_id, type=refund).
      *

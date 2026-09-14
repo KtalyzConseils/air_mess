@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -6,6 +6,7 @@ import AppHeader from '../components/AppHeader'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import { useAuthStore } from '../stores/authStore'
+import { confirmUserPayment } from '../api/wallet'
 
 export default function BillingReturnPage() {
   const { t } = useTranslation()
@@ -13,18 +14,38 @@ export default function BillingReturnPage() {
   const [params] = useSearchParams()
   const { fetchMe } = useAuthStore()
   const queryClient = useQueryClient()
+  const [confirmedStatus, setConfirmedStatus] = useState<string | null>(null)
 
   // Fedapay renvoie typiquement ?status=approved | declined | canceled
   const status = params.get('status') ?? 'unknown'
-  const isSuccess = status === 'approved'
+  const isSuccess = status === 'approved' || confirmedStatus === 'paid'
   const isCanceled = status === 'canceled'
 
   useEffect(() => {
-    fetchMe()
-    queryClient.invalidateQueries({ queryKey: ['wallet'] })
-    queryClient.invalidateQueries({ queryKey: ['courses'] })
-    queryClient.invalidateQueries({ queryKey: ['notifications'] })
-  }, [fetchMe, queryClient])
+    const rawPaymentId = params.get('payment_id') ?? sessionStorage.getItem('airmess_pending_payment_id')
+    const paymentId = Number(rawPaymentId)
+
+    void (async () => {
+      if (Number.isInteger(paymentId) && paymentId > 0) {
+        try {
+          const confirmation = await confirmUserPayment(paymentId)
+          setConfirmedStatus(confirmation.status)
+          if (confirmation.status === 'paid') {
+            sessionStorage.removeItem('airmess_pending_payment_id')
+          }
+        } catch {
+          setConfirmedStatus('processing')
+        }
+      }
+
+      await fetchMe()
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['wallet'] }),
+        queryClient.invalidateQueries({ queryKey: ['courses'] }),
+        queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+      ])
+    })()
+  }, [fetchMe, params, queryClient])
 
   return (
     <div className="min-h-screen bg-cream">

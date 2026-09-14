@@ -21,3 +21,8 @@ Schedule::command('api-apps:expire')
     ->timezone('Africa/Porto-Novo')
     ->onOneServer()
     ->withoutOverlapping();
+
+Schedule::command('courses:monitor-unassigned')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping();

@@ -65,6 +65,7 @@ export interface RegisterDriverPayload {
   equipment_refrigerated_bag?: boolean
   /** Consentement CGU + politique confidentialité (checkbox obligatoire). */
   accepted_terms: boolean
+  referral_code?: string
 }
 
 interface AuthState {
@@ -146,6 +147,7 @@ export const useAuthStore = create<AuthState>()(
         if (payload.driving_license) form.append('driving_license', payload.driving_license)
         // Consentement CGU (checkbox obligatoire côté back)
         form.append('accepted_terms', payload.accepted_terms ? '1' : '0')
+        if (payload.referral_code) form.append('referral_code', payload.referral_code)
 
         const { data } = await api.post('/auth/register/driver', form, {
           headers: { 'Content-Type': 'multipart/form-data' },

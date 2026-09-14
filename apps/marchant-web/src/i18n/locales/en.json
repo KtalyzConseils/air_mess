@@ -194,6 +194,19 @@
         "subtext": "Follow every delivery live, collect payments automatically, withdraw funds whenever you want."
       }
     },
+    "registerSuccess": {
+      "eyebrow": "Registration confirmed",
+      "title": "Congratulations, you’re on the waiting list!",
+      "message": "Your Airmess account has been created. We’ll notify you by email as soon as the service is live.",
+      "giftLabel": "Votre cadeau de bienvenue",
+      "giftBody": "500 FCFA seront automatiquement déduits de votre première course.",
+      "individualEyebrow": "Bienvenue chez Airmess",
+      "individualTitle": "Votre bon de bienvenue est prêt !",
+      "individualMessage": "Votre compte particulier est actif immédiatement. Pour bien commencer, vous bénéficiez d’une réduction sur votre première course.",
+      "understood": "OK, j’ai compris",
+      "login": "Back to sign in",
+      "loginHint": "We’ll contact you by email as soon as the service launches."
+    },
     "register": {
       "title": "Create an account.",
       "subtitle": "Join Air Mess in under 2 minutes.",
@@ -293,6 +306,8 @@
     "subtitleEnd": "for today.",
     "pendingTitle": "Account pending validation",
     "pendingBody": "Your merchant account is being validated by an administrator (within 24 hours). You'll be notified once it's active.",
+    "firstCourseBonusTitle": "Votre bon de 500 FCFA vous attend",
+    "firstCourseBonusBody": "La réduction sera automatiquement appliquée au prix de votre première course.",
     "walletTopUp": "+ Top up",
     "createCourse": "⚡ Create a delivery",
     "newDelivery": "+ New delivery",
@@ -542,7 +557,9 @@
         "showMapHint": "Click the price to see the map",
         "breakdown": "{{distance}} km × {{perKm}} + {{min}} FCFA (rounded up to 100)",
         "breakdownExpress": "× {{multiplier}} for express",
-        "breakdownCapped": "{{distance}} km — {{max}} FCFA cap reached"
+        "breakdownCapped": "{{distance}} km — {{max}} FCFA cap reached",
+        "firstCourseDiscount": "First delivery gift: −{{amount}} FCFA",
+        "welcomeDiscountShort": "Welcome discount applied"
       },
       "errors": {
         "title_one": "1 required field to complete",
@@ -699,6 +716,7 @@
     "unreadSuffixOther": "unread notifications.",
     "markAllRead": "Mark all as read",
     "markAllReadShort": "Mark all read",
+    "markingAllRead": "Marking as read…",
     "unread": "unread",
     "unreadAria": "Unread",
     "emptyTitle": "📭 No notifications",
@@ -1119,6 +1137,7 @@
     "nav": {
       "overview": "Overview",
       "courses": "Deliveries",
+      "unassignedCourses": "Unassigned deliveries",
       "incidents": "Incidents",
       "marchants": "Merchants",
       "merchantWaitlists": "Merchant waitlist",
@@ -1906,6 +1925,8 @@
       "groupConflictsDesc": "Percentages applied by ops when resolving problematic courses (no-show, lost/damaged package, return to merchant).",
       "groupWalletLabel": "Wallet & withdrawals",
       "groupWalletDesc": "Withdrawal thresholds, payout mode and anti-abuse caps for drivers and merchants.",
+      "groupReferralLabel": "Driver referral",
+      "groupReferralDesc": "Activation, delivered-course threshold and referral reward amount.",
       "groupSupportLabel": "Support contacts",
       "groupSupportDesc": "Phone, WhatsApp and email shown in the \"Contact support\" dialogs across all apps.",
       "plansSectionLabel": "Merchant subscription plans",
@@ -1941,6 +1962,7 @@
       "unreadCount_one": "{{count}} unread",
       "unreadCount_other": "{{count}} unread",
       "markAllReadCount": "Mark all as read ({{count}})",
+      "markingAllRead": "Marking as read…",
       "emptyList": "No notifications for now.",
       "refLabel": "Ref:",
       "timeNow": "just now",

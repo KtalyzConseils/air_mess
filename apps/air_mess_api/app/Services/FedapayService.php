@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\Phone;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -38,6 +39,8 @@ class FedapayService
         array $customer,
         string $callbackUrl,
     ): array {
+        $phone = $this->formatCustomerPhone($customer['phone'] ?? null);
+
         // Étape 1 : créer la transaction
         $txResponse = Http::withToken($this->secretKey)
             ->acceptJson()
@@ -51,7 +54,9 @@ class FedapayService
                     'firstname'    => $customer['firstname'] ?? 'Marchand',
                     'lastname'     => $customer['lastname']  ?? 'RMess',
                     'phone_number' => [
-                        'number'  => $customer['phone'] ?? null,
+                        // FedaPay attend le numéro national quand le pays est bj,
+                        // pas le format E.164 (+229...).
+                        'number'  => $phone,
                         'country' => 'bj',
                     ],
                 ],
@@ -87,6 +92,22 @@ class FedapayService
             'reference'      => $transaction['reference'],
             'checkout_url'   => $tokenResponse->json('url'),
         ];
+    }
+
+    private function formatCustomerPhone(?string $rawPhone): string
+    {
+        $normalized = Phone::normalize((string) $rawPhone);
+        $digits = preg_replace('/\D+/', '', $normalized) ?? '';
+
+        if (str_starts_with($digits, '229')) {
+            $digits = substr($digits, 3);
+        }
+
+        if (! in_array(strlen($digits), [8, 10], true)) {
+            throw new RuntimeException('Le numéro de téléphone du compte est invalide pour FedaPay.');
+        }
+
+        return $digits;
     }
 
     /**

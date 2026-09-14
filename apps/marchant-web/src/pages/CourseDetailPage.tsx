@@ -18,6 +18,17 @@ import { markCourseFraud } from '../api/admin'
 import { useAuthStore } from '../stores/authStore'
 import { hasAdminRole } from '../lib/permissions'
 
+function PageWrapper({ isAdmin, children }: { isAdmin: boolean; children: React.ReactNode }) {
+  return isAdmin ? (
+    <AdminPageShell>{children}</AdminPageShell>
+  ) : (
+    <div className="min-h-screen bg-cream">
+      <AppHeader />
+      {children}
+    </div>
+  )
+}
+
 export default function CourseDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
@@ -98,37 +109,24 @@ export default function CourseDetailPage() {
       ? fraudMutation.error.response?.data?.message ?? t('common.unexpectedError')
       : null
 
-  // Le wrapper de la page diffère selon le rôle :
-  //  - admin : sidebar verticale (AdminPageShell) → cohérent avec le reste de /admin
-  //  - autre : header horizontal marchant (AppHeader)
-  const Wrapper = ({ children }: { children: React.ReactNode }) =>
-    isAdmin ? (
-      <AdminPageShell>{children}</AdminPageShell>
-    ) : (
-      <div className="min-h-screen bg-cream">
-        <AppHeader />
-        {children}
-      </div>
-    )
-
   if (courseQuery.isLoading) {
     return (
-      <Wrapper>
+      <PageWrapper isAdmin={isAdmin}>
         <main className="max-w-5xl mx-auto px-4 md:px-6 py-12 text-warm-500">{t('common.loading')}</main>
-      </Wrapper>
+      </PageWrapper>
     )
   }
 
   if (courseQuery.error) {
     return (
-      <Wrapper>
+      <PageWrapper isAdmin={isAdmin}>
         <main className="max-w-5xl mx-auto px-4 md:px-6 py-12">
           <Card padding="lg" className="text-center bg-danger-bg! border-airmess-red/20! text-airmess-red">
             {t('common.loadingError')}{' '}
             <button onClick={() => navigate(-1)} className="underline font-semibold">{t('common.back')}</button>
           </Card>
         </main>
-      </Wrapper>
+      </PageWrapper>
     )
   }
 
@@ -157,7 +155,7 @@ export default function CourseDetailPage() {
       : null
 
   return (
-    <Wrapper>
+    <PageWrapper isAdmin={isAdmin}>
       <main className="max-w-5xl mx-auto px-4 md:px-6 py-8 md:py-12">
         {/* ============================================================
             HERO — référence + statut + actions
@@ -683,7 +681,7 @@ export default function CourseDetailPage() {
           </div>
         )}
       </main>
-    </Wrapper>
+    </PageWrapper>
   )
 }
 

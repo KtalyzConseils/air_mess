@@ -8,7 +8,7 @@ import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import PageEyebrow from '../components/ui/PageEyebrow'
 import { cn } from '../lib/cn'
-import { fetchNotifications, markNotificationRead, type AppNotification } from '../api/notifications'
+import { fetchNotifications, markAllNotificationsRead, markNotificationRead, type AppNotification } from '../api/notifications'
 
 const TYPE_META: Record<string, { icon: string; labelKey: string }> = {
   'course.accepted':         { icon: '✅', labelKey: 'notifications.types.courseAccepted' },
@@ -46,6 +46,23 @@ export default function NotificationsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   })
 
+  const markAllRead = useMutation({
+    mutationFn: markAllNotificationsRead,
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['notifications'] })
+      const previous = queryClient.getQueryData<typeof data>(['notifications'])
+      queryClient.setQueryData<typeof data>(['notifications'], (current) => current && {
+        ...current,
+        data: current.data.map((notification) => ({ ...notification, read_at: new Date().toISOString() })),
+      })
+      return { previous }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(['notifications'], context.previous)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+
   const notifications: AppNotification[] = data?.data ?? []
   const unreadCount = notifications.filter((n) => n.read_at === null).length
 
@@ -55,7 +72,7 @@ export default function NotificationsPage() {
   }
 
   function handleMarkAllRead() {
-    notifications.filter((n) => n.read_at === null).forEach((n) => markRead.mutate(n.id))
+    if (unreadCount > 0 && !markAllRead.isPending) markAllRead.mutate()
   }
 
   return (
@@ -76,8 +93,8 @@ export default function NotificationsPage() {
             )}
           </div>
           {unreadCount > 0 && (
-            <Button variant="dark" size="md" pill onClick={handleMarkAllRead}>
-              {t('notifications.markAllReadShort')}
+            <Button variant="dark" size="md" pill onClick={handleMarkAllRead} disabled={markAllRead.isPending}>
+              {markAllRead.isPending ? t('notifications.markingAllRead') : t('notifications.markAllReadShort')}
             </Button>
           )}
         </div>

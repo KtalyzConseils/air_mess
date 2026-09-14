@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { View, Text, ScrollView, Pressable, Alert, Platform, ActivityIndicator, Linking } from 'react-native'
+import { View, Text, ScrollView, Pressable, Alert, Platform, ActivityIndicator, Linking, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import Constants from 'expo-constants'
 import { useAuthStore } from '../../stores/authStore'
-import { fetchDriverStats } from '../../api/driver'
+import { fetchDriverReferral, fetchDriverStats } from '../../api/driver'
 import { fetchWallet } from '../../api/wallet'
 import { openFullScreenIntentSettings } from '../../lib/fullScreenPermission'
 import SupportContactSheet from '../../components/SupportContactSheet'
@@ -95,6 +95,10 @@ export default function ProfileScreen() {
     queryKey: ['driver-stats'],
     queryFn: fetchDriverStats,
   })
+  const { data: referral } = useQuery({
+    queryKey: ['driver-referral'],
+    queryFn: fetchDriverReferral,
+  })
   const { data: wallet } = useQuery({ queryKey: ['wallet'], queryFn: fetchWallet })
   // Défense : balance peut être null pendant le tout premier fetch (race de types),
   // ou si le back renvoie un wallet incomplet. Sans ça, toLocaleString crashe le render.
@@ -165,6 +169,19 @@ export default function ProfileScreen() {
         }
       ]
     )
+  }
+
+  async function shareReferral() {
+    if (!referral?.share_message) {
+      Alert.alert('Parrainage indisponible', 'Réessaie dans quelques instants.')
+      return
+    }
+
+    try {
+      await Share.share({ message: referral.share_message })
+    } catch {
+      Alert.alert('Erreur', 'Impossible d’ouvrir le partage.')
+    }
   }
 
   return (
@@ -264,6 +281,52 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {referral?.enabled && (
+          <View className="mx-5 mt-5 bg-airmess-yellow rounded-2xl p-4 overflow-hidden">
+            <View className="flex-row items-start justify-between">
+              <View className="flex-1 pr-3">
+                <Text className="text-[10px] uppercase text-ink/70 tracking-widest font-jk-bold">
+                  Parrainage
+                </Text>
+                <Text className="text-xl font-jk-extrabold text-ink mt-1">
+                  {referral.reward_amount_fcfa.toLocaleString('fr-FR')} FCFA à gagner
+                </Text>
+                <Text className="text-xs text-ink/70 font-jk-medium mt-1.5">
+                  Après {referral.required_delivered_courses} course(s) livrée(s) par ton filleul.
+                </Text>
+              </View>
+              <View className="w-11 h-11 rounded-xl bg-ink items-center justify-center">
+                <Ionicons name="gift-outline" size={20} color="#FFCC00" />
+              </View>
+            </View>
+
+            <View className="mt-4 flex-row items-center justify-between bg-off-white/80 rounded-xl px-3 py-2.5">
+              <View>
+                <Text className="text-[10px] uppercase text-warm-600 tracking-widest font-jk-bold">
+                  Ton code
+                </Text>
+                <Text className="text-base text-ink font-jk-extrabold mt-0.5">
+                  {referral.code}
+                </Text>
+              </View>
+              <Pressable
+                onPress={shareReferral}
+                className="bg-ink rounded-full px-4 py-2 flex-row items-center"
+                style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
+              >
+                <Ionicons name="share-social-outline" size={15} color="#FFFFFF" />
+                <Text className="text-white text-xs font-jk-extrabold ml-1.5">Partager</Text>
+              </Pressable>
+            </View>
+
+            <View className="flex-row mt-3">
+              <ReferralMiniStat label="Invités" value={referral.sponsored_count} />
+              <ReferralMiniStat label="En attente" value={referral.pending_count} />
+              <ReferralMiniStat label="Primés" value={referral.rewarded_count} isLast />
+            </View>
+          </View>
+        )}
+
         {/* Autres profils — multi-rôles. La section entière disparaît si
             aucun ajout n'est proposable, pour ne pas laisser un cadre vide. */}
         {canAddMarchant && (
@@ -353,6 +416,23 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <Text className="text-[11px] uppercase text-warm-500 tracking-widest font-jk-bold mb-2 ml-1">
       {children}
     </Text>
+  )
+}
+
+function ReferralMiniStat({
+  label,
+  value,
+  isLast,
+}: {
+  label: string
+  value: number
+  isLast?: boolean
+}) {
+  return (
+    <View className={['flex-1 bg-ink/10 rounded-xl px-2 py-2', isLast ? '' : 'mr-2'].join(' ')}>
+      <Text className="text-base text-ink font-jk-extrabold text-center">{value}</Text>
+      <Text className="text-[10px] text-ink/65 font-jk-bold text-center mt-0.5">{label}</Text>
+    </View>
   )
 }
 

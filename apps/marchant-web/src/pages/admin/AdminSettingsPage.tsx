@@ -15,6 +15,7 @@ import {
   DashboardIcon,
   MenuIcon,
   BankIcon,
+  BikeIcon,
   HelpCircleIcon,
   type IconProps,
 } from '../../components/ui/icons'
@@ -59,6 +60,11 @@ const GROUP_META_CONFIG: Record<string, GroupMetaConfig> = {
     labelKey: 'admin.settings.groupWalletLabel',
     descKey: 'admin.settings.groupWalletDesc',
     Icon: BankIcon,
+  },
+  referral: {
+    labelKey: 'admin.settings.groupReferralLabel',
+    descKey: 'admin.settings.groupReferralDesc',
+    Icon: BikeIcon,
   },
   support: {
     labelKey: 'admin.settings.groupSupportLabel',
@@ -116,8 +122,8 @@ export default function AdminSettingsPage() {
 
         {ready && (
           <>
-            <div className="-mx-4 md:-mx-8 lg:-mx-12 overflow-x-auto px-4 md:px-8 lg:px-12">
-              <AdminTabs tabs={tabs} value={currentTab} onChange={setActiveTab} />
+            <div className="rounded-xl border border-warm-200 bg-white/70 p-3 shadow-soft">
+              <AdminTabs tabs={tabs} value={currentTab} onChange={setActiveTab} variant="pills" />
             </div>
 
             {groupKeys.includes(currentTab) && (

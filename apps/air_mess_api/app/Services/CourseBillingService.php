@@ -15,6 +15,7 @@ class CourseBillingService
 {
     public function __construct(
         private FedapayService $fedapay,
+        private FirstCourseDiscountService $firstCourseDiscount,
     ) {}
 
     /**
@@ -85,7 +86,7 @@ class CourseBillingService
     public function initiateOneShotCheckout(
         User $user,
         array $coursePayload,
-        int $deliveryFee,
+        int $originalDeliveryFee,
         int $driverEarnings,
     ): JsonResponse {
         $callbackUrl = $coursePayload['callback_url'] ?? null;
@@ -98,7 +99,12 @@ class CourseBillingService
         unset($coursePayload['callback_url']);
 
         // Création du Payment AVANT Fedapay (trace)
-        $payment = Payment::create([
+        $payment = DB::transaction(function () use ($user, $coursePayload, $originalDeliveryFee, $driverEarnings) {
+            $lockedUser = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $discountQuote = $this->firstCourseDiscount->quote($lockedUser, $originalDeliveryFee);
+            $deliveryFee = $discountQuote['fee'];
+
+            return Payment::create([
             'user_id'     => $user->id,
             'type'        => Payment::TYPE_DELIVERY_FEE,
             'amount_fcfa' => $deliveryFee,
@@ -110,12 +116,16 @@ class CourseBillingService
                 'course_payload'  => $coursePayload,
                 'delivery_fee'    => $deliveryFee,
                 'driver_earnings' => $driverEarnings,
+                'original_delivery_fee' => $discountQuote['original_fee'],
+                'discount_amount' => $discountQuote['discount_amount'],
+                'discount_code'   => $discountQuote['discount_code'],
             ],
-        ]);
+            ]);
+        });
 
         try {
             $checkout = $this->fedapay->createCheckout(
-                amountFcfa: $deliveryFee,
+                amountFcfa: (int) $payment->amount_fcfa,
                 description: "RMess — Course vers {$coursePayload['destination_quartier']}",
                 customer: [
                     'email'     => $user->email,
@@ -165,6 +175,9 @@ class CourseBillingService
                     ? Course::STATUS_PENDING_PREP
                     : Course::STATUS_AWAITING,
                 'delivery_fee'    => $payment->metadata['delivery_fee'],
+                'original_delivery_fee' => $payment->metadata['original_delivery_fee'] ?? $payment->metadata['delivery_fee'],
+                'discount_amount' => $payment->metadata['discount_amount'] ?? 0,
+                'discount_code'   => $payment->metadata['discount_code'] ?? null,
                 'driver_earnings' => $payment->metadata['driver_earnings'],
                 'has_collection'  => $payload['has_collection'] ?? false,
                 'urgency'         => $payload['urgency'] ?? 'standard',

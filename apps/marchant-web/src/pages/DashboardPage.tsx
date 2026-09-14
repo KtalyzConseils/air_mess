@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import AppHeader from '../components/AppHeader'
@@ -24,8 +24,14 @@ const IN_PROGRESS_STATUSES = ['assigned', 'driver_to_pickup', 'at_pickup', 'pick
 export default function DashboardPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const user = useAuthStore((s) => s.user)
+  const isPendingMarchant = user?.type === 'marchant' && !user.marchant?.validated_at
   const [copiedId, setCopiedId] = useState<number | null>(null)
+  const [showPendingOverlay, setShowPendingOverlay] = useState(true)
+  const [showIndividualBonus, setShowIndividualBonus] = useState(
+    () => Boolean((location.state as { showWelcomeBonus?: boolean } | null)?.showWelcomeBonus),
+  )
 
   // Onboarding — 1er passage : la modale de bienvenue s'affiche. Le bouton "Aide"
   // du header remet le flag à false pour la rejouer à la demande.
@@ -41,7 +47,6 @@ export default function DashboardPage() {
   })
   const needsTermsAcceptance = termsQuery.data?.needs_acceptance ?? false
 
-  const isPendingMarchant = user?.type === 'marchant' && !user.marchant?.validated_at
   const greetingName =
     user?.marchant?.raison_sociale ??
     user?.individual?.first_name ??
@@ -85,6 +90,84 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-cream">
+      {isPendingMarchant && showPendingOverlay && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/65 px-4 py-8 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pending-validation-title"
+        >
+          <div className="w-full max-w-xl rounded-2xl border border-warm-200 bg-off-white p-7 text-center shadow-2xl md:p-12">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-airmess-yellow text-3xl" aria-hidden="true">
+              🎉
+            </div>
+            <p className="mb-3 text-eyebrow uppercase text-airmess-red">
+              {t('auth.registerSuccess.eyebrow')}
+            </p>
+            <h1 id="pending-validation-title" className="mb-4 text-h1 text-ink">
+              {t('auth.registerSuccess.title')}
+            </h1>
+            <p className="mx-auto mb-7 max-w-md text-body-l text-warm-600">
+              {t('auth.registerSuccess.message')}
+            </p>
+
+            <div className="mb-7 rounded-xl border border-airmess-yellow/50 bg-airmess-yellow/10 px-5 py-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-warm-600">
+                {t('auth.registerSuccess.giftLabel')}
+              </p>
+              <p className="mt-1 text-3xl font-bold text-ink">500 FCFA</p>
+              <p className="mt-1 text-body-s text-warm-600">
+                {t('auth.registerSuccess.giftBody')}
+              </p>
+            </div>
+
+            <Button
+              variant="primary"
+              size="lg"
+              pill
+              fullWidth
+              onClick={() => setShowPendingOverlay(false)}
+            >
+              OK, j’ai compris
+            </Button>
+          </div>
+        </div>
+      )}
+      {user?.type === 'individual' && showIndividualBonus && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/65 px-4 py-8 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="individual-bonus-title"
+        >
+          <div className="w-full max-w-xl rounded-2xl border border-warm-200 bg-off-white p-7 text-center shadow-2xl md:p-12">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-airmess-yellow text-3xl" aria-hidden="true">
+              🎁
+            </div>
+            <p className="mb-3 text-eyebrow uppercase text-airmess-red">
+              {t('auth.registerSuccess.individualEyebrow')}
+            </p>
+            <h1 id="individual-bonus-title" className="mb-4 text-h1 text-ink">
+              {t('auth.registerSuccess.individualTitle')}
+            </h1>
+            <p className="mx-auto mb-7 max-w-md text-body-l text-warm-600">
+              {t('auth.registerSuccess.individualMessage')}
+            </p>
+            <div className="mb-7 rounded-xl border border-airmess-yellow/50 bg-airmess-yellow/10 px-5 py-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-warm-600">
+                {t('auth.registerSuccess.giftLabel')}
+              </p>
+              <p className="mt-1 text-3xl font-bold text-ink">500 FCFA</p>
+              <p className="mt-1 text-body-s text-warm-600">
+                {t('auth.registerSuccess.giftBody')}
+              </p>
+            </div>
+            <Button variant="primary" size="lg" pill fullWidth onClick={() => setShowIndividualBonus(false)}>
+              {t('auth.registerSuccess.understood')}
+            </Button>
+          </div>
+        </div>
+      )}
       <AppHeader />
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
@@ -101,6 +184,26 @@ export default function DashboardPage() {
               <p className="text-body-s text-warm-600 mt-0.5">
                 {t('dashboard.pendingBody')}
               </p>
+            </div>
+          </Card>
+        )}
+
+        {!isLoading && user?.type === 'individual' && courses.length === 0 && (
+          <Card
+            variant="default"
+            padding="md"
+            className="mb-8 border-airmess-yellow/60! bg-airmess-yellow/10!"
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-2xl" aria-hidden="true">🎁</span>
+              <div>
+                <p className="font-bold text-ink text-body">
+                  {t('dashboard.firstCourseBonusTitle')}
+                </p>
+                <p className="mt-0.5 text-body-s text-warm-600">
+                  {t('dashboard.firstCourseBonusBody')}
+                </p>
+              </div>
             </div>
           </Card>
         )}

@@ -146,6 +146,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/response-channel', [DriverController::class, 'setResponseChannel']);
         Route::get('/offered-courses', [DriverController::class, 'offeredCourses']);
         Route::get('/stats', [DriverController::class, 'stats']);
+        Route::get('/referral', [DriverController::class, 'referral']);
 
         // Wallet driver (unique source de vérité pour la caution + gains + retraits)
         // top-up + withdraw-request : rate limit court terme en plus des plafonds
@@ -166,6 +167,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/wallet/withdraw-requests/{withdraw}/cancel', [DriverController::class, 'cancelWithdraw']);
 
         Route::post('/courses/{course}/accept',    [DriverController::class, 'acceptCourse']);
+        Route::get('/courses/{course}',            [DriverController::class, 'showCourse']);
         Route::post('/courses/{course}/decline',   [DriverController::class, 'declineCourse']);
         // Refus d'une réaffectation admin : la course lui est DÉJÀ attribuée, la refuser
         // la détache et la remet en attente (cf. declineReassignment).
@@ -219,6 +221,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('notifications')->group(function () {
         Route::get('/',           [NotificationController::class, 'index']);
         Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::post('/read-all', [NotificationController::class, 'markAllRead']);
         Route::post('/{notification}/read', [NotificationController::class, 'markRead']);
         Route::post('/{notification}/received', [NotificationController::class, 'acknowledgePush']);
     });
@@ -313,6 +316,9 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/waitlists/merchants',       [AdminController::class, 'merchantWaitlists']);
         Route::get('/individuals',               [AdminController::class, 'individuals']);
         Route::get('/individuals/{individual}',  [AdminController::class, 'showIndividual']);
+        Route::get('/waitlist',                   [AdminController::class, 'waitlist']);
+        Route::post('/waitlist/{user}/notify',    [AdminController::class, 'notifyWaitlistedUser']);
+        Route::post('/waitlist/notify-bulk',      [AdminController::class, 'notifyWaitlistedUsers']);
         Route::get('/courses',                   [AdminController::class, 'courses']);
         Route::get('/drivers',                   [AdminController::class, 'drivers']);
         Route::get('/drivers/{driver}',          [AdminController::class, 'showDriver']);
@@ -323,6 +329,14 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         // API dev apps — lecture partagée (utile au support pour aider un dev)
         Route::get('/api-apps',            [AdminApiApplicationController::class, 'index']);
         Route::get('/api-apps/{app}',      [AdminApiApplicationController::class, 'show']);
+    });
+
+    // === SUIVI DES COURSES SANS LIVREUR (super + ops + support) ===
+    Route::middleware('admin:ops,support')->group(function () {
+        Route::get('/courses-unassigned', [AdminController::class, 'unassignedCourses']);
+        Route::get('/courses-archived', [AdminController::class, 'archivedCourses']);
+        Route::post('/courses/{course}/offer-viewed', [AdminController::class, 'markOfferViewed']);
+        Route::post('/courses/{course}/cancel-support', [SupportController::class, 'cancelCourse']);
     });
 
     // === ÉCRITURE COMMERCIALE (validation/suspension marchands & particuliers) ===
@@ -345,6 +359,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // Les retraits (argent) restent strictement ops — pas accessibles au support.
     Route::middleware('admin:ops')->group(function () {
         Route::post('/courses/{course}/reassign',      [AdminController::class, 'reassignCourse']);
+        Route::post('/courses/{course}/rebroadcast',   [AdminController::class, 'rebroadcastCourse']);
         Route::post('/courses/{course}/dispute',       [AdminController::class, 'disputeCourse']);
         Route::post('/drivers/{driver}/validate',      [AdminController::class, 'validateDriver']);
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
@@ -372,7 +387,6 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::middleware('admin:support')->group(function () {
         Route::post('/users/{user}/send-password-reset', [SupportController::class, 'sendPasswordReset']);
         Route::post('/users/{user}/send-notification',   [SupportController::class, 'sendNotificationToUser']);
-        Route::post('/courses/{course}/cancel-support',  [SupportController::class, 'cancelCourse']);
     });
 
     // === NOTES INTERNES (ouvertes à tous les rôles admin) ===
@@ -389,6 +403,12 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::patch('/settings/{key}', [AdminController::class, 'updateSetting']);
         Route::get('/plans',            [AdminController::class, 'listPlans']);
         Route::patch('/plans/{plan}',   [AdminController::class, 'updatePlan']);
+
+        // Gestion des comptes admin — création, rôles, activité et dernière connexion.
+        Route::get('/admins',                    [AdminController::class, 'adminUsers']);
+        Route::post('/admins',                   [AdminController::class, 'createAdminUser']);
+        Route::patch('/admins/{admin}',          [AdminController::class, 'updateAdminUser']);
+        Route::get('/admins/{admin}/activity',   [AdminController::class, 'adminUserActivity']);
 
         // Ajustement manuel des wallets (driver + user) — action comptable très sensible
         Route::post('/drivers/{driver}/wallet-adjustment', [AdminController::class, 'adjustDriverWallet']);

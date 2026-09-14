@@ -13,6 +13,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Services\NotificationService;
 use App\Services\DriverWalletService;
+use App\Services\DriverReferralService;
 use App\Models\CourseIncident;
 use App\Models\Admin;
 
@@ -119,10 +120,10 @@ class DriverController extends Controller
         $query->where(function ($q) use ($expressCutoff, $standardCutoff) {
             $q->where(function ($express) use ($expressCutoff) {
                 $express->where('urgency', 'express')
-                    ->where('created_at', '>=', $expressCutoff);
+                    ->whereRaw('COALESCE(offer_broadcasted_at, created_at) >= ?', [$expressCutoff]);
             })->orWhere(function ($standard) use ($standardCutoff) {
                 $standard->where('urgency', 'standard')
-                    ->where('created_at', '>=', $standardCutoff);
+                    ->whereRaw('COALESCE(offer_broadcasted_at, created_at) >= ?', [$standardCutoff]);
             });
         });
 
@@ -191,6 +192,35 @@ class DriverController extends Controller
         $courses = $query->limit($perPage)->get()->makeHidden(['pickup_code', 'delivery_code']);
 
         return response()->json(['courses' => $courses]);
+    }
+
+    public function showCourse(Request $request, Course $course): JsonResponse
+    {
+        $driver = $this->currentDriver($request, requireActive: true);
+
+        $isAssignedToDriver = $course->driver_id === $driver->id;
+        $isVisibleOffer = $course->status === Course::STATUS_AWAITING
+            && $course->driver_id === null
+            && ! \App\Models\CourseDeclineRecord::where('course_id', $course->id)
+                ->where('driver_id', $driver->id)
+                ->exists();
+
+        if ($isVisibleOffer && ! $driver->isAirmess()) {
+            $isHighValue = (bool) $course->is_high_value;
+            $paidByRecipient = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
+            $collectionCovered = ! $course->has_collection
+                || (int) ($course->collection_amount ?? 0) <= (int) ($driver->wallet?->balance ?? 0);
+
+            $isVisibleOffer = ! $isHighValue && ! $paidByRecipient && $collectionCovered;
+        }
+
+        if (! $isAssignedToDriver && ! $isVisibleOffer) {
+            return response()->json(['message' => 'Cette course n\'est plus disponible pour vous.'], 403);
+        }
+
+        $course->load(['sender', 'driver.user', 'packageCategory']);
+
+        return response()->json(['course' => $course->makeHidden(['pickup_code', 'delivery_code'])]);
     }
 
 
@@ -422,6 +452,7 @@ class DriverController extends Controller
         Course $course,
         NotificationService $notifier,
         DriverWalletService $walletService,
+        DriverReferralService $referralService,
         \App\Services\UserWalletService $userWalletService,
     ): JsonResponse
     {
@@ -613,6 +644,26 @@ class DriverController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        if ($nextStatus === Course::STATUS_DELIVERED) {
+            $rewardedReferral = $referralService->evaluateForReferredDriver($driver);
+            if ($rewardedReferral?->sponsor?->user_id) {
+                $amount = (int) $rewardedReferral->reward_amount_fcfa;
+                $notifier->sendToUser(
+                    $rewardedReferral->sponsor->user_id,
+                    'driver.referral_rewarded',
+                    'Prime parrainage créditée',
+                    "Ton parrainage a rapporté {$amount} FCFA dans ton wallet.",
+                    [
+                        'app' => 'driver',
+                        'screen' => 'wallet',
+                        'icon' => 'gift-outline',
+                        'amount_fcfa' => $amount,
+                        'referral_id' => $rewardedReferral->id,
+                    ],
+                );
+            }
+        }
+
         //PUSH au marchand sur les transitions visibles côté client
         $isReturnConfirmation = $data['action'] === 'return_confirmed';
         $skipMerchantPushStatuses = [
@@ -652,6 +703,15 @@ class DriverController extends Controller
             'course'  => $course->fresh()->makeHidden(['pickup_code', 'delivery_code']),
         ]);
 
+    }
+
+    public function referral(Request $request, DriverReferralService $referralService): JsonResponse
+    {
+        $driver = $this->currentDriver($request);
+
+        return response()->json([
+            'referral' => $referralService->summary($driver),
+        ]);
     }
 
     // ===== Helper =====

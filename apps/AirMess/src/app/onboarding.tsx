@@ -19,7 +19,7 @@ const ONBOARDING_COPY = {
     slides: [
       {
         icon: 'storefront-outline' as const,
-        title: 'Gere tes livraisons Air Mess',
+        title: 'Gere tes livraisons AirMess',
         body: 'Cree des courses, suis les livraisons et consulte ton historique depuis ton espace marchand.',
       },
       {
@@ -43,7 +43,7 @@ const ONBOARDING_COPY = {
     slides: [
       {
         icon: 'storefront-outline' as const,
-        title: 'Manage your Air Mess deliveries',
+        title: 'Manage your AirMess deliveries',
         body: 'Create deliveries, track them and check your history from your merchant space.',
       },
       {

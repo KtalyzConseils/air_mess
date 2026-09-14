@@ -5,6 +5,8 @@ import AdminQuickNav from './AdminQuickNav'
 import { MenuIcon } from '../ui/icons'
 import mark from '../../assets/logo/airmess-mark.svg'
 import { useUiPrefsStore } from '../../stores/uiPrefsStore'
+import EnableNotificationsButton from '../EnableNotificationsButton'
+import { useDesktopNotifications } from '../../hooks/useDesktopNotifications'
 
 interface AdminPageShellProps {
   children: ReactNode
@@ -21,6 +23,10 @@ interface AdminPageShellProps {
 export default function AdminPageShell({ children }: AdminPageShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const navMode = useUiPrefsStore((s) => s.navMode)
+
+  // Maintient l'enregistrement web-push et le polling des nouvelles
+  // notifications actifs sur toutes les pages d'administration.
+  useDesktopNotifications()
 
   const showSidebar = navMode !== 'fab'
   const showFab = navMode !== 'sidebar'
@@ -56,6 +62,10 @@ export default function AdminPageShell({ children }: AdminPageShellProps) {
       </div>
 
       {showFab && <AdminQuickNav />}
+
+      <div className="fixed right-4 top-4 z-40">
+        <EnableNotificationsButton />
+      </div>
     </div>
   )
 }

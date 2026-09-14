@@ -70,6 +70,7 @@ interface ButtonProps {
   size?: 'sm' | 'md'
   disabled?: boolean
   type?: 'button' | 'submit'
+  form?: string
   leftIcon?: ReactNode
   rightIcon?: ReactNode
   className?: string
@@ -86,6 +87,7 @@ export function AdminButton({
   size = 'md',
   disabled,
   type = 'button',
+  form,
   leftIcon,
   rightIcon,
   className = '',
@@ -102,6 +104,7 @@ export function AdminButton({
   return (
     <button
       type={type}
+      form={form}
       onClick={onClick}
       disabled={disabled}
       className={[

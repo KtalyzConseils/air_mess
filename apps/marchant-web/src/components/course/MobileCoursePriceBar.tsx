@@ -89,7 +89,18 @@ export default function MobileCoursePriceBar({
                   <p className="text-body font-bold text-warm-400 tabular-nums">—</p>
                 )}
                 {hasFee && estimate && (
-                  <p className="text-caption text-warm-500 tabular-nums mt-0.5">
+                  <div className="mt-0.5">
+                    {estimate.discount_amount > 0 && (
+                      <p className="text-caption font-semibold text-success">
+                        {t('courses.new.recap.firstCourseDiscount', {
+                          amount: estimate.discount_amount.toLocaleString('fr-FR'),
+                        })}{' '}
+                        <span className="font-normal text-warm-500 line-through">
+                          {estimate.original_fee.toLocaleString('fr-FR')} FCFA
+                        </span>
+                      </p>
+                    )}
+                    <p className="text-caption text-warm-500 tabular-nums">
                     {estimate.capped
                       ? t('courses.new.recap.breakdownCapped', {
                           distance: estimate.distance_km.toFixed(1),
@@ -100,7 +111,8 @@ export default function MobileCoursePriceBar({
                           perKm: estimate.per_km.toLocaleString('fr-FR'),
                           min: estimate.min.toLocaleString('fr-FR'),
                         })}
-                  </p>
+                    </p>
+                  </div>
                 )}
                 {!hasFee && (
                   <p className="text-caption text-warm-500 mt-0.5">
@@ -203,9 +215,16 @@ export default function MobileCoursePriceBar({
               </span>
             </p>
             {hasFee ? (
-              <p className="text-body font-bold text-ink tabular-nums leading-tight">
-                {fee!.toLocaleString('fr-FR')} FCFA
-              </p>
+              <div>
+                <p className="text-body font-bold text-ink tabular-nums leading-tight">
+                  {fee!.toLocaleString('fr-FR')} FCFA
+                </p>
+                {estimate && estimate.discount_amount > 0 && (
+                  <p className="text-caption font-semibold text-success">
+                    {t('courses.new.recap.welcomeDiscountShort')}
+                  </p>
+                )}
+              </div>
             ) : (
               <p className="text-body font-bold text-warm-400 tabular-nums leading-tight">
                 {t('courses.new.recap.feePendingShort')}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore, type RegisterDriverPayload } from '../stores/authStore'
@@ -47,7 +47,9 @@ const STEP1_FIELDS = [
 export default function DriverRegisterPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const registerDriver = useAuthStore((s) => s.registerDriver)
+  const referralCode = (searchParams.get('ref') ?? '').trim().toUpperCase()
 
   const [photo, setPhoto] = useState<File | null>(null)
   const [cni, setCni] = useState<File | null>(null)
@@ -66,6 +68,7 @@ export default function DriverRegisterPage() {
     handleSubmit,
     watch,
     trigger,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>()
 
@@ -79,6 +82,10 @@ export default function DriverRegisterPage() {
   useEffect(() => {
     if (cniType !== 'cnib') setCniBack(null)
   }, [cniType])
+
+  useEffect(() => {
+    if (referralCode) setValue('referral_code', referralCode)
+  }, [referralCode, setValue])
 
   /** Étape 1 → 2 : valide les champs de l'étape. */
   async function goToStep2() {
@@ -234,9 +241,17 @@ export default function DriverRegisterPage() {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {referralCode && (
+              <input type="hidden" {...register('referral_code')} />
+            )}
             {/* ============ ÉTAPE 1 — Profil, compte & véhicule ============ */}
             <div className={cn(step !== 1 && 'hidden')}>
               <div className="space-y-4">
+            {referralCode && (
+              <div className="rounded-md border border-airmess-yellow/40 bg-airmess-yellow/10 px-4 py-3 text-body-s text-ink">
+                Code parrainage appliqué : <strong>{referralCode}</strong>
+              </div>
+            )}
             {/* ====================== IDENTITÉ ====================== */}
             <FormSection icon={<IdCardIcon size={20} />} title={t('driverRegister.sectionIdentityTitle')} description={t('driverRegister.sectionIdentityDesc')}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

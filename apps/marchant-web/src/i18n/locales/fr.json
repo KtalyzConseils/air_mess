@@ -194,6 +194,19 @@
         "subtext": "Suivez chaque course en direct, encaissez automatiquement, retirez vos fonds quand vous voulez."
       }
     },
+    "registerSuccess": {
+      "eyebrow": "Inscription confirmée",
+      "title": "Félicitations, vous êtes sur la liste d’attente !",
+      "message": "Votre compte Airmess a bien été créé. Nous vous préviendrons par e-mail dès que le service sera opérationnel.",
+      "giftLabel": "Votre cadeau de bienvenue",
+      "giftBody": "500 FCFA seront automatiquement déduits de votre première course.",
+      "individualEyebrow": "Bienvenue chez Airmess",
+      "individualTitle": "Votre bon de bienvenue est prêt !",
+      "individualMessage": "Votre compte particulier est actif immédiatement. Pour bien commencer, vous bénéficiez d’une réduction sur votre première course.",
+      "understood": "OK, j’ai compris",
+      "login": "Retour à la connexion",
+      "loginHint": "Nous vous contacterons par e-mail dès l’ouverture du service."
+    },
     "register": {
       "title": "Créer un compte.",
       "subtitle": "Rejoignez Air Mess en moins de 2 minutes.",
@@ -293,6 +306,8 @@
     "subtitleEnd": "du jour.",
     "pendingTitle": "Compte en attente de validation",
     "pendingBody": "Votre compte marchand est en cours de validation par un administrateur (sous 24h). Vous serez notifié dès qu'il sera actif.",
+    "firstCourseBonusTitle": "Votre bon de 500 FCFA vous attend",
+    "firstCourseBonusBody": "La réduction sera automatiquement appliquée au prix de votre première course.",
     "walletTopUp": "+ Recharger",
     "createCourse": "⚡ Créer une course",
     "newDelivery": "+ Nouvelle livraison",
@@ -542,7 +557,9 @@
         "showMapHint": "Clic sur le prix pour voir la carte",
         "breakdown": "{{distance}} km × {{perKm}} + {{min}} FCFA (arrondi au 100 sup.)",
         "breakdownExpress": "× {{multiplier}} pour l'express",
-        "breakdownCapped": "{{distance}} km — plafond {{max}} FCFA atteint"
+        "breakdownCapped": "{{distance}} km — plafond {{max}} FCFA atteint",
+        "firstCourseDiscount": "Cadeau première course : −{{amount}} FCFA",
+        "welcomeDiscountShort": "Bon de bienvenue appliqué"
       },
       "errors": {
         "title_one": "1 champ obligatoire à compléter",
@@ -699,6 +716,7 @@
     "unreadSuffixOther": "notifications non lues.",
     "markAllRead": "Tout marquer comme lu",
     "markAllReadShort": "Tout marquer lu",
+    "markingAllRead": "Marquage en cours…",
     "unread": "non lue{{count, plural, one {} other {s}}}",
     "unreadAria": "Non lue",
     "emptyTitle": "📭 Aucune notification",
@@ -1119,6 +1137,7 @@
     "nav": {
       "overview": "Vue d'ensemble",
       "courses": "Courses",
+      "unassignedCourses": "Courses sans livreur",
       "incidents": "Incidents",
       "marchants": "Marchands",
       "merchantWaitlists": "Liste d'attente commerçants",
@@ -1906,6 +1925,8 @@
       "groupConflictsDesc": "Pourcentages appliqués par l'ops lors de la résolution des cas de course problématiques (no-show, colis perdu/endommagé, retour marchand).",
       "groupWalletLabel": "Wallet & retraits",
       "groupWalletDesc": "Seuils de retrait, mode de paiement et plafonds anti-abus pour livreurs et marchands.",
+      "groupReferralLabel": "Parrainage livreur",
+      "groupReferralDesc": "Activation, seuil de courses livrées et montant des primes de parrainage.",
       "groupSupportLabel": "Contacts support",
       "groupSupportDesc": "Téléphone, WhatsApp et email affichés dans les modales \"Contacter le support\" des 3 apps.",
       "plansSectionLabel": "Plans d'abonnement marchands",
@@ -1941,6 +1962,7 @@
       "unreadCount_one": "{{count}} non lue",
       "unreadCount_other": "{{count}} non lues",
       "markAllReadCount": "Tout marquer lu ({{count}})",
+      "markingAllRead": "Marquage en cours…",
       "emptyList": "Aucune notification pour le moment.",
       "refLabel": "Réf :",
       "timeNow": "à l'instant",

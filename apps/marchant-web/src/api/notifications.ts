@@ -38,3 +38,8 @@ export async function markNotificationRead(id: number): Promise<AppNotification>
     const {data} = await api.post(`/notifications/${id}/read`)
     return data.notification
 }
+
+export async function markAllNotificationsRead(): Promise<{ updated: number }> {
+  const { data } = await api.post('/notifications/read-all')
+  return data
+}

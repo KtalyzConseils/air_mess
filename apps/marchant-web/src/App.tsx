@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import LoginPage from './pages/LoginPage'
@@ -9,15 +10,19 @@ import CourseDetailPage from './pages/CourseDetailPage'
 import AddressesPage from './pages/AddressesPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminCoursesPage from './pages/admin/AdminCoursesPage'
+import AdminUnassignedCoursesPage from './pages/admin/AdminUnassignedCoursesPage'
+import AdminArchivedCoursesPage from './pages/admin/AdminArchivedCoursesPage'
 import AdminMarchantsPage from './pages/admin/AdminMarchantsPage'
 import AdminMerchantWaitlistsPage from './pages/admin/AdminMerchantWaitlistsPage'
 import AdminIndividualsPage from './pages/admin/AdminIndividualsPage'
+import AdminWaitlistPage from './pages/admin/AdminWaitlistPage'
 import AdminIndividualDetailPage from './pages/admin/AdminIndividualDetailPage'
 import TrackingPage from './pages/TrackingPage'
 import NotificationsPage from './pages/NotificationsPage'
 import ProfilePage from './pages/ProfilePage'
 import MarchantDetailPage from './pages/admin/MarchantDetailPage'
 import RegisterPage from './pages/RegisterPage'
+import RegisterSuccessPage from './pages/RegisterSuccessPage'
 import DriverRegisterPage from './pages/DriverRegisterPage'
 import DriverRegisterSuccessPage from './pages/DriverRegisterSuccessPage'
 import MarchantFromDriverPage from './pages/MarchantFromDriverPage'
@@ -31,6 +36,7 @@ import BillingReturnPage from './pages/BillingReturnPage'
 import MyWalletPage from './pages/MyWalletPage'
 import DevPage from './pages/DevPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
+import AdminUsersPage from './pages/admin/AdminUsersPage'
 import AdminWithdrawRequestsPage from './pages/admin/AdminWithdrawRequestsPage'
 import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDetailPage'
 import AdminWalletReportingPage from './pages/admin/AdminWalletReportingPage'
@@ -41,6 +47,8 @@ import TermsPage from './pages/legal/TermsPage'
 import PrivacyPage from './pages/legal/PrivacyPage'
 import ClientQuickNav from './components/ClientQuickNav'
 import PwaReloadPrompt from './components/PwaReloadPrompt'
+import api from './api/client'
+import { useAuthStore } from './stores/authStore'
 
 
 const queryClient = new QueryClient({
@@ -52,13 +60,48 @@ const queryClient = new QueryClient({
   },
 })
 
+function AuthProfileRefresher() {
+  const userId = useAuthStore((state) => state.user?.id)
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const setUser = useAuthStore((state) => state.setUser)
+
+  useEffect(() => {
+    if (!isAuthenticated || !userId) return
+
+    let stopped = false
+    const refresh = async () => {
+      try {
+        const { data } = await api.get('/auth/me')
+        if (!stopped && data.user) setUser(data.user)
+      } catch {
+        // Une panne réseau temporaire ne doit pas déconnecter l'utilisateur.
+      }
+    }
+
+    void refresh()
+    const interval = window.setInterval(refresh, 15_000)
+    const onFocus = () => void refresh()
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      stopped = true
+      window.clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [isAuthenticated, userId, setUser])
+
+  return null
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <AuthProfileRefresher />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register/success" element={<RegisterSuccessPage />} />
           <Route path="/register/driver" element={<DriverRegisterPage />} />
           <Route path="/register/driver/success" element={<DriverRegisterSuccessPage />} />
           {/* Ajout d'un profil marchand à un compte existant. Ouverte via deep-link
@@ -74,9 +117,10 @@ function App() {
           <Route path="/billing/return" element={<BillingReturnPage />} />  {/* PUBLIQUE : retour Fedapay, le webhook fait foi */}
 
           {/* Routes protégées */}
-          <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} />}>
-            {/* marchant */}
+          <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} allowPendingMarchant />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} />}>
             <Route path="/courses" element={<MyCoursesPage />} />
             <Route path="/courses/new" element={<NewCoursePage />} />
             <Route path="/addresses" element={<AddressesPage />} />
@@ -101,6 +145,7 @@ function App() {
           {/* admin — paramètres + retraits caution réservés au super-admin */}
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['super']} />}>
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/admins" element={<AdminUsersPage />} />
             <Route path="/admin/withdraw-requests" element={<AdminWithdrawRequestsPage />} />
             <Route path="/admin/withdraw-requests/:id" element={<AdminWithdrawRequestDetailPage />} />
             <Route path="/admin/reporting/wallets" element={<AdminWalletReportingPage />} />
@@ -114,6 +159,7 @@ function App() {
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
             <Route path="/admin/waitlists/merchants" element={<AdminMerchantWaitlistsPage />} />
             <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
+            <Route path="/admin/waitlist" element={<AdminWaitlistPage />} />
             <Route path="/admin/individuals/:id" element={<AdminIndividualDetailPage />} />
           </Route>
 
@@ -124,6 +170,12 @@ function App() {
             <Route path="/admin/drivers/:id" element={<AdminDriverDetailPage />} />
             <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
             <Route path="/admin/api-apps" element={<AdminApiApplicationsPage />} />
+          </Route>
+
+          {/* File sans livreur : visible uniquement par super, ops et support. */}
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['ops', 'support']} />}>
+            <Route path="/admin/courses-unassigned" element={<AdminUnassignedCoursesPage />} />
+            <Route path="/admin/courses-archived" element={<AdminArchivedCoursesPage />} />
           </Route>
 
 

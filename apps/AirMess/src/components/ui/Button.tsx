@@ -2,7 +2,7 @@ import { forwardRef } from 'react'
 import { Pressable, Text, ActivityIndicator, View, type PressableProps } from 'react-native'
 
 /**
- * Button — primitif tactile Air Mess Driver.
+ * Button — primitif tactile AirMess.
  *
  * Cibles tactiles : 48px min (`md`), 56px (`lg`), 64px (`xl` pour l'action
  * principale de la course active). Toujours ≥ HIG 44px.

@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseStatusHistory;
+use App\Models\Admin;
+use App\Models\AdminActivityLog;
 use App\Models\Driver;
 use App\Models\Individual;
 use App\Models\Marchant;
 use App\Models\MerchantWaitlist;
 use App\Models\Payment;
 use App\Models\SupportNote;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +21,10 @@ use Illuminate\Validation\Rule;
 use App\Services\NotificationService;
 use App\Services\DriverWalletService;
 use App\Models\CourseIncident;
+use App\Models\CourseOfferAdminAction;
+use App\Models\CourseDeclineRecord;
+use App\Models\Notification;
+use App\Services\CourseCreationService;
 
 
 class AdminController extends Controller
@@ -71,6 +78,7 @@ class AdminController extends Controller
     {
         $query = Course::query()
             ->with(['sender', 'driver.user', 'packageCategory'])
+            ->whereNull('archived_at')
             ->latest();
 
         if ($status = $request->query('status')) {
@@ -87,6 +95,123 @@ class AdminController extends Controller
         }
 
         return response()->json($query->paginate(min((int) $request->query('per_page', 20), 100)));
+    }
+
+    public function archivedCourses(Request $request): JsonResponse
+    {
+        $query = Course::query()
+            ->whereNotNull('archived_at')
+            ->with(['sender:id,name,email,phone,type', 'archivedBy:id,name,email'])
+            ->latest('archived_at');
+
+        if ($q = trim((string) $request->query('q', ''))) {
+            $query->where(function ($builder) use ($q) {
+                $builder->where('reference', 'ILIKE', "%{$q}%")
+                    ->orWhere('origin_name', 'ILIKE', "%{$q}%")
+                    ->orWhere('destination_name', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        return response()->json($query->paginate(min((int) $request->query('per_page', 30), 100)));
+    }
+
+    public function unassignedCourses(): JsonResponse
+    {
+        $courses = Course::query()->where('status', Course::STATUS_AWAITING)->whereNull('driver_id')
+            ->with(['sender:id,name,phone', 'offerAdminActions.adminUser:id,name'])
+            ->orderByRaw("CASE WHEN urgency = 'express' THEN 0 ELSE 1 END")
+            ->orderByRaw('COALESCE(offer_broadcasted_at, created_at) ASC')->get();
+
+        $courseIds = $courses->pluck('id');
+        $drivers = Driver::query()
+            ->where('activation_status', 'active')
+            ->whereIn('availability_status', ['available', 'busy'])
+            ->whereNotNull('current_lat')->whereNotNull('current_lng')
+            ->get(['id', 'availability_status', 'current_lat', 'current_lng']);
+        $offeredCounts = Notification::query()
+            ->whereIn('course_id', $courseIds)->where('type', 'course.offered')
+            ->selectRaw('course_id, COUNT(DISTINCT user_id) AS total')
+            ->groupBy('course_id')->pluck('total', 'course_id');
+        $declineCounts = CourseDeclineRecord::query()
+            ->whereIn('course_id', $courseIds)
+            ->selectRaw('course_id, COUNT(DISTINCT driver_id) AS total')
+            ->groupBy('course_id')->pluck('total', 'course_id');
+
+        $distanceKm = static function (float $latA, float $lngA, float $latB, float $lngB): float {
+            $latDelta = deg2rad($latB - $latA);
+            $lngDelta = deg2rad($lngB - $lngA);
+            $a = sin($latDelta / 2) ** 2
+                + cos(deg2rad($latA)) * cos(deg2rad($latB)) * sin($lngDelta / 2) ** 2;
+
+            return 2 * 6371 * asin(min(1, sqrt($a)));
+        };
+
+        $courses->each(function (Course $course) use ($drivers, $offeredCounts, $declineCounts, $distanceKm) {
+            $start = $course->offer_broadcasted_at ?? $course->created_at;
+            $course->setAttribute('offer_age_seconds', $start->diffInSeconds(now()));
+
+            $distances = $drivers->mapWithKeys(fn (Driver $driver) => [
+                $driver->id => $distanceKm(
+                    (float) $course->origin_lat,
+                    (float) $course->origin_lng,
+                    (float) $driver->current_lat,
+                    (float) $driver->current_lng,
+                ),
+            ]);
+            $availableIds = $drivers->where('availability_status', 'available')->pluck('id');
+            $busyIds = $drivers->where('availability_status', 'busy')->pluck('id');
+            $availableWithin = $availableIds->filter(fn ($id) => $distances[$id] <= 8.0)->count();
+            $busyWithin = $busyIds->filter(fn ($id) => $distances[$id] <= 8.0)->count();
+            $nearestOutside = $availableIds->map(fn ($id) => $distances[$id])
+                ->filter(fn ($distance) => $distance > 8.0)->min();
+            $offered = (int) ($offeredCounts[$course->id] ?? 0);
+            $declined = (int) ($declineCounts[$course->id] ?? 0);
+
+            if ($offered > 0 && $declined >= $offered) {
+                $code = 'all_contacted_declined';
+                $warning = 'Tous les livreurs contactés ont refusé';
+            } elseif ($availableWithin === 0 && $busyWithin > 0) {
+                $code = 'all_nearby_busy';
+                $warning = 'Livreurs présents, mais tous occupés';
+            } elseif ($availableWithin === 0) {
+                $code = 'none_available_nearby';
+                $warning = 'Aucun livreur disponible dans un rayon de 8 km';
+            } else {
+                $code = 'broadcast_no_response';
+                $warning = 'Diffusion envoyée, aucune réponse';
+            }
+
+            $course->setAttribute('assignment_diagnostic', [
+                'code' => $code,
+                'warning' => $warning,
+                'nearest_available_outside_km' => $nearestOutside === null ? null : round($nearestOutside, 1),
+                'available_within_radius' => $availableWithin,
+                'busy_within_radius' => $busyWithin,
+                'contacted_count' => $offered,
+                'declined_count' => $declined,
+            ]);
+        });
+
+        return response()->json(['count' => $courses->count(), 'courses' => $courses]);
+    }
+
+    public function markOfferViewed(Request $request, Course $course): JsonResponse
+    {
+        CourseOfferAdminAction::create([
+            'course_id' => $course->id, 'admin_user_id' => $request->user()->id, 'action' => 'viewed',
+        ]);
+        return response()->json(['ok' => true]);
+    }
+
+    public function rebroadcastCourse(Request $request, Course $course, CourseCreationService $courses): JsonResponse
+    {
+        abort_unless($course->status === Course::STATUS_AWAITING && $course->driver_id === null, 422, 'Cette course ne peut plus être relancée.');
+        $course->forceFill(['offer_broadcasted_at' => now(), 'offer_alerts_sent' => []])->save();
+        CourseOfferAdminAction::create([
+            'course_id' => $course->id, 'admin_user_id' => $request->user()->id, 'action' => 'rebroadcasted',
+        ]);
+        $courses->dispatchToAvailableDrivers($course);
+        return response()->json(['course' => $course->fresh()]);
     }
 
     // ===== 3. RÉAFFECTER UNE COURSE =====
@@ -189,6 +314,13 @@ class AdminController extends Controller
                     'transfer_lng'                 => $wantsTransfer ? $transferLng : null,
                 ],
             ]);
+
+            CourseOfferAdminAction::create([
+                'course_id' => $course->id,
+                'admin_user_id' => $request->user()->id,
+                'action' => 'assigned',
+                'metadata' => ['driver_id' => $newDriver->id],
+            ]);
         });
 
         // ===== Notifications (hors transaction : on ne notifie que si l'écriture a réussi) =====
@@ -272,6 +404,20 @@ class AdminController extends Controller
             );
         }
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'course.reassigned',
+            ($wantsTransfer ? 'Transfert physique' : 'Réaffectation') . " de la course {$course->reference} vers {$newDriver->first_name} {$newDriver->last_name}.",
+            [
+                'course_id' => $course->id,
+                'old_driver_id' => $oldDriver?->id,
+                'new_driver_id' => $newDriver->id,
+                'pickup_from_previous_driver' => $wantsTransfer,
+            ],
+        );
+
         return response()->json([
             'message' => $wantsTransfer ? 'Course transférée physiquement.' : 'Course réaffectée.',
             'course'  => $course->fresh()->load('driver.user'),
@@ -300,6 +446,15 @@ class AdminController extends Controller
                 'reason'          => $data['reason'],
             ]);
         });
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'course.disputed',
+            "Course {$course->reference} marquée en litige.",
+            ['course_id' => $course->id, 'reason' => $data['reason']],
+        );
 
         return response()->json(['message' => 'Course en litige.', 'course' => $course->fresh()]);
     }
@@ -488,6 +643,20 @@ class AdminController extends Controller
             );
         }
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'course.fraud_marked',
+            "Course {$course->reference} marquee comme fraude.",
+            [
+                'course_id' => $course->id,
+                'driver_id' => $course->driver_id,
+                'refund_owed' => $refundOwed,
+                'note' => $data['note'],
+            ],
+        );
+
         return response()->json([
             'message' => 'Course marquée comme fraude. Driver banni, caution saisie, marchand remboursé.',
             'course'  => $course->fresh(),
@@ -610,6 +779,12 @@ class AdminController extends Controller
             'subscription_status' => 'active',
         ]);
 
+        $marchant->user->update([
+            'is_active' => true,
+            'waitlist_notified_at' => now(),
+            'waitlist_notified_by' => $request->user()->admin?->id,
+        ]);
+
         // Email de validation au marchand
         try {
             \Illuminate\Support\Facades\Mail::to($marchant->user->email)
@@ -620,6 +795,15 @@ class AdminController extends Controller
                 'marchant_id' => $marchant->id,
             ]);
         }
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'marchant.validated',
+            "Marchand {$marchant->raison_sociale} valide.",
+            ['marchant_id' => $marchant->id, 'user_id' => $marchant->user_id],
+        );
 
         return response()->json([
             'message'  => 'Marchand validé.',
@@ -802,7 +986,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     }
 
     // ===== 7ter. ACTIVER / DÉSACTIVER LE COMPTE D'UN LIVREUR =====
-    public function toggleDriverActive(Driver $driver): JsonResponse
+    public function toggleDriverActive(Request $request, Driver $driver): JsonResponse
     {
         // On active si le compte n'est pas déjà 'active', sinon on désactive.
         $activate = $driver->activation_status !== 'active';
@@ -840,6 +1024,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 $driver->user->tokens()->delete();
             }
         });
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            $activate ? 'driver.activated' : 'driver.deactivated',
+            ($activate ? 'Activation' : 'Desactivation') . " du livreur {$driver->first_name} {$driver->last_name}.",
+            ['driver_id' => $driver->id, 'user_id' => $driver->user_id],
+        );
 
         return response()->json([
             'message' => $activate ? 'Compte livreur activé.' : 'Compte livreur désactivé.',
@@ -890,6 +1083,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         });
 
         $label = $newKind === Driver::KIND_AIRMESS ? 'Airmess' : 'indépendant';
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.kind_updated',
+            "Type du livreur {$driver->first_name} {$driver->last_name} modifie.",
+            ['driver_id' => $driver->id, 'before' => $previousKind, 'after' => $newKind],
+        );
 
         return response()->json([
             'message' => "Livreur passé en {$label}.",
@@ -965,6 +1167,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 'escalated_to' => null,
             ]);
         });
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.withdraw_limits_updated',
+            "Plafonds de retrait du livreur {$driver->first_name} {$driver->last_name} modifies.",
+            ['driver_id' => $driver->id, 'changes' => $updates],
+        );
 
         return response()->json([
             'message' => 'Plafonds mis à jour.',
@@ -1044,6 +1255,20 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             default                => 'non vérifié',
         };
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.kyc_updated',
+            "KYC du livreur {$driver->first_name} {$driver->last_name} modifie.",
+            [
+                'driver_id' => $driver->id,
+                'before' => $previousStatus,
+                'after' => $newStatus,
+                'provider' => $data['provider'] ?? 'manual',
+            ],
+        );
+
         return response()->json([
             'message' => "Statut KYC : {$label}.",
             'driver'  => $driver->fresh()->load('user'),
@@ -1057,7 +1282,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      * d'un driver fraîchement inscrit, après vérification de ses documents par l'admin.
      * Envoie un email "Compte activé" au driver.
      */
-    public function validateDriver(Driver $driver, \App\Services\BrevoSmsService $sms): JsonResponse
+    public function validateDriver(Request $request, Driver $driver, \App\Services\BrevoSmsService $sms): JsonResponse
     {
         if ($driver->activation_status !== 'pending') {
             return response()->json([
@@ -1069,6 +1294,11 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             $driver->update(['activation_status' => 'active']);
             $driver->user->update(['is_active' => true]);
         });
+
+        $driver->user->update([
+            'waitlist_notified_at' => now(),
+            'waitlist_notified_by' => $request->user()->admin?->id,
+        ]);
 
         // Email de validation au driver (queued) — envoyé quel que soit le canal préféré.
         try {
@@ -1092,6 +1322,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 'Air Mess : votre compte livreur est activé ! Connectez-vous sur l\'app Air Mess Livreur.',
             );
         }
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.validated',
+            "Livreur {$driver->first_name} {$driver->last_name} valide.",
+            ['driver_id' => $driver->id, 'user_id' => $driver->user_id],
+        );
 
         return response()->json([
             'message' => 'Livreur validé. Email envoyé.',
@@ -2039,7 +2278,17 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         }
         $data = $request->validate($rules);
 
+        $before = \App\Models\AppSetting::get($key);
         \App\Models\AppSetting::set($key, $data['value'], $request->user()->id);
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'setting.updated',
+            "Parametre {$key} mis a jour.",
+            ['key' => $key, 'before' => $before, 'after' => \App\Models\AppSetting::get($key)],
+        );
 
         return response()->json([
             'message' => 'Paramètre mis à jour.',
@@ -2065,7 +2314,21 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             'is_active'          => ['nullable', 'boolean'],
         ]);
 
+        $before = $plan->only(['monthly_price_fcfa', 'included_courses', 'is_active']);
         $plan->update($data);
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'plan.updated',
+            "Plan {$plan->code} mis a jour.",
+            [
+                'plan_id' => $plan->id,
+                'before' => $before,
+                'after' => $plan->fresh()->only(['monthly_price_fcfa', 'included_courses', 'is_active']),
+            ],
+        );
 
         return response()->json([
             'message' => 'Plan mis à jour.',
@@ -2845,6 +3108,307 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         return response()->json([
             'message'    => 'Particulier réactivé.',
             'individual' => $individual->fresh()->load('user'),
+        ]);
+    }
+
+    // ===== 15. GESTION DES ADMINISTRATEURS (SUPER-ADMIN) =====
+    public function adminUsers(Request $request): JsonResponse
+    {
+        $query = Admin::query()
+            ->with('user:id,name,email,phone,is_active,last_login_at,created_at')
+            ->withCount('performedActivityLogs')
+            ->withMax('performedActivityLogs', 'created_at')
+            ->latest();
+
+        if ($role = $request->query('role')) {
+            $query->where('sub_role', $role);
+        }
+
+        if (($active = $request->query('active')) !== null && $active !== '') {
+            $query->whereHas('user', fn ($q) => $q->where('is_active', filter_var($active, FILTER_VALIDATE_BOOLEAN)));
+        }
+
+        if ($q = trim((string) $request->query('q', ''))) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('first_name', 'ILIKE', "%{$q}%")
+                    ->orWhere('last_name', 'ILIKE', "%{$q}%")
+                    ->orWhereHas('user', function ($u) use ($q) {
+                        $u->where('name', 'ILIKE', "%{$q}%")
+                            ->orWhere('email', 'ILIKE', "%{$q}%")
+                            ->orWhere('phone', 'ILIKE', "%{$q}%");
+                    });
+            });
+        }
+
+        return response()->json($query->paginate(min((int) $request->query('per_page', 20), 100)));
+    }
+
+    public function createAdminUser(Request $request): JsonResponse
+    {
+        $roles = [Admin::ROLE_SUPER, Admin::ROLE_OPS, Admin::ROLE_COMMERCIAL, Admin::ROLE_SUPPORT];
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name'  => ['required', 'string', 'max:100'],
+            'email'      => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone'      => ['nullable', 'string', 'max:20', 'unique:users,phone'],
+            'password'   => ['required', 'string', 'min:8'],
+            'sub_role'   => ['required', Rule::in($roles)],
+        ]);
+
+        $actor = $request->user()->admin;
+        $admin = DB::transaction(function () use ($data, $actor, $request) {
+            $name = trim($data['first_name'] . ' ' . $data['last_name']);
+            $user = User::create([
+                'name'            => $name,
+                'email'           => mb_strtolower($data['email']),
+                'phone'           => $data['phone'] ?? null,
+                'password'        => $data['password'],
+                'password_set_at' => now(),
+                'type'            => User::TYPE_ADMIN,
+                'is_active'       => true,
+            ]);
+
+            $admin = Admin::create([
+                'user_id'    => $user->id,
+                'first_name' => $data['first_name'],
+                'last_name'  => $data['last_name'],
+                'sub_role'   => $data['sub_role'],
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $actor,
+                $admin,
+                'admin.created',
+                "Création de l'admin {$name} ({$data['sub_role']}).",
+                ['created' => ['email' => $user->email, 'sub_role' => $admin->sub_role]],
+            );
+
+            return $admin;
+        });
+
+        return response()->json([
+            'message' => 'Administrateur créé.',
+            'admin'   => $admin->fresh()->load('user'),
+        ], 201);
+    }
+
+    public function updateAdminUser(Request $request, Admin $admin): JsonResponse
+    {
+        $roles = [Admin::ROLE_SUPER, Admin::ROLE_OPS, Admin::ROLE_COMMERCIAL, Admin::ROLE_SUPPORT];
+        $data = $request->validate([
+            'first_name' => ['sometimes', 'required', 'string', 'max:100'],
+            'last_name'  => ['sometimes', 'required', 'string', 'max:100'],
+            'phone'      => ['nullable', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($admin->user_id)],
+            'password'   => ['nullable', 'string', 'min:8'],
+            'sub_role'   => ['sometimes', 'required', Rule::in($roles)],
+            'is_active'  => ['sometimes', 'boolean'],
+        ]);
+
+        $actor = $request->user()->admin;
+        if (($data['is_active'] ?? true) === false && $actor->id === $admin->id) {
+            return response()->json(['message' => 'Vous ne pouvez pas désactiver votre propre compte admin.'], 422);
+        }
+
+        $before = [
+            'first_name' => $admin->first_name,
+            'last_name'  => $admin->last_name,
+            'sub_role'   => $admin->sub_role,
+            'is_active'  => $admin->user->is_active,
+            'phone'      => $admin->user->phone,
+        ];
+
+        DB::transaction(function () use ($admin, $data, $before, $actor, $request) {
+            $adminUpdates = [];
+            foreach (['first_name', 'last_name', 'sub_role'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $adminUpdates[$field] = $data[$field];
+                }
+            }
+            if ($adminUpdates) {
+                $admin->update($adminUpdates);
+            }
+
+            $userUpdates = [];
+            if (array_key_exists('first_name', $data) || array_key_exists('last_name', $data)) {
+                $userUpdates['name'] = trim(($data['first_name'] ?? $admin->first_name) . ' ' . ($data['last_name'] ?? $admin->last_name));
+            }
+            if (array_key_exists('phone', $data)) {
+                $userUpdates['phone'] = $data['phone'];
+            }
+            if (array_key_exists('is_active', $data)) {
+                $userUpdates['is_active'] = (bool) $data['is_active'];
+            }
+            if (! empty($data['password'])) {
+                $userUpdates['password'] = $data['password'];
+                $userUpdates['password_set_at'] = now();
+            }
+            if ($userUpdates) {
+                $admin->user->update($userUpdates);
+            }
+
+            $admin->refresh()->load('user');
+            $after = [
+                'first_name' => $admin->first_name,
+                'last_name'  => $admin->last_name,
+                'sub_role'   => $admin->sub_role,
+                'is_active'  => $admin->user->is_active,
+                'phone'      => $admin->user->phone,
+            ];
+
+            $changes = array_filter($after, fn ($value, $key) => ($before[$key] ?? null) !== $value, ARRAY_FILTER_USE_BOTH);
+            if (! empty($data['password'])) {
+                $changes['password'] = 'updated';
+            }
+
+            $this->recordAdminActivity(
+                $request,
+                $actor,
+                $admin,
+                'admin.updated',
+                "Modification de l'admin {$admin->user->name}.",
+                ['before' => $before, 'after' => $after, 'changed' => array_keys($changes)],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Administrateur mis à jour.',
+            'admin'   => $admin->fresh()->load('user'),
+        ]);
+    }
+
+    public function adminUserActivity(Request $request, Admin $admin): JsonResponse
+    {
+        $logs = AdminActivityLog::query()
+            ->with('targetAdmin.user:id,name,email')
+            ->where('admin_id', $admin->id)
+            ->latest()
+            ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        return response()->json($logs);
+    }
+
+    public function waitlist(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:150'],
+            'status' => ['nullable', Rule::in(['waiting', 'notified', 'all'])],
+            'type' => ['nullable', Rule::in([User::TYPE_MARCHANT, User::TYPE_DRIVER])],
+            'per_page' => ['nullable', 'integer', 'between:1,100'],
+        ]);
+
+        $query = User::query()
+            ->with([
+                'marchant:id,user_id,raison_sociale,validated_at',
+                'driver:id,user_id,first_name,last_name,activation_status',
+                'waitlistNotifier.user:id,name',
+            ])
+            ->whereIn('type', [User::TYPE_MARCHANT, User::TYPE_DRIVER])
+            ->where(function ($query) {
+                $query->whereNotNull('waitlisted_at')
+                    ->orWhereHas('marchant', fn ($marchant) => $marchant->whereNull('validated_at'))
+                    ->orWhereHas('driver', fn ($driver) => $driver->where('activation_status', 'pending'));
+            });
+
+        if (($data['status'] ?? 'waiting') === 'waiting') {
+            $query->whereNull('waitlist_notified_at');
+        } elseif (($data['status'] ?? null) === 'notified') {
+            $query->whereNotNull('waitlist_notified_at');
+        }
+        if (! empty($data['type'])) {
+            $query->where('type', $data['type']);
+        }
+        if (! empty($data['q'])) {
+            $search = $data['q'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'ilike', "%{$search}%")
+                    ->orWhere('email', 'ilike', "%{$search}%")
+                    ->orWhere('phone', 'ilike', "%{$search}%")
+                    ->orWhereHas('marchant', fn ($m) => $m->where('raison_sociale', 'ilike', "%{$search}%"))
+                    ->orWhereHas('driver', fn ($d) => $d
+                        ->where('first_name', 'ilike', "%{$search}%")
+                        ->orWhere('last_name', 'ilike', "%{$search}%"));
+            });
+        }
+
+        return response()->json($query->latest('waitlisted_at')->paginate($data['per_page'] ?? 25));
+    }
+
+    public function notifyWaitlistedUser(Request $request, User $user, \App\Services\BrevoSmsService $sms): JsonResponse
+    {
+        return $this->validateWaitlistedUser($request, $user, $sms);
+    }
+
+    public function notifyWaitlistedUsers(Request $request, \App\Services\BrevoSmsService $sms): JsonResponse
+    {
+        $data = $request->validate([
+            'user_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'user_ids.*' => ['integer', 'distinct', 'exists:users,id'],
+        ]);
+
+        $results = [];
+        foreach (User::whereIn('id', $data['user_ids'])->get() as $user) {
+            try {
+                $response = $this->validateWaitlistedUser($request, $user, $sms);
+                $results[] = ['user_id' => $user->id] + $response->getData(true);
+            } catch (\Throwable $e) {
+                report($e);
+                $results[] = ['user_id' => $user->id, 'status' => 'failed'];
+            }
+        }
+
+        return response()->json([
+            'results' => $results,
+            'notified_count' => collect($results)->where('status', 'validated')->count(),
+        ]);
+    }
+
+    private function validateWaitlistedUser(
+        Request $request,
+        User $user,
+        \App\Services\BrevoSmsService $sms,
+    ): JsonResponse
+    {
+        if ($user->type === User::TYPE_MARCHANT && $user->marchant) {
+            if ($user->marchant->validated_at !== null) {
+                return response()->json(['status' => 'already_validated', 'message' => 'Marchand déjà validé.']);
+            }
+
+            $this->validateMarchant($request, $user->marchant);
+
+            return response()->json(['status' => 'validated', 'message' => 'Marchand validé et informé.']);
+        }
+
+        if ($user->type === User::TYPE_DRIVER && $user->driver) {
+            if ($user->driver->activation_status !== 'pending') {
+                return response()->json(['status' => 'already_validated', 'message' => 'Livreur déjà traité.']);
+            }
+
+            $this->validateDriver($request, $user->driver, $sms);
+
+            return response()->json(['status' => 'validated', 'message' => 'Livreur validé et informé.']);
+        }
+
+        return response()->json(['message' => "Ce compte n'est pas éligible à la validation."], 422);
+
+    }
+
+    private function recordAdminActivity(
+        Request $request,
+        ?Admin $actor,
+        ?Admin $target,
+        string $action,
+        string $summary,
+        ?array $changes = null,
+    ): void {
+        AdminActivityLog::create([
+            'admin_id'        => $actor?->id,
+            'target_admin_id' => $target?->id,
+            'action'          => $action,
+            'summary'         => $summary,
+            'changes'         => $changes,
+            'ip_address'      => $request->ip(),
+            'user_agent'      => mb_substr((string) $request->userAgent(), 0, 500),
         ]);
     }
 }
