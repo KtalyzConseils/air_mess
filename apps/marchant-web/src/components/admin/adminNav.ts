@@ -65,6 +65,7 @@ export function useAdminNav() {
       title: t('admin.nav.accounts'),
       items: filterItems([
         { to: '/admin/marchants', label: t('admin.nav.marchants'), Icon: StoreIcon, visible: canBrowseEntities },
+        { to: '/admin/waitlists/merchants', label: t('admin.nav.merchantWaitlists'), Icon: UsersIcon, visible: canBrowseEntities },
         { to: '/admin/individuals', label: t('admin.nav.individuals'), Icon: UsersIcon, visible: canBrowseEntities },
         { to: '/admin/drivers', label: t('admin.nav.drivers'), Icon: BikeIcon, visible: canBrowseEntities },
         { to: '/admin/api-apps', label: t('admin.nav.apiApps'), Icon: CodeIcon, visible: canBrowseEntities },

@@ -1121,6 +1121,7 @@
       "courses": "Deliveries",
       "incidents": "Incidents",
       "marchants": "Merchants",
+      "merchantWaitlists": "Merchant waitlist",
       "individuals": "Individuals",
       "drivers": "Couriers",
       "apiApps": "Dev apps",
@@ -1402,6 +1403,19 @@
         "paymentFailed": "Failed",
         "paymentRefunded": "Refunded"
       }
+    },
+    "merchantWaitlists": {
+      "title": "Merchant waitlist",
+      "subtitle": "Market study sign-ups.",
+      "searchPlaceholder": "Shop, contact, WhatsApp, area…",
+      "emptyResults": "No sign-up found.",
+      "itemLabel": "sign-up",
+      "colCommerce": "Business type",
+      "colShop": "Shop",
+      "colZone": "Area",
+      "colContact": "Contact",
+      "colBonus": "Bonus",
+      "colDate": "Date"
     },
     "individuals": {
       "title": "Individuals",

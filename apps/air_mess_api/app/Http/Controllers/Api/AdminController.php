@@ -8,6 +8,7 @@ use App\Models\CourseStatusHistory;
 use App\Models\Driver;
 use App\Models\Individual;
 use App\Models\Marchant;
+use App\Models\MerchantWaitlist;
 use App\Models\Payment;
 use App\Models\SupportNote;
 use Illuminate\Http\JsonResponse;
@@ -555,6 +556,26 @@ class AdminController extends Controller
     }
 
     // ===== 5ter. FICHE DÉTAILLÉE D'UN MARCHAND =====
+    // ===== 5quater. LISTE D'ATTENTE COMMERCANTS (etude de marche) =====
+    public function merchantWaitlists(Request $request): JsonResponse
+    {
+        $query = MerchantWaitlist::query()->latest();
+
+        // Recherche texte : commerce, responsable, WhatsApp ou zone.
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('shop_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('contact_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        return response()->json(
+            $query->paginate(min((int) $request->query('per_page', 20), 100))
+        );
+    }
+
     public function showMarchant(Marchant $marchant): JsonResponse
     {
         $marchant->load(['user', 'user.wallet', 'validatedBy', 'commercialAssignedTo']);

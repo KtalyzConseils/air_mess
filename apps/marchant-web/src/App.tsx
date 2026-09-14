@@ -10,6 +10,7 @@ import AddressesPage from './pages/AddressesPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminCoursesPage from './pages/admin/AdminCoursesPage'
 import AdminMarchantsPage from './pages/admin/AdminMarchantsPage'
+import AdminMerchantWaitlistsPage from './pages/admin/AdminMerchantWaitlistsPage'
 import AdminIndividualsPage from './pages/admin/AdminIndividualsPage'
 import AdminIndividualDetailPage from './pages/admin/AdminIndividualDetailPage'
 import TrackingPage from './pages/TrackingPage'
@@ -20,6 +21,7 @@ import RegisterPage from './pages/RegisterPage'
 import DriverRegisterPage from './pages/DriverRegisterPage'
 import DriverRegisterSuccessPage from './pages/DriverRegisterSuccessPage'
 import MarchantFromDriverPage from './pages/MarchantFromDriverPage'
+import LandingCommercantsPage from './pages/LandingCommercantsPage'
 import AdminDriversPage from './pages/admin/AdminDriversPage'
 import AdminDriverDetailPage from './pages/admin/AdminDriverDetailPage'
 import AdminIncidentsPage from './pages/admin/AdminIncidentsPage'
@@ -67,6 +69,7 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/legal/terms" element={<TermsPage />} />
           <Route path="/legal/privacy" element={<PrivacyPage />} />
+          <Route path="/landing/merchants" element={<LandingCommercantsPage />} />
           <Route path="/t/:token" element={<TrackingPage />} />  {/* PUBLIQUE POUR LE TRACKING */}
           <Route path="/billing/return" element={<BillingReturnPage />} />  {/* PUBLIQUE : retour Fedapay, le webhook fait foi */}
 
@@ -109,6 +112,7 @@ function App() {
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial', 'ops', 'support']} />}>
             <Route path="/admin/marchants" element={<AdminMarchantsPage />} />
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
+            <Route path="/admin/waitlists/merchants" element={<AdminMerchantWaitlistsPage />} />
             <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
             <Route path="/admin/individuals/:id" element={<AdminIndividualDetailPage />} />
           </Route>

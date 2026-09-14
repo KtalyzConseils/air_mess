@@ -310,6 +310,36 @@ export async function fetchPendingMarchants(): Promise<MarchantWithUser[]> {
   return data.marchants
 }
 
+export type MerchantWaitlistListItem = {
+  id: number
+  commerce_type: string
+  commerce_type_other: string | null
+  zone: string
+  zone_other: string | null
+  weekly_orders: string
+  source: string | null
+  shop_name: string | null
+  contact_name: string | null
+  whatsapp: string | null
+  status: string
+  bonus_amount: number
+  bonus_code: string
+  created_at: string
+}
+
+export interface MerchantWaitlistListParams {
+  q?: string
+  page?: number
+  per_page?: number
+}
+
+export async function fetchMerchantWaitlists(
+  params: MerchantWaitlistListParams = {},
+): Promise<Paginated<MerchantWaitlistListItem>> {
+  const { data } = await api.get('/admin/waitlists/merchants', { params })
+  return data
+}
+
 export interface MarchantListParams {
   subscription_status?: string
   validation?: 'pending' | 'validated'

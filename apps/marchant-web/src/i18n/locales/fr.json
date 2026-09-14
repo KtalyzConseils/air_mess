@@ -1121,6 +1121,7 @@
       "courses": "Courses",
       "incidents": "Incidents",
       "marchants": "Marchands",
+      "merchantWaitlists": "Liste d'attente commerçants",
       "individuals": "Particuliers",
       "drivers": "Livreurs",
       "apiApps": "Apps dev",
@@ -1402,6 +1403,19 @@
         "paymentFailed": "Échoué",
         "paymentRefunded": "Remboursé"
       }
+    },
+    "merchantWaitlists": {
+      "title": "Liste d'attente commerçants",
+      "subtitle": "Inscriptions issues de l'étude de marché.",
+      "searchPlaceholder": "Commerce, contact, WhatsApp, zone…",
+      "emptyResults": "Aucune inscription trouvée.",
+      "itemLabel": "inscription",
+      "colCommerce": "Type de commerce",
+      "colShop": "Enseigne",
+      "colZone": "Zone",
+      "colContact": "Contact",
+      "colBonus": "Bonus",
+      "colDate": "Date"
     },
     "individuals": {
       "title": "Particuliers",
