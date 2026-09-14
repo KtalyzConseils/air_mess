@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AddressController;
 use App\Http\Controllers\Api\TrackingController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\MerchantWaitlistController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\IntegrationKeyController;
 use App\Http\Controllers\Api\IntegrationCourseController;
@@ -174,3 +175,5 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 // Fedapey public lien
 Route::post('/webhooks/fedapay', [SubscriptionController::class, 'webhook']);
 
+// Landing page enquête commerçants : enregistre les réponses et inscrit le répondant sur la liste d'attente.
+Route::post('/waitlist/merchants', [MerchantWaitlistController::class, 'store']);
