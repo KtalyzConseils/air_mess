@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store'
 const PROD_API_BASE_URL = 'https://api.airmess-logistics.com/api'
 
 function resolveApiBaseUrl() {
-  const configured = process.env.EXPO_PUBLIC_API_BASE_URL
+  const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, '')
   if (__DEV__) return configured
 
   if (

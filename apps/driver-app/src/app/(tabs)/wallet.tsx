@@ -393,7 +393,7 @@ function TopUpModal({
       // ne se charge (cf. src/app/payment.tsx) : elle sert de signal de fin de parcours,
       // elle n'a donc pas besoin d'exister côté serveur. Si un jour le paiement sort
       // quand même de l'app, la route API du même nom prend le relais et rebondit.
-      const base = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '')
+      const base = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
       return requestTopUp(n, base ? `${base}/payments/return-to-app` : undefined)
     },
     onSuccess: (checkout) => {
