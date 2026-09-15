@@ -18,6 +18,11 @@ return [
         'key' => env('POSTMARK_API_KEY'),
     ],
 
+    // Notification interne envoyée à chaque réponse du formulaire commerçant.
+    'merchant_waitlist' => [
+        'notification_email' => env('MERCHANT_WAITLIST_NOTIFICATION_EMAIL', 'ktalyzconseils@gmail.com'),
+    ],
+
     'resend' => [
         'key' => env('RESEND_API_KEY'),
     ],
