@@ -1188,7 +1188,7 @@ function Hero() {
       <div className="relative">
         <div className="overflow-hidden rounded-2xl border border-warm-200 shadow-md">
           <img
-            src="/images/probleme-commercants.png"
+            src="/images/recrutement-commercants.png"
             alt="Illustration des problèmes de livraison rencontrés par les commerçants"
             className="h-auto w-full object-contain"
           />
