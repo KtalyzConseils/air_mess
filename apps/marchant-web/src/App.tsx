@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import LoginPage from './pages/LoginPage'
+import UnauthorizedPage from './pages/UnauthorizedPage'
 import DashboardPage from './pages/DashboardPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import NewCoursePage from './pages/NewCoursePage'
@@ -15,6 +16,7 @@ import AdminArchivedCoursesPage from './pages/admin/AdminArchivedCoursesPage'
 import AdminMarchantsPage from './pages/admin/AdminMarchantsPage'
 import AdminMerchantWaitlistsPage from './pages/admin/AdminMerchantWaitlistsPage'
 import AdminDriverWaitlistsPage from './pages/admin/AdminDriverWaitlistsPage'
+import AdminFormResultsPage from './pages/admin/AdminFormResultsPage'
 import AdminIndividualsPage from './pages/admin/AdminIndividualsPage'
 import AdminWaitlistPage from './pages/admin/AdminWaitlistPage'
 import AdminIndividualDetailPage from './pages/admin/AdminIndividualDetailPage'
@@ -103,6 +105,7 @@ function App() {
         <AuthProfileRefresher />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/register/success" element={<RegisterSuccessPage />} />
           <Route path="/register/driver" element={<DriverRegisterPage />} />
@@ -169,6 +172,7 @@ function App() {
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
             <Route path="/admin/waitlists/merchants" element={<AdminMerchantWaitlistsPage />} />
             <Route path="/admin/waitlists/drivers" element={<AdminDriverWaitlistsPage />} />
+            <Route path="/admin/form-results" element={<AdminFormResultsPage />} />
             <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
             <Route path="/admin/waitlist" element={<AdminWaitlistPage />} />
             <Route path="/admin/individuals/:id" element={<AdminIndividualDetailPage />} />

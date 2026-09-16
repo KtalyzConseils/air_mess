@@ -469,12 +469,29 @@ export type MerchantWaitlistListItem = {
   zone_other: string | null
   weekly_orders: string
   source: string | null
+  source_other: string | null
+  delivery_methods: string[]
+  delivery_methods_other: string | null
+  problems: string[]
+  problems_other: string | null
+  worst_experience: string
+  cash_collection_issue: string
+  time_lost_weekly: string
+  orders_lost_weekly: string
+  expected_benefit: string
+  commission_acceptance: string
+  reasonable_fee: string
+  mobile_money_trust: string
+  interest_level: number
+  trial_interest: string
   shop_name: string | null
   contact_name: string | null
+  email: string | null
   whatsapp: string | null
   status: string
   bonus_amount: number
   bonus_code: string
+  bonus_redeemed_at: string | null
   created_at: string
 }
 

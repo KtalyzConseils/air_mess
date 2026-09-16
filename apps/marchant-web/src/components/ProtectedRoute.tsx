@@ -17,6 +17,11 @@ export default function ProtectedRoute({ allowedTypes, allowedAdminRoles, allowP
   }
 
   if (allowedTypes && !allowedTypes.includes(user.type)) {
+    // Un admin qui tombe sur une route client ne doit pas rester bloquÃ© :
+    // on le ramÃ¨ne directement sur sa console.
+    if (user.type === 'admin') {
+      return <Navigate to="/admin/dashboard" replace />
+    }
     return <Navigate to="/unauthorized" replace />
   }
 
