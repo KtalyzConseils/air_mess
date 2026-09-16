@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, Text, Pressable, ActivityIndicator, Vibration, Alert } from 'react-native'
+import { View, Text, Pressable, ActivityIndicator, Vibration, Alert, DeviceEventEmitter } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
@@ -10,9 +10,6 @@ import notifee from '../lib/notifeeSafe'
 import {
   fetchOfferedCourses,
   fetchMyActiveCourses,
-  acceptCourse,
-  declineCourse,
-  declineReassignment,
   type DriverCourseSummary,
 } from '../api/driver'
 import {
@@ -21,6 +18,8 @@ import {
   dequeueRing,
   clearRingQueue,
   isReassignment,
+  respondToIncomingCourse,
+  COURSE_ALERT_STOP,
 } from '../lib/registerBackgroundNotifications'
 
 /**
@@ -42,6 +41,7 @@ export default function IncomingCourseScreen() {
   // n'est pas (encore) dans le pool de propositions — évite un écran vide/"indisponible".
   const [pushInfo, setPushInfo] = useState<Record<string, any> | null>(null)
   const playerRef = useRef<AudioPlayer | null>(null)
+  const vibrationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const dismissedRef = useRef(false)
   const hadCourseRef = useRef(false)
 
@@ -94,6 +94,7 @@ export default function IncomingCourseScreen() {
       console.warn('[incoming] son KO:', e)
     }
     const vib = setInterval(() => Vibration.vibrate(600), 1500)
+    vibrationTimerRef.current = vib
     return () => {
       clearInterval(vib)
       Vibration.cancel()
@@ -122,10 +123,19 @@ export default function IncomingCourseScreen() {
   }, [course, isLoading])
 
   function stopAlert() {
+    if (vibrationTimerRef.current) clearInterval(vibrationTimerRef.current)
+    vibrationTimerRef.current = null
     playerRef.current?.pause()
     Vibration.cancel()
     notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
   }
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(COURSE_ALERT_STOP, ({ courseId: id }) => {
+      if (id === courseId) stopAlert()
+    })
+    return () => sub.remove()
+  }, [courseId])
 
   /** Enchaîne sur la course suivante de la file, ou revient au dashboard si file vide. */
   function goNext(nextCourseId: number | null) {
@@ -147,7 +157,7 @@ export default function IncomingCourseScreen() {
     try {
       // Réaffectation : rien à accepter côté serveur, la course lui appartient déjà.
       // `acceptCourse` exige une course encore offerte et renverrait un 409.
-      if (!reassigned) await acceptCourse(courseId)
+      await respondToIncomingCourse(courseId, 'accept', reassigned)
       dismissedRef.current = true
       await clearRingQueue() // livreur occupé → plus aucune course ne doit sonner
       router.replace('/(tabs)')
@@ -169,13 +179,11 @@ export default function IncomingCourseScreen() {
     try {
       // Refuser une réaffectation la DÉTACHE et la remet en attente côté serveur ; le
       // refus classique ne fait qu'enregistrer une trace sur une course encore offerte.
-      if (reassigned) {
-        await declineReassignment(courseId, 'personal')
-      } else {
-        await declineCourse(courseId, 'personal')
-      }
-    } catch {
-      /* ignore */
+      await respondToIncomingCourse(courseId, 'decline', reassigned)
+    } catch (error: any) {
+      Alert.alert('Impossible de refuser', error?.response?.data?.message ?? 'Vérifie ta connexion et réessaie.')
+      setActing(null)
+      return
     }
     dismissedRef.current = true
     const next = await dequeueRing(courseId)

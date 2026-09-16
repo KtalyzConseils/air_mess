@@ -10,7 +10,7 @@ import { hasAdminRole } from '../../lib/permissions'
 import { cancelCourseAsSupport } from '../../api/support'
 
 type Severity = 'new' | 'watch' | 'urgent' | 'critical'
-type QueueFilter = 'all' | 'express' | 'standard' | 'none_available_nearby' | 'all_nearby_busy' | 'broadcast_no_response' | 'all_contacted_declined'
+type QueueFilter = 'all' | 'none_available_nearby' | 'all_nearby_busy' | 'broadcast_no_response' | 'all_contacted_declined'
 
 const severityMeta: Record<Severity, { label: string; accent: string; badge: string }> = {
   new: { label: 'Nouvelle', accent: 'border-l-warm-300', badge: 'bg-warm-100 text-warm-600' },
@@ -36,8 +36,6 @@ function age(seconds: number) {
 
 const filters: { value: QueueFilter; label: string }[] = [
   { value: 'all', label: 'Toutes' },
-  { value: 'express', label: 'Express' },
-  { value: 'standard', label: 'Standard' },
   { value: 'none_available_nearby', label: 'Aucun à proximité' },
   { value: 'all_nearby_busy', label: 'Tous occupés' },
   { value: 'broadcast_no_response', label: 'Sans réponse' },
@@ -52,6 +50,10 @@ export default function AdminUnassignedCoursesPage() {
   const [assigning, setAssigning] = useState<number | null>(null)
   const [driverId, setDriverId] = useState<number | ''>('')
   const [filter, setFilter] = useState<QueueFilter>('all')
+  const [levelFilter, setLevelFilter] = useState<Severity | 'all'>('all')
+  const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'express' | 'standard'>('all')
+  const [selected, setSelected] = useState<number[]>([])
+  const [bulkResult, setBulkResult] = useState<string | null>(null)
   const queue = useQuery({ queryKey: ['admin', 'courses-unassigned'], queryFn: fetchUnassignedCourses, refetchInterval: 20_000 })
   const drivers = useQuery({ queryKey: ['admin', 'drivers'], queryFn: fetchAdminDrivers })
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'courses-unassigned'] })
@@ -67,30 +69,82 @@ export default function AdminUnassignedCoursesPage() {
     onError: () => window.alert('Assignation impossible.'),
   })
   const available = (drivers.data ?? []).filter((d) => d.availability_status === 'available' && ['active', 'validated'].includes(d.activation_status))
-  const allCourses = queue.data?.courses ?? []
+  const allCourses = useMemo(() => queue.data?.courses ?? [], [queue.data])
   const counts = useMemo(() => allCourses.reduce<Record<Severity, number>>((result, course) => {
     result[severity(course)] += 1
     return result
   }, { new: 0, watch: 0, urgent: 0, critical: 0 }), [allCourses])
   const visibleCourses = useMemo(() => allCourses.filter((course) => {
+    if (levelFilter !== 'all' && severity(course) !== levelFilter) return false
+    if (urgencyFilter !== 'all' && course.urgency !== urgencyFilter) return false
     if (filter === 'all') return true
-    if (filter === 'express' || filter === 'standard') return course.urgency === filter
     return course.assignment_diagnostic.code === filter
-  }), [allCourses, filter])
+  }).sort((a, b) => {
+    const urgency = Number(b.urgency === 'express') - Number(a.urgency === 'express')
+    if (urgency) return urgency
+    const oldestFirst = levelFilter === 'urgent' || levelFilter === 'critical'
+    return (oldestFirst ? b.offer_age_seconds - a.offer_age_seconds : a.offer_age_seconds - b.offer_age_seconds) || a.id - b.id
+  }), [allCourses, filter, levelFilter, urgencyFilter])
+  const selectedCourses = visibleCourses.filter((course) => selected.includes(course.id))
+  const bulkArchive = useMutation({
+    mutationFn: async ({ courses, reason }: { courses: UnassignedCourse[]; reason: string }) => {
+      const succeeded: number[] = []
+      const failures: string[] = []
+      for (const course of courses) {
+        try {
+          await cancelCourseAsSupport(course.id, reason)
+          succeeded.push(course.id)
+        } catch (error: unknown) {
+          const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          failures.push(`${course.reference} : ${message ?? 'Action impossible ; vérifie la connexion ou le statut de la course.'}`)
+        }
+      }
+      return { succeeded, failures }
+    },
+    onSuccess: ({ succeeded, failures }) => {
+      setSelected((ids) => ids.filter((id) => !succeeded.includes(id)))
+      setBulkResult(`${succeeded.length} course(s) annulée(s) et archivée(s). ${failures.length} échec(s).${failures.length ? '\n' + failures.join('\n') : ''}`)
+      void refresh()
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'courses-archived'] })
+    },
+  })
 
   return <AdminPageShell>
     <AdminPageHeader title="Courses sans livreur" subtitle={`${queue.data?.count ?? 0} course(s) à prendre en charge`} />
     <div className="px-4 py-5 md:px-6 lg:px-8">
       <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {(['watch', 'urgent', 'critical', 'new'] as Severity[]).map((key) => <div key={key} className={`rounded-lg border border-l-4 border-warm-200 ${severityMeta[key].accent} bg-off-white p-3`}>
+        {(['watch', 'urgent', 'critical', 'new'] as Severity[]).map((key) => <button type="button" disabled={bulkArchive.isPending} aria-pressed={levelFilter === key} onClick={() => { setLevelFilter(levelFilter === key ? 'all' : key); setSelected([]) }} key={key} className={`text-left rounded-lg border border-l-4 border-warm-200 ${severityMeta[key].accent} ${levelFilter === key ? 'ring-2 ring-ink' : ''} bg-off-white p-3`}>
           <p className="text-caption font-semibold text-warm-500">{severityMeta[key].label}</p>
           <p className="mt-1 text-2xl font-bold tabular-nums text-ink">{counts[key]}</p>
-        </div>)}
+        </button>)}
       </section>
 
       <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-        {filters.map((item) => <button key={item.value} onClick={() => setFilter(item.value)} className={`shrink-0 rounded-full border px-3 py-1.5 text-caption font-semibold transition-colors ${filter === item.value ? 'border-ink bg-ink text-white' : 'border-warm-300 bg-off-white text-warm-600 hover:border-warm-500'}`}>{item.label}</button>)}
+        {filters.map((item) => <button disabled={bulkArchive.isPending} key={item.value} onClick={() => { setFilter(item.value); setSelected([]) }} className={`shrink-0 rounded-full border px-3 py-1.5 text-caption font-semibold transition-colors ${filter === item.value ? 'border-ink bg-ink text-white' : 'border-warm-300 bg-off-white text-warm-600 hover:border-warm-500'}`}>{item.label}</button>)}
       </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-caption">
+        <div className="flex items-center gap-2" role="group" aria-label="Type de course">
+          <span>Type :</span>
+          {(['express', 'standard'] as const).map((type) => <button type="button" key={type} disabled={bulkArchive.isPending} aria-pressed={urgencyFilter === type} onClick={() => { setUrgencyFilter(urgencyFilter === type ? 'all' : type); setSelected([]) }} className={`rounded-full border px-3 py-1.5 font-semibold ${urgencyFilter === type ? 'border-ink bg-ink text-white' : 'border-warm-300 bg-off-white text-warm-600'}`}>{type === 'express' ? 'Express' : 'Standard'}</button>)}
+        </div>
+        <label>Niveau : <select disabled={bulkArchive.isPending} value={levelFilter} onChange={(e) => { setLevelFilter(e.target.value as typeof levelFilter); setSelected([]) }} className="rounded border border-warm-300 bg-white p-2"><option value="all">Tous les niveaux</option>{Object.entries(severityMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}</select></label>
+        <span>{visibleCourses.length} résultat(s) · Express puis Standard · {levelFilter === 'urgent' || levelFilter === 'critical' ? 'Diffusions les plus anciennes en premier' : 'Diffusions les plus récentes en premier'}</span>
+      </div>
+      {canArchive && <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-warm-300 bg-off-white p-3">
+        <label className="flex items-center gap-2 text-caption"><input type="checkbox" disabled={bulkArchive.isPending || !visibleCourses.length} checked={visibleCourses.length > 0 && selectedCourses.length === visibleCourses.length} onChange={(e) => setSelected(e.target.checked ? visibleCourses.map((course) => course.id) : [])} />Tout sélectionner ({visibleCourses.length})</label>
+        <span className="text-caption">{selectedCourses.length} sélectionnée(s)</span>
+        <AdminButton variant="danger" disabled={!selectedCourses.length || bulkArchive.isPending || archive.isPending} onClick={() => {
+          const courses = [...selectedCourses]
+          const reason = window.prompt(`Motif obligatoire pour annuler et archiver les ${courses.length} courses sélectionnées :`)?.trim()
+          if (!reason) return
+          if (reason.length > 500) { window.alert('Le motif doit contenir au maximum 500 caractères.'); return }
+          if (!window.confirm(`Annuler et archiver ${courses.length} course(s) ? Les réservations ou paiements seront traités selon les règles habituelles. Les courses déjà prises seront exclues.`)) return
+          setBulkResult(null)
+          bulkArchive.mutate({ courses, reason })
+        }}>{bulkArchive.isPending ? 'Annulation et archivage en cours…' : 'Annuler et archiver la sélection'}</AdminButton>
+      </div>}
+      {bulkResult && <div role="status" className="mb-4 whitespace-pre-wrap rounded-lg border border-warm-300 bg-off-white p-3 text-body-s">{bulkResult}</div>}
 
       <div className="space-y-3">
         {queue.isLoading && <div className="p-10 text-center text-warm-500">Chargement…</div>}
@@ -102,6 +156,7 @@ export default function AdminUnassignedCoursesPage() {
             <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
+                  {canArchive && <input type="checkbox" aria-label={`Sélectionner ${course.reference}`} disabled={bulkArchive.isPending} checked={selected.includes(course.id)} onChange={(e) => setSelected((ids) => e.target.checked ? [...ids, course.id] : ids.filter((id) => id !== course.id))} />}
                   <span className={`rounded-full px-2.5 py-1 text-caption font-bold ${meta.badge}`}>{meta.label}</span>
                   <span className="rounded-full border border-warm-300 px-2 py-0.5 text-caption font-bold">{course.urgency === 'express' ? 'Express' : 'Standard'}</span>
                   <span className="font-mono text-caption font-bold text-warm-600">{course.reference}</span>
@@ -131,7 +186,7 @@ export default function AdminUnassignedCoursesPage() {
                 {canOps && <AdminButton size="sm" variant="primary" className="lg:w-full" onClick={() => { setAssigning(course.id); setDriverId('') }}>Assigner</AdminButton>}
                 {canOps && <AdminButton size="sm" className="lg:w-full" onClick={() => relaunch.mutate(course.id)} disabled={relaunch.isPending}>Relancer</AdminButton>}
                 <Link to={`/courses/${course.id}`} onClick={() => void markOfferViewed(course.id)} className="inline-flex h-8 items-center justify-center rounded-md border border-warm-300 px-3 text-caption font-medium lg:w-full">Voir les détails</Link>
-                {canArchive && <AdminButton size="sm" variant="danger" className="lg:w-full" disabled={archive.isPending} onClick={() => {
+                {canArchive && <AdminButton size="sm" variant="danger" className="lg:w-full" disabled={archive.isPending || bulkArchive.isPending} onClick={() => {
                   const reason = window.prompt(`Motif obligatoire pour annuler et archiver ${course.reference} :`)?.trim()
                   if (!reason) return
                   if (!window.confirm(`Confirmer l'annulation et l'archivage de ${course.reference} ? Cette action libérera le montant réservé.`)) return

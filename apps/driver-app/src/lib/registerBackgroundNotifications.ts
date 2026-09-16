@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store'
+import { AppState, DeviceEventEmitter } from 'react-native'
 import notifee, {
   AndroidImportance,
   AndroidCategory,
@@ -6,7 +7,7 @@ import notifee, {
   EventType,
 } from './notifeeSafe'
 import { IS_EXPO_GO } from './notifications'
-import { acceptCourse, declineCourse, declineReassignment } from '../api/driver'
+import { acceptCourse, declineCourse, declineReassignment, fetchMyActiveCourses } from '../api/driver'
 import { acknowledgePushReceipt } from '../api/notifications'
 
 // expo-notifications et expo-task-manager NE DOIVENT PAS être importés en Expo Go :
@@ -34,6 +35,9 @@ import { acknowledgePushReceipt } from '../api/notifications'
 export const INCOMING_TASK = 'AIRMESS-INCOMING-COURSE-TASK'
 export const INCOMING_CHANNEL = 'incoming-call' // canal avec la sonnerie longue
 export const INCOMING_NOTIF_ID = 'incoming-course-alert'
+export const COURSE_ALERT_STOP = 'airmess-course-alert-stop'
+const actionsInFlight = new Map<number, Promise<void>>()
+const foregroundDeliveries = new Map<number, number>()
 
 /** File d'attente des courses entrantes à faire sonner (une à la fois). */
 const RING_QUEUE_KEY = 'airmess_ring_queue'
@@ -207,12 +211,13 @@ function notifBody(p: Record<string, any>): string {
 }
 
 /** Affiche/rafraîchit la notif "appel" (full-screen + boutons) pour une course donnée. */
-async function displayRingNotification(item: RingItem): Promise<void> {
+async function displayRingNotification(item: RingItem, foreground = false): Promise<void> {
   const payload = item.payload
   const data: Record<string, string> = {}
   for (const [k, v] of Object.entries(payload)) {
     data[k] = v == null ? '' : String(v)
   }
+  data.alert_mode = foreground ? 'notification' : 'incoming-call'
   // Nombre de courses en attente derrière celle-ci (pour le sous-titre).
   const waiting = Math.max(0, (await readQueueRaw()).length - 1)
 
@@ -233,7 +238,7 @@ async function displayRingNotification(item: RingItem): Promise<void> {
       category: AndroidCategory.CALL,
       importance: AndroidImportance.HIGH,
       visibility: AndroidVisibility.PUBLIC,
-      fullScreenAction: { id: 'incoming-course', launchActivity: 'default' },
+      ...(!foreground ? { fullScreenAction: { id: 'incoming-course', launchActivity: 'default' } } : {}),
       pressAction: { id: 'default', launchActivity: 'default' },
       // Persiste JUSQU'À la réponse du livreur (Accepter / Refuser) : pas de
       // `timeoutAfter`, sinon la notif d'appel disparaît toute seule au bout de 30s.
@@ -255,6 +260,13 @@ async function displayRingNotification(item: RingItem): Promise<void> {
 export async function showIncomingCourseNotification(
   payload: Record<string, any>,
 ): Promise<number | null> {
+  if (AppState.currentState === 'active') {
+    const id = Number(payload.course_id)
+    if (Date.now() - (foregroundDeliveries.get(id) ?? 0) < 5_000) return null
+    foregroundDeliveries.set(id, Date.now())
+    await displayRingNotification({ course_id: Number(payload.course_id), ts: Date.now(), payload }, true)
+    return null
+  }
   const items = await enqueue(payload)
   const head = items[0]
   if (!head) return null
@@ -298,6 +310,32 @@ export async function ringNextInQueue(): Promise<number | null> {
   return head.course_id
 }
 
+export function respondToIncomingCourse(courseId: number, action: 'accept' | 'decline', reassigned = false): Promise<void> {
+  const existing = actionsInFlight.get(courseId)
+  if (existing) return existing
+  const operation = (async () => {
+    DeviceEventEmitter.emit(COURSE_ALERT_STOP, { courseId })
+    await notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
+    if (action === 'accept') {
+      if (!reassigned) {
+        try { await acceptCourse(courseId) }
+        catch (error) {
+          const active = await fetchMyActiveCourses().catch(() => [])
+          if (!active.some((course) => course.id === courseId)) throw error
+        }
+      }
+      await clearRingQueue()
+    } else {
+      if (reassigned) await declineReassignment(courseId, 'personal')
+      else await declineCourse(courseId, 'personal')
+      await dequeueRing(courseId)
+    }
+    DeviceEventEmitter.emit('airmess-course-action-completed', { courseId, action })
+  })().finally(() => actionsInFlight.delete(courseId))
+  actionsInFlight.set(courseId, operation)
+  return operation
+}
+
 /** Traite l'appui sur un bouton de la notif (accept/decline) — commun bg/fg. */
 export async function handleNotifeeEvent({ type, detail }: any): Promise<void> {
   const id = detail?.pressAction?.id
@@ -310,29 +348,10 @@ export async function handleNotifeeEvent({ type, detail }: any): Promise<void> {
   const reassigned = isReassignment(data)
 
   if (id === 'accept') {
-    if (!reassigned) {
-      try {
-        await acceptCourse(courseId)
-      } catch {
-        /* déjà prise / erreur : l'app gérera à l'ouverture */
-      }
-    }
-    // Course prise → livreur occupé : plus aucune course ne doit sonner.
-    await clearRingQueue()
-    await notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
+    await respondToIncomingCourse(courseId, 'accept', reassigned)
   } else if (id === 'decline') {
-    try {
-      if (reassigned) {
-        await declineReassignment(courseId, 'personal')
-      } else {
-        await declineCourse(courseId, 'personal')
-      }
-    } catch {
-      /* ignore */
-    }
-    // Retire de la file et fait sonner la suivante s'il y en a une.
-    await dequeueRing(courseId)
-    await ringNextInQueue()
+    await respondToIncomingCourse(courseId, 'decline', reassigned)
+    if (AppState.currentState !== 'active') await ringNextInQueue()
   }
 }
 
@@ -347,7 +366,18 @@ if (!IS_EXPO_GO) {
   const Notifications = require('expo-notifications') as typeof import('expo-notifications')
 
   // REQUIS par Notifee pour afficher/gérer des notifs en arrière-plan.
-  notifee.onBackgroundEvent(handleNotifeeEvent)
+  notifee.onBackgroundEvent(async (event) => {
+    try { await handleNotifeeEvent(event) }
+    catch (error: any) {
+      console.warn('[incoming] action failed:', error?.response?.data?.message ?? String(error))
+      await notifee.displayNotification({
+        id: 'course-action-error',
+        title: 'Action impossible',
+        body: error?.response?.data?.message ?? 'Vérifie ta connexion et réessaie dans l’application.',
+        android: { channelId: INCOMING_CHANNEL, pressAction: { id: 'default', launchActivity: 'default' } },
+      }).catch(() => {})
+    }
+  })
 
   TaskManager.defineTask(INCOMING_TASK, async ({ data, error }: any) => {
     if (error) return

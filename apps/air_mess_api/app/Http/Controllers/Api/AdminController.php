@@ -120,7 +120,7 @@ class AdminController extends Controller
         $courses = Course::query()->where('status', Course::STATUS_AWAITING)->whereNull('driver_id')
             ->with(['sender:id,name,phone', 'offerAdminActions.adminUser:id,name'])
             ->orderByRaw("CASE WHEN urgency = 'express' THEN 0 ELSE 1 END")
-            ->orderByRaw('COALESCE(offer_broadcasted_at, created_at) ASC')->get();
+            ->orderByRaw('COALESCE(offer_broadcasted_at, created_at) DESC')->get();
 
         $courseIds = $courses->pluck('id');
         $drivers = Driver::query()
