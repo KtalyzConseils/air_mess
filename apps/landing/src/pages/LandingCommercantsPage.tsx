@@ -1186,9 +1186,9 @@ function Hero() {
       <div className="relative">
         <div className="overflow-hidden rounded-2xl border border-warm-200 shadow-md">
           <img
-            src="/images/landingpage-commercants.png"
+            src="/images/recrutement-commercants.png"
             alt="Illustration de la solution de livraison Airmess pour commerçants"
-            className="h-auto w-full object-cover"
+            className="h-auto w-full object-contain"
           />
         </div>
         <div className="absolute -bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-airmess-yellow px-4 py-2 text-caption font-bold text-ink shadow-md">
