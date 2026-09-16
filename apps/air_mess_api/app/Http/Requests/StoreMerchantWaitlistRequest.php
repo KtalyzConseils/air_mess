@@ -129,7 +129,7 @@ class StoreMerchantWaitlistRequest extends FormRequest
             'shop_name' => ['nullable', 'string', 'max:160'],
             'contact_name' => ['nullable', 'string', 'max:160'],
             'email' => ['required', 'string', 'email:rfc'],
-            'whatsapp' => ['nullable', 'string', 'regex:/^(\+229)?[0-9]{8}$/'],
+            'whatsapp' => ['nullable', 'string', 'regex:/^(?:\+229\s?)?01(?:\s?\d{2}){4}$/'],
         ];
     }
 }

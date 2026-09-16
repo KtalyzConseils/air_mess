@@ -159,7 +159,7 @@ const MOBILE_MONEY_OPTIONS = [
 
 const TRIAL_OPTIONS = ['Oui', 'Non', "Peut-être, j'ai besoin d'en savoir plus"]
 
-const WHATSAPP_PATTERN = /^(\+229)?[0-9]{8}$/
+const WHATSAPP_PATTERN = /^(?:\+229\s?)?01(?:\s?\d{2}){4}$/
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type StepDefinition = {
@@ -613,7 +613,7 @@ export default function LandingCommercantsPage() {
       if (!form.whatsapp.trim()) {
         nextErrors.whatsapp = 'Indiquez votre numéro WhatsApp.'
       } else if (!WHATSAPP_PATTERN.test(form.whatsapp.trim())) {
-        nextErrors.whatsapp = 'Format attendu : 8 chiffres, avec ou sans +229.'
+        nextErrors.whatsapp = 'Format attendu : 10 chiffres commençant par 01, ou +229 suivi de 01 et 8 chiffres.'
       }
     }
 
@@ -666,7 +666,7 @@ export default function LandingCommercantsPage() {
     shop_name: form.shop_name.trim(),
     contact_name: form.contact_name.trim(),
     email: form.email.trim(),
-    whatsapp: form.whatsapp.trim(),
+    whatsapp: form.whatsapp.trim().replace(/\s+/g, ''),
   })
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -999,8 +999,8 @@ export default function LandingCommercantsPage() {
                             value={form.whatsapp}
                             onChange={(event) => update('whatsapp', event.target.value)}
                             error={errors.whatsapp}
-                            helper="8 chiffres, avec ou sans indicatif +229 (ex. 90123456 ou +22990123456)."
-                            placeholder="90123456 ou +22990123456"
+                            helper="Ex. 0190123456 ou +229 01 90 12 34 56."
+                            placeholder="0190123456 ou +229 01 90 12 34 56"
                             leftIcon={<WhatsappIcon size={17} />}
                             inputMode="tel"
                           />
