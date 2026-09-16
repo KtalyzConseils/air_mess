@@ -22,6 +22,7 @@ const DISPUTE_WINDOW_DAYS = 7
 
 export default function TrackingPage() {
   const { t } = useTranslation()
+  const locale = t('tracking.locale')
   const { token } = useParams<{ token: string }>()
 
   const { data, isLoading, error } = useQuery({
@@ -124,14 +125,14 @@ export default function TrackingPage() {
                 {t('tracking.paymentEyebrow')}
               </p>
               <p className="text-h1 text-ink mt-2 font-bold tabular-nums">
-                {data.payment.total_to_pay.toLocaleString('fr-FR')}{' '}
+                {data.payment.total_to_pay.toLocaleString(locale)}{' '}
                 <span className="text-body-l font-bold">FCFA</span>
               </p>
               {data.payment.collection_amount > 0 && (
                 <p className="text-body-s text-ink/80 mt-2 leading-relaxed">
                   {t('tracking.paymentBreakdown', {
-                    product: data.payment.collection_amount.toLocaleString('fr-FR'),
-                    fee: data.payment.delivery_fee.toLocaleString('fr-FR'),
+                    product: data.payment.collection_amount.toLocaleString(locale),
+                    fee: data.payment.delivery_fee.toLocaleString(locale),
                   })}
                 </p>
               )}
@@ -222,7 +223,7 @@ export default function TrackingPage() {
                     {statusLabel(tItem.status)}
                   </p>
                   <p className="text-caption text-warm-500">
-                    {new Date(tItem.created_at).toLocaleString('fr-FR', {
+                    {new Date(tItem.created_at).toLocaleString(locale, {
                       day: '2-digit',
                       month: '2-digit',
                       hour: '2-digit',
@@ -295,6 +296,7 @@ function DisputeSection({
   deliveredAt: string
   reference: string
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -318,7 +320,7 @@ function DisputeSection({
 
   const apiError =
     mutation.error instanceof AxiosError
-      ? mutation.error.response?.data?.message ?? 'Erreur inattendue.'
+      ? mutation.error.response?.data?.message ?? t('tracking.dispute.unexpectedError')
       : null
 
   // Une fois soumis avec succès, on remplace la carte par la confirmation
@@ -331,10 +333,10 @@ function DisputeSection({
           </div>
           <div className="min-w-0">
             <p className="text-eyebrow uppercase text-success font-bold mb-1">
-              Contestation enregistrée
+              {t('tracking.dispute.recordedTitle')}
             </p>
             <p className="text-body-s text-warm-700">
-              Merci. L'équipe support va enquêter et vous recontacter au numéro fourni.
+              {t('tracking.dispute.recordedBody')}
             </p>
           </div>
         </div>
@@ -351,15 +353,14 @@ function DisputeSection({
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <p className="text-eyebrow uppercase text-warm-500 font-bold mb-1">
-            Ce colis ne vous a pas été remis&nbsp;?
+            {t('tracking.dispute.prompt')}
           </p>
           <p className="text-body-s text-warm-600">
-            Vous pouvez le signaler pendant {DISPUTE_WINDOW_DAYS} jours après la livraison.
-            Notre équipe enquêtera et reviendra vers vous.
+            {t('tracking.dispute.windowHint', { days: DISPUTE_WINDOW_DAYS })}
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-          Signaler un problème
+          {t('tracking.dispute.reportProblem')}
         </Button>
       </div>
 
@@ -371,27 +372,27 @@ function DisputeSection({
                 <AlertTriangleIcon size={20} />
               </div>
               <div className="min-w-0">
-                <h3 className="text-h3 text-ink font-bold">Contester la livraison</h3>
-                <p className="text-caption text-warm-500 mt-1">Course {reference}</p>
+                <h3 className="text-h3 text-ink font-bold">{t('tracking.dispute.contestTitle')}</h3>
+                <p className="text-caption text-warm-500 mt-1">{t('tracking.dispute.course')} {reference}</p>
               </div>
             </div>
 
             <div className="space-y-3">
               <div>
                 <label className="block text-caption font-medium text-warm-600 mb-1">
-                  Votre nom
+                  {t('tracking.dispute.yourName')}
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Prénom et nom"
+                  placeholder={t('tracking.dispute.yourNamePlaceholder')}
                   className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
                 />
               </div>
               <div>
                 <label className="block text-caption font-medium text-warm-600 mb-1">
-                  Votre téléphone
+                  {t('tracking.dispute.yourPhone')}
                 </label>
                 <input
                   type="tel"
@@ -403,13 +404,13 @@ function DisputeSection({
               </div>
               <div>
                 <label className="block text-caption font-medium text-warm-600 mb-1">
-                  Décrivez ce qui s'est passé (min. 20 caractères)
+                  {t('tracking.dispute.describeWhatHappened')}
                 </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
-                  placeholder="Ex : je n'ai jamais reçu ce colis, personne n'est venu à mon adresse…"
+                  placeholder={t('tracking.dispute.describePlaceholder')}
                   className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
                 />
               </div>
@@ -421,7 +422,7 @@ function DisputeSection({
 
             <div className="flex justify-end gap-3 mt-4">
               <Button variant="secondary" size="md" onClick={() => setOpen(false)}>
-                Annuler
+                {t('tracking.dispute.cancel')}
               </Button>
               <Button
                 variant="danger"
@@ -435,7 +436,7 @@ function DisputeSection({
                   || description.trim().length < 20
                 }
               >
-                Envoyer la contestation
+                {t('tracking.dispute.submit')}
               </Button>
             </div>
           </Card>

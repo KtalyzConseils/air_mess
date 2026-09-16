@@ -10,6 +10,7 @@ import { ArrowLeftIcon, SettingsIcon } from '../../components/ui/icons'
 import MarchantStatusBadge from '../../components/MarchantStatusBadge'
 import ConfirmModal from '../../components/ConfirmModal'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
+import ResetWalletButton from '../../components/ResetWalletButton'
 import SupportNotesPanel from '../../components/SupportNotesPanel'
 import {
   fetchMarchant,
@@ -296,14 +297,23 @@ export default function MarchantDetailPage() {
                 <div className="px-5 py-2.5 border-b border-warm-200 flex items-center justify-between">
                   <h2 className="text-body-s font-bold text-ink">{t('admin.marchants.detail.wallet')}</h2>
                   {isSuperAdmin && data.marchant.user.wallet && (
-                    <AdminButton
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setWalletAdjustOpen(true)}
-                      leftIcon={<SettingsIcon size={14} />}
-                    >
-                      {t('admin.marchants.detail.walletAdjust')}
-                    </AdminButton>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ResetWalletButton
+                        target="user"
+                        targetId={data.marchant.user.id}
+                        targetName={data.marchant.raison_sociale}
+                        currentBalance={data.marchant.user.wallet.balance}
+                        onSuccessInvalidate={[['admin', 'marchant', id]]}
+                      />
+                      <AdminButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setWalletAdjustOpen(true)}
+                        leftIcon={<SettingsIcon size={14} />}
+                      >
+                        {t('admin.marchants.detail.walletAdjust')}
+                      </AdminButton>
+                    </div>
                   )}
                 </div>
                 <div className="px-5 py-3">

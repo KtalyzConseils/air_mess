@@ -37,9 +37,9 @@ const TX_META: Record<WithdrawRequestRecentTx['type'], { i18nKey: string; positi
   earning: { i18nKey: 'admin.withdraws.txEarning', positive: true },
 }
 
-function formatFcfa(n: number | null | undefined): string {
+function formatFcfa(n: number | null | undefined, locale: string = 'fr-FR'): string {
   if (n === null || n === undefined) return '—'
-  return n.toLocaleString('fr-FR') + ' FCFA'
+  return n.toLocaleString(locale) + ' FCFA'
 }
 
 function formatDateTime(value: string | null, locale: string = 'fr-FR'): string {
@@ -97,7 +97,8 @@ export default function AdminWithdrawRequestDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const [showRejectPanel, setShowRejectPanel] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [showMarkPaidPanel, setShowMarkPaidPanel] = useState(false)
@@ -212,7 +213,7 @@ export default function AdminWithdrawRequestDetailPage() {
   if (!driver) {
     return (
       <AdminPageShell>
-        <div className="p-8 text-warm-500 text-center">Demande sans propriétaire — état incohérent.</div>
+        <div className="p-8 text-warm-500 text-center">{t('admin.withdraws.noOwnerAnomaly')}</div>
       </AdminPageShell>
     )
   }
@@ -239,8 +240,8 @@ export default function AdminWithdrawRequestDetailPage() {
     return (
       <AdminPageShell>
         <AdminPageHeader
-          title={`Retrait #${request.id}`}
-          subtitle="Retrait wallet marchand/particulier"
+          title={t('admin.withdraws.detailTitle', { id: request.id })}
+          subtitle={t('admin.withdraws.userView.subtitle')}
         />
         <div className="px-4 md:px-6 lg:px-8 py-5 space-y-4 max-w-4xl">
           <AdminButton
@@ -255,7 +256,7 @@ export default function AdminWithdrawRequestDetailPage() {
           <div className="bg-off-white border border-warm-200 rounded-lg p-5">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <p className="text-eyebrow uppercase text-info font-bold">🏢 Marchand / particulier</p>
+                <p className="text-eyebrow uppercase text-info font-bold">{t('admin.withdraws.userView.ownerBadge')}</p>
                 <p className="text-h2 text-ink font-bold mt-1">{displayName}</p>
                 <p className="text-body-s text-warm-500">
                   {userOwner.phone ?? '—'} · {userOwner.email}
@@ -271,24 +272,24 @@ export default function AdminWithdrawRequestDetailPage() {
             </div>
             <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-body-s">
               <div>
-                <dt className="text-caption text-warm-500">Montant demandé</dt>
-                <dd className="text-h3 text-ink font-bold tabular-nums">{formatFcfa(request.amount_fcfa)}</dd>
+                <dt className="text-caption text-warm-500">{t('admin.withdraws.userView.requestedAmount')}</dt>
+                <dd className="text-h3 text-ink font-bold tabular-nums">{formatFcfa(request.amount_fcfa, locale)}</dd>
               </div>
               <div>
-                <dt className="text-caption text-warm-500">Méthode</dt>
+                <dt className="text-caption text-warm-500">{t('admin.withdraws.methodLabel')}</dt>
                 <dd className="text-body font-medium text-ink">{request.target_method.toUpperCase()}</dd>
                 <dd className="text-caption text-warm-500 font-mono">{request.target_account}</dd>
               </div>
               <div>
-                <dt className="text-caption text-warm-500">Créée</dt>
-                <dd className="text-body-s text-ink">{formatDateTime(request.created_at)}</dd>
+                <dt className="text-caption text-warm-500">{t('admin.withdraws.userView.createdLabel')}</dt>
+                <dd className="text-body-s text-ink">{formatDateTime(request.created_at, locale)}</dd>
               </div>
               {wallet && (
                 <div>
-                  <dt className="text-caption text-warm-500">Solde disponible</dt>
-                  <dd className="text-body font-bold text-ink tabular-nums">{formatFcfa(wallet.available)}</dd>
+                  <dt className="text-caption text-warm-500">{t('admin.withdraws.userView.availableBalance')}</dt>
+                  <dd className="text-body font-bold text-ink tabular-nums">{formatFcfa(wallet.available, locale)}</dd>
                   <dd className="text-caption text-warm-500 tabular-nums">
-                    balance {formatFcfa(wallet.balance)}
+                    {t('admin.withdraws.userView.balanceLabel', { amount: formatFcfa(wallet.balance, locale) })}
                   </dd>
                 </div>
               )}
@@ -298,7 +299,7 @@ export default function AdminWithdrawRequestDetailPage() {
           {/* Actions */}
           {(canApprove || canReject || canMarkPaid) && (
             <div className="bg-off-white border border-warm-200 rounded-lg p-5 space-y-3">
-              <p className="text-eyebrow uppercase text-warm-600 font-bold">Actions</p>
+              <p className="text-eyebrow uppercase text-warm-600 font-bold">{t('admin.withdraws.userView.actionsLabel')}</p>
               <div className="flex flex-wrap gap-2">
                 {canApprove && (
                   <AdminButton
@@ -306,35 +307,37 @@ export default function AdminWithdrawRequestDetailPage() {
                     onClick={() => approveMutation.mutate()}
                     disabled={approveMutation.isPending}
                   >
-                    Approuver et lancer le payout
+                    {t('admin.withdraws.userView.approveAndLaunchPayout')}
                   </AdminButton>
                 )}
                 {canReject && (
                   <AdminButton variant="secondary" onClick={() => setShowRejectPanel(true)}>
-                    Refuser
+                    {t('admin.withdraws.userView.rejectShort')}
                   </AdminButton>
                 )}
                 {canMarkPaid && (
                   <AdminButton variant="secondary" onClick={() => setShowMarkPaidPanel(true)}>
-                    Marquer comme viré manuellement
+                    {t('admin.withdraws.userView.markPaidManual')}
                   </AdminButton>
                 )}
               </div>
               {canApprove === false && request.status === 'pending' && wallet && (
                 <p className="text-caption text-airmess-red">
-                  ⚠️ Solde disponible insuffisant ({formatFcfa(wallet.available)}) pour approuver{' '}
-                  {formatFcfa(request.amount_fcfa)}.
+                  {t('admin.withdraws.userView.insufficientBalanceWarning', {
+                    balance: formatFcfa(wallet.available, locale),
+                    amount: formatFcfa(request.amount_fcfa, locale),
+                  })}
                 </p>
               )}
               {request.status === 'rejected' && request.rejection_reason && (
                 <p className="text-body-s text-warm-600">
-                  Motif du refus : {request.rejection_reason}
+                  {t('admin.withdraws.userView.rejectionReasonInline', { reason: request.rejection_reason })}
                 </p>
               )}
               {request.status === 'approved' && request.paid_at && (
                 <p className="text-body-s text-success">
-                  ✅ Viré le {formatDateTime(request.paid_at)}
-                  {request.external_payout_reference && ` — réf: ${request.external_payout_reference}`}
+                  {t('admin.withdraws.userView.transferredOn', { date: formatDateTime(request.paid_at, locale) })}
+                  {request.external_payout_reference && t('admin.withdraws.userView.transferredRef', { ref: request.external_payout_reference })}
                 </p>
               )}
             </div>
@@ -343,22 +346,22 @@ export default function AdminWithdrawRequestDetailPage() {
           {/* Panels reject + mark-paid (réutilisation des états déjà présents) */}
           {showRejectPanel && (
             <div className="bg-off-white border border-warm-200 rounded-lg p-5">
-              <p className="text-body font-semibold text-ink mb-2">Motif du refus</p>
+              <p className="text-body font-semibold text-ink mb-2">{t('admin.withdraws.userView.rejectReasonLabelShort')}</p>
               <textarea
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 rows={3}
                 className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s"
-                placeholder="Ex : compte inactif, doute sur les coordonnées MoMo…"
+                placeholder={t('admin.withdraws.userView.rejectReasonPlaceholder')}
               />
               <div className="flex justify-end gap-2 mt-3">
-                <AdminButton variant="ghost" onClick={() => setShowRejectPanel(false)}>Annuler</AdminButton>
+                <AdminButton variant="ghost" onClick={() => setShowRejectPanel(false)}>{t('common.cancel')}</AdminButton>
                 <AdminButton
                   variant="danger"
                   onClick={() => rejectMutation.mutate(rejectReason)}
                   disabled={rejectMutation.isPending || rejectReason.trim().length < 3}
                 >
-                  Confirmer le refus
+                  {t('admin.withdraws.userView.confirmRejectShort')}
                 </AdminButton>
               </div>
             </div>
@@ -366,22 +369,22 @@ export default function AdminWithdrawRequestDetailPage() {
           {showMarkPaidPanel && (
             <div className="bg-off-white border border-warm-200 rounded-lg p-5">
               <p className="text-body font-semibold text-ink mb-2">
-                Référence externe du virement
+                {t('admin.withdraws.userView.externalTransferRefLabel')}
               </p>
               <input
                 value={payoutReference}
                 onChange={(e) => setPayoutReference(e.target.value)}
                 className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s font-mono"
-                placeholder="Ex : TX-2026-070312345"
+                placeholder={t('admin.withdraws.userView.externalTransferRefPlaceholder')}
               />
               <div className="flex justify-end gap-2 mt-3">
-                <AdminButton variant="ghost" onClick={() => setShowMarkPaidPanel(false)}>Annuler</AdminButton>
+                <AdminButton variant="ghost" onClick={() => setShowMarkPaidPanel(false)}>{t('common.cancel')}</AdminButton>
                 <AdminButton
                   variant="primary"
                   onClick={() => markPaidMutation.mutate(payoutReference)}
                   disabled={markPaidMutation.isPending || payoutReference.trim().length < 3}
                 >
-                  Marquer comme viré
+                  {t('admin.withdraws.userView.markPaidShort')}
                 </AdminButton>
               </div>
             </div>
@@ -391,23 +394,26 @@ export default function AdminWithdrawRequestDetailPage() {
           {recent_transactions.length > 0 && (
             <div className="bg-off-white border border-warm-200 rounded-lg p-5">
               <p className="text-eyebrow uppercase text-warm-600 font-bold mb-2">
-                10 dernières transactions wallet
+                {t('admin.withdraws.userView.lastTransactionsTitle')}
               </p>
               <ul className="divide-y divide-warm-200">
                 {recent_transactions.map((tx) => (
                   <li key={tx.id} className="py-2 flex items-center justify-between text-body-s">
                     <span className="text-warm-600 font-mono uppercase text-caption">{tx.type}</span>
                     <span className={`tabular-nums font-bold ${tx.amount_fcfa < 0 ? 'text-airmess-red' : 'text-success'}`}>
-                      {tx.amount_fcfa > 0 ? '+' : ''}{tx.amount_fcfa.toLocaleString('fr-FR')}
+                      {tx.amount_fcfa > 0 ? '+' : ''}{tx.amount_fcfa.toLocaleString(locale)}
                     </span>
-                    <span className="text-caption text-warm-500">{formatDateTime(tx.created_at)}</span>
+                    <span className="text-caption text-warm-500">{formatDateTime(tx.created_at, locale)}</span>
                   </li>
                 ))}
               </ul>
               <p className="mt-3 text-caption text-warm-500">
-                Retraits passés : {past_requests.approved_count} approuvés
-                ({formatFcfa(past_requests.approved_total)}), {past_requests.rejected_count} refusés,{' '}
-                {past_requests.cancelled_count} annulés.
+                {t('admin.withdraws.userView.pastRequestsSummary', {
+                  approved: past_requests.approved_count,
+                  total: formatFcfa(past_requests.approved_total, locale),
+                  rejected: past_requests.rejected_count,
+                  cancelled: past_requests.cancelled_count,
+                })}
               </p>
             </div>
           )}
@@ -430,7 +436,7 @@ export default function AdminWithdrawRequestDetailPage() {
     <AdminPageShell>
       <AdminPageHeader
         title={t('admin.withdraws.detailTitle', { id: request.id })}
-        subtitle={t('admin.withdraws.requestedOn', { date: formatDateTime(request.created_at) })}
+        subtitle={t('admin.withdraws.requestedOn', { date: formatDateTime(request.created_at, locale) })}
         actions={
           <span
             className={`inline-block px-3 py-1 rounded-md text-body-s font-semibold ${statusClasses}`}
@@ -461,7 +467,7 @@ export default function AdminWithdrawRequestDetailPage() {
         {isPending && !isBusy && balanceShort && (
           <AlertBand tone="warning">
             {t('admin.withdraws.balanceShortWarning', {
-              balance: formatFcfa(wallet?.balance ?? 0),
+              balance: formatFcfa(wallet?.balance ?? 0, locale),
             })}
           </AlertBand>
         )}
@@ -474,7 +480,7 @@ export default function AdminWithdrawRequestDetailPage() {
               <div>
                 <strong>{t('admin.withdraws.payoutInFlightTitle')}</strong>{' '}
                 {t('admin.withdraws.payoutInFlightBodyPart1', {
-                  date: formatDateTime(request.payout_initiated_at),
+                  date: formatDateTime(request.payout_initiated_at, locale),
                 })}
                 <span className="font-mono">{request.payout_provider_ref}</span>
                 {t('admin.withdraws.payoutInFlightBodyPart2')}
@@ -489,7 +495,7 @@ export default function AdminWithdrawRequestDetailPage() {
               <div className="flex-1">
                 <strong>{t('admin.withdraws.payoutFailedTitle')}</strong>{' '}
                 {t('admin.withdraws.payoutFailedAt', {
-                  date: formatDateTime(request.payout_failed_at),
+                  date: formatDateTime(request.payout_failed_at, locale),
                 })}
                 <div className="mt-1 font-mono text-caption bg-white/40 rounded px-2 py-1">
                   {request.payout_failure_reason ?? t('admin.withdraws.payoutFailureUnknown')}
@@ -538,7 +544,7 @@ export default function AdminWithdrawRequestDetailPage() {
             <dl className="text-body-s space-y-1.5">
               <div className="flex justify-between gap-4">
                 <dt className="text-warm-500">{t('admin.withdraws.decidedOn')}</dt>
-                <dd className="font-medium text-ink">{formatDateTime(request.decided_at)}</dd>
+                <dd className="font-medium text-ink">{formatDateTime(request.decided_at, locale)}</dd>
               </div>
               {request.decided_by_admin && (
                 <div className="flex justify-between gap-4">
@@ -565,7 +571,7 @@ export default function AdminWithdrawRequestDetailPage() {
                 <dl className="text-body-s text-success space-y-0.5">
                   <div>
                     <span className="font-medium">{t('admin.withdraws.transferDoneOn')}</span>{' '}
-                    {formatDateTime(request.paid_at)}
+                    {formatDateTime(request.paid_at, locale)}
                   </div>
                   {request.paid_by_admin && (
                     <div>
@@ -621,7 +627,7 @@ export default function AdminWithdrawRequestDetailPage() {
             {wallet ? (
               <>
                 <p className="text-h1 font-bold text-ink tabular-nums leading-none">
-                  {formatFcfa(wallet.balance)}
+                  {formatFcfa(wallet.balance, locale)}
                 </p>
                 <p className="text-caption text-warm-500 mt-1">
                   {t('admin.withdraws.balanceCurrent')}
@@ -630,13 +636,13 @@ export default function AdminWithdrawRequestDetailPage() {
                   <div className="flex justify-between">
                     <dt className="text-warm-500">{t('admin.withdraws.totalDeposited')}</dt>
                     <dd className="font-medium text-ink tabular-nums">
-                      {formatFcfa(wallet.total_deposited)}
+                      {formatFcfa(wallet.total_deposited, locale)}
                     </dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-warm-500">{t('admin.withdraws.totalWithdrawn')}</dt>
                     <dd className="font-medium text-ink tabular-nums">
-                      {formatFcfa(wallet.total_withdrawn)}
+                      {formatFcfa(wallet.total_withdrawn, locale)}
                     </dd>
                   </div>
                 </dl>
@@ -655,7 +661,7 @@ export default function AdminWithdrawRequestDetailPage() {
             <div>
               <dt className="text-warm-500">{t('admin.withdraws.amountToTransfer')}</dt>
               <dd className="text-h1 font-bold text-ink tabular-nums mt-0.5">
-                {formatFcfa(request.amount_fcfa)}
+                {formatFcfa(request.amount_fcfa, locale)}
               </dd>
             </div>
             <div>
@@ -693,7 +699,7 @@ export default function AdminWithdrawRequestDetailPage() {
                     <div className="min-w-0">
                       <p className="font-medium text-ink">{t(meta.i18nKey)}</p>
                       <p className="text-caption text-warm-500">
-                        {formatDateTime(tx.created_at)}
+                        {formatDateTime(tx.created_at, locale)}
                         {tx.course && (
                           <>
                             {' '}· {t('admin.withdraws.courseLine')}{' '}
@@ -707,11 +713,11 @@ export default function AdminWithdrawRequestDetailPage() {
                         className={`font-bold tabular-nums ${meta.positive ? 'text-success' : 'text-airmess-red'}`}
                       >
                         {meta.positive ? '+' : ''}
-                        {tx.amount_fcfa.toLocaleString('fr-FR')}
+                        {tx.amount_fcfa.toLocaleString(locale)}
                       </p>
                       <p className="text-caption text-warm-400 tabular-nums">
                         {t('admin.withdraws.balancePrefix')}{' '}
-                        {tx.balance_after.toLocaleString('fr-FR')}
+                        {tx.balance_after.toLocaleString(locale)}
                       </p>
                     </div>
                   </li>
@@ -731,7 +737,7 @@ export default function AdminWithdrawRequestDetailPage() {
             />
             <KpiBox
               label={t('admin.withdraws.kpiTotalPaid')}
-              value={formatFcfa(past_requests.approved_total)}
+              value={formatFcfa(past_requests.approved_total, locale)}
               tone="success"
               compact
             />
@@ -758,7 +764,7 @@ export default function AdminWithdrawRequestDetailPage() {
                     if (
                       window.confirm(
                         t('admin.withdraws.approveConfirm', {
-                          amount: formatFcfa(request.amount_fcfa),
+                          amount: formatFcfa(request.amount_fcfa, locale),
                           method:
                             request.target_method === 'momo'
                               ? t('admin.withdraws.momoShort')

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { fetchAddresses, type Address } from '../api/addresses'
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export default function AddressPicker({ onSelect }: Props) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
@@ -38,19 +40,19 @@ export default function AddressPicker({ onSelect }: Props) {
         onClick={() => setOpen(true)}
         className="text-sm text-airmess-dark underline hover:no-underline"
       >
-        📒 Choisir depuis le carnet
+        {t('addressPicker.trigger')}
       </button>
 
       {open && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[80vh] flex flex-col">
             <div className="p-4 border-b">
-              <h3 className="font-bold text-airmess-dark mb-2">Carnet d'adresses</h3>
+              <h3 className="font-bold text-airmess-dark mb-2">{t('addressPicker.modalTitle')}</h3>
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher par nom, téléphone, quartier..."
+                placeholder={t('addressPicker.searchPlaceholder')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-airmess-yellow"
                 autoFocus
               />
@@ -59,7 +61,7 @@ export default function AddressPicker({ onSelect }: Props) {
             <div className="flex-1 overflow-y-auto">
               {filtered.length === 0 && (
                 <div className="p-8 text-center text-gray-500 text-sm">
-                  Aucune adresse correspondante.
+                  {t('addressPicker.empty')}
                 </div>
               )}
               {filtered.map((a) => (
@@ -93,7 +95,7 @@ export default function AddressPicker({ onSelect }: Props) {
                 onClick={() => setOpen(false)}
                 className="text-sm text-gray-500 hover:underline"
               >
-                Fermer
+                {t('addressPicker.close')}
               </button>
             </div>
           </div>

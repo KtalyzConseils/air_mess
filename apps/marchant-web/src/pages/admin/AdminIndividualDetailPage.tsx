@@ -9,6 +9,7 @@ import AdminModal from '../../components/admin/AdminModal'
 import { AdminButton } from '../../components/admin/AdminToolbar'
 import { ArrowLeftIcon, SettingsIcon, AlertTriangleIcon } from '../../components/ui/icons'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
+import ResetWalletButton from '../../components/ResetWalletButton'
 import SupportNotesPanel from '../../components/SupportNotesPanel'
 import { fetchIndividual, suspendIndividual, reactivateIndividual } from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
@@ -221,7 +222,15 @@ export default function AdminIndividualDetailPage() {
               <Section
                 title={t('admin.marchants.detail.wallet')}
                 action={
-                  isSuperAdmin && data.individual.user.wallet ? (
+                isSuperAdmin && data.individual.user.wallet ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ResetWalletButton
+                      target="user"
+                      targetId={data.individual.user.id}
+                      targetName={data.individual.user.name}
+                      currentBalance={data.individual.user.wallet.balance}
+                      onSuccessInvalidate={[['admin', 'individual', id]]}
+                    />
                     <AdminButton
                       variant="ghost"
                       size="sm"
@@ -230,8 +239,9 @@ export default function AdminIndividualDetailPage() {
                     >
                       {t('admin.marchants.detail.walletAdjust')}
                     </AdminButton>
-                  ) : null
-                }
+                  </div>
+                ) : null
+              }
               >
                 {data.individual.user.wallet ? (
                   <>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { CloseIcon, MenuIcon, type IconProps } from './icons'
 
 /* ============================================================
@@ -81,6 +82,7 @@ function defaultPosition(): Position {
 }
 
 export default function QuickNav({ items, positionKey }: QuickNavProps) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const RADIUS = useMemo(() => radiusForItems(items.length), [items.length])
@@ -266,7 +268,7 @@ export default function QuickNav({ items, positionKey }: QuickNavProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        aria-label={isOpen ? 'Fermer la navigation rapide' : 'Ouvrir la navigation rapide'}
+        aria-label={isOpen ? t('quickNav.closeAria') : t('quickNav.openAria')}
         aria-expanded={isOpen}
         className={[
           'fixed z-50 flex items-center justify-center rounded-full shadow-xl select-none',

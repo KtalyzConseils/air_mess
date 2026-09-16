@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import type { UseFormRegister, UseFormWatch, FieldErrors } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import type { CreateCoursePayload } from '../../api/courses'
@@ -33,7 +33,6 @@ export default function OriginDrawer({
   inputClass,
 }: Props) {
   const { t } = useTranslation()
-  const [showStreet, setShowStreet] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -74,6 +73,13 @@ export default function OriginDrawer({
 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label={t('courses.new.originDrawer.streetLabel')} optional className="md:col-span-2">
+              <input
+                {...register('origin_street')}
+                className={inputClass}
+                placeholder={t('courses.new.originDrawer.streetPlaceholder')}
+              />
+            </Field>
             <Field
               label={t('courses.new.senderName')}
               required
@@ -91,27 +97,6 @@ export default function OriginDrawer({
             >
               <input
                 {...register('origin_phone', { required: t('courses.new.required') })}
-                className={inputClass}
-              />
-            </Field>
-            <Field
-              label={t('courses.new.originQuartier')}
-              required
-              error={errors.origin_quartier?.message}
-            >
-              <input
-                {...register('origin_quartier', { required: t('courses.new.required') })}
-                className={inputClass}
-                placeholder={t('courses.new.quartierPlaceholder')}
-              />
-            </Field>
-            <Field
-              label={t('courses.new.originCity')}
-              required
-              error={errors.origin_city?.message}
-            >
-              <input
-                {...register('origin_city', { required: t('courses.new.required') })}
                 className={inputClass}
               />
             </Field>
@@ -148,23 +133,6 @@ export default function OriginDrawer({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowStreet((v) => !v)}
-            className="text-caption font-medium text-warm-600 hover:text-ink underline"
-          >
-            {showStreet
-              ? t('courses.new.hideDetails')
-              : t('courses.new.moreOrigin')}
-          </button>
-
-          {showStreet && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label={t('courses.new.streetLabel')} optional>
-                <input {...register('origin_street')} className={inputClass} />
-              </Field>
-            </div>
-          )}
         </div>
 
         <div className="border-t border-warm-100 px-5 py-3 flex justify-end">

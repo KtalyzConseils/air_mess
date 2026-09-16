@@ -40,6 +40,7 @@ import AdminUsersPage from './pages/admin/AdminUsersPage'
 import AdminWithdrawRequestsPage from './pages/admin/AdminWithdrawRequestsPage'
 import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDetailPage'
 import AdminWalletReportingPage from './pages/admin/AdminWalletReportingPage'
+import AdminAccountingLedgerPage from './pages/admin/AdminAccountingLedgerPage'
 import AdminReconciliationPage from './pages/admin/AdminReconciliationPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
@@ -151,6 +152,10 @@ function App() {
             <Route path="/admin/withdraw-requests/:id" element={<AdminWithdrawRequestDetailPage />} />
             <Route path="/admin/reporting/wallets" element={<AdminWalletReportingPage />} />
             <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['ops']} />}>
+            <Route path="/admin/reporting/accounting" element={<AdminAccountingLedgerPage />} />
           </Route>
 
           {/* admin — fiches marchands/particuliers : lecture partagée (commercial+ops+support),

@@ -32,18 +32,19 @@ const TX_META: Record<WalletTransactionType, { labelKey: string; icon: string; p
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000]
 
-function formatFcfa(n: number): string {
-  return n.toLocaleString('fr-FR') + ' FCFA'
+function formatFcfa(n: number, locale: string = 'fr-FR'): string {
+  return n.toLocaleString(locale) + ' FCFA'
 }
 
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('fr-FR', {
+function formatDateTime(value: string, locale: string = 'fr-FR'): string {
+  return new Date(value).toLocaleString(locale, {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
 
 export default function MyWalletPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const queryClient = useQueryClient()
   const [showTopUp, setShowTopUp] = useState(false)
   const [topUpAmount, setTopUpAmount] = useState<string>('5000')
@@ -89,8 +90,8 @@ export default function MyWalletPage() {
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Erreur lors de la demande de retrait.'
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('wallet.withdrawRequestError')
+          : t('common.unexpectedError')
       window.alert(`⚠️ ${msg}`)
     },
   })
@@ -101,8 +102,8 @@ export default function MyWalletPage() {
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? "Erreur lors de l'annulation."
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('wallet.cancelWithdrawError')
+          : t('common.unexpectedError')
       window.alert(`⚠️ ${msg}`)
     },
   })
@@ -120,15 +121,15 @@ export default function MyWalletPage() {
     const n = parseInt(withdrawAmount, 10)
     if (!data) return
     if (!n || n < data.min_withdraw_fcfa) {
-      window.alert(`Le montant minimum est ${formatFcfa(data.min_withdraw_fcfa)}.`)
+      window.alert(t('wallet.minWithdrawError', { amount: formatFcfa(data.min_withdraw_fcfa, locale) }))
       return
     }
     if (n > data.available) {
-      window.alert(`Solde disponible insuffisant (${formatFcfa(data.available)}).`)
+      window.alert(t('wallet.insufficientBalanceError', { amount: formatFcfa(data.available, locale) }))
       return
     }
     if (!withdrawAccount.trim()) {
-      window.alert('Le numéro de compte est requis.')
+      window.alert(t('wallet.accountRequiredError'))
       return
     }
     withdrawMutation.mutate()
@@ -164,7 +165,7 @@ export default function MyWalletPage() {
             <div className="text-warning">
               <p className="font-bold text-body">{t('wallet.lowBalance')}</p>
               <p className="text-body-s mt-0.5">
-                {t('wallet.lowBalanceBody', { amount: formatFcfa(data.min_recommended_fcfa) })}
+                {t('wallet.lowBalanceBody', { amount: formatFcfa(data.min_recommended_fcfa, locale) })}
               </p>
             </div>
           </Card>
@@ -178,16 +179,16 @@ export default function MyWalletPage() {
           <div className="relative">
             <p className="text-eyebrow uppercase text-warm-300 mb-2">{t('wallet.balanceLabel')}</p>
             <p className="text-display-1 text-airmess-yellow tabular-nums leading-none">
-              {data.balance.toLocaleString('fr-FR')}
+              {data.balance.toLocaleString(locale)}
               <span className="text-h2 text-warm-300 ml-2 font-normal">FCFA</span>
             </p>
 
             {data.pending_reserved > 0 && (
               <p className="text-caption text-warm-300 mt-3">
-                {t('wallet.reservedForOngoing', { amount: formatFcfa(data.pending_reserved) })}
+                {t('wallet.reservedForOngoing', { amount: formatFcfa(data.pending_reserved, locale) })}
                 {' · '}
                 <span className="font-semibold text-cream">
-                  {t('wallet.availableBalance')} : {formatFcfa(data.available)}
+                  {t('wallet.availableBalance')} : {formatFcfa(data.available, locale)}
                 </span>
               </p>
             )}
@@ -195,11 +196,11 @@ export default function MyWalletPage() {
             <div className="mt-6 pt-5 border-t border-warm-600/30 grid grid-cols-2 gap-4 text-body-s">
               <div>
                 <p className="text-caption text-warm-400">{t('wallet.totalDeposited')}</p>
-                <p className="font-bold text-cream tabular-nums">{formatFcfa(data.total_deposited)}</p>
+                <p className="font-bold text-cream tabular-nums">{formatFcfa(data.total_deposited, locale)}</p>
               </div>
               <div>
                 <p className="text-caption text-warm-400">{t('wallet.totalSpent')}</p>
-                <p className="font-bold text-cream tabular-nums">{formatFcfa(data.total_spent)}</p>
+                <p className="font-bold text-cream tabular-nums">{formatFcfa(data.total_spent, locale)}</p>
               </div>
             </div>
 
@@ -223,7 +224,7 @@ export default function MyWalletPage() {
                 disabled={data.available < data.min_withdraw_fcfa || !!data.pending_withdraw_request}
                 rightIcon={<span aria-hidden>↗</span>}
               >
-                Retirer
+                {t('wallet.withdraw')}
               </Button>
             </div>
           </div>
@@ -236,29 +237,29 @@ export default function MyWalletPage() {
           <Card variant="default" padding="md" className="mb-6 bg-info-bg! border-info/30!">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-eyebrow uppercase text-info font-bold mb-1">⏳ Retrait en attente</p>
+                <p className="text-eyebrow uppercase text-info font-bold mb-1">{t('wallet.pendingWithdrawTitle')}</p>
                 <p className="text-body font-bold text-ink">
-                  {formatFcfa(data.pending_withdraw_request.amount_fcfa)}
+                  {formatFcfa(data.pending_withdraw_request.amount_fcfa, locale)}
                 </p>
                 <p className="text-body-s text-warm-600 mt-0.5">
-                  vers {data.pending_withdraw_request.target_method.toUpperCase()} · {data.pending_withdraw_request.target_account}
+                  {t('wallet.pendingWithdrawTo', { method: data.pending_withdraw_request.target_method.toUpperCase(), account: data.pending_withdraw_request.target_account })}
                 </p>
                 <p className="text-caption text-warm-500 mt-1">
-                  Demande créée le {formatDateTime(data.pending_withdraw_request.created_at)}. Un admin la traitera sous 24h ouvrées.
+                  {t('wallet.pendingWithdrawCreated', { date: formatDateTime(data.pending_withdraw_request.created_at, locale) })}
                 </p>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  if (data.pending_withdraw_request && window.confirm('Annuler cette demande de retrait ?')) {
+                  if (data.pending_withdraw_request && window.confirm(t('wallet.cancelWithdrawConfirm'))) {
                     cancelWithdrawMutation.mutate(data.pending_withdraw_request.id)
                   }
                 }}
                 loading={cancelWithdrawMutation.isPending}
                 className="text-airmess-red! shrink-0"
               >
-                Annuler
+                {t('common.cancel')}
               </Button>
             </div>
           </Card>
@@ -294,7 +295,7 @@ export default function MyWalletPage() {
                       <div className="min-w-0">
                         <p className="text-body font-medium text-ink">{t(meta.labelKey)}</p>
                         <p className="text-caption text-warm-500">
-                          {formatDateTime(tx.created_at)}
+                          {formatDateTime(tx.created_at, locale)}
                           {tx.course && (
                             <> · {t('wallet.onCourse')} <span className="font-mono text-warm-400">{tx.course.reference}</span></>
                           )}
@@ -308,10 +309,10 @@ export default function MyWalletPage() {
                           positive ? 'text-success' : 'text-airmess-red',
                         )}
                       >
-                        {positive ? '+' : '−'}{Math.abs(tx.amount_fcfa).toLocaleString('fr-FR')}
+                        {positive ? '+' : '−'}{Math.abs(tx.amount_fcfa).toLocaleString(locale)}
                       </p>
                       <p className="text-caption text-warm-400 tabular-nums">
-                        {t('wallet.balanceLabel')} : {tx.balance_after.toLocaleString('fr-FR')}
+                        {t('wallet.balanceLabel')} : {tx.balance_after.toLocaleString(locale)}
                       </p>
                     </div>
                   </li>
@@ -328,14 +329,14 @@ export default function MyWalletPage() {
       {showWithdraw && (
         <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-4 ams-anim-fade-in">
           <Card variant="signature" padding="lg" className="w-full max-w-md ams-anim-scale-in">
-            <h3 className="text-h2 text-ink font-bold">Retirer du wallet</h3>
+            <h3 className="text-h2 text-ink font-bold">{t('wallet.withdrawModalTitle')}</h3>
             <p className="text-body-s text-warm-500 mt-1 mb-5">
-              Recevez votre solde sur votre mobile money ou compte bancaire. La demande sera traitée par un admin sous 24h ouvrées.
+              {t('wallet.withdrawModalSub')}
             </p>
 
             {/* Montant */}
             <label className="block text-caption text-warm-600 font-medium mb-1.5">
-              Montant (min {formatFcfa(data.min_withdraw_fcfa)})
+              {t('wallet.amountMinLabel', { amount: formatFcfa(data.min_withdraw_fcfa, locale) })}
             </label>
             <div className="relative mb-4">
               <input
@@ -353,7 +354,7 @@ export default function MyWalletPage() {
             </div>
 
             {/* Méthode */}
-            <label className="block text-caption text-warm-600 font-medium mb-1.5">Méthode</label>
+            <label className="block text-caption text-warm-600 font-medium mb-1.5">{t('wallet.methodLabel')}</label>
             <div className="grid grid-cols-2 gap-2 mb-4">
               {(['momo', 'bank'] as const).map((m) => (
                 <button
@@ -367,24 +368,24 @@ export default function MyWalletPage() {
                       : 'bg-off-white border-warm-300 text-warm-600 hover:border-warm-400',
                   )}
                 >
-                  {m === 'momo' ? '📱 Mobile Money' : '🏦 Banque'}
+                  {m === 'momo' ? t('wallet.methodMomo') : t('wallet.methodBank')}
                 </button>
               ))}
             </div>
 
             {/* Numéro / IBAN */}
             <label className="block text-caption text-warm-600 font-medium mb-1.5">
-              {withdrawMethod === 'momo' ? 'Numéro mobile (MoMo, Wave…)' : 'IBAN / RIB'}
+              {withdrawMethod === 'momo' ? t('wallet.momoNumberLabel') : t('wallet.ibanLabel')}
             </label>
             <input
               type="text"
               value={withdrawAccount}
               onChange={(e) => setWithdrawAccount(e.target.value)}
-              placeholder={withdrawMethod === 'momo' ? '+229 90 12 34 56' : 'BJXXXX...'}
+              placeholder={withdrawMethod === 'momo' ? t('wallet.momoPlaceholder') : t('wallet.ibanPlaceholder')}
               className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow font-mono"
             />
             <p className="text-caption text-warm-500 mt-1.5">
-              Solde disponible : {formatFcfa(data.available)}
+              {t('wallet.availableBalanceColon', { amount: formatFcfa(data.available, locale) })}
             </p>
 
             <div className="flex gap-3 mt-6">
@@ -405,7 +406,7 @@ export default function MyWalletPage() {
                 loading={withdrawMutation.isPending}
                 rightIcon={!withdrawMutation.isPending && <span aria-hidden>→</span>}
               >
-                Envoyer
+                {t('wallet.send')}
               </Button>
             </div>
           </Card>
@@ -437,7 +438,7 @@ export default function MyWalletPage() {
                       : 'bg-off-white border-warm-300 text-warm-600 hover:border-warm-400',
                   )}
                 >
-                  {formatFcfa(a)}
+                  {formatFcfa(a, locale)}
                 </button>
               ))}
             </div>
@@ -459,7 +460,7 @@ export default function MyWalletPage() {
               </span>
             </div>
             <p className="text-caption text-warm-500 mt-1.5">
-              {t('wallet.minRecommended', { amount: formatFcfa(data.min_recommended_fcfa) })}
+              {t('wallet.minRecommended', { amount: formatFcfa(data.min_recommended_fcfa, locale) })}
             </p>
 
             <div className="flex gap-3 mt-6">

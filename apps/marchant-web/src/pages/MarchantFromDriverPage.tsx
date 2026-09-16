@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import { addMarchantRole, type AddMarchantRolePayload } from '../api/profileRole'
 import Button from '../components/ui/Button'
@@ -22,6 +23,7 @@ import mark from '../assets/logo/airmess-mark.svg'
  * — nom, email, phone, password — sont déjà connues et inchangées).
  */
 export default function MarchantFromDriverPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const fetchMe = useAuthStore((s) => s.fetchMe)
@@ -78,23 +80,19 @@ export default function MarchantFromDriverPage() {
         return
       }
       if (u.marchant) {
-        setBlockedReason(
-          "Tu as déjà un compte marchand associé à cet email. Rien à faire ici.",
-        )
+        setBlockedReason(t('marchantFromDriver.alreadyMarchant'))
         setPhase('blocked')
         return
       }
       if (u.type === 'admin') {
-        setBlockedReason(
-          "Ce compte est un compte admin et ne peut pas ouvrir de commerce.",
-        )
+        setBlockedReason(t('marchantFromDriver.adminCannotOpen'))
         setPhase('blocked')
         return
       }
       setPhase('form')
     }
     void hydrate()
-  }, [fetchMe, navigate])
+  }, [fetchMe, navigate, t])
 
   const serverErr = (field: string): string | undefined =>
     serverFieldErrors[field]?.[0]
@@ -121,14 +119,12 @@ export default function MarchantFromDriverPage() {
         setServerFieldErrors(ax.response.data.errors)
       } else if (ax.response?.status === 409) {
         setBlockedReason(
-          ax.response.data?.message ??
-            "Tu as déjà un compte marchand associé à cet email.",
+          ax.response.data?.message ?? t('marchantFromDriver.alreadyMarchantShort'),
         )
         setPhase('blocked')
       } else {
         setError(
-          ax.response?.data?.message ??
-            "Une erreur est survenue. Réessaie dans un instant.",
+          ax.response?.data?.message ?? t('marchantFromDriver.genericError'),
         )
       }
     }
@@ -146,7 +142,7 @@ export default function MarchantFromDriverPage() {
   if (phase === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cream">
-        <p className="text-warm-600 text-body">Chargement…</p>
+        <p className="text-warm-600 text-body">{t('marchantFromDriver.loading')}</p>
       </div>
     )
   }
@@ -155,13 +151,13 @@ export default function MarchantFromDriverPage() {
     return (
       <PageShell>
         <div className="max-w-lg mx-auto bg-off-white border border-warm-200 rounded-lg p-6 md:p-8 text-center">
-          <h1 className="text-h2 text-ink mb-2">Impossible d'ouvrir un commerce</h1>
+          <h1 className="text-h2 text-ink mb-2">{t('marchantFromDriver.cannotOpenTitle')}</h1>
           <p className="text-body text-warm-600 mb-6">{blockedReason}</p>
           <Link
             to="/login"
             className="inline-flex items-center gap-2 rounded-full bg-airmess-dark text-cream px-5 py-2.5 text-body font-medium hover:bg-ink transition-colors"
           >
-            Retour à la connexion
+            {t('marchantFromDriver.backToLogin')}
             <ArrowRightIcon size={16} />
           </Link>
         </div>
@@ -176,20 +172,18 @@ export default function MarchantFromDriverPage() {
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-success/15 text-success mb-4">
             <CheckIcon size={28} />
           </div>
-          <h1 className="text-h2 text-ink mb-2">Demande envoyée</h1>
+          <h1 className="text-h2 text-ink mb-2">{t('marchantFromDriver.requestSentTitle')}</h1>
           <p className="text-body text-warm-600 mb-2">
-            Ton profil marchand est en attente de validation par un administrateur
-            (généralement sous 24h).
+            {t('marchantFromDriver.requestSentBody')}
           </p>
           <p className="text-body-s text-warm-500 mb-6">
-            Ton compte livreur reste actif normalement pendant ce temps —
-            tu peux continuer à recevoir des courses.
+            {t('marchantFromDriver.driverAccountStaysActive')}
           </p>
           <Link
             to="/login"
             className="inline-flex items-center gap-2 rounded-full bg-airmess-dark text-cream px-5 py-2.5 text-body font-medium hover:bg-ink transition-colors"
           >
-            Retour à la connexion
+            {t('marchantFromDriver.backToLogin')}
             <ArrowRightIcon size={16} />
           </Link>
         </div>
@@ -202,15 +196,14 @@ export default function MarchantFromDriverPage() {
     <PageShell>
       <div className="max-w-lg mx-auto">
         <div className="bg-off-white border border-warm-200 rounded-lg p-6 md:p-8">
-          <h1 className="text-h2 text-ink mb-1">Ouvrir aussi un commerce</h1>
+          <h1 className="text-h2 text-ink mb-1">{t('marchantFromDriver.title')}</h1>
           <p className="text-body-s text-warm-500 mb-6">
             {displayName ? (
               <>
-                Connecté en tant que <strong>{displayName}</strong>. Renseigne les
-                informations de ton commerce ci-dessous.
+                {t('marchantFromDriver.connectedAs')} <strong>{displayName}</strong>. {t('marchantFromDriver.fillBusinessInfo')}
               </>
             ) : (
-              'Renseigne les informations de ton commerce ci-dessous.'
+              t('marchantFromDriver.fillBusinessInfo')
             )}
           </p>
 
@@ -222,32 +215,32 @@ export default function MarchantFromDriverPage() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <Input
-              label="Raison sociale"
-              placeholder="Ex : Boutique La Paix Sarl"
+              label={t('marchantFromDriver.businessName')}
+              placeholder={t('marchantFromDriver.businessNamePlaceholder')}
               {...register('raison_sociale', {
-                required: 'Raison sociale obligatoire',
+                required: t('marchantFromDriver.businessNameRequired'),
               })}
               error={errors.raison_sociale?.message ?? serverErr('raison_sociale')}
             />
 
             <div>
               <label className="block mb-1.5 text-caption text-warm-600 font-medium">
-                Secteur d'activité <span className="text-airmess-red">*</span>
+                {t('marchantFromDriver.sector')} <span className="text-airmess-red">*</span>
               </label>
               <select
                 {...register('secteur_activite', {
-                  required: 'Choisis un secteur',
+                  required: t('marchantFromDriver.chooseSectorRequired'),
                 })}
                 className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink transition-all duration-200 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow"
                 defaultValue=""
               >
-                <option value="" disabled>Choisis un secteur…</option>
-                <option value="supermarche">Supermarché</option>
-                <option value="restaurant">Restaurant</option>
-                <option value="boutique">Boutique</option>
-                <option value="pharmacie">Pharmacie</option>
-                <option value="ecommerce">E-commerce</option>
-                <option value="autre">Autre</option>
+                <option value="" disabled>{t('marchantFromDriver.chooseSector')}</option>
+                <option value="supermarche">{t('marchantFromDriver.sectors.supermarche')}</option>
+                <option value="restaurant">{t('marchantFromDriver.sectors.restaurant')}</option>
+                <option value="boutique">{t('marchantFromDriver.sectors.boutique')}</option>
+                <option value="pharmacie">{t('marchantFromDriver.sectors.pharmacie')}</option>
+                <option value="ecommerce">{t('marchantFromDriver.sectors.ecommerce')}</option>
+                <option value="autre">{t('marchantFromDriver.sectors.autre')}</option>
               </select>
               {(errors.secteur_activite?.message || serverErr('secteur_activite')) && (
                 <p className="mt-1.5 text-caption text-airmess-red">
@@ -257,24 +250,23 @@ export default function MarchantFromDriverPage() {
             </div>
 
             <Input
-              label="IFU / RCCM"
-              helper="Optionnel — tu peux l'ajouter plus tard depuis ton dashboard."
-              placeholder="Ex : 0123456789012"
+              label={t('marchantFromDriver.taxId')}
+              helper={t('marchantFromDriver.taxIdHelper')}
+              placeholder={t('marchantFromDriver.taxIdPlaceholder')}
               {...register('ifu_rccm')}
               error={serverErr('ifu_rccm')}
             />
 
             <div className="pt-2">
               <Button type="submit" loading={isSubmitting} className="w-full">
-                Envoyer ma demande
+                {t('marchantFromDriver.submit')}
               </Button>
             </div>
           </form>
         </div>
 
         <p className="text-body-s text-warm-500 text-center mt-4">
-          Ton compte livreur n'est pas modifié : il reste actif pendant la
-          validation.
+          {t('marchantFromDriver.driverAccountUnaffected')}
         </p>
       </div>
     </PageShell>

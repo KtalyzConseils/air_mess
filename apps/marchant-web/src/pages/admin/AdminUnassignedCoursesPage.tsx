@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import { AdminButton } from '../../components/admin/AdminToolbar'
@@ -12,11 +14,11 @@ import { cancelCourseAsSupport } from '../../api/support'
 type Severity = 'new' | 'watch' | 'urgent' | 'critical'
 type QueueFilter = 'all' | 'express' | 'standard' | 'none_available_nearby' | 'all_nearby_busy' | 'broadcast_no_response' | 'all_contacted_declined'
 
-const severityMeta: Record<Severity, { label: string; accent: string; badge: string }> = {
-  new: { label: 'Nouvelle', accent: 'border-l-warm-300', badge: 'bg-warm-100 text-warm-600' },
-  watch: { label: 'À surveiller', accent: 'border-l-airmess-yellow', badge: 'bg-airmess-yellow/20 text-ink' },
-  urgent: { label: 'Urgent', accent: 'border-l-orange-500', badge: 'bg-orange-100 text-orange-800' },
-  critical: { label: 'Critique', accent: 'border-l-airmess-red', badge: 'bg-danger-bg text-airmess-red' },
+const severityMeta: Record<Severity, { accent: string; badge: string }> = {
+  new: { accent: 'border-l-warm-300', badge: 'bg-warm-100 text-warm-600' },
+  watch: { accent: 'border-l-airmess-yellow', badge: 'bg-airmess-yellow/20 text-ink' },
+  urgent: { accent: 'border-l-orange-500', badge: 'bg-orange-100 text-orange-800' },
+  critical: { accent: 'border-l-airmess-red', badge: 'bg-danger-bg text-airmess-red' },
 }
 
 function severity(course: UnassignedCourse): Severity {
@@ -28,23 +30,17 @@ function severity(course: UnassignedCourse): Severity {
   return 'new'
 }
 
-function age(seconds: number) {
+function age(seconds: number, t: TFunction) {
   const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes} min`
-  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`
+  if (minutes < 60) return t('admin.unassignedCourses.ageMinutes', { count: minutes })
+  return t('admin.unassignedCourses.ageHoursMinutes', { hours: Math.floor(minutes / 60), minutes: String(minutes % 60).padStart(2, '0') })
 }
 
-const filters: { value: QueueFilter; label: string }[] = [
-  { value: 'all', label: 'Toutes' },
-  { value: 'express', label: 'Express' },
-  { value: 'standard', label: 'Standard' },
-  { value: 'none_available_nearby', label: 'Aucun à proximité' },
-  { value: 'all_nearby_busy', label: 'Tous occupés' },
-  { value: 'broadcast_no_response', label: 'Sans réponse' },
-  { value: 'all_contacted_declined', label: 'Tous refusés' },
-]
+const filterValues: QueueFilter[] = ['all', 'express', 'standard', 'none_available_nearby', 'all_nearby_busy', 'broadcast_no_response', 'all_contacted_declined']
 
 export default function AdminUnassignedCoursesPage() {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const queryClient = useQueryClient()
   const user = useAuthStore((state) => state.user)
   const canOps = hasAdminRole(user, 'ops')
@@ -55,16 +51,16 @@ export default function AdminUnassignedCoursesPage() {
   const queue = useQuery({ queryKey: ['admin', 'courses-unassigned'], queryFn: fetchUnassignedCourses, refetchInterval: 20_000 })
   const drivers = useQuery({ queryKey: ['admin', 'drivers'], queryFn: fetchAdminDrivers })
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'courses-unassigned'] })
-  const relaunch = useMutation({ mutationFn: rebroadcastCourse, onSuccess: refresh, onError: () => window.alert('Relance impossible.') })
+  const relaunch = useMutation({ mutationFn: rebroadcastCourse, onSuccess: refresh, onError: () => window.alert(t('admin.unassignedCourses.relaunchError')) })
   const archive = useMutation({
     mutationFn: ({ courseId, reason }: { courseId: number; reason: string }) => cancelCourseAsSupport(courseId, reason),
     onSuccess: () => void refresh(),
-    onError: () => window.alert('Annulation impossible. La course a peut-être déjà été prise par un livreur.'),
+    onError: () => window.alert(t('admin.unassignedCourses.archiveError')),
   })
   const assign = useMutation({
-    mutationFn: ({ courseId, selected }: { courseId: number; selected: number }) => reassignCourse(courseId, selected, 'Assignation depuis la file sans livreur'),
+    mutationFn: ({ courseId, selected }: { courseId: number; selected: number }) => reassignCourse(courseId, selected, t('admin.unassignedCourses.assignReason')),
     onSuccess: () => { setAssigning(null); setDriverId(''); void refresh() },
-    onError: () => window.alert('Assignation impossible.'),
+    onError: () => window.alert(t('admin.unassignedCourses.assignError')),
   })
   const available = (drivers.data ?? []).filter((d) => d.availability_status === 'available' && ['active', 'validated'].includes(d.activation_status))
   const allCourses = queue.data?.courses ?? []
@@ -79,21 +75,21 @@ export default function AdminUnassignedCoursesPage() {
   }), [allCourses, filter])
 
   return <AdminPageShell>
-    <AdminPageHeader title="Courses sans livreur" subtitle={`${queue.data?.count ?? 0} course(s) à prendre en charge`} />
+    <AdminPageHeader title={t('admin.unassignedCourses.title')} subtitle={t('admin.unassignedCourses.subtitle', { count: queue.data?.count ?? 0 })} />
     <div className="px-4 py-5 md:px-6 lg:px-8">
       <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {(['watch', 'urgent', 'critical', 'new'] as Severity[]).map((key) => <div key={key} className={`rounded-lg border border-l-4 border-warm-200 ${severityMeta[key].accent} bg-off-white p-3`}>
-          <p className="text-caption font-semibold text-warm-500">{severityMeta[key].label}</p>
+          <p className="text-caption font-semibold text-warm-500">{t(`admin.unassignedCourses.severity.${key}`)}</p>
           <p className="mt-1 text-2xl font-bold tabular-nums text-ink">{counts[key]}</p>
         </div>)}
       </section>
 
       <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-        {filters.map((item) => <button key={item.value} onClick={() => setFilter(item.value)} className={`shrink-0 rounded-full border px-3 py-1.5 text-caption font-semibold transition-colors ${filter === item.value ? 'border-ink bg-ink text-white' : 'border-warm-300 bg-off-white text-warm-600 hover:border-warm-500'}`}>{item.label}</button>)}
+        {filterValues.map((value) => <button key={value} onClick={() => setFilter(value)} className={`shrink-0 rounded-full border px-3 py-1.5 text-caption font-semibold transition-colors ${filter === value ? 'border-ink bg-ink text-white' : 'border-warm-300 bg-off-white text-warm-600 hover:border-warm-500'}`}>{t(`admin.unassignedCourses.filters.${value}`)}</button>)}
       </div>
 
       <div className="space-y-3">
-        {queue.isLoading && <div className="p-10 text-center text-warm-500">Chargement…</div>}
+        {queue.isLoading && <div className="p-10 text-center text-warm-500">{t('admin.unassignedCourses.loading')}</div>}
         {visibleCourses.map((course) => {
           const level = severity(course)
           const meta = severityMeta[level]
@@ -102,8 +98,8 @@ export default function AdminUnassignedCoursesPage() {
             <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-2.5 py-1 text-caption font-bold ${meta.badge}`}>{meta.label}</span>
-                  <span className="rounded-full border border-warm-300 px-2 py-0.5 text-caption font-bold">{course.urgency === 'express' ? 'Express' : 'Standard'}</span>
+                  <span className={`rounded-full px-2.5 py-1 text-caption font-bold ${meta.badge}`}>{t(`admin.unassignedCourses.severity.${level}`)}</span>
+                  <span className="rounded-full border border-warm-300 px-2 py-0.5 text-caption font-bold">{t(`admin.unassignedCourses.filters.${course.urgency === 'express' ? 'express' : 'standard'}`)}</span>
                   <span className="font-mono text-caption font-bold text-warm-600">{course.reference}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
@@ -113,43 +109,43 @@ export default function AdminUnassignedCoursesPage() {
                     <p className="text-body-s font-semibold text-ink">{course.destination_quartier}</p>
                   </div>
                   <div className="text-left lg:text-right">
-                    <p className="text-caption text-warm-500">Sans livreur depuis</p>
-                    <p className="text-2xl font-extrabold tabular-nums text-ink">{age(course.offer_age_seconds)}</p>
+                    <p className="text-caption text-warm-500">{t('admin.unassignedCourses.sinceNoDriver')}</p>
+                    <p className="text-2xl font-extrabold tabular-nums text-ink">{age(course.offer_age_seconds, t)}</p>
                   </div>
                 </div>
                 <div className="mt-3 rounded-md border border-warning/25 bg-warning-bg/60 px-3 py-2">
                   <p className="text-body-s font-bold text-ink">⚠ {diagnostic.warning}</p>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-caption text-warm-600">
-                    <span>{diagnostic.contacted_count} contacté(s)</span><span>{diagnostic.declined_count} refus</span>
-                    <span>{diagnostic.available_within_radius} disponible(s) à moins de 8 km</span><span>{diagnostic.busy_within_radius} occupé(s) dans la zone</span>
-                    {diagnostic.nearest_available_outside_km !== null && <span>Plus proche hors zone : <strong>{diagnostic.nearest_available_outside_km.toLocaleString('fr-FR')} km</strong></span>}
+                    <span>{t('admin.unassignedCourses.contactedCount', { count: diagnostic.contacted_count })}</span><span>{t('admin.unassignedCourses.declinedCount', { count: diagnostic.declined_count })}</span>
+                    <span>{t('admin.unassignedCourses.availableWithinRadius', { count: diagnostic.available_within_radius })}</span><span>{t('admin.unassignedCourses.busyWithinRadius', { count: diagnostic.busy_within_radius })}</span>
+                    {diagnostic.nearest_available_outside_km !== null && <span>{t('admin.unassignedCourses.nearestOutside', { km: diagnostic.nearest_available_outside_km.toLocaleString(locale) })}</span>}
                   </div>
                 </div>
-                {course.offer_admin_actions?.length ? <p className="mt-2 text-caption text-warm-500">Dernière action : {course.offer_admin_actions[0].action} par {course.offer_admin_actions[0].admin_user?.name ?? 'admin'}</p> : null}
+                {course.offer_admin_actions?.length ? <p className="mt-2 text-caption text-warm-500">{t('admin.unassignedCourses.lastAction', { action: course.offer_admin_actions[0].action, admin: course.offer_admin_actions[0].admin_user?.name ?? t('admin.unassignedCourses.anAdmin') })}</p> : null}
               </div>
               <div className="flex flex-wrap content-start gap-2 lg:w-48 lg:flex-col">
-                {canOps && <AdminButton size="sm" variant="primary" className="lg:w-full" onClick={() => { setAssigning(course.id); setDriverId('') }}>Assigner</AdminButton>}
-                {canOps && <AdminButton size="sm" className="lg:w-full" onClick={() => relaunch.mutate(course.id)} disabled={relaunch.isPending}>Relancer</AdminButton>}
-                <Link to={`/courses/${course.id}`} onClick={() => void markOfferViewed(course.id)} className="inline-flex h-8 items-center justify-center rounded-md border border-warm-300 px-3 text-caption font-medium lg:w-full">Voir les détails</Link>
+                {canOps && <AdminButton size="sm" variant="primary" className="lg:w-full" onClick={() => { setAssigning(course.id); setDriverId('') }}>{t('admin.unassignedCourses.assign')}</AdminButton>}
+                {canOps && <AdminButton size="sm" className="lg:w-full" onClick={() => relaunch.mutate(course.id)} disabled={relaunch.isPending}>{t('admin.unassignedCourses.relaunch')}</AdminButton>}
+                <Link to={`/courses/${course.id}`} onClick={() => void markOfferViewed(course.id)} className="inline-flex h-8 items-center justify-center rounded-md border border-warm-300 px-3 text-caption font-medium lg:w-full">{t('admin.unassignedCourses.viewDetails')}</Link>
                 {canArchive && <AdminButton size="sm" variant="danger" className="lg:w-full" disabled={archive.isPending} onClick={() => {
-                  const reason = window.prompt(`Motif obligatoire pour annuler et archiver ${course.reference} :`)?.trim()
+                  const reason = window.prompt(t('admin.unassignedCourses.archiveReasonPrompt', { reference: course.reference }))?.trim()
                   if (!reason) return
-                  if (!window.confirm(`Confirmer l'annulation et l'archivage de ${course.reference} ? Cette action libérera le montant réservé.`)) return
+                  if (!window.confirm(t('admin.unassignedCourses.archiveConfirm', { reference: course.reference }))) return
                   archive.mutate({ courseId: course.id, reason })
-                }}>Annuler et archiver</AdminButton>}
+                }}>{t('admin.unassignedCourses.archiveAndCancel')}</AdminButton>}
               </div>
             </div>
             {canOps && assigning === course.id && <div className="mt-4 flex flex-wrap gap-2 border-t border-warm-200 pt-3">
               <select className="h-9 min-w-[260px] rounded-md border border-warm-300 bg-white px-3" value={driverId} onChange={(e) => setDriverId(e.target.value ? Number(e.target.value) : '')}>
-                <option value="">Choisir un livreur disponible</option>
+                <option value="">{t('admin.unassignedCourses.chooseDriver')}</option>
                 {available.map((d) => <option key={d.id} value={d.id}>{d.first_name} {d.last_name} · {d.vehicle_type}</option>)}
               </select>
-              <AdminButton variant="primary" disabled={!driverId || assign.isPending} onClick={() => driverId && assign.mutate({ courseId: course.id, selected: Number(driverId) })}>Confirmer</AdminButton>
-              <AdminButton variant="ghost" onClick={() => setAssigning(null)}>Annuler</AdminButton>
+              <AdminButton variant="primary" disabled={!driverId || assign.isPending} onClick={() => driverId && assign.mutate({ courseId: course.id, selected: Number(driverId) })}>{t('admin.unassignedCourses.confirm')}</AdminButton>
+              <AdminButton variant="ghost" onClick={() => setAssigning(null)}>{t('admin.unassignedCourses.cancel')}</AdminButton>
             </div>}
           </article>
         })}
-        {!queue.isLoading && visibleCourses.length === 0 && <div className="rounded-lg border border-warm-200 bg-off-white p-10 text-center text-warm-500">Aucune course ne correspond à ce filtre.</div>}
+        {!queue.isLoading && visibleCourses.length === 0 && <div className="rounded-lg border border-warm-200 bg-off-white p-10 text-center text-warm-500">{t('admin.unassignedCourses.noneMatch')}</div>}
       </div>
     </div>
   </AdminPageShell>

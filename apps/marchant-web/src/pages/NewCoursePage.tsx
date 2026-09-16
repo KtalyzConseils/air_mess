@@ -24,7 +24,6 @@ import { useAuthStore } from '../stores/authStore'
 import { fetchWallet } from '../api/wallet'
 import { useOnboardingStore } from '../stores/onboardingStore'
 import Coachmark, { type CoachStep } from '../components/onboarding/Coachmark'
-import OriginBanner from '../components/course/OriginBanner'
 import OriginDrawer from '../components/course/OriginDrawer'
 import CoursePriceRecap from '../components/course/CoursePriceRecap'
 import MobileCoursePriceBar from '../components/course/MobileCoursePriceBar'
@@ -35,14 +34,28 @@ import MissingFieldsBanner, {
 import {
   AlertTriangleIcon,
   ArrowRightIcon,
+  BagIcon,
   ChevronDownIcon,
+  ClockIcon,
+  FileTextIcon,
+  MapPinIcon,
   PackageIcon,
   RouteIcon,
   SettingsIcon,
+  SnowflakeIcon,
+  StoreIcon,
 } from '../components/ui/icons'
 
 type FormValues = CreateCoursePayload
 type CourseFormStep = 1 | 2 | 3
+type PackagePreset = {
+  id: string
+  categoryCode: string
+  title: string
+  subtitle: string
+  size: 'S' | 'M' | 'L'
+  Icon: typeof PackageIcon
+}
 
 /**
  * Métadonnées de chaque champ obligatoire pour piloter le bandeau d'erreurs :
@@ -51,7 +64,7 @@ type CourseFormStep = 1 | 2 | 3
  * - dedupKey  : plusieurs erreurs qui pointent le même problème (ex: lat & lng du même pin)
  *               partagent une clé pour n'afficher qu'une seule entrée dans le bandeau
  */
-type FieldLocation = 'drawer' | 'options' | 'main' | 'map_A' | 'map_B'
+type FieldLocation = 'package' | 'drawer' | 'options' | 'main' | 'map_A' | 'map_B'
 
 const FIELD_META: Record<string, { labelKey: string; location: FieldLocation; dedupKey?: string }> = {
   origin_name:          { labelKey: 'courses.new.senderName',       location: 'drawer' },
@@ -66,8 +79,7 @@ const FIELD_META: Record<string, { labelKey: string; location: FieldLocation; de
   destination_city:     { labelKey: 'courses.new.destinationCity',   location: 'main' },
   destination_lat:      { labelKey: 'courses.new.errors.mapB',      location: 'map_B', dedupKey: 'map_B' },
   destination_lng:      { labelKey: 'courses.new.errors.mapB',      location: 'map_B', dedupKey: 'map_B' },
-  package_category_id:  { labelKey: 'courses.new.categoryLabel',    location: 'main' },
-  package_description:  { labelKey: 'courses.new.packageDescription', location: 'main' },
+  package_category_id:  { labelKey: 'courses.new.categoryLabel',    location: 'package' },
 }
 
 const inputClass =
@@ -77,20 +89,71 @@ const inputClass =
   'disabled:opacity-60 disabled:cursor-not-allowed'
 
 const STEP_FIELD_NAMES: Record<CourseFormStep, Array<keyof FormValues>> = {
-  1: ['origin_name', 'origin_phone', 'origin_quartier', 'origin_city', 'origin_lat', 'origin_lng'],
-  2: [
+  1: ['package_category_id'],
+  2: ['origin_name', 'origin_phone', 'origin_quartier', 'origin_lat', 'origin_lng',
     'destination_name',
     'destination_phone',
     'destination_quartier',
-    'destination_city',
     'destination_lat',
     'destination_lng',
   ],
-  3: ['package_category_id', 'package_description'],
+  3: [],
 }
 
+const PACKAGE_PRESETS: PackagePreset[] = [
+  {
+    id: 'parcel',
+    categoryCode: 'standard',
+    title: 'Colis',
+    subtitle: 'Paquet simple, objet, petit achat',
+    size: 'M',
+    Icon: PackageIcon,
+  },
+  {
+    id: 'food',
+    categoryCode: 'hot_meal',
+    title: 'Repas',
+    subtitle: 'Restaurant, snack, plat prepare',
+    size: 'S',
+    Icon: StoreIcon,
+  },
+  {
+    id: 'documents',
+    categoryCode: 'document',
+    title: 'Documents',
+    subtitle: 'Plis, papiers, dossiers',
+    size: 'S',
+    Icon: FileTextIcon,
+  },
+  {
+    id: 'shopping',
+    categoryCode: 'standard',
+    title: 'Courses',
+    subtitle: 'Achats client ou commande boutique',
+    size: 'M',
+    Icon: BagIcon,
+  },
+  {
+    id: 'pharmacy',
+    categoryCode: 'pharmacy',
+    title: 'Pharmacie',
+    subtitle: 'Produit sensible ou urgent',
+    size: 'S',
+    Icon: SnowflakeIcon,
+  },
+  {
+    id: 'other',
+    categoryCode: 'standard',
+    title: 'Autre',
+    subtitle: 'A preciser dans les details',
+    size: 'L',
+    Icon: ClockIcon,
+  },
+]
+
 export default function NewCoursePage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
@@ -151,12 +214,27 @@ export default function NewCoursePage() {
   const paidBy = watch('delivery_fee_paid_by') ?? 'sender'
   const isRecipientPaid = paidBy === 'recipient'
   const urgencyWatch = (watch('urgency') ?? 'standard') as 'standard' | 'express'
+  const packageSizeWatch = (watch('package_size') ?? 'M') as 'S' | 'M' | 'L' | 'XL'
   const originName = watch('origin_name') ?? ''
   const originQuartier = watch('origin_quartier') ?? ''
   const originCity = watch('origin_city') ?? ''
   const destinationQuartier = watch('destination_quartier') ?? ''
   const destinationCity = watch('destination_city') ?? ''
   const destinationName = watch('destination_name') ?? ''
+  const selectedCategoryId = Number(watch('package_category_id')) || undefined
+  const [currentStep, setCurrentStep] = useState<CourseFormStep>(1)
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
+  const selectedPackagePreset = useMemo(
+    () =>
+      PACKAGE_PRESETS.find((preset) => preset.id === selectedPresetId) ??
+      PACKAGE_PRESETS.find((preset) => {
+        const category = categories.find((item) => item.id === selectedCategoryId)
+        return category?.code === preset.categoryCode && packageSizeWatch === preset.size
+      }) ??
+      null,
+    [categories, packageSizeWatch, selectedCategoryId, selectedPresetId],
+  )
+  const SelectedPackageIcon = selectedPackagePreset?.Icon
 
   const shouldSuggestDeclared = collectionAmountWatch >= 20000 && !declaredValueWatch
   const exposurePreview = Math.max(collectionAmountWatch || 0, declaredValueWatch || 0)
@@ -172,7 +250,7 @@ export default function NewCoursePage() {
   const [showDestExtra, setShowDestExtra] = useState(false)
   const [showDeclared, setShowDeclared] = useState(false)
   const [originDrawerOpen, setOriginDrawerOpen] = useState(false)
-  const [currentStep, setCurrentStep] = useState<CourseFormStep>(1)
+  const [locationTarget, setLocationTarget] = useState<'A' | 'B'>('B')
 
   // Onboarding — coach-marks du formulaire. Si l'utilisateur ne les a pas
   // encore vus, on ouvre l'accordion "Options" pour que les cibles
@@ -320,35 +398,6 @@ export default function NewCoursePage() {
   // drawer est fermé, avec un message ciblé sur le champ le plus fréquent.
   // Prend en compte À LA FOIS les erreurs client (RHF) et backend (Laravel 422),
   // car Laravel peut refuser un champ que RHF n'avait pas validé.
-  const originErrorKeys = [
-    'origin_name',
-    'origin_phone',
-    'origin_quartier',
-    'origin_city',
-  ] as const
-  const originErrorList = originErrorKeys.filter(
-    (k) =>
-      (errors as Record<string, unknown>)[k] !== undefined || backendFieldErrors[k],
-  )
-  const originHasError =
-    (isSubmitted && originErrorList.length > 0) ||
-    (Object.keys(backendFieldErrors).length > 0 && originErrorList.length > 0)
-  const originErrorMessage = (() => {
-    if (originErrorList.length !== 1) return undefined
-    switch (originErrorList[0]) {
-      case 'origin_quartier':
-        return t('courses.new.originBanner.errorMissingQuartier')
-      case 'origin_name':
-        return t('courses.new.originBanner.errorMissingName')
-      case 'origin_phone':
-        return t('courses.new.originBanner.errorMissingPhone')
-      case 'origin_city':
-        return t('courses.new.originBanner.errorMissingCity')
-      default:
-        return undefined
-    }
-  })()
-
   // Au retour d'une erreur backend qui concerne l'origine, remonter en haut pour
   // que la bannière rouge soit visible tout de suite (comme pour le submit client).
   const firstBackendField = Object.keys(backendFieldErrors).find((k) => FIELD_META[k])
@@ -367,10 +416,14 @@ export default function NewCoursePage() {
   function handleMissingFieldClick(fieldName: string) {
     const meta = FIELD_META[fieldName]
     if (!meta) return
-    if (meta.location === 'drawer' || meta.location === 'map_A') {
+    if (meta.location === 'package') {
       setCurrentStep(1)
+    } else if (meta.location === 'drawer' || meta.location === 'map_A') {
+      setCurrentStep(2)
+      setLocationTarget('A')
     } else if (meta.location === 'main' || meta.location === 'map_B') {
       setCurrentStep(2)
+      setLocationTarget('B')
     } else if (meta.location === 'options') {
       setCurrentStep(3)
       setOptionsOpen(true)
@@ -409,6 +462,12 @@ export default function NewCoursePage() {
           const numeric = Number(value)
           return !Number.isFinite(numeric) || numeric === 0
         }
+        if (name === 'origin_quartier') {
+          return !String(value ?? getValues('origin_street') ?? '').trim()
+        }
+        if (name === 'destination_quartier') {
+          return !String(value ?? getValues('destination_street') ?? '').trim()
+        }
         return value == null || String(value).trim() === ''
       })
       .map((name) => {
@@ -418,6 +477,28 @@ export default function NewCoursePage() {
           label: meta ? t(meta.labelKey) : String(name),
         }
       })
+  }
+
+  function selectPackagePreset(preset: PackagePreset) {
+    const category =
+      categories.find((item) => item.code === preset.categoryCode) ??
+      categories.find((item) => item.code === 'standard') ??
+      categories[0]
+
+    if (!category) {
+      setQuotaError('Les categories de colis ne sont pas encore chargees.')
+      return
+    }
+
+    setQuotaError(null)
+    setSelectedPresetId(preset.id)
+    setValue('package_category_id', category.id, { shouldDirty: true, shouldValidate: true })
+    setValue('package_size', preset.size, { shouldDirty: true, shouldValidate: true })
+    if (!watch('package_description') && preset.id !== 'other') {
+      setValue('package_description', preset.title, { shouldDirty: true })
+    }
+    setCurrentStep(2)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function goToNextStep() {
@@ -461,7 +542,6 @@ export default function NewCoursePage() {
       destinationQuartier,
       destinationCity,
       watch('package_category_id'),
-      watch('package_description'),
     ]
     let count = required.filter((v) => !v || String(v).trim() === '').length
     // + positions carte (comptées comme 1 chacune, pas 2 par pin)
@@ -483,7 +563,6 @@ export default function NewCoursePage() {
     watch('origin_phone'),
     watch('destination_phone'),
     watch('package_category_id'),
-    watch('package_description'),
     watch('origin_lat'),
     watch('origin_lng'),
     watch('destination_lat'),
@@ -514,8 +593,12 @@ export default function NewCoursePage() {
       package_weight_kg: values.package_weight_kg ? Number(values.package_weight_kg) : undefined,
       origin_lat: Number(values.origin_lat),
       origin_lng: Number(values.origin_lng),
+      origin_quartier: values.origin_quartier || values.origin_street || 'Position actuelle',
+      origin_city: values.origin_city || 'Cotonou',
       destination_lat: Number(values.destination_lat),
       destination_lng: Number(values.destination_lng),
+      destination_quartier: values.destination_quartier || values.destination_street || 'Destination',
+      destination_city: values.destination_city || 'Cotonou',
       collection_amount: values.has_collection ? Number(values.collection_amount) : undefined,
       collection_method: values.has_collection ? values.collection_method : undefined,
       package_declared_value: values.package_declared_value ? Number(values.package_declared_value) : undefined,
@@ -547,11 +630,13 @@ export default function NewCoursePage() {
     setValue('origin_lng', place.lng, { shouldDirty: true, shouldValidate: true })
     if (place.quartier) {
       setValue('origin_quartier', place.quartier, { shouldDirty: true, shouldValidate: true })
+    } else if (place.formatted_address || place.name) {
+      setValue('origin_quartier', place.formatted_address ?? place.name ?? '', { shouldDirty: true, shouldValidate: true })
     }
     if (place.city) {
       setValue('origin_city', place.city, { shouldDirty: true, shouldValidate: true })
     }
-    if (place.formatted_address && !watch('origin_street')) {
+    if (place.formatted_address) {
       setValue('origin_street', place.formatted_address, { shouldDirty: true })
     }
   }
@@ -561,13 +646,31 @@ export default function NewCoursePage() {
     setValue('destination_lng', place.lng, { shouldDirty: true, shouldValidate: true })
     if (place.quartier) {
       setValue('destination_quartier', place.quartier, { shouldDirty: true, shouldValidate: true })
+    } else if (place.formatted_address || place.name) {
+      setValue('destination_quartier', place.formatted_address ?? place.name ?? '', { shouldDirty: true, shouldValidate: true })
     }
     if (place.city) {
       setValue('destination_city', place.city, { shouldDirty: true, shouldValidate: true })
     }
-    if (place.formatted_address && !watch('destination_street')) {
+    if (place.formatted_address) {
       setValue('destination_street', place.formatted_address, { shouldDirty: true })
     }
+  }
+
+  function fillOriginFromMapClick(lat: number, lng: number) {
+    const label = `Point selectionne sur la carte (${lat.toFixed(5)}, ${lng.toFixed(5)})`
+    setValue('origin_lat', lat, { shouldDirty: true, shouldValidate: true })
+    setValue('origin_lng', lng, { shouldDirty: true, shouldValidate: true })
+    setValue('origin_street', label, { shouldDirty: true, shouldValidate: true })
+    setValue('origin_quartier', label, { shouldDirty: true, shouldValidate: true })
+  }
+
+  function fillDestinationFromMapClick(lat: number, lng: number) {
+    const label = `Destination selectionnee sur la carte (${lat.toFixed(5)}, ${lng.toFixed(5)})`
+    setValue('destination_lat', lat, { shouldDirty: true, shouldValidate: true })
+    setValue('destination_lng', lng, { shouldDirty: true, shouldValidate: true })
+    setValue('destination_street', label, { shouldDirty: true, shouldValidate: true })
+    setValue('destination_quartier', label, { shouldDirty: true, shouldValidate: true })
   }
 
   // Coords utilisées à la fois pour la carte, le récap et l'estimation tarif.
@@ -615,7 +718,7 @@ export default function NewCoursePage() {
         }
       : undefined
 
-  const packageCategoryId = Number(watch('package_category_id')) || undefined
+  const packageCategoryId = selectedCategoryId
   const packageCategoryLabel =
     packageCategoryId != null
       ? categories.find((c) => c.id === packageCategoryId)?.name
@@ -638,7 +741,7 @@ export default function NewCoursePage() {
     destInstructions: (watch('destination_instructions') ?? '') || undefined,
     packageCategoryLabel,
     packageDescription: (watch('package_description') ?? '') as string,
-    packageSize: (watch('package_size') ?? 'M') as 'S' | 'M' | 'L' | 'XL',
+    packageSize: packageSizeWatch,
     packageWeight: packageWeightWatch,
     packageDeclaredValue: declaredValueWatch || undefined,
     urgency: urgencyWatch,
@@ -674,9 +777,9 @@ export default function NewCoursePage() {
 
         <div className="mb-6 grid grid-cols-3 gap-2 rounded-xl bg-warm-100 p-1">
           {[
-            { step: 1 as const, label: 'Retrait' },
-            { step: 2 as const, label: 'Livraison' },
-            { step: 3 as const, label: 'Colis & paiement' },
+            { step: 1 as const, label: 'Colis' },
+            { step: 2 as const, label: 'Trajet' },
+            { step: 3 as const, label: 'Détails' },
           ].map((item) => (
             <button
               key={item.step}
@@ -735,6 +838,10 @@ export default function NewCoursePage() {
           <input type="hidden" {...register('origin_lng', { required: true })} />
           <input type="hidden" {...register('destination_lat', { required: true })} />
           <input type="hidden" {...register('destination_lng', { required: true })} />
+          <input type="hidden" {...register('origin_quartier')} />
+          <input type="hidden" {...register('origin_city')} />
+          <input type="hidden" {...register('destination_quartier')} />
+          <input type="hidden" {...register('destination_city')} />
 
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
             {/* ===================== Colonne formulaire ===================== */}
@@ -751,57 +858,68 @@ export default function NewCoursePage() {
                   Bordure rouge quand un champ origine est en erreur (le drawer est fermé
                   par défaut → l'utilisateur ne voit sinon pas quel bloc corriger). */}
               {currentStep === 1 && (
-                <>
-                  <div data-onboarding-id="origin">
-                    <OriginBanner
-                      name={originName}
-                      quartier={originQuartier}
-                      city={originCity}
-                      hasError={originHasError}
-                      errorMessage={originErrorMessage}
-                      onEdit={() => setOriginDrawerOpen(true)}
-                    />
+                <section className="bg-off-white border border-warm-200 rounded-lg p-5 md:p-6">
+                  <div className="mb-5 flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-caption font-bold uppercase text-warm-500">
+                        {t('courses.new.packageSectionDesc')}
+                      </p>
+                      <h3 className="text-h2 text-ink font-bold">
+                        Nous livrons quoi ?
+                      </h3>
+                    </div>
+                    <span className="hidden sm:grid h-11 w-11 place-items-center rounded-full bg-airmess-yellow text-ink">
+                      <PackageIcon size={20} />
+                    </span>
                   </div>
 
-                  <section className="bg-off-white border border-warm-200 rounded-lg p-5 md:p-6">
-                    <div className="mb-4 pb-3 border-b border-warm-100 flex items-center gap-2">
-                      <span className="text-warm-600">
-                        <RouteIcon size={18} />
-                      </span>
-                      <h3 className="text-h3 text-ink font-bold">Position de retrait</h3>
-                    </div>
-                    <p className="text-caption text-warm-600 font-medium mb-1.5">
-                      {t('courses.new.dualMap.blockTitle')}
-                    </p>
-                    <DualPinMap
-                      originLat={Number(watch('origin_lat')) || undefined}
-                      originLng={Number(watch('origin_lng')) || undefined}
-                      destLat={Number(watch('destination_lat')) || undefined}
-                      destLng={Number(watch('destination_lng')) || undefined}
-                      defaultActive="A"
-                      onOriginChange={(la, ln) => {
-                        setValue('origin_lat', la, { shouldDirty: true, shouldValidate: true })
-                        setValue('origin_lng', ln, { shouldDirty: true, shouldValidate: true })
-                      }}
-                      onOriginPlaceSelect={fillOriginFromPlace}
-                      onDestChange={(la, ln) => {
-                        setValue('destination_lat', la, { shouldDirty: true, shouldValidate: true })
-                        setValue('destination_lng', ln, { shouldDirty: true, shouldValidate: true })
-                      }}
-                      onDestPlaceSelect={fillDestinationFromPlace}
-                    />
-                    {geoStatus === 'success' && (
-                      <p className="text-caption text-success mt-1.5">{t('courses.new.geoSuccess')}</p>
-                    )}
-                    {geoStatus === 'denied' && (
-                      <p className="text-caption text-warning mt-1.5">{t('courses.new.geoDenied')}</p>
-                    )}
-                  </section>
-                </>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    {PACKAGE_PRESETS.map((preset) => {
+                      const selected = selectedPackagePreset?.id === preset.id
+                      const Icon = preset.Icon
+
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => selectPackagePreset(preset)}
+                          className={[
+                            'min-h-[116px] rounded-xl border-2 p-4 text-left transition-all',
+                            'hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-airmess-yellow/50',
+                            selected
+                              ? 'border-airmess-yellow bg-airmess-yellow text-ink shadow-sm'
+                              : 'border-warm-200 bg-cream hover:border-airmess-yellow/70',
+                          ].join(' ')}
+                        >
+                          <span
+                            className={[
+                              'mb-3 grid h-10 w-10 place-items-center rounded-full',
+                              selected ? 'bg-off-white text-ink' : 'bg-off-white text-warm-700',
+                            ].join(' ')}
+                          >
+                            <Icon size={19} />
+                          </span>
+                          <span className="block text-body font-extrabold text-ink">
+                            {preset.title}
+                          </span>
+                          <span className="mt-1 block text-caption leading-5 text-warm-600">
+                            {preset.subtitle}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <input
+                    type="hidden"
+                    {...register('package_category_id', { required: t('courses.new.required') })}
+                  />
+                </section>
               )}
 
               {/* Bloc TRAJET (destinataire + carte destination) */}
               {currentStep === 2 && (
+              <>
               <section className="bg-off-white border border-warm-200 rounded-lg p-5 md:p-6">
                 <div className="mb-4 pb-3 border-b border-warm-100 flex items-center gap-2">
                   <span className="text-warm-600">
@@ -812,71 +930,140 @@ export default function NewCoursePage() {
                   </h3>
                 </div>
 
-                <div className="mb-3">
-                  <AddressPicker onSelect={fillDestinationFromAddress} />
+                <div className="mb-4 rounded-2xl border border-warm-200 bg-cream p-2 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setLocationTarget('A')}
+                    className={[
+                      'w-full rounded-xl p-3 text-left transition-colors flex items-center gap-3',
+                      locationTarget === 'A' ? 'bg-airmess-yellow/20' : 'hover:bg-off-white',
+                    ].join(' ')}
+                  >
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-off-white text-ink shrink-0">
+                      <StoreIcon size={20} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2 text-caption font-bold text-warm-500">
+                        Prise en charge
+                        {originLat !== 0 && originLng !== 0 && (
+                          <span className="text-success">✓</span>
+                        )}
+                      </span>
+                      <span className="block truncate text-h3 font-extrabold text-ink">
+                        {originQuartier || watch('origin_street') || 'Position actuelle'}
+                      </span>
+                    </span>
+                  </button>
+
+                  <div className="mx-14 h-px bg-warm-200" />
+
+                  <button
+                    type="button"
+                    onClick={() => setLocationTarget('B')}
+                    className={[
+                      'w-full rounded-xl p-3 text-left transition-colors flex items-center gap-3',
+                      locationTarget === 'B' ? 'bg-airmess-red/10' : 'hover:bg-off-white',
+                    ].join(' ')}
+                  >
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-airmess-red text-white shrink-0">
+                      <MapPinIcon size={20} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2 text-caption font-bold text-warm-500">
+                        Destination
+                        {destinationLat !== 0 && destinationLng !== 0 && (
+                          <span className="text-success">✓</span>
+                        )}
+                      </span>
+                      <span className="block truncate text-h3 font-extrabold text-ink">
+                        {watch('destination_street') || destinationQuartier || 'Où livrer ?'}
+                      </span>
+                    </span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label={t('courses.new.recipientNameLabel')} required>
-                    <input
-                      {...register('destination_name', { required: t('courses.new.required') })}
-                      className={inputClass}
-                    />
-                  </Field>
-                  <Field label={t('courses.new.recipientPhoneLabel')} required>
-                    <input
-                      {...register('destination_phone', { required: t('courses.new.required') })}
-                      className={inputClass}
-                    />
-                  </Field>
-                  <Field
-                    label={t('courses.new.destinationQuartier')}
-                    required
-                    error={errors.destination_quartier?.message}
-                  >
-                    <input
-                      {...register('destination_quartier', { required: t('courses.new.required') })}
-                      className={inputClass}
-                    />
-                  </Field>
-                  <Field
-                    label={t('courses.new.destinationCity')}
-                    required
-                    error={errors.destination_city?.message}
-                  >
-                    <input
-                      {...register('destination_city', { required: t('courses.new.required') })}
-                      className={inputClass}
-                    />
-                  </Field>
-                  <div className="md:col-span-2" id="dual-pin-map">
-                    <p className="text-caption text-warm-600 font-medium mb-1.5">
-                      {t('courses.new.dualMap.blockTitle')}
-                    </p>
-                    <DualPinMap
-                      originLat={Number(watch('origin_lat')) || undefined}
-                      originLng={Number(watch('origin_lng')) || undefined}
-                      destLat={Number(watch('destination_lat')) || undefined}
-                      destLng={Number(watch('destination_lng')) || undefined}
-                      onOriginChange={(la, ln) => {
-                        setValue('origin_lat', la, { shouldDirty: true, shouldValidate: true })
-                        setValue('origin_lng', ln, { shouldDirty: true, shouldValidate: true })
-                      }}
-                      onOriginPlaceSelect={fillOriginFromPlace}
-                      onDestChange={(la, ln) => {
-                        setValue('destination_lat', la, { shouldDirty: true, shouldValidate: true })
-                        setValue('destination_lng', ln, { shouldDirty: true, shouldValidate: true })
-                      }}
-                      onDestPlaceSelect={fillDestinationFromPlace}
-                    />
-                    {geoStatus === 'success' && (
-                      <p className="text-caption text-success mt-1.5">{t('courses.new.geoSuccess')}</p>
-                    )}
-                    {geoStatus === 'denied' && (
-                      <p className="text-caption text-warning mt-1.5">{t('courses.new.geoDenied')}</p>
-                    )}
-                  </div>
+                <div className="mb-4" id="dual-pin-map">
+                  <DualPinMap
+                    originLat={Number(watch('origin_lat')) || undefined}
+                    originLng={Number(watch('origin_lng')) || undefined}
+                    destLat={Number(watch('destination_lat')) || undefined}
+                    destLng={Number(watch('destination_lng')) || undefined}
+                    defaultActive="B"
+                    activePin={locationTarget}
+                    onActivePinChange={setLocationTarget}
+                    height="280px"
+                    onOriginChange={fillOriginFromMapClick}
+                    onOriginPlaceSelect={fillOriginFromPlace}
+                    onDestChange={fillDestinationFromMapClick}
+                    onDestPlaceSelect={fillDestinationFromPlace}
+                  />
+                  {geoStatus === 'success' && (
+                    <p className="text-caption text-success mt-1.5">{t('courses.new.geoSuccess')}</p>
+                  )}
+                  {geoStatus === 'denied' && (
+                    <p className="text-caption text-warning mt-1.5">{t('courses.new.geoDenied')}</p>
+                  )}
                 </div>
+
+                {locationTarget === 'B' ? (
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <AddressPicker onSelect={fillDestinationFromAddress} />
+                    </div>
+                    <Field label={t('courses.new.destinationFieldLabel')} required>
+                      <input
+                        {...register('destination_street')}
+                        className={inputClass}
+                        placeholder={t('courses.new.destinationSearchPlaceholder')}
+                      />
+                    </Field>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Field label={t('courses.new.recipientNameLabel')} required>
+                        <input
+                          {...register('destination_name', { required: t('courses.new.required') })}
+                          className={inputClass}
+                          placeholder={t('courses.new.recipientNamePlaceholder')}
+                        />
+                      </Field>
+                      <Field label={t('courses.new.recipientPhoneLabel')} required>
+                        <input
+                          {...register('destination_phone', { required: t('courses.new.required') })}
+                          className={inputClass}
+                          placeholder="+229..."
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-warm-200 bg-cream p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <StoreIcon size={18} />
+                      <p className="text-body font-extrabold text-ink">{t('courses.new.senderSectionTitle')}</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Field label={t('courses.new.originDrawer.streetLabel')} required>
+                        <input
+                          {...register('origin_street')}
+                          className={inputClass}
+                          placeholder={t('courses.new.originDrawer.streetPlaceholder')}
+                        />
+                      </Field>
+                      <Field label={t('courses.new.senderName')} required>
+                        <input
+                          {...register('origin_name', { required: t('courses.new.required') })}
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field label={t('courses.new.phoneLabel')} required>
+                        <input
+                          {...register('origin_phone', { required: t('courses.new.required') })}
+                          className={inputClass}
+                          placeholder="+229..."
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                )}
 
                 {/* Précisions destination (rue + landmark + instructions) */}
                 <div className="mt-3">
@@ -891,9 +1078,6 @@ export default function NewCoursePage() {
                   </button>
                   {showDestExtra && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                      <Field label={t('courses.new.streetLabel')} optional>
-                        <input {...register('destination_street')} className={inputClass} />
-                      </Field>
                       <Field label={t('courses.new.landmarkLabel')} optional>
                         <input
                           {...register('destination_landmark')}
@@ -913,6 +1097,7 @@ export default function NewCoursePage() {
                   )}
                 </div>
               </section>
+              </>
               )}
 
               {/* Bloc COLIS */}
@@ -929,34 +1114,40 @@ export default function NewCoursePage() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Field
-                      label={t('courses.new.categoryLabel')}
-                      required
-                      error={errors.package_category_id?.message}
+                  <div className="rounded-xl border border-warm-200 bg-cream px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="grid h-10 w-10 place-items-center rounded-full bg-airmess-yellow text-ink shrink-0">
+                        {SelectedPackageIcon ? (
+                          <SelectedPackageIcon size={18} />
+                        ) : (
+                          <PackageIcon size={18} />
+                        )}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-body font-extrabold text-ink truncate">
+                          {selectedPackagePreset?.title ?? packageCategoryLabel ?? t('courses.new.categoryLabel')}
+                        </p>
+                        <p className="text-caption text-warm-600">
+                          Taille {packageSizeWatch}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      pill
+                      onClick={() => setCurrentStep(1)}
                     >
-                      <select
-                        {...register('package_category_id', { required: t('courses.new.required') })}
-                        className={inputClass}
-                      >
-                        <option value="">{t('courses.new.categoryChoose')}</option>
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-
-                    <Field label={t('courses.new.sizeLabel')} required>
-                      <select {...register('package_size')} className={inputClass}>
-                        <option value="S">{t('courses.new.sizeSmall')}</option>
-                        <option value="M">{t('courses.new.sizeMedium')}</option>
-                        <option value="L">{t('courses.new.sizeLarge')}</option>
-                        <option value="XL">{t('courses.new.sizeXL')}</option>
-                      </select>
-                    </Field>
+                      Modifier
+                    </Button>
                   </div>
+
+                  <input
+                    type="hidden"
+                    {...register('package_category_id', { required: t('courses.new.required') })}
+                  />
+                  <input type="hidden" {...register('package_size')} />
 
                   <div data-onboarding-id="urgency">
                     <Field label={t('courses.new.urgencyLabel')}>
@@ -996,13 +1187,9 @@ export default function NewCoursePage() {
                     </Field>
                   </div>
 
-                  <Field
-                    label={t('courses.new.packageDescription')}
-                    required
-                    error={errors.package_description?.message}
-                  >
+                  <Field label={`${t('courses.new.packageDescription')} (optionnel)`}>
                     <input
-                      {...register('package_description', { required: t('courses.new.required') })}
+                      {...register('package_description')}
                       className={inputClass}
                       placeholder={t('courses.new.packageDescPlaceholder')}
                     />
@@ -1150,16 +1337,13 @@ export default function NewCoursePage() {
                             <div className="rounded-md bg-airmess-yellow/10 border border-airmess-yellow/40 px-3 py-2.5 text-body-s text-ink">
                               {hasCollection && collectionAmountWatch > 0
                                 ? t('courses.new.paidByPreviewCombined', {
-                                    product: (collectionAmountWatch || 0).toLocaleString('fr-FR'),
-                                    fee: feeToCollect.toLocaleString('fr-FR'),
-                                    total: totalToCollect.toLocaleString('fr-FR'),
+                                    product: (collectionAmountWatch || 0).toLocaleString(locale),
+                                    fee: feeToCollect.toLocaleString(locale),
+                                    total: totalToCollect.toLocaleString(locale),
                                   })
                                 : t('courses.new.paidByPreviewFeeOnly', {
-                                    fee: feeToCollect.toLocaleString('fr-FR'),
+                                    fee: feeToCollect.toLocaleString(locale),
                                   })}
-                            </div>
-                            <div className="rounded-md bg-info-bg border border-info/20 px-3 py-2.5 text-caption text-info">
-                              {t('courses.new.paidByAirmessNote')}
                             </div>
                           </div>
                         )
@@ -1201,7 +1385,7 @@ export default function NewCoursePage() {
                           {willBePremium && (
                             <p className="mt-2 text-caption text-ink bg-airmess-yellow/10 border border-airmess-yellow/40 rounded-md px-3 py-2">
                               {t('courses.new.premiumHint', {
-                                threshold: HIGH_VALUE_UI_THRESHOLD.toLocaleString('fr-FR'),
+                                threshold: HIGH_VALUE_UI_THRESHOLD.toLocaleString(locale),
                               })}
                             </p>
                           )}

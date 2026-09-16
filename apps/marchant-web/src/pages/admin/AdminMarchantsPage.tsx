@@ -9,6 +9,7 @@ import AdminPagination from '../../components/admin/AdminPagination'
 import { AdminSearchInput, AdminButton } from '../../components/admin/AdminToolbar'
 import MarchantStatusBadge from '../../components/MarchantStatusBadge'
 import { fetchMarchants, type MarchantListParams } from '../../api/admin'
+import { CreateMarchantModal } from '../../components/admin/CreateAccountModals'
 
 type FilterKey = 'all' | 'active' | 'suspended'
 
@@ -17,6 +18,7 @@ export default function AdminMarchantsPage() {
   const [filterKey, setFilterKey] = useState<FilterKey>('all')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const FILTERS: readonly { key: FilterKey; label: string; params: MarchantListParams }[] = [
     { key: 'all', label: t('admin.marchants.tabAll'), params: {} },
@@ -50,6 +52,11 @@ export default function AdminMarchantsPage() {
       <AdminPageHeader
         title={t('admin.marchants.title')}
         subtitle={t('admin.marchants.pageSubtitle')}
+        actions={
+          <AdminButton variant="primary" onClick={() => setCreateOpen(true)}>
+            Creer un marchand
+          </AdminButton>
+        }
         toolbar={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full">
             <AdminTabs tabs={FILTERS} value={filterKey} onChange={changeFilter} />
@@ -155,6 +162,7 @@ export default function AdminMarchantsPage() {
           />
         )}
       </div>
+      <CreateMarchantModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </AdminPageShell>
   )
 }
