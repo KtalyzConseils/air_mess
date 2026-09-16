@@ -320,6 +320,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/marchants/{marchant}',      [AdminController::class, 'showMarchant']);
         Route::get('/waitlists/merchants',       [AdminController::class, 'merchantWaitlists']);
         Route::get('/waitlists/drivers',         [AdminController::class, 'driverWaitlists']);
+        Route::get('/waitlists/merchants/export.{format}', [AdminController::class, 'merchantWaitlistsExport'])
+            ->whereIn('format', ['csv', 'txt']);
+        Route::get('/waitlists/drivers/export.{format}',   [AdminController::class, 'driverWaitlistsExport'])
+            ->whereIn('format', ['csv', 'txt']);
         Route::get('/individuals',               [AdminController::class, 'individuals']);
         Route::get('/individuals/{individual}',  [AdminController::class, 'showIndividual']);
         Route::get('/waitlist',                   [AdminController::class, 'waitlist']);

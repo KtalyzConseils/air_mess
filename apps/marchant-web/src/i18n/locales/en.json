@@ -1714,6 +1714,9 @@
       "itemLabelDriver": "courier form",
       "bonus": "Bonus",
       "submittedAt": "Submitted on",
+      "exportExcel": "Excel (.csv)",
+      "exportTxt": "TXT",
+      "exportError": "Export failed. Please try again.",
       "sections": {
         "contact": "Contact",
         "activity": "Current activity",

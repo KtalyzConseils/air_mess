@@ -837,6 +837,204 @@ class AdminController extends Controller
         );
     }
 
+    public function merchantWaitlistsExport(Request $request, string $format): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $format = strtolower($format);
+        if (!in_array($format, ['csv', 'txt'], true)) {
+            abort(400, 'Unsupported export format.');
+        }
+
+        $query = MerchantWaitlist::query()->latest();
+
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('shop_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('contact_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        $delimiter = $format === 'csv' ? ';' : "\t";
+        $contentType = $format === 'csv' ? 'text/csv; charset=UTF-8' : 'text/plain; charset=UTF-8';
+        $filename = 'commercants_formulaires_' . now()->format('Ymd_His') . '.' . $format;
+        $stringifyList = fn ($value): string => is_array($value)
+            ? implode(' | ', array_map(fn ($item) => (string) $item, $value))
+            : (string) $value;
+        $cell = fn ($value) => $value === null ? '' : $stringifyList($value);
+
+        return response()->streamDownload(function () use ($query, $delimiter, $cell) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, [
+                'id',
+                'type_commerce',
+                'type_commerce_autre',
+                'zone',
+                'zone_autre',
+                'commandes_par_semaine',
+                'source',
+                'source_autre',
+                'moyens_livraison',
+                'moyens_livraison_autre',
+                'problemes',
+                'problemes_autre',
+                'pire_experience',
+                'probleme_collecte_especes',
+                'temps_perdu_par_semaine',
+                'commandes_perdues_par_semaine',
+                'benefice_attendu',
+                'acceptation_commission',
+                'commission_raisonnable',
+                'confiance_mobile_money',
+                'niveau_interet',
+                'interet_essai',
+                'nom_commerce',
+                'nom_contact',
+                'email',
+                'whatsapp',
+                'statut',
+                'bonus_montant',
+                'bonus_code',
+                'bonus_utilise_le',
+                'cree_le',
+            ], $delimiter);
+
+            $query->chunk(500, function ($rows) use ($out, $delimiter, $cell) {
+                foreach ($rows as $row) {
+                    fputcsv($out, [
+                        $row->id,
+                        $cell($row->commerce_type),
+                        $cell($row->commerce_type_other),
+                        $cell($row->zone),
+                        $cell($row->zone_other),
+                        $cell($row->weekly_orders),
+                        $cell($row->source),
+                        $cell($row->source_other),
+                        $cell($row->delivery_methods),
+                        $cell($row->delivery_methods_other),
+                        $cell($row->problems),
+                        $cell($row->problems_other),
+                        $cell($row->worst_experience),
+                        $cell($row->cash_collection_issue),
+                        $cell($row->time_lost_weekly),
+                        $cell($row->orders_lost_weekly),
+                        $cell($row->expected_benefit),
+                        $cell($row->commission_acceptance),
+                        $cell($row->reasonable_fee),
+                        $cell($row->mobile_money_trust),
+                        $row->interest_level ?? '',
+                        $cell($row->trial_interest),
+                        $cell($row->shop_name),
+                        $cell($row->contact_name),
+                        $cell($row->email),
+                        $cell($row->whatsapp),
+                        $cell($row->status),
+                        $row->bonus_amount ?? '',
+                        $cell($row->bonus_code),
+                        $row->bonus_redeemed_at?->format('Y-m-d H:i:s') ?? '',
+                        $row->created_at?->format('Y-m-d H:i:s') ?? '',
+                    ], $delimiter);
+                }
+            });
+
+            fclose($out);
+        }, $filename, ['Content-Type' => $contentType]);
+    }
+
+    public function driverWaitlistsExport(Request $request, string $format): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $format = strtolower($format);
+        if (!in_array($format, ['csv', 'txt'], true)) {
+            abort(400, 'Unsupported export format.');
+        }
+
+        $query = DriverWaitlist::query()->latest();
+
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('full_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('email', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        $delimiter = $format === 'csv' ? ';' : "\t";
+        $contentType = $format === 'csv' ? 'text/csv; charset=UTF-8' : 'text/plain; charset=UTF-8';
+        $filename = 'livreurs_formulaires_' . now()->format('Ymd_His') . '.' . $format;
+        $stringifyList = fn ($value): string => is_array($value)
+            ? implode(' | ', array_map(fn ($item) => (string) $item, $value))
+            : (string) $value;
+        $cell = fn ($value) => $value === null ? '' : $stringifyList($value);
+
+        return response()->streamDownload(function () use ($query, $delimiter, $cell) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, [
+                'id',
+                'nom_complet',
+                'email',
+                'whatsapp',
+                'type_vehicule',
+                'zone',
+                'zone_autre',
+                'experience',
+                'disponibilite',
+                'source',
+                'source_autre',
+                'plateformes_utilisees',
+                'plateformes_utilisees_autre',
+                'livraisons_par_semaine',
+                'revenu_hebdomadaire',
+                'problemes',
+                'problemes_autre',
+                'pire_experience',
+                'modele_paiement_attendu',
+                'revenu_hebdomadaire_attendu',
+                'confiance_mobile_money',
+                'niveau_interet',
+                'disponibilite_lancement',
+                'statut',
+                'cree_le',
+            ], $delimiter);
+
+            $query->chunk(500, function ($rows) use ($out, $delimiter, $cell) {
+                foreach ($rows as $row) {
+                    fputcsv($out, [
+                        $row->id,
+                        $cell($row->full_name),
+                        $cell($row->email),
+                        $cell($row->whatsapp),
+                        $cell($row->vehicle_type),
+                        $cell($row->zone),
+                        $cell($row->zone_other),
+                        $cell($row->experience),
+                        $cell($row->availability),
+                        $cell($row->source),
+                        $cell($row->source_other),
+                        $cell($row->platforms_used),
+                        $cell($row->platforms_used_other),
+                        $cell($row->weekly_deliveries),
+                        $cell($row->weekly_income),
+                        $cell($row->problems),
+                        $cell($row->problems_other),
+                        $cell($row->worst_experience),
+                        $cell($row->expected_payment_model),
+                        $cell($row->expected_weekly_income),
+                        $cell($row->mobile_money_trust),
+                        $row->interest_level ?? '',
+                        $cell($row->launch_availability),
+                        $cell($row->status),
+                        $row->created_at?->format('Y-m-d H:i:s') ?? '',
+                    ], $delimiter);
+                }
+            });
+
+            fclose($out);
+        }, $filename, ['Content-Type' => $contentType]);
+    }
+
     public function showMarchant(Marchant $marchant): JsonResponse
     {
         $marchant->load(['user', 'user.wallet', 'validatedBy', 'commercialAssignedTo']);

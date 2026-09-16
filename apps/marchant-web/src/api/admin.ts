@@ -549,6 +549,45 @@ export async function fetchDriverWaitlists(
   return data
 }
 
+export type WaitlistExportFormat = 'csv' | 'txt'
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => window.URL.revokeObjectURL(url), 30_000)
+}
+
+export async function downloadMerchantWaitlistsExport(
+  format: WaitlistExportFormat,
+  params: MerchantWaitlistListParams = {},
+): Promise<void> {
+  const response = await api.get(`/admin/waitlists/merchants/export.${format}`, {
+    params,
+    responseType: 'blob',
+  })
+  const type = format === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8'
+  const blob = new Blob([response.data], { type })
+  downloadBlob(blob, `commercants_formulaires.${format}`)
+}
+
+export async function downloadDriverWaitlistsExport(
+  format: WaitlistExportFormat,
+  params: DriverWaitlistListParams = {},
+): Promise<void> {
+  const response = await api.get(`/admin/waitlists/drivers/export.${format}`, {
+    params,
+    responseType: 'blob',
+  })
+  const type = format === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8'
+  const blob = new Blob([response.data], { type })
+  downloadBlob(blob, `livreurs_formulaires.${format}`)
+}
+
 export interface MarchantListParams {
   subscription_status?: string
   validation?: 'pending' | 'validated'

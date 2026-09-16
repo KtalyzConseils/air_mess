@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import AdminPagination from '../../components/admin/AdminPagination'
-import { AdminSearchInput } from '../../components/admin/AdminToolbar'
+import { AdminSearchInput, AdminButton } from '../../components/admin/AdminToolbar'
 import { ChevronDownIcon } from '../../components/ui/icons'
 import {
   fetchMerchantWaitlists,
@@ -13,6 +13,9 @@ import {
   type DriverWaitlistListItem,
   type MerchantWaitlistListParams,
   type DriverWaitlistListParams,
+  type WaitlistExportFormat,
+  downloadMerchantWaitlistsExport,
+  downloadDriverWaitlistsExport,
 } from '../../api/admin'
 
 type Tab = 'merchants' | 'drivers'
@@ -334,6 +337,7 @@ export default function AdminFormResultsPage() {
   const [tab, setTab] = useState<Tab>('merchants')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
 
   const search = q.trim()
   const merchantParams: MerchantWaitlistListParams = search ? { q: search, page } : { page }
@@ -360,6 +364,23 @@ export default function AdminFormResultsPage() {
     setQ('')
   }
 
+  const handleExport = async (format: WaitlistExportFormat) => {
+    setExporting(true)
+    try {
+      const filter = search ? { q: search } : {}
+      if (tab === 'merchants') {
+        await downloadMerchantWaitlistsExport(format, filter)
+      } else {
+        await downloadDriverWaitlistsExport(format, filter)
+      }
+    } catch (error) {
+      console.error('Form results export failed', error)
+      window.alert(t('admin.formResults.exportError'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <AdminPageShell>
       <AdminPageHeader
@@ -379,19 +400,37 @@ export default function AdminFormResultsPage() {
                 label={t('admin.formResults.tabsDrivers')}
               />
             </div>
-            <AdminSearchInput
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value)
-                setPage(1)
-              }}
-              placeholder={
-                tab === 'merchants'
-                  ? t('admin.formResults.searchPlaceholderMerchants')
-                  : t('admin.formResults.searchPlaceholderDrivers')
-              }
-              minWidthClass="min-w-[280px]"
-            />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <AdminSearchInput
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value)
+                  setPage(1)
+                }}
+                placeholder={
+                  tab === 'merchants'
+                    ? t('admin.formResults.searchPlaceholderMerchants')
+                    : t('admin.formResults.searchPlaceholderDrivers')
+                }
+                minWidthClass="min-w-[280px]"
+              />
+              <AdminButton
+                size="sm"
+                variant="secondary"
+                disabled={exporting}
+                onClick={() => handleExport('csv')}
+              >
+                {t('admin.formResults.exportExcel')}
+              </AdminButton>
+              <AdminButton
+                size="sm"
+                variant="secondary"
+                disabled={exporting}
+                onClick={() => handleExport('txt')}
+              >
+                {t('admin.formResults.exportTxt')}
+              </AdminButton>
+            </div>
           </div>
         }
       />

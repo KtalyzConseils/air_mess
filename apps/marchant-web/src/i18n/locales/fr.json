@@ -1714,6 +1714,9 @@
       "itemLabelDriver": "formulaire livreur",
       "bonus": "Bonus",
       "submittedAt": "Soumis le",
+      "exportExcel": "Excel (.csv)",
+      "exportTxt": "TXT",
+      "exportError": "Échec de l'exportation. Réessayez.",
       "sections": {
         "contact": "Coordonnées",
         "activity": "Activité actuelle",
