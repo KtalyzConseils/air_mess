@@ -1382,6 +1382,7 @@
       "incidents": "Incidents",
       "marchants": "Merchants",
       "merchantWaitlists": "Merchant waitlist",
+      "driverWaitlists": "Courier waitlist",
       "individuals": "Individuals",
       "waitlist": "Waitlist",
       "drivers": "Couriers",
@@ -1677,6 +1678,19 @@
       "colZone": "Area",
       "colContact": "Contact",
       "colBonus": "Bonus",
+      "colDate": "Date"
+    },
+    "driverWaitlists": {
+      "title": "Courier waitlist",
+      "subtitle": "Courier sign-ups from the market study.",
+      "searchPlaceholder": "Name, email, WhatsApp, area…",
+      "emptyResults": "No sign-up found.",
+      "itemLabel": "sign-up",
+      "colContact": "Contact",
+      "colVehicle": "Vehicle",
+      "colZone": "Area",
+      "colAvailability": "Availability",
+      "colInterest": "Interest",
       "colDate": "Date"
     },
     "individuals": {

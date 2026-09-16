@@ -491,6 +491,47 @@ export async function fetchMerchantWaitlists(
   return data
 }
 
+export type DriverWaitlistListItem = {
+  id: number
+  full_name: string
+  email: string
+  whatsapp: string
+  vehicle_type: string
+  zone: string
+  zone_other: string | null
+  experience: string
+  availability: string
+  source: string | null
+  source_other: string | null
+  platforms_used: string[]
+  platforms_used_other: string | null
+  weekly_deliveries: string
+  weekly_income: string
+  problems: string[]
+  problems_other: string | null
+  worst_experience: string
+  expected_payment_model: string
+  expected_weekly_income: string
+  mobile_money_trust: string
+  interest_level: number
+  launch_availability: string
+  status: string
+  created_at: string
+}
+
+export interface DriverWaitlistListParams {
+  q?: string
+  page?: number
+  per_page?: number
+}
+
+export async function fetchDriverWaitlists(
+  params: DriverWaitlistListParams = {},
+): Promise<Paginated<DriverWaitlistListItem>> {
+  const { data } = await api.get('/admin/waitlists/drivers', { params })
+  return data
+}
+
 export interface MarchantListParams {
   subscription_status?: string
   validation?: 'pending' | 'validated'

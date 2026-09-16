@@ -1382,6 +1382,7 @@
       "incidents": "Incidents",
       "marchants": "Marchands",
       "merchantWaitlists": "Liste d'attente commerçants",
+      "driverWaitlists": "Liste d'attente livreurs",
       "individuals": "Particuliers",
       "waitlist": "Liste d'attente",
       "drivers": "Livreurs",
@@ -1677,6 +1678,19 @@
       "colZone": "Zone",
       "colContact": "Contact",
       "colBonus": "Bonus",
+      "colDate": "Date"
+    },
+    "driverWaitlists": {
+      "title": "Liste d'attente livreurs",
+      "subtitle": "Inscriptions livreurs issues de l'étude de marché.",
+      "searchPlaceholder": "Nom, email, WhatsApp, zone…",
+      "emptyResults": "Aucune inscription trouvée.",
+      "itemLabel": "inscription",
+      "colContact": "Contact",
+      "colVehicle": "Véhicule",
+      "colZone": "Zone",
+      "colAvailability": "Disponibilité",
+      "colInterest": "Intérêt",
       "colDate": "Date"
     },
     "individuals": {

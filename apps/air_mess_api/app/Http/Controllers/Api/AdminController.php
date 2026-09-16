@@ -11,6 +11,7 @@ use App\Models\Driver;
 use App\Models\Individual;
 use App\Models\Marchant;
 use App\Models\MerchantWaitlist;
+use App\Models\DriverWaitlist;
 use App\Models\Payment;
 use App\Models\SupportNote;
 use App\Models\User;
@@ -817,6 +818,25 @@ class AdminController extends Controller
     }
 
     // ===== 5ter. FICHE DÃ‰TAILLÃ‰E D'UN MARCHAND =====
+    // ===== 5quinquies. LISTE D'ATTENTE LIVREURS (etude de marche) =====
+    public function driverWaitlists(Request $request): JsonResponse
+    {
+        $query = DriverWaitlist::query()->latest();
+
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('full_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('email', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        return response()->json(
+            $query->paginate(min((int) $request->query('per_page', 20), 100))
+        );
+    }
+
     public function showMarchant(Marchant $marchant): JsonResponse
     {
         $marchant->load(['user', 'user.wallet', 'validatedBy', 'commercialAssignedTo']);
