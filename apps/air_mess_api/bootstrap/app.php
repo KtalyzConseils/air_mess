@@ -31,6 +31,16 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Pour les routes API protegees, renvoyer une reponse JSON 401
+        // au lieu d'une redirection vers une route web inexistante.
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json(['message' => 'Non authentifie.'], 401);
+            }
+
+            return null;
+        });
+
         // Rate limiting : renvoyer un JSON français propre avec Retry-After.
         // Sans ce handler, Laravel renvoie une page HTML "Too Many Attempts" pas
         // exploitable par les 3 clients (marchant-web, driver-app, integration).
