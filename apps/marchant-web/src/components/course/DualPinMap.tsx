@@ -16,6 +16,8 @@ interface Props {
   onDestPlaceSelect?: (place: PlaceDetails) => void
   /** Pin actif par défaut. Le marchand connaît son origine ⇒ 'B' est plus fréquent. */
   defaultActive?: 'A' | 'B'
+  activePin?: 'A' | 'B'
+  onActivePinChange?: (pin: 'A' | 'B') => void
   height?: string
 }
 
@@ -37,12 +39,19 @@ export default function DualPinMap({
   onOriginPlaceSelect,
   onDestPlaceSelect,
   defaultActive = 'B',
+  activePin,
+  onActivePinChange,
   height = '340px',
 }: Props) {
   const { t } = useTranslation()
-  const [active, setActive] = useState<'A' | 'B'>(defaultActive)
+  const [internalActive, setInternalActive] = useState<'A' | 'B'>(defaultActive)
   const [error, setError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
+  const active = activePin ?? internalActive
+  const setActive = (pin: 'A' | 'B') => {
+    setInternalActive(pin)
+    onActivePinChange?.(pin)
+  }
 
   const hasOrigin =
     typeof originLat === 'number' &&

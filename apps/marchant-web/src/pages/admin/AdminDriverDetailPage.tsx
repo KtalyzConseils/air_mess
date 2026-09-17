@@ -8,6 +8,7 @@ import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import { AdminButton } from '../../components/admin/AdminToolbar'
 import { ArrowLeftIcon, SettingsIcon, CheckIcon, AlertTriangleIcon, WhatsappIcon } from '../../components/ui/icons'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
+import ResetWalletButton from '../../components/ResetWalletButton'
 import SupportNotesPanel from '../../components/SupportNotesPanel'
 import {
   fetchDriver,
@@ -370,14 +371,23 @@ export default function AdminDriverDetailPage() {
               title={t('admin.drivers.sectionWalletDeposit')}
               action={
                 isSuperAdmin && data.driver.wallet ? (
-                  <AdminButton
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setWalletAdjustOpen(true)}
-                    leftIcon={<SettingsIcon size={14} />}
-                  >
-                    {t('admin.drivers.walletAdjust')}
-                  </AdminButton>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ResetWalletButton
+                      target="driver"
+                      targetId={data.driver.id}
+                      targetName={`${data.driver.first_name} ${data.driver.last_name}`}
+                      currentBalance={data.driver.wallet.balance}
+                      onSuccessInvalidate={[['admin', 'driver', id]]}
+                    />
+                    <AdminButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setWalletAdjustOpen(true)}
+                      leftIcon={<SettingsIcon size={14} />}
+                    >
+                      {t('admin.drivers.walletAdjust')}
+                    </AdminButton>
+                  </div>
                 ) : null
               }
             >

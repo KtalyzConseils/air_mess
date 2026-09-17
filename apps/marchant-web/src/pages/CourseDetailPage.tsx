@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import AppHeader from '../components/AppHeader'
 import AdminPageShell from '../components/admin/AdminPageShell'
 import IncidentArbitrationPanel from '../components/admin/IncidentArbitrationPanel'
@@ -18,7 +19,21 @@ import { markCourseFraud } from '../api/admin'
 import { useAuthStore } from '../stores/authStore'
 import { hasAdminRole } from '../lib/permissions'
 
-function PageWrapper({ isAdmin, children }: { isAdmin: boolean; children: React.ReactNode }) {
+/**
+ * Wrapper de page — DOIT rester déclaré au niveau module.
+ *
+ * S'il est défini à l'intérieur du composant parent (CourseDetailPage), sa
+ * référence change à chaque render, et React démonte/remonte tout l'arbre
+ * en dessous à chaque frappe → le textarea du motif d'annulation perd le
+ * focus à chaque lettre tapée. Le garder hors du composant fixe le bug.
+ */
+function Wrapper({
+  isAdmin,
+  children,
+}: {
+  isAdmin: boolean
+  children: React.ReactNode
+}) {
   return isAdmin ? (
     <AdminPageShell>{children}</AdminPageShell>
   ) : (
@@ -30,7 +45,8 @@ function PageWrapper({ isAdmin, children }: { isAdmin: boolean; children: React.
 }
 
 export default function CourseDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -111,22 +127,22 @@ export default function CourseDetailPage() {
 
   if (courseQuery.isLoading) {
     return (
-      <PageWrapper isAdmin={isAdmin}>
+      <Wrapper isAdmin={isAdmin}>
         <main className="max-w-5xl mx-auto px-4 md:px-6 py-12 text-warm-500">{t('common.loading')}</main>
-      </PageWrapper>
+      </Wrapper>
     )
   }
 
   if (courseQuery.error) {
     return (
-      <PageWrapper isAdmin={isAdmin}>
+      <Wrapper isAdmin={isAdmin}>
         <main className="max-w-5xl mx-auto px-4 md:px-6 py-12">
           <Card padding="lg" className="text-center bg-danger-bg! border-airmess-red/20! text-airmess-red">
             {t('common.loadingError')}{' '}
             <button onClick={() => navigate(-1)} className="underline font-semibold">{t('common.back')}</button>
           </Card>
         </main>
-      </PageWrapper>
+      </Wrapper>
     )
   }
 
@@ -143,10 +159,11 @@ export default function CourseDetailPage() {
   const openIncidents = (course.incidents ?? []).filter((i) => i.status === 'open')
 
   const trackingUrl = `${window.location.origin}/t/${course.tracking_token}`
-  const waMessage =
-    `Bonjour, votre colis Air Mess (réf. ${course.reference}) arrive.\n` +
-    `Suivez la livraison ici : ${trackingUrl}\n` +
-    `🔑 Code de livraison à remettre au livreur : ${course.delivery_code}`
+  const waMessage = t('courses.detail.waMessage', {
+    reference: course.reference,
+    url: trackingUrl,
+    code: course.delivery_code,
+  })
   const waLink = `https://wa.me/${waNumber(course.destination_phone)}?text=${encodeURIComponent(waMessage)}`
 
   const apiError =
@@ -155,7 +172,7 @@ export default function CourseDetailPage() {
       : null
 
   return (
-    <PageWrapper isAdmin={isAdmin}>
+    <Wrapper isAdmin={isAdmin}>
       <main className="max-w-5xl mx-auto px-4 md:px-6 py-8 md:py-12">
         {/* ============================================================
             HERO — référence + statut + actions
@@ -194,7 +211,7 @@ export default function CourseDetailPage() {
             </Button>
             {canReportIncident && (
               <Button variant="ghost" size="sm" onClick={() => setReportIncidentOpen(true)}>
-                <span className="text-warning">⚠️ Signaler un incident</span>
+                <span className="text-warning">⚠️ {t('courses.detail.reportIncident')}</span>
               </Button>
             )}
             {canCancel && (
@@ -207,7 +224,7 @@ export default function CourseDetailPage() {
               <Button variant="ghost" size="sm" onClick={() => setFraudOpen(true)}>
                 <span className="text-airmess-red inline-flex items-center gap-1">
                   <AlertTriangleIcon size={14} />
-                  Signaler vol
+                  {t('courses.detail.reportTheft')}
                 </span>
               </Button>
             )}
@@ -223,12 +240,10 @@ export default function CourseDetailPage() {
               </div>
               <div className="min-w-0">
                 <p className="text-eyebrow uppercase text-warm-500 font-bold mb-1">
-                  Course en prise en charge premium
+                  {t('courses.detail.premiumTitle')}
                 </p>
                 <p className="text-body-s text-warm-700">
-                  Cette course dépasse le seuil grand public. Elle n'est pas proposée à nos livreurs
-                  standards. Un membre de notre équipe va vous contacter pour l'assigner à un
-                  livreur dédié.
+                  {t('courses.detail.premiumBody')}
                 </p>
               </div>
             </div>
@@ -244,15 +259,12 @@ export default function CourseDetailPage() {
               </div>
               <div className="min-w-0">
                 <p className="text-eyebrow uppercase text-airmess-red font-bold mb-1">
-                  Course frauduleuse — signalée
+                  {t('courses.detail.fraudBannerTitle')}
                 </p>
                 <p className="text-body-s text-warm-700">
-                  Le livreur a été banni, la caution saisie, et le marchand remboursé.
+                  {t('courses.detail.fraudBannerBody')}
                   {typeof course.fraud_shortfall_fcfa === 'number' && course.fraud_shortfall_fcfa > 0 && (
-                    <>
-                      {' '}Manque à combler par la plateforme :{' '}
-                      <strong>{course.fraud_shortfall_fcfa.toLocaleString('fr-FR')} FCFA</strong>.
-                    </>
+                    <strong>{t('courses.detail.fraudShortfall', { amount: course.fraud_shortfall_fcfa.toLocaleString(locale) })}</strong>
                   )}
                 </p>
               </div>
@@ -275,12 +287,12 @@ export default function CourseDetailPage() {
         {!isAdmin && openIncidents.length > 0 && (
           <Card variant="default" padding="md" className="mb-6 bg-warning-bg! border-warning/30!">
             <p className="text-eyebrow uppercase text-warning font-bold mb-1">
-              ⚖️ Incident en cours de traitement
+              {t('courses.detail.incidentBannerTitle')}
             </p>
             <p className="text-body-s text-warm-600">
               {openIncidents.length === 1
-                ? `Vous avez signalé un incident sur cette course. L'équipe ops l'arbitrera sous 24h ouvrées.`
-                : `${openIncidents.length} incidents en cours d'arbitrage sur cette course.`}
+                ? t('courses.detail.incidentBannerSingle')
+                : t('courses.detail.incidentBannerMultiple', { count: openIncidents.length })}
             </p>
           </Card>
         )}
@@ -291,18 +303,18 @@ export default function CourseDetailPage() {
         {isAdmin && (
           <Card variant="default" padding="lg" className="mb-6 bg-info-bg! border-info/20!">
             <p className="text-eyebrow uppercase text-info font-semibold mb-4">
-              🛠️ Vue ops — informations internes
+              {t('courses.detail.opsEyebrow')}
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 text-body-s">
               <div>
-                <p className="text-warm-500">Expéditeur</p>
+                <p className="text-warm-500">{t('courses.detail.sender')}</p>
                 <p className="font-bold text-ink">{course.sender?.name ?? course.origin_name}</p>
                 <p className="text-caption text-warm-500">{course.sender?.phone ?? '—'}</p>
               </div>
 
               <div>
-                <p className="text-warm-500">Livreur</p>
+                <p className="text-warm-500">{t('courses.detail.driver')}</p>
                 {course.driver ? (
                   <>
                     <Link
@@ -314,50 +326,50 @@ export default function CourseDetailPage() {
                     <p className="text-caption text-warm-500">{course.driver.user.phone}</p>
                   </>
                 ) : (
-                  <p className="font-medium text-warm-400 italic">Non assigné</p>
+                  <p className="font-medium text-warm-400 italic">{t('courses.detail.unassigned')}</p>
                 )}
               </div>
 
               <div>
-                <p className="text-warm-500">Marge transporteur</p>
+                <p className="text-warm-500">{t('courses.detail.marginLabel')}</p>
                 <p className="font-bold text-ink tabular-nums">
-                  {(course.delivery_fee - course.driver_earnings).toLocaleString('fr-FR')} FCFA
+                  {(course.delivery_fee - course.driver_earnings).toLocaleString(locale)} FCFA
                 </p>
                 <p className="text-caption text-warm-500 tabular-nums">
-                  {course.delivery_fee.toLocaleString('fr-FR')} − {course.driver_earnings.toLocaleString('fr-FR')}
+                  {course.delivery_fee.toLocaleString(locale)} − {course.driver_earnings.toLocaleString(locale)}
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-4 pt-4 border-t border-info/20">
               <div>
-                <p className="text-caption text-warm-500">Code de retrait</p>
+                <p className="text-caption text-warm-500">{t('courses.detail.pickupCodeLabel')}</p>
                 <p className="font-mono font-bold text-ink tracking-widest text-h3">{course.pickup_code}</p>
               </div>
               <div>
-                <p className="text-caption text-warm-500">Code de livraison</p>
+                <p className="text-caption text-warm-500">{t('courses.detail.deliveryCodeLabel')}</p>
                 <p className="font-mono font-bold text-ink tracking-widest text-h3">{course.delivery_code}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-body-s mt-4 pt-4 border-t border-info/20">
               <div>
-                <p className="text-caption text-warm-500">Créée</p>
-                <p className="font-medium text-ink">{fmtDateTime(course.created_at)}</p>
+                <p className="text-caption text-warm-500">{t('courses.detail.createdLabel')}</p>
+                <p className="font-medium text-ink">{fmtDateTime(course.created_at, locale)}</p>
               </div>
               <div>
-                <p className="text-caption text-warm-500">Attribuée</p>
-                <p className="font-medium text-ink">{fmtDateTime(course.assigned_at)}</p>
-                <p className="text-caption text-warm-500">délai : {duration(course.created_at, course.assigned_at)}</p>
+                <p className="text-caption text-warm-500">{t('courses.detail.assignedLabel')}</p>
+                <p className="font-medium text-ink">{fmtDateTime(course.assigned_at, locale)}</p>
+                <p className="text-caption text-warm-500">{t('courses.detail.delayLabel', { duration: duration(course.created_at, course.assigned_at, t) })}</p>
               </div>
               <div>
-                <p className="text-caption text-warm-500">Récupérée</p>
-                <p className="font-medium text-ink">{fmtDateTime(course.picked_up_at)}</p>
+                <p className="text-caption text-warm-500">{t('courses.detail.pickedUpLabel')}</p>
+                <p className="font-medium text-ink">{fmtDateTime(course.picked_up_at, locale)}</p>
               </div>
               <div>
-                <p className="text-caption text-warm-500">Livrée</p>
-                <p className="font-medium text-ink">{fmtDateTime(course.delivered_at)}</p>
-                <p className="text-caption text-warm-500">transit : {duration(course.picked_up_at, course.delivered_at)}</p>
+                <p className="text-caption text-warm-500">{t('courses.detail.deliveredLabel')}</p>
+                <p className="font-medium text-ink">{fmtDateTime(course.delivered_at, locale)}</p>
+                <p className="text-caption text-warm-500">{t('courses.detail.transitLabel', { duration: duration(course.picked_up_at, course.delivered_at, t) })}</p>
               </div>
             </div>
           </Card>
@@ -378,21 +390,22 @@ export default function CourseDetailPage() {
             {course.status === 'returning_to_sender' && course.return_code && (
               <Card variant="signature" padding="lg" className="border-l-4 border-l-airmess-red! mb-4">
                 <p className="text-eyebrow uppercase text-airmess-red font-semibold mb-2">
-                  🔄 Colis en retour vers vous
+                  {t('courses.detail.returnBannerTitle')}
                 </p>
                 <p className="text-body-s text-warm-600 mb-4">
-                  Le client a refusé le colis. Le livreur vous le rapporte. À son arrivée, donnez-lui ce
-                  <strong className="text-ink"> code de retour</strong> pour clôturer la course.
+                  {t('courses.detail.returnBannerBodyPart1')}
+                  <strong className="text-ink"> {t('courses.detail.returnBannerCodeWord')} </strong>
+                  {t('courses.detail.returnBannerBodyPart2')}
                 </p>
                 <div className="bg-airmess-red/10 rounded-lg p-4 flex items-center justify-between flex-wrap gap-3">
                   <div>
-                    <p className="text-caption text-warm-600 uppercase font-semibold">Code de retour</p>
+                    <p className="text-caption text-warm-600 uppercase font-semibold">{t('courses.detail.returnCodeLabel')}</p>
                     <p className="text-h1 font-bold font-mono text-ink tracking-[0.4em] mt-1">
                       {course.return_code}
                     </p>
                   </div>
                   <Button variant="dark" size="sm" pill onClick={() => copy(course.return_code!, 'return')}>
-                    {copiedKey === 'return' ? '✓ Copié' : '📋 Copier'}
+                    {copiedKey === 'return' ? `✓ ${t('common.copied')}` : `📋 ${t('common.copy')}`}
                   </Button>
                 </div>
               </Card>
@@ -402,30 +415,31 @@ export default function CourseDetailPage() {
             {course.driver && !isTerminal && (
               <Card variant="signature" padding="lg" className="border-l-4 border-l-airmess-yellow!">
                 <p className="text-eyebrow uppercase text-warm-500 font-semibold mb-2">
-                  🔑 Codes de validation
+                  {t('courses.detail.validationCodesEyebrow')}
                 </p>
                 <p className="text-body-s text-warm-600 mb-4">
-                  Donnez le <strong className="text-ink">code de retrait</strong> au livreur quand il arrive.
-                  Le <strong className="text-ink">code de livraison</strong> est pour le destinataire (visible sur son lien de suivi).
+                  {t('courses.detail.validationCodesBodyPart1')} <strong className="text-ink">{t('courses.detail.validationCodesCodeWord1')}</strong>{' '}
+                  {t('courses.detail.validationCodesBodyPart2')} <strong className="text-ink">{t('courses.detail.validationCodesCodeWord2')}</strong>{' '}
+                  {t('courses.detail.validationCodesBodyPart3')}
                 </p>
 
                 {/* Code de retrait — gros & copiable */}
                 <div className="bg-airmess-yellow/15 rounded-lg p-4 flex items-center justify-between mb-3 flex-wrap gap-3">
                   <div>
-                    <p className="text-caption text-warm-600 uppercase font-semibold">Code de retrait</p>
+                    <p className="text-caption text-warm-600 uppercase font-semibold">{t('courses.detail.pickupCodeLabel')}</p>
                     <p className="text-h1 font-bold font-mono text-ink tracking-[0.4em] mt-1">
                       {course.pickup_code}
                     </p>
                   </div>
                   <Button variant="dark" size="sm" pill onClick={() => copy(course.pickup_code, 'pickup')}>
-                    {copiedKey === 'pickup' ? '✓ Copié' : '📋 Copier'}
+                    {copiedKey === 'pickup' ? `✓ ${t('common.copied')}` : `📋 ${t('common.copy')}`}
                   </Button>
                 </div>
 
                 {/* Code de livraison — secondaire */}
                 <div className="bg-warm-100 rounded-lg p-3 flex items-center justify-between flex-wrap gap-2">
                   <div>
-                    <p className="text-caption text-warm-500 uppercase">Code de livraison (destinataire)</p>
+                    <p className="text-caption text-warm-500 uppercase">{t('courses.detail.deliveryCodeRecipientLabel')}</p>
                     <p className="text-h3 font-bold font-mono text-ink tracking-widest mt-0.5">
                       {course.delivery_code}
                     </p>
@@ -434,7 +448,7 @@ export default function CourseDetailPage() {
                     onClick={() => copy(course.delivery_code, 'delivery')}
                     className="text-caption text-warm-500 hover:text-ink underline"
                   >
-                    {copiedKey === 'delivery' ? '✓ Copié' : 'Copier'}
+                    {copiedKey === 'delivery' ? `✓ ${t('common.copied')}` : t('common.copy')}
                   </button>
                 </div>
 
@@ -446,7 +460,7 @@ export default function CourseDetailPage() {
                   className="mt-4 w-full flex items-center justify-center gap-2 bg-[#25D366] text-white font-semibold py-3 rounded-full hover:opacity-90 transition-opacity shadow-sm"
                 >
                   <span className="text-lg" aria-hidden>📲</span>
-                  Envoyer au destinataire (WhatsApp)
+                  {t('courses.detail.whatsappCta')}
                 </a>
               </Card>
             )}
@@ -471,11 +485,11 @@ export default function CourseDetailPage() {
 
             {/* Tarification */}
             <Section title={t('courses.detail.pricing')}>
-              <KV label={t('courses.detail.deliveryFee')} value={`${course.delivery_fee.toLocaleString('fr-FR')} FCFA`} />
-              <KV label={t('admin.reconciliation.driverEarnings')} value={`${course.driver_earnings.toLocaleString('fr-FR')} FCFA`} />
+              <KV label={t('courses.detail.deliveryFee')} value={`${course.delivery_fee.toLocaleString(locale)} FCFA`} />
+              <KV label={t('admin.reconciliation.driverEarnings')} value={`${course.driver_earnings.toLocaleString(locale)} FCFA`} />
               {course.has_collection && (
                 <>
-                  <KV label={t('courses.detail.collectionAmount')} value={`${course.collection_amount?.toLocaleString('fr-FR')} FCFA`} />
+                  <KV label={t('courses.detail.collectionAmount')} value={`${course.collection_amount?.toLocaleString(locale)} FCFA`} />
                   <KV label={t('common.type')} value={course.collection_method ?? '—'} />
                 </>
               )}
@@ -536,7 +550,7 @@ export default function CourseDetailPage() {
                     </p>
                     <p className="text-caption text-warm-600 mt-1">
                       {t('courses.detail.cancelPostPickupBody', {
-                        fee: course.delivery_fee.toLocaleString('fr-FR'),
+                        fee: course.delivery_fee.toLocaleString(locale),
                       })}
                     </p>
                     <label className="flex items-start gap-2 mt-3 cursor-pointer">
@@ -604,37 +618,36 @@ export default function CourseDetailPage() {
                   <AlertTriangleIcon size={22} />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-h2 text-ink font-bold">Signaler un vol livreur</h3>
+                  <h3 className="text-h2 text-ink font-bold">{t('courses.detail.fraudModalTitle')}</h3>
                   <p className="text-body-s text-warm-600 mt-1">
-                    Le livreur sera <strong>banni définitivement</strong>, sa caution sera saisie
-                    en totalité, et le marchand sera remboursé (valeur déclarée + encaissement).
-                    Cette action est <strong>irréversible</strong>.
+                    {t('courses.detail.fraudModalBodyPart1')} <strong>{t('courses.detail.fraudModalBannedWord')}</strong>
+                    {t('courses.detail.fraudModalBodyPart2')} <strong>{t('courses.detail.fraudModalIrreversibleWord')}</strong>.
                   </p>
                 </div>
               </div>
 
               <div className="mt-4 bg-warm-100 rounded-md p-3 text-caption text-warm-600 space-y-1">
-                <p><strong>Livreur :</strong> {course.driver?.user.name ?? '—'}</p>
-                <p><strong>Valeur déclarée du colis :</strong>{' '}
+                <p><strong>{t('courses.detail.fraudModalDriverLabel')}</strong> {course.driver?.user.name ?? '—'}</p>
+                <p><strong>{t('courses.detail.fraudModalDeclaredValueLabel')}</strong>{' '}
                   {typeof course.package_declared_value === 'number'
-                    ? course.package_declared_value.toLocaleString('fr-FR') + ' FCFA'
-                    : 'non renseignée'}
+                    ? course.package_declared_value.toLocaleString(locale) + ' FCFA'
+                    : t('courses.detail.fraudModalNotProvided')}
                 </p>
                 {course.has_collection && (
-                  <p><strong>Encaissement :</strong>{' '}
-                    {(course.collection_amount ?? 0).toLocaleString('fr-FR')} FCFA
+                  <p><strong>{t('courses.detail.fraudModalCollectionLabel')}</strong>{' '}
+                    {(course.collection_amount ?? 0).toLocaleString(locale)} FCFA
                   </p>
                 )}
               </div>
 
               <label className="block mt-4 text-caption text-warm-600 font-medium">
-                Note détaillée (min. 20 caractères)
+                {t('courses.detail.fraudModalNoteLabel')}
               </label>
               <textarea
                 value={fraudNote}
                 onChange={(e) => setFraudNote(e.target.value)}
                 rows={4}
-                placeholder="Contexte, sources, preuves (appels marchand, GPS coupé, tentatives infructueuses…)"
+                placeholder={t('courses.detail.fraudModalNotePlaceholder')}
                 className="w-full mt-1 bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body-s text-ink focus:outline-none focus:border-airmess-red"
               />
 
@@ -646,7 +659,7 @@ export default function CourseDetailPage() {
                   className="mt-1 accent-airmess-red"
                 />
                 <span className="text-caption text-ink font-semibold">
-                  Je comprends que cette action est irréversible.
+                  {t('courses.detail.fraudModalAckLabel')}
                 </span>
               </label>
 
@@ -674,14 +687,14 @@ export default function CourseDetailPage() {
                   loading={fraudMutation.isPending}
                   disabled={!fraudAck || fraudNote.trim().length < 20}
                 >
-                  Bannir et rembourser
+                  {t('courses.detail.fraudModalSubmit')}
                 </Button>
               </div>
             </Card>
           </div>
         )}
       </main>
-    </PageWrapper>
+    </Wrapper>
   )
 }
 
@@ -706,20 +719,20 @@ function KV({ label, value }: { label: string; value: string | number }) {
   )
 }
 
-function fmtDateTime(v?: string | null): string {
+function fmtDateTime(v?: string | null, locale: string = 'fr-FR'): string {
   if (!v) return '—'
-  return new Date(v).toLocaleString('fr-FR', {
+  return new Date(v).toLocaleString(locale, {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   })
 }
 
-function duration(from?: string | null, to?: string | null): string {
+function duration(from: string | null | undefined, to: string | null | undefined, t: TFunction): string {
   if (!from || !to) return '—'
   const ms = new Date(to).getTime() - new Date(from).getTime()
   if (ms < 0) return '—'
   const min = Math.round(ms / 60000)
-  if (min < 60) return `${min} min`
-  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
+  if (min < 60) return t('courses.detail.durationMinutes', { count: min })
+  return t('courses.detail.durationHoursMinutes', { hours: Math.floor(min / 60), minutes: String(min % 60).padStart(2, '0') })
 }
 
 function waNumber(phone: string): string {

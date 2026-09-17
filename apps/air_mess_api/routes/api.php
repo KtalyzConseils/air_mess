@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\PlacesController;
 use App\Http\Controllers\Api\ProfileRoleController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\MerchantWaitlistController;
+use App\Http\Controllers\Api\DriverWaitlistController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -96,6 +97,10 @@ Route::get('/support-contact', function () {
 // Inscription commerçants à la liste d'attente + étude de marché.
 // Endpoint public, sans compte User, rate-limité par IP (voir AppServiceProvider).
 Route::post('/waitlist/merchants', [MerchantWaitlistController::class, 'store'])->middleware('throttle:waitlist');
+
+// Inscription livreurs à la liste d'attente + étude de marché.
+// Endpoint public, sans compte User, rate-limité par IP (voir AppServiceProvider).
+Route::post('/waitlist/drivers', [DriverWaitlistController::class, 'store'])->middleware('throttle:waitlist');
 
 // Routes protégées (token Sanctum requis)
 Route::middleware('auth:sanctum')->group(function () {
@@ -314,6 +319,11 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/marchants/pending',         [AdminController::class, 'pendingMarchants']);
         Route::get('/marchants/{marchant}',      [AdminController::class, 'showMarchant']);
         Route::get('/waitlists/merchants',       [AdminController::class, 'merchantWaitlists']);
+        Route::get('/waitlists/drivers',         [AdminController::class, 'driverWaitlists']);
+        Route::get('/waitlists/merchants/export.{format}', [AdminController::class, 'merchantWaitlistsExport'])
+            ->whereIn('format', ['csv', 'txt']);
+        Route::get('/waitlists/drivers/export.{format}',   [AdminController::class, 'driverWaitlistsExport'])
+            ->whereIn('format', ['csv', 'txt']);
         Route::get('/individuals',               [AdminController::class, 'individuals']);
         Route::get('/individuals/{individual}',  [AdminController::class, 'showIndividual']);
         Route::get('/waitlist',                   [AdminController::class, 'waitlist']);
@@ -341,12 +351,14 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 
     // === ÉCRITURE COMMERCIALE (validation/suspension marchands & particuliers) ===
     Route::middleware('admin:commercial')->group(function () {
+        Route::post('/marchants', [AdminController::class, 'createMarchant']);
         Route::post('/marchants/{marchant}/validate',   [AdminController::class, 'validateMarchant']);
         Route::post('/marchants/{marchant}/suspend',    [AdminController::class, 'suspendMarchant']);
         Route::post('/marchants/{marchant}/reactivate', [AdminController::class, 'reactivateMarchant']);
         Route::post('/marchants/{marchant}/reject',     [AdminController::class, 'rejectMarchant']);
         Route::delete('/marchants/{marchant}',          [AdminController::class, 'destroyMarchant']);
 
+        Route::post('/individuals', [AdminController::class, 'createIndividual']);
         Route::post('/individuals/{individual}/suspend',    [AdminController::class, 'suspendIndividual']);
         Route::post('/individuals/{individual}/reactivate', [AdminController::class, 'reactivateIndividual']);
 
@@ -361,6 +373,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/courses/{course}/reassign',      [AdminController::class, 'reassignCourse']);
         Route::post('/courses/{course}/rebroadcast',   [AdminController::class, 'rebroadcastCourse']);
         Route::post('/courses/{course}/dispute',       [AdminController::class, 'disputeCourse']);
+        Route::post('/drivers',                        [AdminController::class, 'createDriver']);
         Route::post('/drivers/{driver}/validate',      [AdminController::class, 'validateDriver']);
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
         Route::post('/incidents/{incident}/resolve',   [AdminController::class, 'resolveIncident']);
@@ -398,6 +411,13 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::delete('/notes/{note}', [SupportController::class, 'destroyNote']);
     });
 
+    // Journal comptable : lecture seule pour ops + super.
+    Route::middleware('admin:ops')->group(function () {
+        Route::get('/reporting/accounting', [AdminReportingController::class, 'accountingLedger']);
+        Route::get('/reporting/accounting/cash-due', [AdminReportingController::class, 'driverCashDue']);
+        Route::get('/reporting/courses/{course}/accounting', [AdminReportingController::class, 'courseAccounting']);
+    });
+
     // Paramètres globaux — super-admin uniquement
     Route::middleware('admin:super')->group(function () {
         Route::get('/settings',         [AdminController::class, 'listSettings']);
@@ -413,7 +433,9 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 
         // Ajustement manuel des wallets (driver + user) — action comptable très sensible
         Route::post('/drivers/{driver}/wallet-adjustment', [AdminController::class, 'adjustDriverWallet']);
+        Route::post('/drivers/{driver}/wallet-reset-zero', [AdminController::class, 'resetDriverWallet']);
         Route::post('/users/{user}/wallet-adjustment',     [AdminController::class, 'adjustUserWallet']);
+        Route::post('/users/{user}/wallet-reset-zero',     [AdminController::class, 'resetUserWallet']);
 
         // Bascule "livreur freelance ↔ salarié Air Mess" — impacte le routing des
         // courses (paid_by_recipient + is_high_value) et bypass caution. Traçable via
@@ -430,7 +452,6 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         // Reporting compta — dashboard mouvements wallet (KPI + graphs).
         // Accessible ops+ (lecture seule, pas d'action sensible).
         Route::get('/reporting/wallets', [AdminReportingController::class, 'wallets']);
-
         // Cas 7 — Signaler une course frauduleuse (vol livreur).
         // Bannit le driver + saisit la caution + rembourse le marchand. Irréversible.
         Route::post('/courses/{course}/mark-fraud', [AdminController::class, 'markFraud']);

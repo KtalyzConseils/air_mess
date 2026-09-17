@@ -321,6 +321,73 @@ export async function fetchWalletReporting(params: {
   return data
 }
 
+export interface AccountingLine {
+  id: number
+  account_code: string
+  account_name: string
+  direction: 'debit' | 'credit'
+  amount_fcfa: number
+  currency: string
+  holder_type: string | null
+  holder_id: number | null
+  counterparty_type: string | null
+  counterparty_id: number | null
+  created_at: string
+}
+
+export interface AccountingJournal {
+  id: number
+  event_type: string
+  description: string | null
+  course_id: number | null
+  driver_id: number | null
+  user_id: number | null
+  occurred_at: string
+  created_at: string
+  course?: { id: number; reference: string; status: string } | null
+  lines: AccountingLine[]
+}
+
+export interface AccountingLedgerResponse {
+  period: { from: string; to: string }
+  journals: Paginated<AccountingJournal>
+}
+
+export interface DriverCashDueRow {
+  driver_id: number
+  driver_name: string
+  phone: string | null
+  due_fcfa: number
+  movement_count: number
+}
+
+export interface DriverCashDueResponse {
+  period: { from: string; to: string }
+  drivers: DriverCashDueRow[]
+}
+
+export async function fetchAccountingLedger(params: {
+  from?: string
+  to?: string
+  event_type?: string
+  course_id?: number
+  driver_id?: number
+  user_id?: number
+  page?: number
+  per_page?: number
+}): Promise<AccountingLedgerResponse> {
+  const { data } = await api.get('/admin/reporting/accounting', { params })
+  return data
+}
+
+export async function fetchDriverCashDue(params: {
+  from?: string
+  to?: string
+}): Promise<DriverCashDueResponse> {
+  const { data } = await api.get('/admin/reporting/accounting/cash-due', { params })
+  return data
+}
+
 
 export async function fetchAdminDashboard(): Promise<DashboardResponse> {
   const { data } = await api.get('/admin/dashboard')
@@ -402,12 +469,29 @@ export type MerchantWaitlistListItem = {
   zone_other: string | null
   weekly_orders: string
   source: string | null
+  source_other: string | null
+  delivery_methods: string[]
+  delivery_methods_other: string | null
+  problems: string[]
+  problems_other: string | null
+  worst_experience: string
+  cash_collection_issue: string
+  time_lost_weekly: string
+  orders_lost_weekly: string
+  expected_benefit: string
+  commission_acceptance: string
+  reasonable_fee: string
+  mobile_money_trust: string
+  interest_level: number
+  trial_interest: string
   shop_name: string | null
   contact_name: string | null
+  email: string | null
   whatsapp: string | null
   status: string
   bonus_amount: number
   bonus_code: string
+  bonus_redeemed_at: string | null
   created_at: string
 }
 
@@ -422,6 +506,86 @@ export async function fetchMerchantWaitlists(
 ): Promise<Paginated<MerchantWaitlistListItem>> {
   const { data } = await api.get('/admin/waitlists/merchants', { params })
   return data
+}
+
+export type DriverWaitlistListItem = {
+  id: number
+  full_name: string
+  email: string
+  whatsapp: string
+  vehicle_type: string
+  zone: string
+  zone_other: string | null
+  experience: string
+  availability: string
+  source: string | null
+  source_other: string | null
+  platforms_used: string[]
+  platforms_used_other: string | null
+  weekly_deliveries: string
+  weekly_income: string
+  problems: string[]
+  problems_other: string | null
+  worst_experience: string
+  expected_payment_model: string
+  expected_weekly_income: string
+  mobile_money_trust: string
+  interest_level: number
+  launch_availability: string
+  status: string
+  created_at: string
+}
+
+export interface DriverWaitlistListParams {
+  q?: string
+  page?: number
+  per_page?: number
+}
+
+export async function fetchDriverWaitlists(
+  params: DriverWaitlistListParams = {},
+): Promise<Paginated<DriverWaitlistListItem>> {
+  const { data } = await api.get('/admin/waitlists/drivers', { params })
+  return data
+}
+
+export type WaitlistExportFormat = 'csv' | 'txt'
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => window.URL.revokeObjectURL(url), 30_000)
+}
+
+export async function downloadMerchantWaitlistsExport(
+  format: WaitlistExportFormat,
+  params: MerchantWaitlistListParams = {},
+): Promise<void> {
+  const response = await api.get(`/admin/waitlists/merchants/export.${format}`, {
+    params,
+    responseType: 'blob',
+  })
+  const type = format === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8'
+  const blob = new Blob([response.data], { type })
+  downloadBlob(blob, `commercants_formulaires.${format}`)
+}
+
+export async function downloadDriverWaitlistsExport(
+  format: WaitlistExportFormat,
+  params: DriverWaitlistListParams = {},
+): Promise<void> {
+  const response = await api.get(`/admin/waitlists/drivers/export.${format}`, {
+    params,
+    responseType: 'blob',
+  })
+  const type = format === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8'
+  const blob = new Blob([response.data], { type })
+  downloadBlob(blob, `livreurs_formulaires.${format}`)
 }
 
 export interface MarchantListParams {
@@ -478,6 +642,22 @@ export async function fetchMarchants(params: MarchantListParams): Promise<Pagina
   return data
 }
 
+export interface CreateMarchantPayload {
+  name: string
+  email: string
+  phone: string
+  password: string
+  raison_sociale: string
+  ifu_rccm?: string
+  secteur_activite: 'supermarche' | 'restaurant' | 'boutique' | 'pharmacie' | 'ecommerce' | 'autre'
+  validate_now?: boolean
+}
+
+export async function createMarchant(payload: CreateMarchantPayload): Promise<{ marchant: MarchantWithUser; message: string }> {
+  const { data } = await api.post('/admin/marchants', payload)
+  return data
+}
+
 export interface MarchantStats {
   courses_total: number
   courses_delivered: number
@@ -500,6 +680,26 @@ export async function validateMarchant(id: number): Promise<void> {
 export async function fetchAdminDrivers(): Promise<DriverFull[]> {
   const { data } = await api.get('/admin/drivers')
   return data.drivers
+}
+
+export interface CreateDriverPayload {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  password: string
+  gender?: 'M' | 'F' | 'autre'
+  birth_date?: string
+  vehicle_type: 'scooter' | 'moto' | 'voiture' | 'velo'
+  vehicle_plate?: string
+  vehicle_brand?: string
+  kind?: DriverKind
+  activate_now?: boolean
+}
+
+export async function createDriver(payload: CreateDriverPayload): Promise<{ driver: DriverFull; message: string }> {
+  const { data } = await api.post('/admin/drivers', payload)
+  return data
 }
 
 /**
@@ -664,6 +864,22 @@ export async function fetchIndividuals(
   params: IndividualListParams,
 ): Promise<Paginated<IndividualWithUser>> {
   const { data } = await api.get('/admin/individuals', { params })
+  return data
+}
+
+export interface CreateIndividualPayload {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  password: string
+  gender?: 'M' | 'F' | 'autre'
+}
+
+export async function createIndividual(
+  payload: CreateIndividualPayload,
+): Promise<{ individual: IndividualWithUser; message: string }> {
+  const { data } = await api.post('/admin/individuals', payload)
   return data
 }
 
@@ -872,11 +1088,19 @@ export async function adjustDriverWallet(driverId: number, payload: WalletAdjust
   await api.post(`/admin/drivers/${driverId}/wallet-adjustment`, payload)
 }
 
+export async function resetDriverWallet(driverId: number, reason: string): Promise<void> {
+  await api.post(`/admin/drivers/${driverId}/wallet-reset-zero`, { reason })
+}
+
 /**
  * Ajustement manuel d'un wallet user (marchand ou particulier).
  */
 export async function adjustUserWallet(userId: number, payload: WalletAdjustmentPayload): Promise<void> {
   await api.post(`/admin/users/${userId}/wallet-adjustment`, payload)
+}
+
+export async function resetUserWallet(userId: number, reason: string): Promise<void> {
+  await api.post(`/admin/users/${userId}/wallet-reset-zero`, { reason })
 }
 
 // ============== RÉCONCILIATION COMPTABLE (SUPER-ADMIN) ==============

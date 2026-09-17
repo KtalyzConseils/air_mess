@@ -174,6 +174,18 @@ export default function CourseDetailModal({
         </View>
       )}
 
+      {/* Info neutre "client paie livraison" — pas de montant ici pour éviter
+          de perturber le driver. Le montant apparaîtra pendant l'exécution de
+          la course, au moment où il devra effectivement le collecter. */}
+      {course.delivery_fee_paid_by === 'recipient' && (
+        <View className="bg-info-bg border border-info/30 rounded-2xl px-4 py-3 mb-3 flex-row items-center">
+          <Ionicons name="wallet-outline" size={16} color="#0284C7" />
+          <Text className="text-info text-sm font-extrabold ml-2 flex-1">
+            Client paie la livraison
+          </Text>
+        </View>
+      )}
+
       {/* Colis */}
       <SectionLabel icon="cube-outline">Colis</SectionLabel>
       <View className="bg-off-white border border-warm-200 rounded-2xl p-4 mb-3">

@@ -136,17 +136,22 @@ class DriverController extends Controller
                 $q->where('is_high_value', false)->orWhereNull('is_high_value');
             });
 
-            // Mode "aux frais du destinataire" : réservé Airmess (le marchand n'a rien payé,
-            // c'est un modèle économique dédié aux salariés Air Mess).
-            $query->where(function ($q) {
-                $q->where('delivery_fee_paid_by', Course::PAID_BY_SENDER)
-                  ->orWhereNull('delivery_fee_paid_by');
+            // Mode "aux frais du destinataire" : le driver encaisse le delivery_fee en
+            // cash/mobile money chez le client, puis se fait débiter la part AirMess
+            // (commission) à la livraison — cf. debitPlatformCommission. On ne montre
+            // l'offre que s'il peut déjà couvrir cette part avec son wallet, sinon le
+            // débit échouerait à la livraison. Le driver Airmess bypass : salarié, pas
+            // de commission perso (tout revient à la plateforme via PlatformEarning).
+            $balance = $driver->wallet?->balance ?? 0;
+            $query->where(function ($q) use ($balance) {
+                $q->where('delivery_fee_paid_by', '!=', Course::PAID_BY_RECIPIENT)
+                  ->orWhereNull('delivery_fee_paid_by')
+                  ->orWhereRaw('(delivery_fee - driver_earnings) <= ?', [$balance]);
             });
 
             // Filtre caution : on cache les courses avec encaissement > balance du wallet.
             // Le driver indépendant ne verra que ce qu'il peut couvrir avec sa caution.
             // Le driver Airmess bypass — Air Mess porte le risque via sa relation salariale.
-            $balance = $driver->wallet?->balance ?? 0;
             $query->where(function ($q) use ($balance) {
                 $q->where('has_collection', false)
                   ->orWhere('collection_amount', '<=', $balance);
@@ -208,10 +213,15 @@ class DriverController extends Controller
         if ($isVisibleOffer && ! $driver->isAirmess()) {
             $isHighValue = (bool) $course->is_high_value;
             $paidByRecipient = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
+            $balance = (int) ($driver->wallet?->balance ?? 0);
+            // Part AirMess à débiter à la livraison si le driver prend cette course
+            // (cf. debitPlatformCommission) — doit déjà être couverte par le wallet.
+            $platformShare = (int) $course->delivery_fee - (int) $course->driver_earnings;
+            $platformShareCovered = ! $paidByRecipient || $platformShare <= $balance;
             $collectionCovered = ! $course->has_collection
-                || (int) ($course->collection_amount ?? 0) <= (int) ($driver->wallet?->balance ?? 0);
+                || (int) ($course->collection_amount ?? 0) <= $balance;
 
-            $isVisibleOffer = ! $isHighValue && ! $paidByRecipient && $collectionCovered;
+            $isVisibleOffer = ! $isHighValue && $platformShareCovered && $collectionCovered;
         }
 
         if (! $isAssignedToDriver && ! $isVisibleOffer) {
@@ -219,6 +229,19 @@ class DriverController extends Controller
         }
 
         $course->load(['sender', 'driver.user', 'packageCategory']);
+
+        // Ajoute `distance_km` (haversine driver → pickup → destination) pour rester
+        // cohérent avec la liste des offres (offeredCourses). Sans ça, l'écran
+        // détail du driver-app affichait des kilométrages faussés / undefined.
+        if ($driver->current_lat !== null && $driver->current_lng !== null) {
+            $row = Course::query()
+                ->selectDistanceFrom((float) $driver->current_lat, (float) $driver->current_lng)
+                ->whereKey($course->id)
+                ->first();
+            if ($row !== null) {
+                $course->setAttribute('distance_km', $row->distance_km);
+            }
+        }
 
         return response()->json(['course' => $course->makeHidden(['pickup_code', 'delivery_code'])]);
     }
@@ -462,6 +485,7 @@ class DriverController extends Controller
         DriverWalletService $walletService,
         DriverReferralService $referralService,
         \App\Services\UserWalletService $userWalletService,
+        \App\Services\AccountingLedgerService $accounting,
     ): JsonResponse
     {
         $driver = $this->currentDriver($request, requireActive: true);
@@ -554,7 +578,7 @@ class DriverController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($course, $driver, $nextStatus, $timestampField, $data, $walletService, $userWalletService) {
+            DB::transaction(function () use ($course, $driver, $nextStatus, $timestampField, $data, $walletService, $userWalletService, $accounting) {
                 // Capture le statut AVANT update pour les hooks wallet
                 $previousStatus = $course->getOriginal('status');
 
@@ -574,6 +598,9 @@ class DriverController extends Controller
                 if ($nextStatus === Course::STATUS_PICKED_UP && $course->has_collection) {
                     $walletService->debitForPickup($driver, $course);
                 }
+                if ($nextStatus === Course::STATUS_PICKED_UP) {
+                    $accounting->recordPackagePickedUp($course, $driver);
+                }
 
                 // Hook wallet DRIVER : failed APRÈS pickup → remboursement caution
                 // Inclut aussi returning_to_sender (Cas 4 — retour au marchand)
@@ -589,16 +616,33 @@ class DriverController extends Controller
                 // Créditer le livreur quand la course est livrée : les gains s'ajoutent
                 // directement à son wallet (cf. project_wallet_driver).
                 //
-                // Cas spécial : un driver Airmess qui livre une course "aux frais du
-                // destinataire" ne reçoit PAS de commission — il est salarié et le
-                // revenu delivery_fee revient à la plateforme via platform_earnings.
-                // Sur une course sender-paid, l'Airmess touche la commission comme
-                // n'importe quel driver (le marchand a payé, l'argent existe déjà).
+                // Cas "aux frais du destinataire" (delivery_fee_paid_by=recipient) :
+                // le livreur encaisse déjà 100% du delivery_fee en cash/mobile money
+                // chez le client — l'argent ne transite jamais par le wallet AirMess.
+                //  - Driver Airmess (salarié) : ne reçoit PAS de commission, tout
+                //    l'argent collecté revient à la plateforme via PlatformEarning
+                //    (restitution physique du cash en fin de shift).
+                //  - Driver indépendant : pas de crédit gains (il tient déjà sa part
+                //    en cash), on débite juste la part AirMess de son wallet — cf.
+                //    debitPlatformCommission. Filtré en amont (offeredCourses/showCourse)
+                //    pour que son wallet puisse toujours couvrir ce débit.
+                // Sur une course sender-paid, tout driver touche sa commission normalement
+                // (le marchand a payé, l'argent existe déjà dans le système).
                 $isRecipientPaid = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
-                $skipEarning = $driver->isAirmess() && $isRecipientPaid;
+                $isAirmessDriver = $driver->isAirmess();
+                $skipEarning = $isAirmessDriver && $isRecipientPaid;
+                $isIndependentRecipientPaid = ! $isAirmessDriver && $isRecipientPaid;
+                $platformShare = (int) $course->delivery_fee - (int) $course->driver_earnings;
 
-                if ($nextStatus === Course::STATUS_DELIVERED && $course->driver_earnings > 0 && ! $skipEarning) {
+                if ($nextStatus === Course::STATUS_DELIVERED && $course->driver_earnings > 0 && ! $skipEarning && ! $isIndependentRecipientPaid) {
                     $walletService->creditEarning($driver, $course, (int) $course->driver_earnings);
+                }
+                if ($nextStatus === Course::STATUS_DELIVERED && $isIndependentRecipientPaid && $platformShare > 0) {
+                    $walletService->debitPlatformCommission($driver, $course, $platformShare);
+                }
+                if ($nextStatus === Course::STATUS_DELIVERED) {
+                    $accounting->recordPackageDelivered($course, $driver);
+                    $accounting->recordRecipientCashCollected($course, $driver);
                 }
 
                 // Hook plateforme : livraison d'une course "aux frais du destinataire"
@@ -606,7 +650,7 @@ class DriverController extends Controller
                 // physique est chez le driver Airmess (il l'a collecté chez le client)
                 // et sera restitué en fin de shift. Idempotent via UNIQUE(course_id, kind).
                 if ($nextStatus === Course::STATUS_DELIVERED && $isRecipientPaid && $course->delivery_fee > 0) {
-                    \App\Models\PlatformEarning::firstOrCreate(
+                    $earning = \App\Models\PlatformEarning::firstOrCreate(
                         [
                             'course_id' => $course->id,
                             'kind'      => \App\Models\PlatformEarning::KIND_DELIVERY_FEE,
@@ -620,6 +664,7 @@ class DriverController extends Controller
                             ],
                         ],
                     );
+                    $accounting->recordRecipientPaidDelivery($course, $driver, $earning);
                 }
 
                 // Hook wallet MARCHAND : livraison + course avec encaissement → on
@@ -702,6 +747,34 @@ class DriverController extends Controller
                         'referral_id' => $rewardedReferral->id,
                     ],
                 );
+            }
+
+            // Explique au driver indépendant pourquoi son wallet vient d'être débité
+            // sur une course "payée à la livraison" — il a le cash en poche, il ne
+            // faut pas qu'il croie à une erreur ou un débit injustifié.
+            $isRecipientPaid = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
+            if ($isRecipientPaid && ! $driver->isAirmess()) {
+                $platformShare = (int) $course->delivery_fee - (int) $course->driver_earnings;
+                if ($platformShare > 0) {
+                    $notifier->sendToUser(
+                        $driver->user_id,
+                        'driver.recipient_paid_commission_debited',
+                        '💰 Course payée à la livraison',
+                        "Tu as encaissé {$course->delivery_fee} FCFA chez le client. "
+                        . "La part AirMess ({$platformShare} FCFA) a été débitée de ton wallet — "
+                        . "il te reste {$course->driver_earnings} FCFA de gains sur cette course.",
+                        [
+                            'app'              => 'driver',
+                            'screen'           => 'wallet',
+                            'icon'             => 'cash-outline',
+                            'reference'        => $course->reference,
+                            'delivery_fee'     => (int) $course->delivery_fee,
+                            'platform_share'   => $platformShare,
+                            'driver_earnings'  => (int) $course->driver_earnings,
+                        ],
+                        $course->id,
+                    );
+                }
             }
         }
 

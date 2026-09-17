@@ -610,7 +610,7 @@ function formatReason(
       return t('admin.courses.reassignReasonNotActive')
     case 'premium_needs_airmess':
       return t('admin.courses.reassignReasonPremiumAirmess')
-    case 'paid_by_recipient_needs_airmess':
+    case 'recipient_paid_platform_share_exceeds_wallet':
       return t('admin.courses.reassignReasonRecipientAirmess')
     case 'collection_exceeds_wallet':
       return t('admin.courses.reassignReasonCollectionCaution', {

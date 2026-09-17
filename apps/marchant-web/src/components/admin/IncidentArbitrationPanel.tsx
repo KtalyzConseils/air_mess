@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
 import Badge from '../ui/Badge'
@@ -32,6 +33,8 @@ export default function IncidentArbitrationPanel({
   course: Course
   incident: CourseIncident
 }) {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const queryClient = useQueryClient()
 
   const [resolutionNote, setResolutionNote] = useState('')
@@ -65,8 +68,8 @@ export default function IncidentArbitrationPanel({
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? "Erreur lors de l'arbitrage."
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('admin.incidentArbitration.arbitrateError')
+          : t('admin.incidentArbitration.unexpectedError')
       setError(msg)
     },
   })
@@ -81,8 +84,8 @@ export default function IncidentArbitrationPanel({
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? "Erreur lors du preset no-show."
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('admin.incidentArbitration.noShowPresetError')
+          : t('admin.incidentArbitration.unexpectedError')
       setError(msg)
     },
   })
@@ -90,16 +93,10 @@ export default function IncidentArbitrationPanel({
   function submitNoShow() {
     setError(null)
     if (resolutionNote.trim().length < 5) {
-      setError('La note de résolution est requise (5 caractères minimum).')
+      setError(t('admin.incidentArbitration.resolutionNoteRequired'))
       return
     }
-    if (
-      !window.confirm(
-        "Confirmer un no-show partiel ? Applique les % configurés dans les paramètres — "
-        + 'capture partielle du hold marchand + crédit partiel de la caution livreur, '
-        + 'course passée en failed, incident résolu.',
-      )
-    ) return
+    if (!window.confirm(t('admin.incidentArbitration.confirmNoShow'))) return
     noShowMutation.mutate()
   }
 
@@ -113,8 +110,8 @@ export default function IncidentArbitrationPanel({
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? "Erreur lors du preset retour."
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('admin.incidentArbitration.returnPresetError')
+          : t('admin.incidentArbitration.unexpectedError')
       setError(msg)
     },
   })
@@ -122,15 +119,10 @@ export default function IncidentArbitrationPanel({
   function submitReturn() {
     setError(null)
     if (resolutionNote.trim().length < 5) {
-      setError('La note de résolution est requise (5 caractères minimum).')
+      setError(t('admin.incidentArbitration.resolutionNoteRequired'))
       return
     }
-    if (
-      !window.confirm(
-        "Confirmer le retour du colis ? Applique les % configurés dans les paramètres — "
-        + 'capture du fee marchand + crédit driver (earnings + bonus retour), incident résolu.',
-      )
-    ) return
+    if (!window.confirm(t('admin.incidentArbitration.confirmReturn'))) return
     returnMutation.mutate()
   }
 
@@ -144,8 +136,8 @@ export default function IncidentArbitrationPanel({
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? "Erreur lors du preset annulation marchand."
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('admin.incidentArbitration.marchandCancelPresetError')
+          : t('admin.incidentArbitration.unexpectedError')
       setError(msg)
     },
   })
@@ -153,39 +145,34 @@ export default function IncidentArbitrationPanel({
   function submitMarchandCancel() {
     setError(null)
     if (resolutionNote.trim().length < 5) {
-      setError('La note de résolution est requise (5 caractères minimum).')
+      setError(t('admin.incidentArbitration.resolutionNoteRequired'))
       return
     }
-    if (
-      !window.confirm(
-        "Confirmer l'annulation marchand ? Applique les % configurés — "
-        + 'capture du fee marchand + crédit driver (trajet + bonus retour), incident résolu.',
-      )
-    ) return
+    if (!window.confirm(t('admin.incidentArbitration.confirmMarchandCancel'))) return
     marchandCancelMutation.mutate()
   }
 
   function submit() {
     setError(null)
     if (resolutionNote.trim().length < 5) {
-      setError('La note de résolution est requise (5 caractères minimum).')
+      setError(t('admin.incidentArbitration.resolutionNoteRequired'))
       return
     }
     if (!reasonCodeMarchand && !reasonCodeDriver) {
-      setError('Au moins un ajustement (marchand OU livreur) doit être renseigné.')
+      setError(t('admin.incidentArbitration.atLeastOneAdjustment'))
       return
     }
     if (reasonCodeMarchand) {
       const n = parseInt(amountMarchand, 10)
       if (!n || n <= 0) {
-        setError('Le montant marchand doit être un entier positif (le signe est déduit du motif).')
+        setError(t('admin.incidentArbitration.merchantAmountPositive'))
         return
       }
     }
     if (reasonCodeDriver) {
       const n = parseInt(amountDriver, 10)
       if (!n || n <= 0) {
-        setError('Le montant livreur doit être un entier positif (le signe est déduit du motif).')
+        setError(t('admin.incidentArbitration.driverAmountPositive'))
         return
       }
     }
@@ -201,13 +188,13 @@ export default function IncidentArbitrationPanel({
     <Card variant="signature" padding="lg" className="mb-6 border-l-4 border-l-airmess-red!">
       <div className="flex items-start justify-between mb-4 gap-3">
         <div>
-          <Badge variant="danger" size="sm" className="mb-2">⚖️ Incident ouvert — arbitrage requis</Badge>
-          <h3 className="text-h3 text-ink font-bold">{humanIncidentType(incident.type)}</h3>
+          <Badge variant="danger" size="sm" className="mb-2">{t('admin.incidentArbitration.openBadge')}</Badge>
+          <h3 className="text-h3 text-ink font-bold">{t(`admin.incidentArbitration.types.${incident.type}`, humanIncidentType(incident.type))}</h3>
           <p className="text-caption text-warm-500 mt-1">
-            Signalé par {incident.reporter_type}
+            {t('admin.incidentArbitration.reportedBy')} {incident.reporter_type}
             {incident.reported_by_user && ` (${incident.reported_by_user.name})`}
             {' · '}
-            {new Date(incident.created_at).toLocaleString('fr-FR', {
+            {new Date(incident.created_at).toLocaleString(locale, {
               day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
             })}
           </p>
@@ -223,18 +210,17 @@ export default function IncidentArbitrationPanel({
       {/* Hint contextuel selon le type d'incident — aide l'ops à choisir le bon barème. */}
       {(incident.type === 'package_lost' || incident.type === 'package_damaged') && (
         <div className="mb-4 bg-info-bg border border-info/30 rounded-md p-3 text-body-s text-info">
-          <p className="font-bold">💡 Barème indicatif</p>
+          <p className="font-bold">{t('admin.incidentArbitration.lostDamagedHint')}</p>
           <p className="mt-1">
-            <strong>Valeur déclarée du colis :</strong>{' '}
+            <strong>{t('admin.incidentArbitration.declaredValue')}</strong>{' '}
             {typeof course.package_declared_value === 'number'
-              ? course.package_declared_value.toLocaleString('fr-FR') + ' FCFA'
-              : 'non renseignée'}
+              ? course.package_declared_value.toLocaleString(locale) + ' FCFA'
+              : t('admin.incidentArbitration.notProvided')}
             {' '}·{' '}
-            <strong>Frais de livraison :</strong> {course.delivery_fee.toLocaleString('fr-FR')} FCFA
+            <strong>{t('admin.incidentArbitration.deliveryFee')}</strong> {course.delivery_fee.toLocaleString(locale)} FCFA
           </p>
           <p className="mt-1 text-caption">
-            Pour un colis perdu, le débit livreur est typiquement basé sur la valeur déclarée × %resp.
-            Pour un colis endommagé, sur les frais × %resp.
+            {t('admin.incidentArbitration.lostDamagedNote')}
           </p>
         </div>
       )}
@@ -246,18 +232,16 @@ export default function IncidentArbitrationPanel({
           rel="noopener noreferrer"
           className="inline-block mb-4 text-caption text-info underline"
         >
-          📸 Voir la photo jointe
+          {t('admin.incidentArbitration.viewPhoto')}
         </a>
       )}
 
       {/* ============ Preset 1-clic : Course retour confirmée (Cas 4) ============ */}
       {incident.type === 'recipient_refused' && course.status === 'failed' && course.is_return_trip && (
         <div className="mb-4 bg-airmess-yellow/10 border border-airmess-yellow rounded-md p-4">
-          <p className="font-bold text-ink mb-1">⚡ Préréglage — Course retour confirmée</p>
+          <p className="font-bold text-ink mb-1">{t('admin.incidentArbitration.returnTripPresetTitle')}</p>
           <p className="text-body-s text-warm-600 mb-3">
-            Le driver a rendu le colis au marchand. Applique les % configurés dans
-            <em> Paramètres → Arbitrage des incidents</em> : capture du fee marchand +
-            crédit driver (earnings + bonus retour). Incident résolu.
+            {t('admin.incidentArbitration.returnTripPresetBody', { settingsPath: t('admin.incidentArbitration.settingsPathIncidents') })}
           </p>
           <Button
             variant="secondary"
@@ -267,24 +251,22 @@ export default function IncidentArbitrationPanel({
             loading={returnMutation.isPending}
             disabled={mutation.isPending || noShowMutation.isPending}
           >
-            Appliquer course retour (1 clic)
+            {t('admin.incidentArbitration.applyReturnTrip')}
           </Button>
         </div>
       )}
       {incident.type === 'recipient_refused' && course.status !== 'failed' && (
         <div className="mb-4 bg-warning-bg border border-warning/30 rounded-md p-3 text-body-s text-warning">
-          🔄 <strong>Retour en cours</strong> — le driver doit encore rendre le colis au marchand
-          (saisie du code de retour). Le preset s'affichera une fois le retour confirmé côté driver.
+          {t('admin.incidentArbitration.returnInProgress')}
         </div>
       )}
 
       {/* ============ Preset 1-clic : Annulation marchand confirmée (Cas 6) ============ */}
       {incident.type === 'marchand_cancelled' && course.status === 'failed' && course.is_return_trip && (
         <div className="mb-4 bg-airmess-yellow/10 border border-airmess-yellow rounded-md p-4">
-          <p className="font-bold text-ink mb-1">Préréglage — Annulation marchand confirmée</p>
+          <p className="font-bold text-ink mb-1">{t('admin.incidentArbitration.marchandCancelPresetTitle')}</p>
           <p className="text-body-s text-warm-600 mb-3">
-            Le marchand a annulé et le driver a rendu le colis. Applique les mêmes % que "course retour" —
-            capture du fee marchand + crédit driver (trajet + bonus retour). Incident résolu.
+            {t('admin.incidentArbitration.marchandCancelPresetBody')}
           </p>
           <Button
             variant="secondary"
@@ -294,28 +276,28 @@ export default function IncidentArbitrationPanel({
             loading={marchandCancelMutation.isPending}
             disabled={mutation.isPending || noShowMutation.isPending || returnMutation.isPending}
           >
-            Appliquer annulation marchand (1 clic)
+            {t('admin.incidentArbitration.applyMarchandCancel')}
           </Button>
         </div>
       )}
       {incident.type === 'marchand_cancelled' && course.status !== 'failed' && (
         <div className="mb-4 bg-warning-bg border border-warning/30 rounded-md p-3 text-body-s text-warning">
-          <strong>Retour en cours</strong> — le driver doit encore ramener le colis au marchand
-          (saisie du code de retour). Le preset s'affichera une fois le retour confirmé côté driver.
+          {t('admin.incidentArbitration.returnInProgress2')}
         </div>
       )}
 
       {/* ============ Preset 1-clic : No-show partiel confirmé (Cas 3) ============ */}
       {incident.type === 'recipient_unreachable' && (
         <div className="mb-4 bg-airmess-yellow/10 border border-airmess-yellow rounded-md p-4">
-          <p className="font-bold text-ink mb-1">⚡ Préréglage — No-show partiel confirmé</p>
+          <p className="font-bold text-ink mb-1">{t('admin.incidentArbitration.noShowPresetTitle')}</p>
           <p className="text-body-s text-warm-600 mb-3">
-            Applique automatiquement les % configurés dans <em>Paramètres → Arbitrage des incidents</em> :
-            capture d'une part des frais côté marchand + crédit partiel de la caution livreur pour le trajet effectué.
-            La course passe en <strong>failed</strong> et l'incident est résolu — pas besoin de saisir les motifs et montants ci-dessous.
+            {t('admin.incidentArbitration.noShowPresetBody', {
+              settingsPath: t('admin.incidentArbitration.settingsPathIncidents'),
+              failed: t('admin.incidentArbitration.failedStatus'),
+            })}
           </p>
           <p className="text-caption text-warm-500 mb-3">
-            💡 Nécessite quand même la note de résolution ci-dessous (envoyée au marchand et au livreur).
+            {t('admin.incidentArbitration.noShowHint')}
           </p>
           <Button
             variant="secondary"
@@ -325,7 +307,7 @@ export default function IncidentArbitrationPanel({
             loading={noShowMutation.isPending}
             disabled={mutation.isPending}
           >
-            Appliquer no-show partiel (1 clic)
+            {t('admin.incidentArbitration.applyNoShow')}
           </Button>
         </div>
       )}
@@ -333,7 +315,7 @@ export default function IncidentArbitrationPanel({
       {/* ============ Bloc marchand ============ */}
       <div className="border-t border-warm-100 pt-4 mb-4">
         <p className="text-eyebrow uppercase text-warm-500 font-bold mb-2">
-          🏢 Ajustement marchand
+          {t('admin.incidentArbitration.merchantAdjustment')}
           <span className="normal-case font-normal text-warm-400 ml-2">
             ({course.sender?.name ?? '—'})
           </span>
@@ -344,7 +326,7 @@ export default function IncidentArbitrationPanel({
             onChange={(e) => setReasonCodeMarchand(e.target.value as AdjustmentReasonCode | '')}
             className="w-full bg-off-white border-2 border-warm-200 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
           >
-            <option value="">— Aucun ajustement marchand —</option>
+            <option value="">{t('admin.incidentArbitration.noMerchantAdjustment')}</option>
             {marchandOptions.map(([code, meta]) => (
               <option key={code} value={code}>
                 {meta.label} ({meta.sign === 'credit' ? '+' : '−'})
@@ -357,7 +339,7 @@ export default function IncidentArbitrationPanel({
               min={1}
               value={amountMarchand}
               onChange={(e) => setAmountMarchand(e.target.value)}
-              placeholder="Montant (FCFA)"
+              placeholder={t('admin.incidentArbitration.amountPlaceholder')}
               disabled={!reasonCodeMarchand}
               className="w-full bg-off-white border-2 border-warm-200 rounded-md px-3 py-2 pr-16 text-body-s focus:outline-none focus:border-airmess-yellow disabled:opacity-50"
             />
@@ -369,8 +351,8 @@ export default function IncidentArbitrationPanel({
         {reasonCodeMarchand && (
           <p className="text-caption text-warm-500 mt-2">
             {ADJUSTMENT_REASON_CODES[reasonCodeMarchand].sign === 'credit'
-              ? '💰 Le wallet marchand sera CRÉDITÉ de ce montant.'
-              : '⚠️ Le wallet marchand sera DÉBITÉ de ce montant.'}
+              ? t('admin.incidentArbitration.merchantWalletCredited')
+              : t('admin.incidentArbitration.merchantWalletDebited')}
           </p>
         )}
       </div>
@@ -378,7 +360,7 @@ export default function IncidentArbitrationPanel({
       {/* ============ Bloc livreur ============ */}
       <div className="border-t border-warm-100 pt-4 mb-4">
         <p className="text-eyebrow uppercase text-warm-500 font-bold mb-2">
-          🛵 Ajustement livreur
+          {t('admin.incidentArbitration.driverAdjustment')}
           <span className="normal-case font-normal text-warm-400 ml-2">
             ({course.driver?.user.name ?? '—'})
           </span>
@@ -390,7 +372,7 @@ export default function IncidentArbitrationPanel({
             className="w-full bg-off-white border-2 border-warm-200 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
             disabled={!course.driver}
           >
-            <option value="">— Aucun ajustement livreur —</option>
+            <option value="">{t('admin.incidentArbitration.noDriverAdjustment')}</option>
             {driverOptions.map(([code, meta]) => (
               <option key={code} value={code}>
                 {meta.label} ({meta.sign === 'credit' ? '+' : '−'})
@@ -403,7 +385,7 @@ export default function IncidentArbitrationPanel({
               min={1}
               value={amountDriver}
               onChange={(e) => setAmountDriver(e.target.value)}
-              placeholder="Montant (FCFA)"
+              placeholder={t('admin.incidentArbitration.amountPlaceholder')}
               disabled={!reasonCodeDriver || !course.driver}
               className="w-full bg-off-white border-2 border-warm-200 rounded-md px-3 py-2 pr-16 text-body-s focus:outline-none focus:border-airmess-yellow disabled:opacity-50"
             />
@@ -414,17 +396,11 @@ export default function IncidentArbitrationPanel({
         </div>
         {reasonCodeDriver && (
           <p className="text-caption text-warm-500 mt-2">
-            {ADJUSTMENT_REASON_CODES[reasonCodeDriver].sign === 'credit' ? (
-              '💰 La caution livreur sera CRÉDITÉE de ce montant.'
-            ) : reasonCodeDriver === 'incident_debit' || reasonCodeDriver === 'caution_seizure' ? (
-              <>
-                ⚠️ La caution livreur sera <strong>DÉBITÉE</strong> de ce montant.
-                Si la caution est insuffisante, le solde disponible sera capé et le livreur
-                sera <strong className="text-airmess-red">automatiquement suspendu</strong> jusqu'à rechargement.
-              </>
-            ) : (
-              '⚠️ La caution livreur sera DÉBITÉE de ce montant. Refuse si insuffisant.'
-            )}
+            {ADJUSTMENT_REASON_CODES[reasonCodeDriver].sign === 'credit'
+              ? t('admin.incidentArbitration.driverDepositCredited')
+              : reasonCodeDriver === 'incident_debit' || reasonCodeDriver === 'caution_seizure'
+                ? t('admin.incidentArbitration.driverDepositDebitedSuspend')
+                : t('admin.incidentArbitration.driverDepositDebited')}
           </p>
         )}
       </div>
@@ -432,13 +408,13 @@ export default function IncidentArbitrationPanel({
       {/* ============ Note de résolution ============ */}
       <div className="border-t border-warm-100 pt-4 mb-4">
         <label className="block text-caption uppercase text-warm-500 tracking-widest font-bold mb-1.5">
-          Note de résolution <span className="text-airmess-red">*</span>
+          {t('admin.incidentArbitration.resolutionNote')} <span className="text-airmess-red">*</span>
         </label>
         <textarea
           value={resolutionNote}
           onChange={(e) => setResolutionNote(e.target.value)}
           rows={3}
-          placeholder="Explique brièvement la décision. Elle sera envoyée au marchand et au livreur."
+          placeholder={t('admin.incidentArbitration.resolutionNotePlaceholder')}
           className="w-full bg-off-white border-2 border-warm-200 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
         />
       </div>
@@ -460,7 +436,7 @@ export default function IncidentArbitrationPanel({
         onClick={submit}
         loading={mutation.isPending}
       >
-        Arbitrer l'incident et appliquer les ajustements
+        {t('admin.incidentArbitration.submit')}
       </Button>
     </Card>
   )
@@ -478,7 +454,7 @@ function normalizeSign(code: AdjustmentReasonCode, rawAmount: number): number {
 
 /**
  * Label lisible pour un type d'incident — mirror de CourseIncident::TYPE_*.
- * Volontairement en dur ici, pas critique pour un panneau ops interne.
+ * Fallback si la clé de traduction manque.
  */
 function humanIncidentType(type: string): string {
   const map: Record<string, string> = {

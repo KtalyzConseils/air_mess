@@ -8,6 +8,7 @@ import AdminTabs from '../../components/admin/AdminTabs'
 import AdminPagination from '../../components/admin/AdminPagination'
 import { AdminSearchInput, AdminButton } from '../../components/admin/AdminToolbar'
 import { fetchIndividuals, type IndividualListParams } from '../../api/admin'
+import { CreateIndividualModal } from '../../components/admin/CreateAccountModals'
 
 type FilterKey = 'all' | 'free' | 'active' | 'expired' | 'suspended'
 
@@ -44,6 +45,7 @@ export default function AdminIndividualsPage() {
   const [filterKey, setFilterKey] = useState<FilterKey>('all')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const FILTERS: readonly { key: FilterKey; label: string; params: IndividualListParams }[] = [
     { key: 'all', label: t('admin.individuals.tabAll'), params: {} },
@@ -78,6 +80,11 @@ export default function AdminIndividualsPage() {
       <AdminPageHeader
         title={t('admin.individuals.title')}
         subtitle={t('admin.individuals.pageSubtitle')}
+        actions={
+          <AdminButton variant="primary" onClick={() => setCreateOpen(true)}>
+            Creer un particulier
+          </AdminButton>
+        }
         toolbar={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full">
             <AdminTabs tabs={FILTERS} value={filterKey} onChange={changeFilter} />
@@ -176,6 +183,7 @@ export default function AdminIndividualsPage() {
           />
         )}
       </div>
+      <CreateIndividualModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </AdminPageShell>
   )
 }

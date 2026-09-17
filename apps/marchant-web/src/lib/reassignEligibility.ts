@@ -3,7 +3,7 @@ import type { DriverFull } from '../api/admin'
 
 export type EligibilityReasonCode =
   | 'premium_needs_airmess'
-  | 'paid_by_recipient_needs_airmess'
+  | 'recipient_paid_platform_share_exceeds_wallet'
   | 'collection_exceeds_wallet'
   | 'not_available'
   | 'not_active'
@@ -47,7 +47,18 @@ export function computeEligibility(course: Course, driver: DriverFull): Eligibil
   }
 
   if (course.delivery_fee_paid_by === 'recipient' && !isAirmess) {
-    reasons.push({ code: 'paid_by_recipient_needs_airmess' })
+    const platformShare = Math.max(0, (course.delivery_fee ?? 0) - (course.driver_earnings ?? 0))
+    const balance = driver.wallet?.balance ?? 0
+
+    if (platformShare > balance) {
+      reasons.push({
+        code: 'recipient_paid_platform_share_exceeds_wallet',
+        context: {
+          amount: platformShare,
+          balance,
+        },
+      })
+    }
   }
 
   if (

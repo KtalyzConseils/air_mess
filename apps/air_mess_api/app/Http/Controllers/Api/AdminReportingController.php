@@ -3,6 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AccountingJournal;
+use App\Models\AccountingLine;
+use App\Models\Course;
+use App\Models\CourseCustodyEvent;
+use App\Models\Driver;
 use App\Models\DriverWallet;
 use App\Models\PlatformEarning;
 use App\Models\UserWallet;
@@ -29,6 +34,112 @@ use Illuminate\Support\Facades\DB;
  */
 class AdminReportingController extends Controller
 {
+    public function accountingLedger(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'from'       => ['nullable', 'date_format:Y-m-d'],
+            'to'         => ['nullable', 'date_format:Y-m-d'],
+            'event_type' => ['nullable', 'string', 'max:80'],
+            'course_id'  => ['nullable', 'integer', 'exists:courses,id'],
+            'driver_id'  => ['nullable', 'integer', 'exists:drivers,id'],
+            'user_id'    => ['nullable', 'integer', 'exists:users,id'],
+            'per_page'   => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        [$from, $to] = $this->resolvePeriod($data);
+
+        $query = AccountingJournal::query()
+            ->with(['lines', 'course:id,reference,status'])
+            ->whereBetween('occurred_at', [$from, $to])
+            ->latest('occurred_at')
+            ->latest('id');
+
+        foreach (['event_type', 'course_id', 'driver_id', 'user_id'] as $field) {
+            if (! empty($data[$field])) {
+                $query->where($field, $data[$field]);
+            }
+        }
+
+        return response()->json([
+            'period' => [
+                'from' => $from->toDateString(),
+                'to'   => $to->toDateString(),
+            ],
+            'journals' => $query->paginate((int) ($data['per_page'] ?? 30)),
+        ]);
+    }
+
+    public function courseAccounting(Course $course): JsonResponse
+    {
+        return response()->json([
+            'course' => $course->only([
+                'id',
+                'reference',
+                'status',
+                'delivery_fee',
+                'delivery_fee_paid_by',
+                'driver_earnings',
+                'has_collection',
+                'collection_amount',
+            ]),
+            'journals' => AccountingJournal::where('course_id', $course->id)
+                ->with('lines')
+                ->orderBy('occurred_at')
+                ->get(),
+            'custody_events' => CourseCustodyEvent::where('course_id', $course->id)
+                ->orderBy('occurred_at')
+                ->get(),
+        ]);
+    }
+
+    public function driverCashDue(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to'   => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        [$from, $to] = $this->resolvePeriod($data);
+
+        $rows = AccountingLine::query()
+            ->selectRaw("
+                holder_id as driver_id,
+                SUM(CASE WHEN direction = 'debit' THEN amount_fcfa ELSE -amount_fcfa END) as due_fcfa,
+                COUNT(*) as movement_count
+            ")
+            ->where('account_code', \App\Services\AccountingLedgerService::ACC_DRIVER_CASH_DUE)
+            ->where('holder_type', 'driver')
+            ->whereBetween('created_at', [$from, $to])
+            ->groupBy('holder_id')
+            ->havingRaw("SUM(CASE WHEN direction = 'debit' THEN amount_fcfa ELSE -amount_fcfa END) > 0")
+            ->orderByDesc('due_fcfa')
+            ->get();
+
+        $drivers = Driver::whereIn('id', $rows->pluck('driver_id')->filter()->all())
+            ->get(['id', 'first_name', 'last_name', 'phone'])
+            ->keyBy('id');
+
+        return response()->json([
+            'period' => [
+                'from' => $from->toDateString(),
+                'to'   => $to->toDateString(),
+            ],
+            'drivers' => $rows->map(function ($row) use ($drivers) {
+                $driver = $drivers[(int) $row->driver_id] ?? null;
+
+                return [
+                    'driver_id' => (int) $row->driver_id,
+                    'driver_name' => $driver
+                        ? trim(($driver->first_name ?? '') . ' ' . ($driver->last_name ?? ''))
+                        : "Driver #{$row->driver_id}",
+                    'phone' => $driver?->phone,
+                    'due_fcfa' => (int) $row->due_fcfa,
+                    'movement_count' => (int) $row->movement_count,
+                ];
+            })->values(),
+        ]);
+    }
+
     /**
      * Point d'entrée unique du dashboard reporting wallet.
      *

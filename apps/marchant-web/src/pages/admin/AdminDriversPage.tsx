@@ -6,8 +6,10 @@ import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import AdminTabs from '../../components/admin/AdminTabs'
+import { AdminButton } from '../../components/admin/AdminToolbar'
 import { fetchAdminDrivers, toggleDriverActive } from '../../api/admin'
 import DriversMap, { DRIVER_STATUS_COLOR } from '../../components/DriversMap'
+import { CreateDriverModal } from '../../components/admin/CreateAccountModals'
 
 // Badge de disponibilité (état temps réel du livreur)
 const AVAILABILITY_KEYS = ['available', 'busy', 'on_break', 'offline'] as const
@@ -48,6 +50,7 @@ export default function AdminDriversPage() {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<AvailFilter>('all')
   const [view, setView] = useState<'list' | 'map'>('list')
+  const [createOpen, setCreateOpen] = useState(false)
 
   const FILTERS: readonly { key: AvailFilter; label: string }[] = [
     { key: 'all', label: t('admin.drivers.filterAll') },
@@ -105,6 +108,11 @@ export default function AdminDriversPage() {
           filtered: filtered.length,
           total: drivers.length,
         })}
+        actions={
+          <AdminButton variant="primary" onClick={() => setCreateOpen(true)}>
+            Creer un livreur
+          </AdminButton>
+        }
         toolbar={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full">
             <AdminTabs tabs={FILTERS} value={filter} onChange={setFilter} />
@@ -277,6 +285,7 @@ export default function AdminDriversPage() {
           </div>
         )}
       </div>
+      <CreateDriverModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </AdminPageShell>
   )
 }

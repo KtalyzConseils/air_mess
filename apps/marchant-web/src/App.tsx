@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import LoginPage from './pages/LoginPage'
+import UnauthorizedPage from './pages/UnauthorizedPage'
 import DashboardPage from './pages/DashboardPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import NewCoursePage from './pages/NewCoursePage'
@@ -14,6 +15,8 @@ import AdminUnassignedCoursesPage from './pages/admin/AdminUnassignedCoursesPage
 import AdminArchivedCoursesPage from './pages/admin/AdminArchivedCoursesPage'
 import AdminMarchantsPage from './pages/admin/AdminMarchantsPage'
 import AdminMerchantWaitlistsPage from './pages/admin/AdminMerchantWaitlistsPage'
+import AdminDriverWaitlistsPage from './pages/admin/AdminDriverWaitlistsPage'
+import AdminFormResultsPage from './pages/admin/AdminFormResultsPage'
 import AdminIndividualsPage from './pages/admin/AdminIndividualsPage'
 import AdminWaitlistPage from './pages/admin/AdminWaitlistPage'
 import AdminIndividualDetailPage from './pages/admin/AdminIndividualDetailPage'
@@ -27,6 +30,7 @@ import DriverRegisterPage from './pages/DriverRegisterPage'
 import DriverRegisterSuccessPage from './pages/DriverRegisterSuccessPage'
 import MarchantFromDriverPage from './pages/MarchantFromDriverPage'
 import LandingCommercantsPage from './pages/LandingCommercantsPage'
+import LandingDriversPage from './pages/LandingDriversPage'
 import AdminDriversPage from './pages/admin/AdminDriversPage'
 import AdminDriverDetailPage from './pages/admin/AdminDriverDetailPage'
 import AdminIncidentsPage from './pages/admin/AdminIncidentsPage'
@@ -40,6 +44,7 @@ import AdminUsersPage from './pages/admin/AdminUsersPage'
 import AdminWithdrawRequestsPage from './pages/admin/AdminWithdrawRequestsPage'
 import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDetailPage'
 import AdminWalletReportingPage from './pages/admin/AdminWalletReportingPage'
+import AdminAccountingLedgerPage from './pages/admin/AdminAccountingLedgerPage'
 import AdminReconciliationPage from './pages/admin/AdminReconciliationPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
@@ -100,6 +105,7 @@ function App() {
         <AuthProfileRefresher />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/register/success" element={<RegisterSuccessPage />} />
           <Route path="/register/driver" element={<DriverRegisterPage />} />
@@ -114,6 +120,8 @@ function App() {
           <Route path="/legal/privacy" element={<PrivacyPage />} />
           <Route path="/landing/merchants" element={<Navigate to="/landing/merchants_learn" replace />} />
           <Route path="/landing/merchants_learn" element={<LandingCommercantsPage />} />
+          <Route path="/landing/drivers" element={<Navigate to="/landing/drivers_learn" replace />} />
+          <Route path="/landing/drivers_learn" element={<LandingDriversPage />} />
           <Route path="/t/:token" element={<TrackingPage />} />  {/* PUBLIQUE POUR LE TRACKING */}
           <Route path="/billing/return" element={<BillingReturnPage />} />  {/* PUBLIQUE : retour Fedapay, le webhook fait foi */}
 
@@ -153,12 +161,18 @@ function App() {
             <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />
           </Route>
 
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['ops']} />}>
+            <Route path="/admin/reporting/accounting" element={<AdminAccountingLedgerPage />} />
+          </Route>
+
           {/* admin — fiches marchands/particuliers : lecture partagée (commercial+ops+support),
               actions sensibles gatées à l'intérieur des pages via canManage* */}
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial', 'ops', 'support']} />}>
             <Route path="/admin/marchants" element={<AdminMarchantsPage />} />
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
             <Route path="/admin/waitlists/merchants" element={<AdminMerchantWaitlistsPage />} />
+            <Route path="/admin/waitlists/drivers" element={<AdminDriverWaitlistsPage />} />
+            <Route path="/admin/form-results" element={<AdminFormResultsPage />} />
             <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
             <Route path="/admin/waitlist" element={<AdminWaitlistPage />} />
             <Route path="/admin/individuals/:id" element={<AdminIndividualDetailPage />} />

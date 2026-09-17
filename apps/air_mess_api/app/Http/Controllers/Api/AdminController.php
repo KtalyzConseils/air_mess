@@ -11,9 +11,15 @@ use App\Models\Driver;
 use App\Models\Individual;
 use App\Models\Marchant;
 use App\Models\MerchantWaitlist;
+use App\Models\DriverWaitlist;
 use App\Models\Payment;
 use App\Models\SupportNote;
 use App\Models\User;
+use App\Models\UserWallet;
+use App\Models\DriverWallet;
+use App\Models\UserWalletTransaction;
+use App\Models\WalletTransaction;
+use App\Models\WalletWithdrawRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -748,6 +754,290 @@ class AdminController extends Controller
         );
     }
 
+    public function createMarchant(Request $request): JsonResponse
+    {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'name'             => ['required', 'string', 'max:255'],
+            'email'            => ['required', 'email', 'unique:users,email'],
+            'phone'            => ['required', 'string', 'max:20', 'unique:users,phone'],
+            'password'         => ['required', 'string', 'min:8'],
+            'raison_sociale'   => ['required', 'string', 'max:255'],
+            'ifu_rccm'         => ['nullable', 'string', 'max:50'],
+            'secteur_activite' => ['required', Rule::in([
+                'supermarche', 'restaurant', 'boutique', 'pharmacie', 'ecommerce', 'autre',
+            ])],
+            'validate_now'     => ['nullable', 'boolean'],
+        ]);
+
+        $marchant = DB::transaction(function () use ($request, $data) {
+            $validateNow = (bool) ($data['validate_now'] ?? true);
+
+            $user = User::create([
+                'name'                   => $data['name'],
+                'email'                  => $data['email'],
+                'phone'                  => $data['phone'],
+                'password'               => $data['password'],
+                'password_set_at'        => now(),
+                'type'                   => User::TYPE_MARCHANT,
+                'is_active'              => true,
+                'waitlisted_at'          => $validateNow ? null : now(),
+                'phone_verified_at'      => now(),
+                'email_verified_at'      => now(),
+                'accepted_terms_at'      => now(),
+                'accepted_terms_version' => User::TERMS_VERSION,
+            ]);
+
+            UserWallet::create(['user_id' => $user->id]);
+
+            $marchant = Marchant::create([
+                'user_id'             => $user->id,
+                'raison_sociale'      => $data['raison_sociale'],
+                'ifu_rccm'            => $data['ifu_rccm'] ?? null,
+                'secteur_activite'    => $data['secteur_activite'],
+                'subscription_plan'   => 'trial',
+                'subscription_status' => $validateNow ? 'active' : 'trial',
+                'validated_at'        => $validateNow ? now() : null,
+                'validated_by'        => $validateNow ? $request->user()->id : null,
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'marchant.created',
+                "Marchand {$marchant->raison_sociale} cree par admin.",
+                ['marchant_id' => $marchant->id, 'user_id' => $user->id],
+            );
+
+            return $marchant;
+        });
+
+        return response()->json([
+            'message' => 'Marchand cree.',
+            'marchant' => $marchant->fresh()->load('user'),
+        ], 201);
+    }
+
+    // ===== 5ter. FICHE DÃ‰TAILLÃ‰E D'UN MARCHAND =====
+    // ===== 5quinquies. LISTE D'ATTENTE LIVREURS (etude de marche) =====
+    public function driverWaitlists(Request $request): JsonResponse
+    {
+        $query = DriverWaitlist::query()->latest();
+
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('full_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('email', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        return response()->json(
+            $query->paginate(min((int) $request->query('per_page', 20), 100))
+        );
+    }
+
+    public function merchantWaitlistsExport(Request $request, string $format): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $format = strtolower($format);
+        if (!in_array($format, ['csv', 'txt'], true)) {
+            abort(400, 'Unsupported export format.');
+        }
+
+        $query = MerchantWaitlist::query()->latest();
+
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('shop_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('contact_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        $delimiter = $format === 'csv' ? ';' : "\t";
+        $contentType = $format === 'csv' ? 'text/csv; charset=UTF-8' : 'text/plain; charset=UTF-8';
+        $filename = 'commercants_formulaires_' . now()->format('Ymd_His') . '.' . $format;
+        $stringifyList = fn ($value): string => is_array($value)
+            ? implode(' | ', array_map(fn ($item) => (string) $item, $value))
+            : (string) $value;
+        $cell = fn ($value) => $value === null ? '' : $stringifyList($value);
+
+        return response()->streamDownload(function () use ($query, $delimiter, $cell) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, [
+                'id',
+                'type_commerce',
+                'type_commerce_autre',
+                'zone',
+                'zone_autre',
+                'commandes_par_semaine',
+                'source',
+                'source_autre',
+                'moyens_livraison',
+                'moyens_livraison_autre',
+                'problemes',
+                'problemes_autre',
+                'pire_experience',
+                'probleme_collecte_especes',
+                'temps_perdu_par_semaine',
+                'commandes_perdues_par_semaine',
+                'benefice_attendu',
+                'acceptation_commission',
+                'commission_raisonnable',
+                'confiance_mobile_money',
+                'niveau_interet',
+                'interet_essai',
+                'nom_commerce',
+                'nom_contact',
+                'email',
+                'whatsapp',
+                'statut',
+                'bonus_montant',
+                'bonus_code',
+                'bonus_utilise_le',
+                'cree_le',
+            ], $delimiter);
+
+            $query->chunk(500, function ($rows) use ($out, $delimiter, $cell) {
+                foreach ($rows as $row) {
+                    fputcsv($out, [
+                        $row->id,
+                        $cell($row->commerce_type),
+                        $cell($row->commerce_type_other),
+                        $cell($row->zone),
+                        $cell($row->zone_other),
+                        $cell($row->weekly_orders),
+                        $cell($row->source),
+                        $cell($row->source_other),
+                        $cell($row->delivery_methods),
+                        $cell($row->delivery_methods_other),
+                        $cell($row->problems),
+                        $cell($row->problems_other),
+                        $cell($row->worst_experience),
+                        $cell($row->cash_collection_issue),
+                        $cell($row->time_lost_weekly),
+                        $cell($row->orders_lost_weekly),
+                        $cell($row->expected_benefit),
+                        $cell($row->commission_acceptance),
+                        $cell($row->reasonable_fee),
+                        $cell($row->mobile_money_trust),
+                        $row->interest_level ?? '',
+                        $cell($row->trial_interest),
+                        $cell($row->shop_name),
+                        $cell($row->contact_name),
+                        $cell($row->email),
+                        $cell($row->whatsapp),
+                        $cell($row->status),
+                        $row->bonus_amount ?? '',
+                        $cell($row->bonus_code),
+                        $row->bonus_redeemed_at?->format('Y-m-d H:i:s') ?? '',
+                        $row->created_at?->format('Y-m-d H:i:s') ?? '',
+                    ], $delimiter);
+                }
+            });
+
+            fclose($out);
+        }, $filename, ['Content-Type' => $contentType]);
+    }
+
+    public function driverWaitlistsExport(Request $request, string $format): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $format = strtolower($format);
+        if (!in_array($format, ['csv', 'txt'], true)) {
+            abort(400, 'Unsupported export format.');
+        }
+
+        $query = DriverWaitlist::query()->latest();
+
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('full_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('email', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        $delimiter = $format === 'csv' ? ';' : "\t";
+        $contentType = $format === 'csv' ? 'text/csv; charset=UTF-8' : 'text/plain; charset=UTF-8';
+        $filename = 'livreurs_formulaires_' . now()->format('Ymd_His') . '.' . $format;
+        $stringifyList = fn ($value): string => is_array($value)
+            ? implode(' | ', array_map(fn ($item) => (string) $item, $value))
+            : (string) $value;
+        $cell = fn ($value) => $value === null ? '' : $stringifyList($value);
+
+        return response()->streamDownload(function () use ($query, $delimiter, $cell) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, [
+                'id',
+                'nom_complet',
+                'email',
+                'whatsapp',
+                'type_vehicule',
+                'zone',
+                'zone_autre',
+                'experience',
+                'disponibilite',
+                'source',
+                'source_autre',
+                'plateformes_utilisees',
+                'plateformes_utilisees_autre',
+                'livraisons_par_semaine',
+                'revenu_hebdomadaire',
+                'problemes',
+                'problemes_autre',
+                'pire_experience',
+                'modele_paiement_attendu',
+                'revenu_hebdomadaire_attendu',
+                'confiance_mobile_money',
+                'niveau_interet',
+                'disponibilite_lancement',
+                'statut',
+                'cree_le',
+            ], $delimiter);
+
+            $query->chunk(500, function ($rows) use ($out, $delimiter, $cell) {
+                foreach ($rows as $row) {
+                    fputcsv($out, [
+                        $row->id,
+                        $cell($row->full_name),
+                        $cell($row->email),
+                        $cell($row->whatsapp),
+                        $cell($row->vehicle_type),
+                        $cell($row->zone),
+                        $cell($row->zone_other),
+                        $cell($row->experience),
+                        $cell($row->availability),
+                        $cell($row->source),
+                        $cell($row->source_other),
+                        $cell($row->platforms_used),
+                        $cell($row->platforms_used_other),
+                        $cell($row->weekly_deliveries),
+                        $cell($row->weekly_income),
+                        $cell($row->problems),
+                        $cell($row->problems_other),
+                        $cell($row->worst_experience),
+                        $cell($row->expected_payment_model),
+                        $cell($row->expected_weekly_income),
+                        $cell($row->mobile_money_trust),
+                        $row->interest_level ?? '',
+                        $cell($row->launch_availability),
+                        $cell($row->status),
+                        $row->created_at?->format('Y-m-d H:i:s') ?? '',
+                    ], $delimiter);
+                }
+            });
+
+            fclose($out);
+        }, $filename, ['Content-Type' => $contentType]);
+    }
+
     public function showMarchant(Marchant $marchant): JsonResponse
     {
         $marchant->load(['user', 'user.wallet', 'validatedBy', 'commercialAssignedTo']);
@@ -815,6 +1105,88 @@ class AdminController extends Controller
     }
 
     // ===== 7. LISTE LIVE DES LIVREURS =====
+    public function createDriver(Request $request): JsonResponse
+    {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'first_name'    => ['required', 'string', 'max:100'],
+            'last_name'     => ['required', 'string', 'max:100'],
+            'email'         => ['required', 'email', 'unique:users,email'],
+            'phone'         => ['required', 'string', 'max:20', 'unique:users,phone'],
+            'password'      => ['required', 'string', 'min:8'],
+            'gender'        => ['nullable', Rule::in(['M', 'F', 'autre'])],
+            'birth_date'    => ['nullable', 'date', 'before:-16 years'],
+            'vehicle_type'  => ['required', Rule::in(['scooter', 'moto', 'voiture', 'velo'])],
+            'vehicle_plate' => ['nullable', 'string', 'max:20'],
+            'vehicle_brand' => ['nullable', 'string', 'max:50'],
+            'kind'          => ['nullable', Rule::in([Driver::KIND_INDEPENDENT, Driver::KIND_AIRMESS])],
+            'activate_now'  => ['nullable', 'boolean'],
+        ]);
+
+        $driver = DB::transaction(function () use ($request, $data) {
+            $activateNow = (bool) ($data['activate_now'] ?? false);
+
+            $user = User::create([
+                'name'                   => $data['first_name'] . ' ' . $data['last_name'],
+                'email'                  => $data['email'],
+                'phone'                  => $data['phone'],
+                'password'               => $data['password'],
+                'password_set_at'        => now(),
+                'type'                   => User::TYPE_DRIVER,
+                'is_active'              => true,
+                'waitlisted_at'          => $activateNow ? null : now(),
+                'waitlist_notified_at'   => $activateNow ? now() : null,
+                'waitlist_notified_by'   => $activateNow ? $request->user()->admin?->id : null,
+                'phone_verified_at'      => now(),
+                'email_verified_at'      => now(),
+                'accepted_terms_at'      => now(),
+                'accepted_terms_version' => User::TERMS_VERSION,
+            ]);
+
+            $driver = Driver::create([
+                'user_id'                  => $user->id,
+                'first_name'               => $data['first_name'],
+                'last_name'                => $data['last_name'],
+                'gender'                   => $data['gender'] ?? 'autre',
+                'birth_date'               => $data['birth_date'] ?? null,
+                'vehicle_type'             => $data['vehicle_type'],
+                'vehicle_plate'            => $data['vehicle_plate'] ?? null,
+                'vehicle_brand'            => $data['vehicle_brand'] ?? null,
+                'kind'                     => $data['kind'] ?? Driver::KIND_INDEPENDENT,
+                'activation_status'        => $activateNow ? 'active' : 'pending',
+                'availability_status'      => Driver::STATUS_OFFLINE,
+                'emergency_contact_name'   => $data['first_name'] . ' ' . $data['last_name'],
+                'emergency_contact_phone'  => $data['phone'],
+                'emergency_contact2_name'  => $data['first_name'] . ' ' . $data['last_name'],
+                'emergency_contact2_phone' => $data['phone'],
+                'equipment'                => [
+                    'isothermal_bag' => false,
+                    'top_case' => false,
+                    'refrigerated_bag' => false,
+                ],
+            ]);
+
+            DriverWallet::create(['driver_id' => $driver->id]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'driver.created',
+                "Livreur {$driver->first_name} {$driver->last_name} cree par admin.",
+                ['driver_id' => $driver->id, 'user_id' => $user->id],
+            );
+
+            return $driver;
+        });
+
+        return response()->json([
+            'message' => 'Livreur cree.',
+            'driver' => $driver->fresh()->load(['user', 'wallet']),
+        ], 201);
+    }
+
     public function drivers(Request $request): JsonResponse
     {
         $query = Driver::query()->with('user')->latest();
@@ -2405,6 +2777,63 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     }
 
     // ===== 11. FICHE DÉTAILLÉE D'UN PARTICULIER =====
+    public function createIndividual(Request $request): JsonResponse
+    {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name'  => ['required', 'string', 'max:100'],
+            'email'      => ['required', 'email', 'unique:users,email'],
+            'phone'      => ['required', 'string', 'max:20', 'unique:users,phone'],
+            'password'   => ['required', 'string', 'min:8'],
+            'gender'     => ['nullable', Rule::in(['M', 'F', 'autre'])],
+        ]);
+
+        $individual = DB::transaction(function () use ($request, $data) {
+            $user = User::create([
+                'name'                   => $data['first_name'] . ' ' . $data['last_name'],
+                'email'                  => $data['email'],
+                'phone'                  => $data['phone'],
+                'password'               => $data['password'],
+                'password_set_at'        => now(),
+                'type'                   => User::TYPE_INDIVIDUAL,
+                'is_active'              => true,
+                'phone_verified_at'      => now(),
+                'email_verified_at'      => now(),
+                'accepted_terms_at'      => now(),
+                'accepted_terms_version' => User::TERMS_VERSION,
+            ]);
+
+            UserWallet::create(['user_id' => $user->id]);
+
+            $individual = Individual::create([
+                'user_id'                   => $user->id,
+                'first_name'                => $data['first_name'],
+                'last_name'                 => $data['last_name'],
+                'gender'                    => $data['gender'] ?? null,
+                'monthly_courses_limit'     => (int) \App\Models\AppSetting::get('individual_monthly_courses_limit', 20),
+                'monthly_period_started_at' => now()->startOfMonth(),
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'individual.created',
+                "Particulier {$individual->first_name} {$individual->last_name} cree par admin.",
+                ['individual_id' => $individual->id, 'user_id' => $user->id],
+            );
+
+            return $individual;
+        });
+
+        return response()->json([
+            'message' => 'Particulier cree.',
+            'individual' => $individual->fresh()->load('user'),
+        ], 201);
+    }
+
     public function showIndividual(Individual $individual): JsonResponse
     {
         $individual->load(['user', 'user.wallet']);
@@ -3081,6 +3510,164 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      * Sans cet endpoint, on n'avait aucun moyen de répondre à un driver qui dirait
      * « je n'ai pas reçu mon argent ». Cf. project_wallet_driver_todo #2.
      */
+    public function resetDriverWallet(Request $request, Driver $driver): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $admin = $request->user()->admin;
+
+        $result = DB::transaction(function () use ($request, $driver, $admin, $data) {
+            $wallet = DriverWallet::where('driver_id', $driver->id)->lockForUpdate()->firstOrFail();
+            $amount = (int) $wallet->balance;
+
+            $cancelledWithdrawals = WalletWithdrawRequest::where('driver_id', $driver->id)
+                ->where('status', WalletWithdrawRequest::STATUS_PENDING)
+                ->update([
+                    'status' => WalletWithdrawRequest::STATUS_CANCELLED,
+                    'decided_by_admin_id' => $admin->id,
+                    'decided_at' => now(),
+                    'rejection_reason' => 'Annule automatiquement par remise a zero du wallet: ' . $data['reason'],
+                ]);
+
+            if ($amount <= 0) {
+                return [
+                    'transaction' => null,
+                    'wallet' => $wallet,
+                    'amount' => 0,
+                    'cancelled_withdrawals' => $cancelledWithdrawals,
+                ];
+            }
+
+            $wallet->balance = 0;
+            $wallet->save();
+
+            $transaction = WalletTransaction::create([
+                'driver_id' => $driver->id,
+                'type' => WalletTransaction::TYPE_ADJUSTMENT_DEBIT,
+                'amount_fcfa' => -$amount,
+                'balance_after' => 0,
+                'metadata' => [
+                    'admin_id' => $admin->id,
+                    'reason' => $data['reason'],
+                    'reset_to_zero' => true,
+                    'cancelled_withdrawals' => $cancelledWithdrawals,
+                ],
+                'created_at' => now(),
+            ]);
+
+            app(\App\Services\AccountingLedgerService::class)->recordDriverWalletTransaction($transaction);
+
+            $this->recordAdminActivity(
+                $request,
+                $admin,
+                null,
+                'driver_wallet.reset_zero',
+                "Wallet livreur #{$driver->id} remis a zero ({$amount} FCFA).",
+                ['driver_id' => $driver->id, 'amount_fcfa' => $amount, 'cancelled_withdrawals' => $cancelledWithdrawals],
+            );
+
+            return [
+                'transaction' => $transaction,
+                'wallet' => $wallet->fresh(),
+                'amount' => $amount,
+                'cancelled_withdrawals' => $cancelledWithdrawals,
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Wallet livreur remis a zero.',
+            ...$result,
+        ]);
+    }
+
+    public function resetUserWallet(Request $request, User $user): JsonResponse
+    {
+        if (! $user->isMarchant() && ! $user->isIndividual()) {
+            return response()->json([
+                'message' => "La remise a zero de wallet user ne s'applique qu'aux marchands et particuliers.",
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $admin = $request->user()->admin;
+
+        $result = DB::transaction(function () use ($request, $user, $admin, $data) {
+            $wallet = UserWallet::where('user_id', $user->id)->lockForUpdate()->firstOrFail();
+            $amount = (int) $wallet->balance;
+            $reservedBefore = (int) $wallet->pending_reserved;
+
+            $cancelledWithdrawals = WalletWithdrawRequest::where('user_id', $user->id)
+                ->where('status', WalletWithdrawRequest::STATUS_PENDING)
+                ->update([
+                    'status' => WalletWithdrawRequest::STATUS_CANCELLED,
+                    'decided_by_admin_id' => $admin->id,
+                    'decided_at' => now(),
+                    'rejection_reason' => 'Annule automatiquement par remise a zero du wallet: ' . $data['reason'],
+                ]);
+
+            if ($amount <= 0 && $reservedBefore <= 0) {
+                return [
+                    'transaction' => null,
+                    'wallet' => $wallet,
+                    'amount' => 0,
+                    'cancelled_withdrawals' => $cancelledWithdrawals,
+                    'released_reserved' => 0,
+                ];
+            }
+
+            $wallet->balance = 0;
+            $wallet->pending_reserved = 0;
+            $wallet->save();
+
+            $transaction = null;
+            if ($amount > 0) {
+                $transaction = UserWalletTransaction::create([
+                    'user_id' => $user->id,
+                    'type' => UserWalletTransaction::TYPE_ADJUSTMENT_DEBIT,
+                    'amount_fcfa' => -$amount,
+                    'balance_after' => 0,
+                    'metadata' => [
+                        'admin_id' => $admin->id,
+                        'reason' => $data['reason'],
+                        'reset_to_zero' => true,
+                        'released_reserved' => $reservedBefore,
+                        'cancelled_withdrawals' => $cancelledWithdrawals,
+                    ],
+                    'created_at' => now(),
+                ]);
+
+                app(\App\Services\AccountingLedgerService::class)->recordUserWalletTransaction($transaction);
+            }
+
+            $this->recordAdminActivity(
+                $request,
+                $admin,
+                null,
+                'user_wallet.reset_zero',
+                "Wallet user #{$user->id} remis a zero ({$amount} FCFA).",
+                ['user_id' => $user->id, 'amount_fcfa' => $amount, 'released_reserved' => $reservedBefore, 'cancelled_withdrawals' => $cancelledWithdrawals],
+            );
+
+            return [
+                'transaction' => $transaction,
+                'wallet' => $wallet->fresh(),
+                'amount' => $amount,
+                'cancelled_withdrawals' => $cancelledWithdrawals,
+                'released_reserved' => $reservedBefore,
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Wallet user remis a zero.',
+            ...$result,
+        ]);
+    }
+
     public function markWithdrawRequestPaid(
         Request $request,
         \App\Models\WalletWithdrawRequest $withdraw,

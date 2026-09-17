@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import AdminPagination from '../../components/admin/AdminPagination'
@@ -16,22 +17,11 @@ import {
   type ManagedAdmin,
 } from '../../api/adminUsers'
 
-const ROLES: { value: AdminRole | ''; label: string }[] = [
-  { value: '', label: 'Tous les rôles' },
-  { value: 'super', label: 'Super admin' },
-  { value: 'ops', label: 'Opérations' },
-  { value: 'commercial', label: 'Commercial' },
-  { value: 'support', label: 'Support' },
-]
-
-const ROLE_LABEL: Record<AdminRole, string> = {
-  super: 'Super admin',
-  ops: 'Opérations',
-  commercial: 'Commercial',
-  support: 'Support',
-}
+const ROLE_VALUES: AdminRole[] = ['super', 'ops', 'commercial', 'support']
 
 export default function AdminUsersPage() {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const queryClient = useQueryClient()
   const [q, setQ] = useState('')
   const [role, setRole] = useState<AdminRole | ''>('')
@@ -62,11 +52,22 @@ export default function AdminUsersPage() {
     setPage(1)
   }
 
+  function formatDate(value: string | null) {
+    if (!value) return t('admin.usersPage.never')
+    return new Date(value).toLocaleString(locale, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Gestion des admins"
-        subtitle="Création, rôles, accès et historique des actions effectuées."
+        title={t('admin.usersPage.title')}
+        subtitle={t('admin.usersPage.subtitle')}
         toolbar={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full">
             <div className="flex flex-wrap items-center gap-2 flex-1">
@@ -76,7 +77,7 @@ export default function AdminUsersPage() {
                   setQ(e.target.value)
                   resetPage()
                 }}
-                placeholder="Nom, email ou téléphone"
+                placeholder={t('admin.usersPage.searchPlaceholder')}
                 minWidthClass="min-w-[260px]"
               />
               <AdminSelect
@@ -86,9 +87,10 @@ export default function AdminUsersPage() {
                   resetPage()
                 }}
               >
-                {ROLES.map((r) => (
-                  <option key={r.value || 'all'} value={r.value}>
-                    {r.label}
+                <option value="">{t('admin.usersPage.roles.all')}</option>
+                {ROLE_VALUES.map((r) => (
+                  <option key={r} value={r}>
+                    {t(`admin.usersPage.roles.${r}`)}
                   </option>
                 ))}
               </AdminSelect>
@@ -99,13 +101,13 @@ export default function AdminUsersPage() {
                   resetPage()
                 }}
               >
-                <option value="">Tous les statuts</option>
-                <option value="1">Actifs</option>
-                <option value="0">Désactivés</option>
+                <option value="">{t('admin.usersPage.statusAll')}</option>
+                <option value="1">{t('admin.usersPage.statusActive')}</option>
+                <option value="0">{t('admin.usersPage.statusInactive')}</option>
               </AdminSelect>
             </div>
             <AdminButton variant="primary" onClick={() => setCreateOpen(true)} leftIcon={<UsersIcon size={15} />}>
-              Créer un admin
+              {t('admin.usersPage.createAdmin')}
             </AdminButton>
           </div>
         }
@@ -115,22 +117,22 @@ export default function AdminUsersPage() {
         <div>
           <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
             {isLoading ? (
-              <div className="p-10 text-center text-warm-500 text-body-s">Chargement...</div>
+              <div className="p-10 text-center text-warm-500 text-body-s">{t('admin.usersPage.loading')}</div>
             ) : admins.length === 0 ? (
               <div className="p-10 text-center text-warm-500 text-body-s italic">
-                Aucun administrateur trouvé.
+                {t('admin.usersPage.empty')}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-body-s min-w-[820px]">
                   <thead className="bg-cream/60 text-[10px] uppercase tracking-wider font-bold text-warm-600 border-b border-warm-200">
                     <tr>
-                      <th className="px-5 py-2.5 text-left">Admin</th>
-                      <th className="px-5 py-2.5 text-left">Rôle</th>
-                      <th className="px-5 py-2.5 text-left">Dernière connexion</th>
-                      <th className="px-5 py-2.5 text-left">Activité</th>
-                      <th className="px-5 py-2.5 text-center">Accès</th>
-                      <th className="px-5 py-2.5 text-right">Actions</th>
+                      <th className="px-5 py-2.5 text-left">{t('admin.usersPage.colAdmin')}</th>
+                      <th className="px-5 py-2.5 text-left">{t('admin.usersPage.colRole')}</th>
+                      <th className="px-5 py-2.5 text-left">{t('admin.usersPage.colLastLogin')}</th>
+                      <th className="px-5 py-2.5 text-left">{t('admin.usersPage.colActivity')}</th>
+                      <th className="px-5 py-2.5 text-center">{t('admin.usersPage.colAccess')}</th>
+                      <th className="px-5 py-2.5 text-right">{t('admin.usersPage.colActions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-warm-200">
@@ -143,14 +145,14 @@ export default function AdminUsersPage() {
                         </td>
                         <td className="px-5 py-3">
                           <span className="inline-flex items-center rounded-md bg-warm-100 px-2 py-1 text-caption font-bold text-ink">
-                            {ROLE_LABEL[admin.sub_role]}
+                            {t(`admin.usersPage.roles.${admin.sub_role}`)}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-warm-600">
                           {formatDate(admin.user.last_login_at)}
                         </td>
                         <td className="px-5 py-3 text-warm-600">
-                          <p>{admin.performed_activity_logs_count ?? 0} action(s)</p>
+                          <p>{t('admin.usersPage.actionsCount', { count: admin.performed_activity_logs_count ?? 0 })}</p>
                           <p className="text-caption text-warm-500">
                             {formatDate(admin.performed_activity_logs_max_created_at ?? null)}
                           </p>
@@ -168,7 +170,7 @@ export default function AdminUsersPage() {
                               'inline-flex h-6 w-11 items-center rounded-full p-0.5 transition-colors',
                               admin.user.is_active ? 'bg-success' : 'bg-warm-300',
                             ].join(' ')}
-                            aria-label={admin.user.is_active ? 'Désactiver' : 'Activer'}
+                            aria-label={admin.user.is_active ? t('admin.usersPage.deactivate') : t('admin.usersPage.activate')}
                           >
                             <span
                               className={[
@@ -180,7 +182,7 @@ export default function AdminUsersPage() {
                         </td>
                         <td className="px-5 py-3 text-right whitespace-nowrap">
                           <AdminButton variant="ghost" size="sm" onClick={() => setSelected(admin)}>
-                            Voir / modifier
+                            {t('admin.usersPage.viewEdit')}
                           </AdminButton>
                         </td>
                       </tr>
@@ -196,7 +198,7 @@ export default function AdminUsersPage() {
               currentPage={data.current_page}
               lastPage={data.last_page}
               total={data.total}
-              itemLabel="admin(s)"
+              itemLabel={t('admin.usersPage.itemLabel')}
               onChange={setPage}
               isFetching={isFetching}
             />
@@ -212,6 +214,7 @@ export default function AdminUsersPage() {
 }
 
 function CreateAdminModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     first_name: '',
@@ -240,18 +243,18 @@ function CreateAdminModal({ open, onClose }: { open: boolean; onClose: () => voi
     <AdminModal
       open={open}
       onClose={onClose}
-      title="Créer un administrateur"
-      subtitle="Le compte pourra se connecter immédiatement avec l'email et le mot de passe définis."
+      title={t('admin.usersPage.createModalTitle')}
+      subtitle={t('admin.usersPage.createModalSubtitle')}
       footer={
         <>
-          <AdminButton variant="ghost" onClick={onClose}>Annuler</AdminButton>
+          <AdminButton variant="ghost" onClick={onClose}>{t('admin.usersPage.cancel')}</AdminButton>
           <AdminButton variant="primary" type="submit" form="create-admin-form" disabled={mutation.isPending}>
-            Créer
+            {t('admin.usersPage.create')}
           </AdminButton>
         </>
       }
     >
-      <AdminForm id="create-admin-form" form={form} setForm={setForm} onSubmit={submit} error={errorMessage(mutation.error)} />
+      <AdminForm id="create-admin-form" form={form} setForm={setForm} onSubmit={submit} error={errorMessage(mutation.error, t)} />
     </AdminModal>
   )
 }
@@ -263,6 +266,8 @@ function AdminActivityPanel({
   admin: ManagedAdmin | null
   onUpdated: (admin: ManagedAdmin) => void
 }) {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const queryClient = useQueryClient()
   const [password, setPassword] = useState('')
   const [form, setForm] = useState({
@@ -312,9 +317,9 @@ function AdminActivityPanel({
         <div className="w-10 h-10 rounded-full bg-warm-100 flex items-center justify-center mb-3">
           <SettingsIcon size={18} />
         </div>
-        <h2 className="text-body font-bold text-ink">Sélectionnez un admin</h2>
+        <h2 className="text-body font-bold text-ink">{t('admin.usersPage.selectAdminTitle')}</h2>
         <p className="text-body-s text-warm-500 mt-1">
-          Ouvrez une ligne pour modifier son rôle, son accès et consulter les actions qu'il a effectuées.
+          {t('admin.usersPage.selectAdminBody')}
         </p>
       </aside>
     )
@@ -323,7 +328,7 @@ function AdminActivityPanel({
   return (
     <aside className="bg-off-white border border-warm-200 rounded-lg overflow-hidden h-fit">
       <header className="px-5 py-4 border-b border-warm-200">
-        <p className="text-caption uppercase tracking-wider font-bold text-warm-500">Fiche admin</p>
+        <p className="text-caption uppercase tracking-wider font-bold text-warm-500">{t('admin.usersPage.cardTitle')}</p>
         <h2 className="text-body font-bold text-ink mt-1">{admin.user.name}</h2>
         <p className="text-body-s text-warm-500">{admin.user.email}</p>
       </header>
@@ -336,43 +341,43 @@ function AdminActivityPanel({
         }}
       >
         <div className="grid grid-cols-2 gap-2">
-          <Field label="Prénom" value={form.first_name} onChange={(v) => setForm((f) => ({ ...f, first_name: v }))} />
-          <Field label="Nom" value={form.last_name} onChange={(v) => setForm((f) => ({ ...f, last_name: v }))} />
+          <Field label={t('admin.usersPage.firstName')} value={form.first_name} onChange={(v) => setForm((f) => ({ ...f, first_name: v }))} />
+          <Field label={t('admin.usersPage.lastName')} value={form.last_name} onChange={(v) => setForm((f) => ({ ...f, last_name: v }))} />
         </div>
-        <Field label="Téléphone" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
+        <Field label={t('admin.usersPage.phone')} value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
         <label className="block">
-          <span className="block text-[10px] uppercase tracking-wider font-bold text-warm-600 mb-1">Rôle</span>
+          <span className="block text-[10px] uppercase tracking-wider font-bold text-warm-600 mb-1">{t('admin.usersPage.role')}</span>
           <select
             value={form.sub_role}
             onChange={(e) => setForm((f) => ({ ...f, sub_role: e.target.value as AdminRole }))}
             className="w-full h-10 px-3 bg-off-white border border-warm-300 rounded-md text-body-s text-ink focus:outline-none focus:border-airmess-yellow"
           >
-            {ROLES.filter((r) => r.value).map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
+            {ROLE_VALUES.map((r) => (
+              <option key={r} value={r}>{t(`admin.usersPage.roles.${r}`)}</option>
             ))}
           </select>
         </label>
-        <Field label="Nouveau mot de passe" type="password" value={password} onChange={setPassword} placeholder="Laisser vide pour conserver" />
-        {mutation.error && <p className="text-caption text-airmess-red">{errorMessage(mutation.error)}</p>}
+        <Field label={t('admin.usersPage.newPassword')} type="password" value={password} onChange={setPassword} placeholder={t('admin.usersPage.newPasswordPlaceholder')} />
+        {mutation.error && <p className="text-caption text-airmess-red">{errorMessage(mutation.error, t)}</p>}
         <AdminButton variant="primary" type="submit" disabled={mutation.isPending} leftIcon={<SettingsIcon size={15} />}>
-          Enregistrer
+          {t('admin.usersPage.save')}
         </AdminButton>
       </form>
 
       <div className="px-5 py-4">
         <div className="flex items-center gap-2 mb-3">
           <ClockIcon size={16} className="text-warm-600" />
-          <h3 className="text-body-s font-bold text-ink">Actions effectuées</h3>
+          <h3 className="text-body-s font-bold text-ink">{t('admin.usersPage.performedActions')}</h3>
         </div>
         <div className="space-y-3">
           {(activity?.data ?? []).length === 0 ? (
-            <p className="text-body-s text-warm-500 italic">Aucune activité enregistrée.</p>
+            <p className="text-body-s text-warm-500 italic">{t('admin.usersPage.noActivity')}</p>
           ) : (
             activity!.data.map((log) => (
               <div key={log.id} className="border-l-2 border-airmess-yellow pl-3">
                 <p className="text-body-s font-semibold text-ink">{log.summary}</p>
                 <p className="text-caption text-warm-500">
-                  {formatDate(log.created_at)} · {log.target_admin?.user.name ? `Cible: ${log.target_admin.user.name}` : log.action}
+                  {formatDate(log.created_at, locale)} · {log.target_admin?.user.name ? `${t('admin.usersPage.target')}: ${log.target_admin.user.name}` : log.action}
                 </p>
               </div>
             ))
@@ -396,24 +401,25 @@ function AdminForm({
   onSubmit: (e: FormEvent) => void
   error?: string
 }) {
+  const { t } = useTranslation()
   return (
     <form id={id} onSubmit={onSubmit} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Prénom" required value={form.first_name} onChange={(v) => setForm((f) => ({ ...f, first_name: v }))} />
-        <Field label="Nom" required value={form.last_name} onChange={(v) => setForm((f) => ({ ...f, last_name: v }))} />
+        <Field label={t('admin.usersPage.firstName')} required value={form.first_name} onChange={(v) => setForm((f) => ({ ...f, first_name: v }))} />
+        <Field label={t('admin.usersPage.lastName')} required value={form.last_name} onChange={(v) => setForm((f) => ({ ...f, last_name: v }))} />
       </div>
-      <Field label="Email" type="email" required value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} />
-      <Field label="Téléphone" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
-      <Field label="Mot de passe" type="password" required value={form.password} onChange={(v) => setForm((f) => ({ ...f, password: v }))} />
+      <Field label={t('admin.usersPage.email')} type="email" required value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} />
+      <Field label={t('admin.usersPage.phone')} value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
+      <Field label={t('admin.usersPage.password')} type="password" required value={form.password} onChange={(v) => setForm((f) => ({ ...f, password: v }))} />
       <label className="block">
-        <span className="block text-[10px] uppercase tracking-wider font-bold text-warm-600 mb-1">Rôle</span>
+        <span className="block text-[10px] uppercase tracking-wider font-bold text-warm-600 mb-1">{t('admin.usersPage.role')}</span>
         <select
           value={form.sub_role}
           onChange={(e) => setForm((f) => ({ ...f, sub_role: e.target.value as AdminRole }))}
           className="w-full h-10 px-3 bg-off-white border border-warm-300 rounded-md text-body-s text-ink focus:outline-none focus:border-airmess-yellow"
         >
-          {ROLES.filter((r) => r.value).map((r) => (
-            <option key={r.value} value={r.value}>{r.label}</option>
+          {ROLE_VALUES.map((r) => (
+            <option key={r} value={r}>{t(`admin.usersPage.roles.${r}`)}</option>
           ))}
         </select>
       </label>
@@ -454,9 +460,9 @@ function Field({
   )
 }
 
-function formatDate(value: string | null) {
-  if (!value) return 'Jamais'
-  return new Date(value).toLocaleString('fr-FR', {
+function formatDate(value: string | null, locale: string) {
+  if (!value) return null
+  return new Date(value).toLocaleString(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -465,12 +471,12 @@ function formatDate(value: string | null) {
   })
 }
 
-function errorMessage(error: unknown) {
+function errorMessage(error: unknown, t: (key: string) => string) {
   if (!error) return undefined
   if (error instanceof AxiosError) {
     const data = error.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
     const first = data?.errors ? Object.values(data.errors)[0]?.[0] : undefined
-    return first ?? data?.message ?? 'Action impossible.'
+    return first ?? data?.message ?? t('admin.usersPage.genericError')
   }
-  return 'Action impossible.'
+  return t('admin.usersPage.genericError')
 }

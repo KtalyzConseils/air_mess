@@ -35,7 +35,7 @@ class UserWalletService
             throw new \InvalidArgumentException("Deposit amount must be > 0, got {$amount}.");
         }
 
-        return DB::transaction(function () use ($user, $amount, $payment) {
+        $transaction = DB::transaction(function () use ($user, $amount, $payment) {
             $wallet = UserWallet::where('user_id', $user->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -52,6 +52,8 @@ class UserWalletService
                 'payment_id'    => $payment->id,
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -118,7 +120,7 @@ class UserWalletService
             return $existing;
         }
 
-        return DB::transaction(function () use ($user, $course, $amount) {
+        $transaction = DB::transaction(function () use ($user, $course, $amount) {
             $wallet = UserWallet::where('user_id', $user->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -144,6 +146,8 @@ class UserWalletService
                 'course_id'     => $course->id,
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -186,7 +190,7 @@ class UserWalletService
             );
         }
 
-        return DB::transaction(function () use ($user, $course, $capturedAmount, $holdAmount) {
+        $transaction = DB::transaction(function () use ($user, $course, $capturedAmount, $holdAmount) {
             $wallet = UserWallet::where('user_id', $user->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -220,6 +224,8 @@ class UserWalletService
                 ],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -249,7 +255,7 @@ class UserWalletService
             return $existing;
         }
 
-        return DB::transaction(function () use ($marchand, $course, $amount) {
+        $transaction = DB::transaction(function () use ($marchand, $course, $amount) {
             $wallet = UserWallet::where('user_id', $marchand->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -269,6 +275,8 @@ class UserWalletService
                 ],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -398,7 +406,7 @@ class UserWalletService
             throw new \DomainException("Course #{$course->id} n'a pas été chargée, rien à rembourser.");
         }
 
-        return DB::transaction(function () use ($user, $course, $amount, $reason) {
+        $transaction = DB::transaction(function () use ($user, $course, $amount, $reason) {
             $wallet = UserWallet::where('user_id', $user->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -415,6 +423,8 @@ class UserWalletService
                 'metadata'      => $reason ? ['reason' => $reason] : null,
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -426,7 +436,7 @@ class UserWalletService
             throw new \InvalidArgumentException("Adjustment credit must be > 0, got {$amount}.");
         }
 
-        return DB::transaction(function () use ($user, $amount, $adminId, $reason) {
+        $transaction = DB::transaction(function () use ($user, $amount, $adminId, $reason) {
             $wallet = UserWallet::where('user_id', $user->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -442,6 +452,8 @@ class UserWalletService
                 'metadata'      => ['admin_id' => $adminId, 'reason' => $reason],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -463,7 +475,7 @@ class UserWalletService
             throw new \InvalidArgumentException("Withdraw amount must be > 0, got {$amount}.");
         }
 
-        return DB::transaction(function () use ($user, $amount, $adminId, $reason) {
+        $transaction = DB::transaction(function () use ($user, $amount, $adminId, $reason) {
             $wallet = UserWallet::where('user_id', $user->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -488,6 +500,8 @@ class UserWalletService
                 'metadata'      => ['admin_id' => $adminId, 'reason' => $reason],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -512,7 +526,7 @@ class UserWalletService
             return null;
         }
 
-        return DB::transaction(function () use ($user, $withdraw, $amount) {
+        $transaction = DB::transaction(function () use ($user, $withdraw, $amount) {
             $wallet = UserWallet::where('user_id', $user->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -534,6 +548,8 @@ class UserWalletService
                 ],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -547,7 +563,7 @@ class UserWalletService
             throw new \InvalidArgumentException("Adjustment debit must be > 0, got {$amount}.");
         }
 
-        return DB::transaction(function () use ($user, $amount, $adminId, $reason) {
+        $transaction = DB::transaction(function () use ($user, $amount, $adminId, $reason) {
             $wallet = UserWallet::where('user_id', $user->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -570,5 +586,14 @@ class UserWalletService
                 'metadata'      => ['admin_id' => $adminId, 'reason' => $reason],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
+    }
+
+    private function recordAccounting(UserWalletTransaction $transaction): UserWalletTransaction
+    {
+        app(AccountingLedgerService::class)->recordUserWalletTransaction($transaction);
+
+        return $transaction;
     }
 }

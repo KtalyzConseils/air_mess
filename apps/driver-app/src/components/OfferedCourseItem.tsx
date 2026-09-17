@@ -43,7 +43,9 @@ export default function OfferedCourseItem({
         className="rounded-2xl mb-3 bg-off-white border border-warm-200 p-4"
         style={({ pressed }) => (pressed ? { opacity: 0.9 } : undefined)}
       >
-        {/* Ligne du haut : tags | prix */}
+        {/* Ligne du haut : tags | prix. Le badge "Client paie livraison" rejoint
+            cette ligne (à côté d'Express / de la catégorie) — info neutre en bleu,
+            SANS montant : le prix sera visible pendant l'exécution de la course. */}
         <View className="flex-row items-start justify-between">
           <View className="flex-1 flex-row flex-wrap items-center pr-2" style={{ gap: 6 }}>
             {isExpress && (
@@ -57,6 +59,14 @@ export default function OfferedCourseItem({
                 <Text className="text-warm-600 text-[10px] font-jk-bold">{category}</Text>
               </View>
             )}
+            {course.delivery_fee_paid_by === 'recipient' && (
+              <View className="flex-row items-center bg-info-bg border border-info/30 px-2 py-1 rounded-md">
+                <Ionicons name="wallet-outline" size={11} color="#0284C7" />
+                <Text className="text-info text-[10px] font-jk-extrabold ml-1">
+                  Client paie livraison
+                </Text>
+              </View>
+            )}
           </View>
           <View className="items-end">
             <Text className="text-ink text-xl font-jk-extrabold leading-6">
@@ -66,7 +76,8 @@ export default function OfferedCourseItem({
           </View>
         </View>
 
-        {/* Encaissement */}
+        {/* Encaissement — sur sa ligne, seul pattern qui garde le montant (le driver
+            en a besoin pour vérifier la somme à collecter chez le destinataire). */}
         {course.has_collection && (
           <View className="self-start flex-row items-center bg-airmess-yellow/20 px-2 py-1 rounded-md mt-2">
             <Ionicons name="cash-outline" size={11} color="#1A1614" />

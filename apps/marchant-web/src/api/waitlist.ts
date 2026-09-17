@@ -45,3 +45,44 @@ export async function submitMerchantWaitlist(
   const { data } = await api.post('/waitlist/merchants', payload)
   return data
 }
+
+export interface DriverWaitlistPayload {
+  vehicle_type: string
+  zone: string
+  zone_other?: string
+  experience: string
+  availability: string
+  source?: string
+  source_other?: string
+  platforms_used: string[]
+  platforms_used_other?: string
+  weekly_deliveries: string
+  weekly_income: string
+  problems: string[]
+  problems_other?: string
+  worst_experience: string
+  expected_payment_model: string
+  expected_weekly_income: string
+  mobile_money_trust: string
+  interest_level: number
+  launch_availability: string
+  full_name: string
+  email: string
+  whatsapp: string
+}
+
+export interface DriverWaitlistResponse {
+  message: string
+  waitlist: {
+    id: number
+    status: string
+    created_at: string | null
+  }
+}
+
+export async function submitDriverWaitlist(
+  payload: DriverWaitlistPayload,
+): Promise<DriverWaitlistResponse> {
+  const { data } = await api.post('/waitlist/drivers', payload)
+  return data
+}

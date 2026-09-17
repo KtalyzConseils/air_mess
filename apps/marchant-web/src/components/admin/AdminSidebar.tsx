@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../stores/authStore'
 import mark from '../../assets/logo/airmess-mark.svg'
 import wordmark from '../../assets/logo/airmess-wordmark.svg'
@@ -19,6 +20,7 @@ interface AdminSidebarProps {
 const COLLAPSED_KEY = 'admin.sidebar.collapsed'
 
 export default function AdminSidebar({ mobileOpen, onMobileClose }: AdminSidebarProps) {
+  const { t } = useTranslation()
   const { user, logout } = useAuthStore()
 
   // Persistance du collapsed state. Sur mobile, ignoré (drawer plein).
@@ -77,7 +79,7 @@ export default function AdminSidebar({ mobileOpen, onMobileClose }: AdminSidebar
           <button
             onClick={onMobileClose}
             className="lg:hidden p-2 rounded-md text-white/70 hover:text-white hover:bg-white/8"
-            aria-label="Fermer la navigation"
+            aria-label={t('admin.sidebar.closeNav')}
           >
             <CloseIcon size={18} />
           </button>
@@ -142,26 +144,26 @@ export default function AdminSidebar({ mobileOpen, onMobileClose }: AdminSidebar
 
           <button
             onClick={() => logout()}
-            title={collapsed ? 'Déconnexion' : undefined}
+            title={collapsed ? t('admin.sidebar.logout') : undefined}
             className={[
               'w-full flex items-center gap-3 rounded-md text-body-s font-medium text-white/70 hover:text-airmess-red hover:bg-white/8 transition-colors',
               collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2',
             ].join(' ')}
           >
             <LogOutIcon size={18} />
-            {!collapsed && <span>Déconnexion</span>}
+            {!collapsed && <span>{t('admin.sidebar.logout')}</span>}
           </button>
 
           {/* Collapse toggle — desktop only */}
           <button
             onClick={() => setCollapsed((v) => !v)}
             className="hidden lg:flex w-full items-center justify-center gap-1.5 px-2 py-2 rounded-md text-caption text-white/50 hover:text-white hover:bg-white/8 transition-colors"
-            aria-label={collapsed ? 'Étendre la navigation' : 'Réduire la navigation'}
+            aria-label={collapsed ? t('admin.sidebar.expandNav') : t('admin.sidebar.collapseNav')}
           >
             {collapsed ? <ChevronRightIcon size={16} /> : (
               <>
                 <ChevronLeftIcon size={16} />
-                <span>Réduire</span>
+                <span>{t('admin.sidebar.collapse')}</span>
               </>
             )}
           </button>

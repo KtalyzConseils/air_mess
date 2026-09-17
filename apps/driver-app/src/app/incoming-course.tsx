@@ -309,6 +309,17 @@ export default function IncomingCourseScreen() {
                 )}
               </View>
 
+              {/* Info neutre "client paie livraison" — sans montant, pour ne pas
+                  perturber le driver au moment de la décision. */}
+              {course?.delivery_fee_paid_by === 'recipient' && (
+                <View className="flex-row items-center bg-info-bg border border-info/30 rounded-xl px-3 py-2 mb-3">
+                  <Ionicons name="wallet-outline" size={14} color="#0284C7" />
+                  <Text className="text-info text-xs font-extrabold ml-1.5 flex-1">
+                    Client paie la livraison
+                  </Text>
+                </View>
+              )}
+
               {/* Meta — seulement quand on a les détails complets */}
               {course && (
                 <View className="flex-row justify-between">
