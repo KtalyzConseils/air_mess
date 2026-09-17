@@ -35,6 +35,20 @@ workflows:
           npm install
           test -d node_modules/expo
 
+      # GoogleService-Info.plist n'est PAS versionné (retiré par "Purge tracked secrets").
+      # On le reconstitue depuis une variable sécurisée Codemagic (GOOGLE_SERVICE_INFO_PLIST,
+      # le plist encodé en base64) avant le prebuild, sinon @react-native-firebase échoue à
+      # le copier. Voir docs/codemagic-ios.md pour poser la variable.
+      - name: Restore GoogleService-Info.plist
+        script: |
+          set -e
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST" ]; then
+            echo "ERREUR: variable GOOGLE_SERVICE_INFO_PLIST absente (groupe ios_signing)."
+            exit 1
+          fi
+          echo "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > GoogleService-Info.plist
+          plutil -lint GoogleService-Info.plist
+
       - name: Generate iOS project
         script: |
           set -e
