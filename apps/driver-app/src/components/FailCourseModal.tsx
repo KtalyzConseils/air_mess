@@ -23,6 +23,7 @@ const FAIL_REASONS: FailReason[] = [
 
 interface Props {
   courseId: number
+  postPickup: boolean
   visible: boolean
   onClose: () => void
 }
@@ -34,7 +35,7 @@ interface Props {
  *   étape 1 : choisir raison + détails
  *   étape 2 : bandeau danger avec les conséquences + récap + confirmation
  */
-export default function FailCourseModal({ courseId, visible, onClose }: Props) {
+export default function FailCourseModal({ courseId, postPickup, visible, onClose }: Props) {
   const queryClient = useQueryClient()
   const [reasonCode, setReasonCode] = useState<string | null>(null)
   const [details, setDetails] = useState('')
@@ -75,7 +76,7 @@ export default function FailCourseModal({ courseId, visible, onClose }: Props) {
       title={confirmStep ? "Confirmer l'abandon" : 'Abandonner la course'}
       subtitle={
         confirmStep
-          ? 'Action définitive — lis les conséquences.'
+          ? 'Lis les conséquences avant de confirmer.'
           : 'Pourquoi tu ne peux pas livrer ?'
       }
       footer={
@@ -184,15 +185,15 @@ export default function FailCourseModal({ courseId, visible, onClose }: Props) {
                 Ce que ça implique
               </Text>
             </View>
-            <Consequence>Le marchand sera notifié</Consequence>
-            <Consequence>
-              Tu ne toucheras <Text className="font-extrabold">aucun gain</Text> pour cette
-              course
-            </Consequence>
-            <Consequence>Tu redeviendras disponible pour d'autres propositions</Consequence>
-            <Text className="text-xs text-airmess-red mt-2 italic">
-              Cette action est définitive.
-            </Text>
+            {postPickup ? <>
+              <Consequence>Les opérations seront alertées pour organiser un transfert ou un retour.</Consequence>
+              <Consequence>Conserve le colis et reste disponible pour leurs instructions. La course n’est pas clôturée.</Consequence>
+              <Consequence>Tu restes occupé jusqu’à la remise du colis.</Consequence>
+            </> : <>
+              <Consequence>La course sera remise en attente et proposée aux autres livreurs.</Consequence>
+              <Consequence>Aucun gain ne sera crédité pour cet abandon avant récupération.</Consequence>
+              <Consequence>Tu redeviendras disponible si tu n’as pas d’autre course active.</Consequence>
+            </>}
           </View>
 
           {/* Récap */}

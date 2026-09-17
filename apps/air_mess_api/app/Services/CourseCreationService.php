@@ -72,6 +72,7 @@ class CourseCreationService
         }
 
         $driverUserIds = Driver::availableNear($course->origin_lat, $course->origin_lng, $radiusKm)
+            ->whereNotIn('id', \App\Models\CourseDeclineRecord::where('course_id', $course->id)->select('driver_id'))
             ->pluck('user_id')
             ->toArray();
 

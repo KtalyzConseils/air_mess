@@ -369,6 +369,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/incidents/{incident}/no-show-partial', [AdminController::class, 'noShowPartial']);
         // Cas 4 — preset 1-clic pour course retour confirmée après refus client
         Route::post('/incidents/{incident}/return-trip-confirmed', [AdminController::class, 'returnTripConfirmed']);
+        Route::post('/incidents/{incident}/start-return', [AdminController::class, 'startIncidentReturn']);
         // Cas 6 — preset 1-clic pour annulation marchand confirmée post-pickup
         Route::post('/incidents/{incident}/marchand-cancel-confirmed', [AdminController::class, 'marchandCancelConfirmed']);
 

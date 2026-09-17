@@ -234,6 +234,9 @@ class AdminController extends Controller
 
         $isPostPickup = in_array($course->status, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF], true);
         $wantsTransfer = (bool) ($data['pickup_from_previous_driver'] ?? false);
+        if ($wantsTransfer && ! $isPostPickup) {
+            return response()->json(['message' => 'Le transfert concerne uniquement un colis déjà récupéré.'], 422);
+        }
 
         // Chemin classique : réassignation avant pickup → statut ASSIGNED
         // Chemin transfert : réassignation après pickup → statut PICKED_UP conservé
@@ -292,9 +295,9 @@ class AdminController extends Controller
             $newDriver->update(['availability_status' => 'busy']);
 
             // En transfert, le driver initial garde le colis quelques minutes de plus
-            // (le temps du rendez-vous), mais côté système on le libère : il pourra
-            // accepter d'autres courses une fois le transfert fait.
-            if ($oldDriver) {
+            // (le temps du rendez-vous) : il reste occupé jusqu'à la confirmation
+            // de la remise physique par le nouveau livreur.
+            if ($oldDriver && ! $wantsTransfer) {
                 $oldDriver->update(['availability_status' => 'available']);
             }
 
@@ -1370,6 +1373,37 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     }
 
     // ===== 8. LISTE DES INCIDENTS =====
+    public function startIncidentReturn(Request $request, CourseIncident $incident, NotificationService $notifier): JsonResponse
+    {
+        $course = DB::transaction(function () use ($incident, $request) {
+            $lockedIncident = CourseIncident::whereKey($incident->id)->lockForUpdate()->firstOrFail();
+            $course = Course::whereKey($lockedIncident->course_id)->lockForUpdate()->firstOrFail();
+            if ($lockedIncident->status !== 'open' || ! str_starts_with($lockedIncident->description ?? '', '[Abandon après récupération]') ||
+                ! in_array($course->status, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF], true) || $course->pickup_from_previous_driver) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['course' => 'Cette course ne peut pas être mise en retour depuis cet incident.']);
+            }
+            $previousStatus = $course->status;
+            $course->update(['status' => Course::STATUS_RETURNING_TO_SENDER, 'return_code' => $course->return_code ?: Course::generateCode()]);
+            CourseStatusHistory::create([
+                'course_id' => $course->id, 'from_status' => $previousStatus, 'to_status' => Course::STATUS_RETURNING_TO_SENDER,
+                'changed_by_id' => $request->user()->id, 'changed_by_type' => 'user',
+                'reason' => 'Retour organisé par les opérations après abandon',
+                'metadata' => ['incident_id' => $lockedIncident->id],
+            ]);
+            return $course;
+        });
+        $notifier->sendToUser($course->sender_id, 'course.returning_to_sender', 'Retour du colis organisé',
+            "Les opérations organisent le retour de {$course->reference}. Code à donner lors de la remise : {$course->return_code}.",
+            ['reference' => $course->reference, 'return_code' => $course->return_code], $course->id);
+        $driver = $course->driver;
+        if ($driver) {
+            $notifier->sendToUser($driver->user_id, 'course.returning_to_sender', 'Rapporte le colis au point de départ',
+                "Retour autorisé par les opérations pour {$course->reference}. Confirme la remise avec le code de l’expéditeur.",
+                ['reference' => $course->reference], $course->id);
+        }
+        return response()->json(['message' => 'Retour organisé. L’incident reste ouvert pour le suivi et la facturation.']);
+    }
+
     public function incidents(Request $request): JsonResponse
     {
         $query = CourseIncident::query()

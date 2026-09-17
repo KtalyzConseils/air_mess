@@ -614,6 +614,10 @@ export async function resolveIncident(id: number, resolution_note: string): Prom
   await api.post(`/admin/incidents/${id}/resolve`, { resolution_note })
 }
 
+export async function startIncidentReturn(id: number): Promise<void> {
+  await api.post(`/admin/incidents/${id}/start-return`)
+}
+
 // ============== PARTICULIERS (ADMIN) ==============
 
 export type IndividualWithUser = Individual & {

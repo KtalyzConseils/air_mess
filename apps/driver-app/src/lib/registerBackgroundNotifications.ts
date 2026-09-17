@@ -38,13 +38,16 @@ export const INCOMING_NOTIF_ID = 'incoming-course-alert'
 export const COURSE_ALERT_STOP = 'airmess-course-alert-stop'
 const actionsInFlight = new Map<number, Promise<void>>()
 const foregroundDeliveries = new Map<number, number>()
+let activeIncomingCourseId: number | null = null
+export function setActiveIncomingCourse(id: number | null): void { activeIncomingCourseId = id }
+export function getActiveIncomingCourse(): number | null { return activeIncomingCourseId }
 
 /** File d'attente des courses entrantes à faire sonner (une à la fois). */
 const RING_QUEUE_KEY = 'airmess_ring_queue'
 /** Marqueur de la course qui sonne actuellement (évite de re-sonner la tête à chaque push). */
 const RINGING_KEY = 'airmess_ringing'
 /** Une course entrante n'est plus pertinente au-delà de ce délai. */
-const RING_TTL_MS = 45_000
+const RING_TTL_MS = 24 * 60 * 60 * 1_000
 /** Durée de la sonnerie/notif active (aligné sur timeoutAfter + timer 30s). */
 const RING_ACTIVE_MS = 32_000
 
@@ -110,7 +113,7 @@ async function readQueueRaw(): Promise<RingItem[]> {
     if (!Array.isArray(arr)) return []
     const now = Date.now()
     return arr.filter(
-      (it: any) => it && it.course_id != null && now - it.ts < RING_TTL_MS,
+      (it: any) => it && it.course_id != null && now - it.ts < (it.payload?.urgency === 'express' ? 15 * 60 * 1_000 : RING_TTL_MS),
     )
   } catch {
     return []
@@ -153,6 +156,8 @@ export async function dequeueRing(courseId: number): Promise<RingItem | null> {
 
 /** Vide toute la file (ex : une course acceptée → livreur occupé). */
 export async function clearRingQueue(): Promise<void> {
+  const items = await readQueueRaw()
+  await Promise.all(items.map((item) => notifee.cancelNotification(`incoming-course-${item.course_id}`).catch(() => {})))
   await writeQueue([])
   await clearRinging()
 }
@@ -225,7 +230,7 @@ async function displayRingNotification(item: RingItem, foreground = false): Prom
 
   await ensureIncomingChannel()
   await notifee.displayNotification({
-    id: INCOMING_NOTIF_ID,
+    id: foreground ? `incoming-course-${item.course_id}` : INCOMING_NOTIF_ID,
     // Le livreur doit comprendre AVANT de décrocher qu'on lui impose une course
     // reprise à un collègue, et non qu'on lui en propose une nouvelle.
     title: reassigned ? '🔄 Course réaffectée' : '📦 Nouvelle course',
@@ -264,6 +269,12 @@ export async function showIncomingCourseNotification(
     const id = Number(payload.course_id)
     if (Date.now() - (foregroundDeliveries.get(id) ?? 0) < 5_000) return null
     foregroundDeliveries.set(id, Date.now())
+    const items = await enqueue(payload)
+    if (activeIncomingCourseId === null) {
+      DeviceEventEmitter.emit('airmess-incoming-course', { courseId: items[0]?.course_id ?? id })
+      return items[0]?.course_id ?? id
+    }
+    if (activeIncomingCourseId === id) return id
     await displayRingNotification({ course_id: Number(payload.course_id), ts: Date.now(), payload }, true)
     return null
   }
@@ -310,24 +321,46 @@ export async function ringNextInQueue(): Promise<number | null> {
   return head.course_id
 }
 
+export async function dismissUnavailableCourse(courseId: number): Promise<void> {
+  if (actionsInFlight.has(courseId)) return
+  await dequeueRing(courseId)
+  await notifee.cancelNotification(`incoming-course-${courseId}`).catch(() => {})
+  DeviceEventEmitter.emit('airmess-course-unavailable', { courseId })
+}
+
 export function respondToIncomingCourse(courseId: number, action: 'accept' | 'decline', reassigned = false): Promise<void> {
   const existing = actionsInFlight.get(courseId)
   if (existing) return existing
   const operation = (async () => {
     DeviceEventEmitter.emit(COURSE_ALERT_STOP, { courseId })
     await notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
+    await notifee.cancelNotification(`incoming-course-${courseId}`).catch(() => {})
     if (action === 'accept') {
       if (!reassigned) {
         try { await acceptCourse(courseId) }
         catch (error) {
           const active = await fetchMyActiveCourses().catch(() => [])
-          if (!active.some((course) => course.id === courseId)) throw error
+          if (!active.some((course) => course.id === courseId)) {
+            if ((error as any)?.response?.status === 409) {
+              await dequeueRing(courseId)
+              DeviceEventEmitter.emit('airmess-course-unavailable', { courseId })
+              return
+            }
+            throw error
+          }
         }
       }
       await clearRingQueue()
     } else {
-      if (reassigned) await declineReassignment(courseId, 'personal')
-      else await declineCourse(courseId, 'personal')
+      try {
+        if (reassigned) await declineReassignment(courseId, 'personal')
+        else await declineCourse(courseId, 'personal')
+      } catch (error) {
+        if ((error as any)?.response?.status !== 409) throw error
+        await dequeueRing(courseId)
+        DeviceEventEmitter.emit('airmess-course-unavailable', { courseId })
+        return
+      }
       await dequeueRing(courseId)
     }
     DeviceEventEmitter.emit('airmess-course-action-completed', { courseId, action })

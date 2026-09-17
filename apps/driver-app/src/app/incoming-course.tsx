@@ -20,6 +20,7 @@ import {
   isReassignment,
   respondToIncomingCourse,
   COURSE_ALERT_STOP,
+  setActiveIncomingCourse,
 } from '../lib/registerBackgroundNotifications'
 
 /**
@@ -40,10 +41,10 @@ export default function IncomingCourseScreen() {
   // Infos portées par le push (trajet + gains) : filet de sécurité quand la course
   // n'est pas (encore) dans le pool de propositions — évite un écran vide/"indisponible".
   const [pushInfo, setPushInfo] = useState<Record<string, any> | null>(null)
+  const [pushLoadedFor, setPushLoadedFor] = useState<number | null>(null)
   const playerRef = useRef<AudioPlayer | null>(null)
   const vibrationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const dismissedRef = useRef(false)
-  const hadCourseRef = useRef(false)
 
   // Détail de la course (pool de propositions). Rafraîchi régulièrement pour détecter
   // si un autre livreur la prend pendant que ça sonne.
@@ -60,9 +61,9 @@ export default function IncomingCourseScreen() {
       const list = reassigned ? await fetchMyActiveCourses() : await fetchOfferedCourses()
       return list.find((c) => c.id === courseId) ?? null
     },
-    enabled: courseId != null,
+    enabled: courseId != null && pushLoadedFor === courseId,
     refetchOnWindowFocus: false,
-    refetchInterval: 10_000,
+    refetchInterval: 3_000,
   })
 
   // ── Sonnerie en boucle + vibration ────────────────────────────────
@@ -70,17 +71,19 @@ export default function IncomingCourseScreen() {
   // l'écran ne se démonte pas → il faut relancer son/vibration/état.
   useEffect(() => {
     dismissedRef.current = false
-    hadCourseRef.current = false
+    setActiveIncomingCourse(courseId)
     setActing(null)
     // Combien de courses attendent derrière celle-ci ? + infos du push (secours).
     getRingQueue()
       .then((items) => {
         setWaiting(Math.max(0, items.length - 1))
         setPushInfo(items.find((i) => i.course_id === courseId)?.payload ?? null)
+        setPushLoadedFor(courseId)
       })
       .catch(() => {
         setWaiting(0)
         setPushInfo(null)
+        setPushLoadedFor(courseId)
       })
     // L'écran d'appel prend le relais : on coupe la notif (et sa sonnerie de canal)
     // pour éviter le double son avec la boucle in-app.
@@ -96,6 +99,7 @@ export default function IncomingCourseScreen() {
     const vib = setInterval(() => Vibration.vibrate(600), 1500)
     vibrationTimerRef.current = vib
     return () => {
+      setActiveIncomingCourse(null)
       clearInterval(vib)
       Vibration.cancel()
       playerRef.current?.pause()
@@ -109,9 +113,8 @@ export default function IncomingCourseScreen() {
   // (Accepter / Refuser). La seule sortie automatique est la disparition de la course
   // du pool = un autre livreur l'a acceptée.
   useEffect(() => {
-    if (course) hadCourseRef.current = true
     if (isLoading || dismissedRef.current) return
-    if (course === null && hadCourseRef.current) {
+    if (course === null) {
       dismissedRef.current = true
       stopAlert()
       void (async () => {
@@ -131,11 +134,30 @@ export default function IncomingCourseScreen() {
   }
 
   useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('airmess-course-unavailable', ({ courseId: id }) => {
+      if (id !== courseId || dismissedRef.current) return
+      dismissedRef.current = true
+      stopAlert()
+      void getRingQueue().then((items) => goNext(items[0]?.course_id ?? null))
+    })
+    return () => sub.remove()
+  }, [courseId])
+
+  useEffect(() => {
     const sub = DeviceEventEmitter.addListener(COURSE_ALERT_STOP, ({ courseId: id }) => {
       if (id === courseId) stopAlert()
     })
     return () => sub.remove()
   }, [courseId])
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', ({ courseId: id, action }) => {
+      if (id !== courseId || action !== 'decline' || acting) return
+      dismissedRef.current = true
+      void getRingQueue().then((items) => goNext(items[0]?.course_id ?? null))
+    })
+    return () => sub.remove()
+  }, [courseId, acting])
 
   /** Enchaîne sur la course suivante de la file, ou revient au dashboard si file vide. */
   function goNext(nextCourseId: number | null) {
@@ -158,6 +180,7 @@ export default function IncomingCourseScreen() {
       // Réaffectation : rien à accepter côté serveur, la course lui appartient déjà.
       // `acceptCourse` exige une course encore offerte et renverrait un 409.
       await respondToIncomingCourse(courseId, 'accept', reassigned)
+      if (dismissedRef.current) return
       dismissedRef.current = true
       await clearRingQueue() // livreur occupé → plus aucune course ne doit sonner
       router.replace('/(tabs)')
@@ -180,6 +203,7 @@ export default function IncomingCourseScreen() {
       // Refuser une réaffectation la DÉTACHE et la remet en attente côté serveur ; le
       // refus classique ne fait qu'enregistrer une trace sur une course encore offerte.
       await respondToIncomingCourse(courseId, 'decline', reassigned)
+      if (dismissedRef.current) return
     } catch (error: any) {
       Alert.alert('Impossible de refuser', error?.response?.data?.message ?? 'Vérifie ta connexion et réessaie.')
       setActing(null)
@@ -325,7 +349,7 @@ export default function IncomingCourseScreen() {
         <View className="flex-row gap-3">
           <Pressable
             onPress={onDecline}
-            disabled={!!acting}
+            disabled={!!acting || !course}
             className="flex-1 h-16 rounded-2xl bg-white/10 border border-white/15 items-center justify-center flex-row"
             style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
           >

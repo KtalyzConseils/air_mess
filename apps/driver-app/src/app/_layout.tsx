@@ -12,6 +12,8 @@ import {
   enqueueCourseFromPush,
   isCallType,
   showIncomingCourseNotification,
+  setActiveIncomingCourse,
+  dismissUnavailableCourse,
 } from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
@@ -85,10 +87,34 @@ export default function RootLayout() {
   useIosVoipCall()
 
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', () => {
+    if (IS_EXPO_GO || !hydrated || !user) return
+    const prune = async () => {
+      if (AppState.currentState !== 'active') return
+      try {
+        const items = await getRingQueue()
+        if (!items.some((item) => item.payload.type === 'course.offered')) return
+        const offered = await fetchOfferedCourses()
+        for (const item of items) {
+          if (item.payload.type === 'course.offered' && !offered.some((course) => course.id === item.course_id)) {
+            await dismissUnavailableCourse(item.course_id)
+          }
+        }
+      } catch { /* Une panne réseau ne signifie pas que l'offre a disparu. */ }
+    }
+    const timer = setInterval(() => void prune(), 3_000)
+    return () => clearInterval(timer)
+  }, [hydrated, user?.id])
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('airmess-incoming-course', ({ courseId }) => setPendingCourseId(courseId))
+    return () => sub.remove()
+  }, [])
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', ({ action }) => {
       setPendingCourseId(null)
       void queryClient.invalidateQueries()
-      if (segments[0] === 'incoming-course') router.replace('/(tabs)')
+      if (segments[0] === 'incoming-course' && action === 'accept') router.replace('/(tabs)')
     })
     return () => sub.remove()
   }, [router, segments])
@@ -194,6 +220,7 @@ export default function RootLayout() {
     if (hydrated && user) {
       const id = pendingCourseId
       setPendingCourseId(null)
+      setActiveIncomingCourse(id)
       router.push({ pathname: '/incoming-course', params: { course_id: String(id) } })
     }
   }, [pendingCourseId, hydrated, user, router, segments])

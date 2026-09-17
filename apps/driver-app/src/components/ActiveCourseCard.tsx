@@ -61,7 +61,9 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
   const [correctOpen, setCorrectOpen] = useState(false)
   const [correctValue, setCorrectValue] = useState('')
   const [correctNote, setCorrectNote] = useState('')
-  const next = NEXT_ACTION[course.status]
+  const next: (typeof NEXT_ACTION)[string] = course.pickup_from_previous_driver
+    ? { action: 'transfer_confirmed', label: 'Colis reçu du précédent livreur' }
+    : NEXT_ACTION[course.status]
 
   // Phase = quelle destination on vise en ce moment.
   //   `pickup`   : je vais au marchand chercher le colis
@@ -72,7 +74,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
   const phase: 'pickup' | 'transfer' | 'dropoff' | 'return' =
     course.status === 'returning_to_sender'
       ? 'return'
-      : course.pickup_from_previous_driver && !['picked_up', 'at_dropoff'].includes(course.status)
+      : course.pickup_from_previous_driver
         ? 'transfer'
         : ['assigned', 'driver_to_pickup', 'at_pickup'].includes(course.status)
           ? 'pickup'
@@ -96,7 +98,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
       : phase === 'dropoff'
         ? course.destination_name
         : course.origin_name
-  const targetPhone = phase === 'dropoff' ? course.destination_phone : course.origin_phone
+  const targetPhone = phase === 'transfer' ? undefined : phase === 'dropoff' ? course.destination_phone : course.origin_phone
   const targetPhoneRole = phase === 'dropoff' ? 'le client' : 'le marchand'
 
   const mutation = useMutation({
@@ -479,6 +481,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
       />
       <FailCourseModal
         courseId={course.id}
+        postPickup={['picked_up', 'at_dropoff', 'returning_to_sender'].includes(course.status) || !!course.pickup_from_previous_driver}
         visible={failOpen}
         onClose={() => setFailOpen(false)}
       />

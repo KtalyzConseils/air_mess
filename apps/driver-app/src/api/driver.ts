@@ -58,6 +58,7 @@ export type TransitionAction =
   | 'delivered'
   | 'return_confirmed'
   | 'failed'
+  | 'transfer_confirmed'
 
 export async function updateAvailability(status: Availability) {
   const { data } = await api.post('/driver/availability', { availability_status: status })
