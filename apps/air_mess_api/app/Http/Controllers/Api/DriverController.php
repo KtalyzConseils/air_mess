@@ -527,6 +527,15 @@ class DriverController extends Controller
                     Driver::whereKey($previous)->where('availability_status', 'busy')->update(['availability_status' => 'available']);
                 }
             });
+            $notifier->sendToUser($course->sender_id, 'course.transfer_confirmed', 'Colis récupéré par le nouveau livreur',
+                "Le nouveau livreur a confirmé la récupération du colis pour {$course->reference}. La livraison peut reprendre.",
+                ['reference' => $course->reference], $course->id);
+            $previousDriver = $course->fresh()->previous_driver_id ? Driver::find($course->fresh()->previous_driver_id) : null;
+            if ($previousDriver) {
+                $notifier->sendToUser($previousDriver->user_id, 'course.transfer_confirmed', 'Remise du colis confirmée',
+                    "Le nouveau livreur a confirmé la réception de {$course->reference}. Tu n’as plus la garde de ce colis.",
+                    ['reference' => $course->reference], $course->id);
+            }
             return response()->json(['message' => 'Transfert confirmé.', 'course' => $course->fresh()->makeHidden(['pickup_code', 'delivery_code'])]);
         }
         if ($course->pickup_from_previous_driver && in_array($data['action'], ['arrived_dropoff', 'delivered'], true)) {
@@ -1365,6 +1374,12 @@ class DriverController extends Controller
                 ]);
                 $driver->increment('incidents_count');
                 $driver->update(['availability_status' => 'busy']);
+                CourseStatusHistory::create([
+                    'course_id' => $locked->id, 'from_status' => $previousStatus, 'to_status' => $previousStatus,
+                    'changed_by_id' => $driver->user_id, 'changed_by_type' => 'user',
+                    'reason' => 'Abandon après récupération : '.$reason,
+                    'metadata' => ['event' => 'driver_abandoned', 'abandoned_by_driver_id' => $driver->id, 'incident_id' => $incident->id],
+                ]);
                 return ['post_pickup' => true, 'new' => true, 'incident' => $incident];
             }
             if (! in_array($previousStatus, [Course::STATUS_ASSIGNED, Course::STATUS_TO_PICKUP, Course::STATUS_AT_PICKUP], true)) {
@@ -1379,7 +1394,7 @@ class DriverController extends Controller
             CourseStatusHistory::create([
                 'course_id' => $locked->id, 'from_status' => $previousStatus, 'to_status' => Course::STATUS_AWAITING,
                 'changed_by_id' => $driver->user_id, 'changed_by_type' => 'user',
-                'reason' => 'Abandon avant récupération : '.$reason, 'metadata' => ['abandoned_by_driver_id' => $driver->id],
+                'reason' => 'Abandon avant récupération : '.$reason, 'metadata' => ['event' => 'driver_abandoned', 'abandoned_by_driver_id' => $driver->id],
             ]);
             if (! Course::where('driver_id', $driver->id)->whereNotIn('status', Course::TERMINAL_STATUSES)->exists()) {
                 $driver->update(['availability_status' => 'available']);
@@ -1394,9 +1409,18 @@ class DriverController extends Controller
                 "Course {$course->reference} : le livreur détient encore le colis. Organisez un transfert ou un retour. Motif : {$reason}",
                 ['reference' => $course->reference, 'incident_type' => 'other', 'incident_id' => $result['incident']->id], $course->id);
         }
+        if ($result['new']) {
+            $notifier->sendToUser($course->sender_id, 'course.driver_abandoned', 'Prise en charge interrompue',
+                $result['post_pickup']
+                    ? "Le livreur de {$course->reference} a signalé une interruption. Notre équipe organise la suite ; le colis reste sous sa garde."
+                    : "Le livreur de {$course->reference} ne peut plus assurer la course. Nous recherchons un autre livreur.",
+                ['reference' => $course->reference, 'post_pickup' => $result['post_pickup']], $course->id);
+        }
+        $updatedCourse = $course->fresh()->makeHidden(['pickup_code', 'delivery_code']);
+        $updatedCourse->setAttribute('abandonment_pending', $result['post_pickup']);
         return response()->json([
             'message' => $result['post_pickup'] ? 'Les opérations sont alertées. Conservez le colis et attendez leurs instructions.' : 'Course remise en attente et rediffusée.',
-            'course' => $course->fresh()->makeHidden(['pickup_code', 'delivery_code']),
+            'course' => $updatedCourse,
             'incident' => $result['incident'] ?? null,
         ]);
     }

@@ -4,6 +4,8 @@ export interface DriverCourseSummary {
   id: number
   reference: string
   status: string
+  abandonment_pending?: boolean
+  holding_for_transfer?: boolean
   origin_name: string
   origin_quartier: string
   destination_name: string
@@ -132,7 +134,7 @@ export async function transition(
 
 export async function fetchMyActiveCourses(): Promise<DriverCourseSummary[]> {
   // statuts non-terminaux du workflow livreur
-  const statuses = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff'].join(',')
+  const statuses = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff', 'returning_to_sender'].join(',')
   const { data } = await api.get('/courses', { params: { status: statuses, per_page: 5 } })
   return data.data
 }

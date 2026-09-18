@@ -387,6 +387,7 @@ export default function RegisterScreen() {
       />
 
       <KeyboardAwareScrollView
+        mode="layout"
         bottomOffset={24}
         contentContainerStyle={{ paddingBottom: 20 }}
         keyboardShouldPersistTaps="handled"

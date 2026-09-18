@@ -16,7 +16,6 @@ import {
   INCOMING_NOTIF_ID,
   getRingQueue,
   dequeueRing,
-  clearRingQueue,
   isReassignment,
   respondToIncomingCourse,
   COURSE_ALERT_STOP,
@@ -45,6 +44,7 @@ export default function IncomingCourseScreen() {
   const playerRef = useRef<AudioPlayer | null>(null)
   const vibrationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const dismissedRef = useRef(false)
+  const actionLockRef = useRef(false)
 
   // Détail de la course (pool de propositions). Rafraîchi régulièrement pour détecter
   // si un autre livreur la prend pendant que ça sonne.
@@ -71,6 +71,7 @@ export default function IncomingCourseScreen() {
   // l'écran ne se démonte pas → il faut relancer son/vibration/état.
   useEffect(() => {
     dismissedRef.current = false
+    actionLockRef.current = false
     setActiveIncomingCourse(courseId)
     setActing(null)
     // Combien de courses attendent derrière celle-ci ? + infos du push (secours).
@@ -113,7 +114,7 @@ export default function IncomingCourseScreen() {
   // (Accepter / Refuser). La seule sortie automatique est la disparition de la course
   // du pool = un autre livreur l'a acceptée.
   useEffect(() => {
-    if (isLoading || dismissedRef.current) return
+    if (isLoading || dismissedRef.current || actionLockRef.current) return
     if (course === null) {
       dismissedRef.current = true
       stopAlert()
@@ -152,7 +153,7 @@ export default function IncomingCourseScreen() {
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', ({ courseId: id, action }) => {
-      if (id !== courseId || action !== 'decline' || acting) return
+      if (id !== courseId || action !== 'decline' || actionLockRef.current) return
       dismissedRef.current = true
       void getRingQueue().then((items) => goNext(items[0]?.course_id ?? null))
     })
@@ -173,7 +174,8 @@ export default function IncomingCourseScreen() {
   }
 
   async function onAccept() {
-    if (!courseId || acting) return
+    if (!courseId || !course || actionLockRef.current || dismissedRef.current) return
+    actionLockRef.current = true
     setActing('accept')
     stopAlert()
     try {
@@ -182,8 +184,7 @@ export default function IncomingCourseScreen() {
       await respondToIncomingCourse(courseId, 'accept', reassigned)
       if (dismissedRef.current) return
       dismissedRef.current = true
-      await clearRingQueue() // livreur occupé → plus aucune course ne doit sonner
-      router.replace('/(tabs)')
+      // La navigation est gérée une seule fois par le gestionnaire global.
     } catch (e: any) {
       // On NE rebondit plus en silence : on montre la raison exacte du refus serveur
       // (409 course déjà prise, 403 pas disponible…) pour pouvoir diagnostiquer.
@@ -192,11 +193,13 @@ export default function IncomingCourseScreen() {
       console.warn('[accept] échec', status, msg)
       Alert.alert("Impossible d'accepter", `${msg}${status ? ` (code ${status})` : ''}`)
       setActing(null)
+      actionLockRef.current = false
     }
   }
 
   async function onDecline() {
-    if (!courseId || acting) return
+    if (!courseId || !course || actionLockRef.current || dismissedRef.current) return
+    actionLockRef.current = true
     setActing('decline')
     stopAlert()
     try {
@@ -207,6 +210,7 @@ export default function IncomingCourseScreen() {
     } catch (error: any) {
       Alert.alert('Impossible de refuser', error?.response?.data?.message ?? 'Vérifie ta connexion et réessaie.')
       setActing(null)
+      actionLockRef.current = false
       return
     }
     dismissedRef.current = true
@@ -360,15 +364,23 @@ export default function IncomingCourseScreen() {
         <View className="flex-row gap-3">
           <Pressable
             onPress={onDecline}
+            accessibilityRole="button"
+            accessibilityLabel="Refuser la course"
+            hitSlop={4}
             disabled={!!acting || !course}
             className="flex-1 h-16 rounded-2xl bg-white/10 border border-white/15 items-center justify-center flex-row"
             style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
           >
-            <Ionicons name="close" size={22} color="#E7E0D4" />
-            <Text className="text-warm-200 font-extrabold ml-2 text-base">Refuser</Text>
+            <View pointerEvents="none" className="flex-row items-center">
+              {acting === 'decline' ? <ActivityIndicator color="#E7E0D4" /> : <Ionicons name="close" size={22} color="#E7E0D4" />}
+              <Text className="text-warm-200 font-extrabold ml-2 text-base">{acting === 'decline' ? 'Refus…' : 'Refuser'}</Text>
+            </View>
           </Pressable>
           <Pressable
             onPress={onAccept}
+            accessibilityRole="button"
+            accessibilityLabel="Accepter la course"
+            hitSlop={4}
             disabled={!!acting || !course}
             className="flex-[1.4] h-16 rounded-2xl bg-airmess-yellow items-center justify-center flex-row"
             style={({ pressed }) => (pressed ? { opacity: 0.9 } : undefined)}
@@ -376,10 +388,10 @@ export default function IncomingCourseScreen() {
             {acting === 'accept' ? (
               <ActivityIndicator color="#1A1614" />
             ) : (
-              <>
+              <View pointerEvents="none" className="flex-row items-center">
                 <Ionicons name="checkmark" size={24} color="#1A1614" />
                 <Text className="text-ink font-extrabold ml-2 text-lg">Accepter</Text>
-              </>
+              </View>
             )}
           </Pressable>
         </View>

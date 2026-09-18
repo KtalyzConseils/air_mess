@@ -1919,6 +1919,11 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 $driverAdj    = null;
                 $cautionShort = false;
 
+                $incident = CourseIncident::whereKey($incident->id)->lockForUpdate()->firstOrFail();
+                if ($incident->status !== 'open') {
+                    throw new \DomainException('Cet incident est déjà clôturé.');
+                }
+
                 // Ajustement marchand (côté user_wallet) — le sender de la course.
                 if (($data['reason_code_marchand'] ?? null) !== null && $course->sender) {
                     $marchandAdj = $adjustments->applyToUser(
@@ -1949,15 +1954,9 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                         $needed = abs($requestedAmount);
                         if ($needed > (int) $wallet->balance) {
                             $capped = -1 * (int) $wallet->balance;
-                            if ($capped === 0) {
-                                // Rien à débiter mais on veut quand même tracer l'insuffisance.
-                                // On saute la création de l'adjustment (amount=0 refusé par CHECK)
-                                // et on suspend directement.
-                                $course->driver->update(['activation_status' => 'suspended']);
-                                $cautionShort = true;
-                                return [$marchandAdj, null, $cautionShort];
-                            }
-
+                            // Même à solde nul, poursuivre jusqu'à la clôture de l'incident.
+                            // Sinon une relance pourrait créditer à nouveau le marchand.
+                            if ($capped !== 0) {
                             $driverAdj = $adjustments->applyToDriver(
                                 driver:     $course->driver,
                                 amount:     $capped,
@@ -1967,6 +1966,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                                 adminId:    $admin->id,
                                 notes:      "[Caution insuffisante — montant capé sur solde disponible] " . $data['resolution_note'],
                             );
+                            }
                             $course->driver->update(['activation_status' => 'suspended']);
                             $cautionShort = true;
                         } else {

@@ -13,6 +13,7 @@ import {
   isCallType,
   showIncomingCourseNotification,
   setActiveIncomingCourse,
+  getActiveIncomingCourse,
   dismissUnavailableCourse,
 } from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
@@ -114,7 +115,7 @@ export default function RootLayout() {
     const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', ({ action }) => {
       setPendingCourseId(null)
       void queryClient.invalidateQueries()
-      if (segments[0] === 'incoming-course' && action === 'accept') router.replace('/(tabs)')
+      if (action === 'accept') router.dismissTo('/(tabs)')
     })
     return () => sub.remove()
   }, [router, segments])
@@ -213,7 +214,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (pendingCourseId == null) return
     // Déjà sur l'écran d'appel → on ignore (évite le double-empilement).
-    if (segments[0] === 'incoming-course') {
+    if (segments[0] === 'incoming-course' || getActiveIncomingCourse() != null) {
       setPendingCourseId(null)
       return
     }

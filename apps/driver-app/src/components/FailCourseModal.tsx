@@ -49,7 +49,10 @@ export default function FailCourseModal({ courseId, postPickup, visible, onClose
         : (reasonLabel as string)
       return transition(courseId, 'failed', { reason: fullReason })
     },
-    onSuccess: () => {
+    onSuccess: (updatedCourse) => {
+      queryClient.setQueryData<import('../api/driver').DriverCourseSummary[]>(['my-active'], (courses) =>
+        courses?.flatMap((course) => course.id !== courseId ? [course] : updatedCourse.status === 'awaiting_assignment' ? [] : [updatedCourse]),
+      )
       queryClient.invalidateQueries({ queryKey: ['my-active'] })
       queryClient.invalidateQueries({ queryKey: ['me'] })
       queryClient.invalidateQueries({ queryKey: ['driver-history'] })
