@@ -21,6 +21,10 @@ export default function HomePage() {
       })
     })
 
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('animateMotion').forEach((node) => node.remove())
+    }
+
     const revealItems = document.querySelectorAll<HTMLElement>('.reveal')
     let observer: IntersectionObserver | undefined
 
