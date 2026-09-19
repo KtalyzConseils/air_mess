@@ -82,6 +82,9 @@ export default function LoginScreen() {
     <SafeAreaView className="flex-1 bg-airmess-dark" edges={['top', 'left', 'right']}>
       <StatusBar style="light" />
       <KeyboardAwareScrollView
+        mode="layout"
+        style={{ flex: 1 }}
+        keyboardDismissMode="on-drag"
         bottomOffset={24}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 + insets.bottom }}
         keyboardShouldPersistTaps="handled"

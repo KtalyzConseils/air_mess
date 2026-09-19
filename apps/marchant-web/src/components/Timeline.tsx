@@ -5,6 +5,10 @@ interface Props {
   items: CourseStatusHistoryItem[]
 }
 
+function isAbandonment(item: CourseStatusHistoryItem) {
+  return item.metadata?.event === 'driver_abandoned' || item.metadata?.abandoned_by_driver_id != null || !!item.reason?.startsWith('Abandon ')
+}
+
 export default function Timeline({ items }: Props) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
@@ -18,10 +22,12 @@ export default function Timeline({ items }: Props) {
       {items.map((item, idx) => (
         <li key={item.id} className="mb-6 ml-6">
           <span className={`absolute -left-2 flex items-center justify-center w-4 h-4 rounded-full
-            ${idx === items.length - 1 ? 'bg-airmess-yellow' : 'bg-gray-300'}`}
+            ${isAbandonment(item) ? 'bg-airmess-red ring-4 ring-red-100' : idx === items.length - 1 ? 'bg-airmess-yellow' : 'bg-gray-300'}`}
           />
-          <p className="font-medium text-airmess-dark">
-            {t(`courseStatus.${item.to_status}`, item.to_status)}
+          <p className={isAbandonment(item) ? 'font-bold text-airmess-red' : 'font-medium text-airmess-dark'}>
+            {isAbandonment(item)
+              ? (i18n.language === 'en' ? 'Driver abandonment reported' : 'Abandon signalé')
+              : t(`courseStatus.${item.to_status}`, item.to_status)}
           </p>
           <p className="text-xs text-gray-500 mt-1">
             {new Date(item.created_at).toLocaleString(locale, {

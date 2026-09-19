@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 import { fetchUnreadCount } from '../../api/notifications'
-import { fetchUnassignedCourses, fetchWaitlist } from '../../api/admin'
+import { fetchUnassignedCourses, fetchWaitlist, fetchIncidents } from '../../api/admin'
 import {
   DashboardIcon,
   StoreIcon,
@@ -66,6 +66,12 @@ export function useAdminNav() {
     refetchInterval: 30_000,
     enabled: canBrowseEntities,
   })
+  const { data: incidents } = useQuery({
+    queryKey: ['admin', 'incidents', 'nav-count'],
+    queryFn: () => fetchIncidents({ status: 'open', page: 1 }),
+    refetchInterval: 20_000,
+    enabled: canOps,
+  })
 
   const sections: AdminNavSection[] = [
     {
@@ -75,7 +81,7 @@ export function useAdminNav() {
         { to: '/admin/courses', label: t('admin.nav.courses'), Icon: PackageIcon, visible: canBrowseEntities },
         { to: '/admin/courses-unassigned', label: t('admin.nav.unassignedCourses'), Icon: AlertTriangleIcon, visible: canMonitorUnassigned, badge: unassigned?.count ?? 0 },
         { to: '/admin/courses-archived', label: t('admin.nav.archivedCourses'), Icon: PackageIcon, visible: canMonitorUnassigned },
-        { to: '/admin/incidents', label: t('admin.nav.incidents'), Icon: AlertTriangleIcon, visible: canOps },
+        { to: '/admin/incidents', label: t('admin.nav.incidents'), Icon: AlertTriangleIcon, visible: canOps, badge: incidents?.total ?? 0 },
       ]),
     },
     {

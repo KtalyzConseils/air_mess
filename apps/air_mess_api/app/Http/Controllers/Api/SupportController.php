@@ -121,6 +121,15 @@ class SupportController extends Controller
         $walletReleased = false;
 
         DB::transaction(function () use ($course, $data, $previousStatus, $admin, $walletService, $releasedAmount, &$directRefund, &$walletReleased) {
+            $locked = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
+            if ($locked->driver_id !== null || $locked->archived_at !== null ||
+                ! in_array($locked->status, [Course::STATUS_PENDING_PREP, Course::STATUS_AWAITING], true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'course' => 'Cette course a déjà été prise, annulée ou archivée. Elle est exclue de la sélection.',
+                ]);
+            }
+            $course->setRawAttributes($locked->getAttributes(), true);
+            $previousStatus = $locked->status;
             $course->update([
                 'status'              => Course::STATUS_CANCELLED,
                 'cancelled_at'        => now(),

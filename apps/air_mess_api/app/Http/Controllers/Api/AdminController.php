@@ -126,7 +126,7 @@ class AdminController extends Controller
         $courses = Course::query()->where('status', Course::STATUS_AWAITING)->whereNull('driver_id')
             ->with(['sender:id,name,phone', 'offerAdminActions.adminUser:id,name'])
             ->orderByRaw("CASE WHEN urgency = 'express' THEN 0 ELSE 1 END")
-            ->orderByRaw('COALESCE(offer_broadcasted_at, created_at) ASC')->get();
+            ->orderByRaw('COALESCE(offer_broadcasted_at, created_at) DESC')->get();
 
         $courseIds = $courses->pluck('id');
         $drivers = Driver::query()
@@ -240,6 +240,9 @@ class AdminController extends Controller
 
         $isPostPickup = in_array($course->status, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF], true);
         $wantsTransfer = (bool) ($data['pickup_from_previous_driver'] ?? false);
+        if ($wantsTransfer && ! $isPostPickup) {
+            return response()->json(['message' => 'Le transfert concerne uniquement un colis déjà récupéré.'], 422);
+        }
 
         // Chemin classique : réassignation avant pickup → statut ASSIGNED
         // Chemin transfert : réassignation après pickup → statut PICKED_UP conservé
@@ -298,9 +301,9 @@ class AdminController extends Controller
             $newDriver->update(['availability_status' => 'busy']);
 
             // En transfert, le driver initial garde le colis quelques minutes de plus
-            // (le temps du rendez-vous), mais côté système on le libère : il pourra
-            // accepter d'autres courses une fois le transfert fait.
-            if ($oldDriver) {
+            // (le temps du rendez-vous) : il reste occupé jusqu'à la confirmation
+            // de la remise physique par le nouveau livreur.
+            if ($oldDriver && ! $wantsTransfer) {
                 $oldDriver->update(['availability_status' => 'available']);
             }
 
@@ -1742,6 +1745,37 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     }
 
     // ===== 8. LISTE DES INCIDENTS =====
+    public function startIncidentReturn(Request $request, CourseIncident $incident, NotificationService $notifier): JsonResponse
+    {
+        $course = DB::transaction(function () use ($incident, $request) {
+            $lockedIncident = CourseIncident::whereKey($incident->id)->lockForUpdate()->firstOrFail();
+            $course = Course::whereKey($lockedIncident->course_id)->lockForUpdate()->firstOrFail();
+            if ($lockedIncident->status !== 'open' || ! str_starts_with($lockedIncident->description ?? '', '[Abandon après récupération]') ||
+                ! in_array($course->status, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF], true) || $course->pickup_from_previous_driver) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['course' => 'Cette course ne peut pas être mise en retour depuis cet incident.']);
+            }
+            $previousStatus = $course->status;
+            $course->update(['status' => Course::STATUS_RETURNING_TO_SENDER, 'return_code' => $course->return_code ?: Course::generateCode()]);
+            CourseStatusHistory::create([
+                'course_id' => $course->id, 'from_status' => $previousStatus, 'to_status' => Course::STATUS_RETURNING_TO_SENDER,
+                'changed_by_id' => $request->user()->id, 'changed_by_type' => 'user',
+                'reason' => 'Retour organisé par les opérations après abandon',
+                'metadata' => ['incident_id' => $lockedIncident->id],
+            ]);
+            return $course;
+        });
+        $notifier->sendToUser($course->sender_id, 'course.returning_to_sender', 'Retour du colis organisé',
+            "Les opérations organisent le retour de {$course->reference}. Code à donner lors de la remise : {$course->return_code}.",
+            ['reference' => $course->reference, 'return_code' => $course->return_code], $course->id);
+        $driver = $course->driver;
+        if ($driver) {
+            $notifier->sendToUser($driver->user_id, 'course.returning_to_sender', 'Rapporte le colis au point de départ',
+                "Retour autorisé par les opérations pour {$course->reference}. Confirme la remise avec le code de l’expéditeur.",
+                ['reference' => $course->reference], $course->id);
+        }
+        return response()->json(['message' => 'Retour organisé. L’incident reste ouvert pour le suivi et la facturation.']);
+    }
+
     public function incidents(Request $request): JsonResponse
     {
         $query = CourseIncident::query()
@@ -1885,6 +1919,11 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 $driverAdj    = null;
                 $cautionShort = false;
 
+                $incident = CourseIncident::whereKey($incident->id)->lockForUpdate()->firstOrFail();
+                if ($incident->status !== 'open') {
+                    throw new \DomainException('Cet incident est déjà clôturé.');
+                }
+
                 // Ajustement marchand (côté user_wallet) — le sender de la course.
                 if (($data['reason_code_marchand'] ?? null) !== null && $course->sender) {
                     $marchandAdj = $adjustments->applyToUser(
@@ -1915,15 +1954,9 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                         $needed = abs($requestedAmount);
                         if ($needed > (int) $wallet->balance) {
                             $capped = -1 * (int) $wallet->balance;
-                            if ($capped === 0) {
-                                // Rien à débiter mais on veut quand même tracer l'insuffisance.
-                                // On saute la création de l'adjustment (amount=0 refusé par CHECK)
-                                // et on suspend directement.
-                                $course->driver->update(['activation_status' => 'suspended']);
-                                $cautionShort = true;
-                                return [$marchandAdj, null, $cautionShort];
-                            }
-
+                            // Même à solde nul, poursuivre jusqu'à la clôture de l'incident.
+                            // Sinon une relance pourrait créditer à nouveau le marchand.
+                            if ($capped !== 0) {
                             $driverAdj = $adjustments->applyToDriver(
                                 driver:     $course->driver,
                                 amount:     $capped,
@@ -1933,6 +1966,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                                 adminId:    $admin->id,
                                 notes:      "[Caution insuffisante — montant capé sur solde disponible] " . $data['resolution_note'],
                             );
+                            }
                             $course->driver->update(['activation_status' => 'suspended']);
                             $cautionShort = true;
                         } else {

@@ -267,7 +267,16 @@ class CourseController extends Controller
         if ($user->isMarchant() || $user->isIndividual()) {
             $query->where('sender_id', $user->id);
         } elseif ($user->isDriver()) {
-            $query->where('driver_id', $user->driver?->id);
+            $driverId = $user->driver?->id;
+            $query->where(function ($q) use ($driverId) {
+                $q->where('driver_id', $driverId)->orWhere(function ($q) use ($driverId) {
+                    $q->where('previous_driver_id', $driverId)->where('pickup_from_previous_driver', true)
+                        ->whereNotIn('status', Course::TERMINAL_STATUSES);
+                });
+            })->withExists(['incidents as abandonment_pending' => function ($q) use ($user) {
+                $q->where('reported_by', $user->id)->where('status', 'open')
+                    ->where('description', 'like', '[Abandon après récupération]%');
+            }]);
         }
         // admin : voit tout (pas de filtrage)
 
@@ -279,7 +288,13 @@ class CourseController extends Controller
 
         $perPage = min((int) $request->query('per_page', 15), 100);
 
-        return response()->json($query->paginate($perPage));
+        $courses = $query->paginate($perPage);
+        if ($user->isDriver()) {
+            $courses->getCollection()->each(function ($course) use ($user) {
+                $course->setAttribute('holding_for_transfer', $course->previous_driver_id === $user->driver?->id && $course->pickup_from_previous_driver);
+            });
+        }
+        return response()->json($courses);
     }
 
     /**

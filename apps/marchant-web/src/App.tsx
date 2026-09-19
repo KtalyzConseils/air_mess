@@ -52,6 +52,7 @@ import TermsPage from './pages/legal/TermsPage'
 import PrivacyPage from './pages/legal/PrivacyPage'
 import ClientQuickNav from './components/ClientQuickNav'
 import PwaReloadPrompt from './components/PwaReloadPrompt'
+import AnalyticsTracker from './components/AnalyticsTracker'
 import api from './api/client'
 import { useAuthStore } from './stores/authStore'
 
@@ -102,6 +103,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <AnalyticsTracker />
         <AuthProfileRefresher />
         <Routes>
           <Route path="/login" element={<LoginPage />} />

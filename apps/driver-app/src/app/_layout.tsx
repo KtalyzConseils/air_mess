@@ -4,17 +4,22 @@ import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import notifee, { EventType } from '../lib/notifeeSafe'
-import { AppState } from 'react-native'
+import { AppState, Alert, DeviceEventEmitter } from 'react-native'
 import { useAuthStore } from '../stores/authStore'
 import {
   handleNotifeeEvent,
   getRingQueue,
   enqueueCourseFromPush,
   isCallType,
+  showIncomingCourseNotification,
+  setActiveIncomingCourse,
+  getActiveIncomingCourse,
+  dismissUnavailableCourse,
 } from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import { acknowledgePushReceipt } from '../api/notifications'
+import { fetchOfferedCourses } from '../api/driver'
 import { useIosVoipCall } from '../hooks/useIosVoipCall'
 import BrandSplash from '../components/BrandSplash'
 import BackgroundLocationDisclosure from '../components/BackgroundLocationDisclosure'
@@ -62,6 +67,10 @@ export default function RootLayout() {
     import('expo-notifications').then((Notifications) => {
       sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data as any
+        if (isCallType(data?.type) && AppState.currentState === 'active') {
+          router.push('/(tabs)/notifications')
+          return
+        }
         if (isCallType(data?.type) && data?.course_id != null) {
           if (data.notification_id != null) {
             void acknowledgePushReceipt(data.notification_id).catch(() => {})
@@ -78,6 +87,39 @@ export default function RootLayout() {
   usePushTokenRegistration()
   useIosVoipCall()
 
+  useEffect(() => {
+    if (IS_EXPO_GO || !hydrated || !user) return
+    const prune = async () => {
+      if (AppState.currentState !== 'active') return
+      try {
+        const items = await getRingQueue()
+        if (!items.some((item) => item.payload.type === 'course.offered')) return
+        const offered = await fetchOfferedCourses()
+        for (const item of items) {
+          if (item.payload.type === 'course.offered' && !offered.some((course) => course.id === item.course_id)) {
+            await dismissUnavailableCourse(item.course_id)
+          }
+        }
+      } catch { /* Une panne réseau ne signifie pas que l'offre a disparu. */ }
+    }
+    const timer = setInterval(() => void prune(), 3_000)
+    return () => clearInterval(timer)
+  }, [hydrated, user?.id])
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('airmess-incoming-course', ({ courseId }) => setPendingCourseId(courseId))
+    return () => sub.remove()
+  }, [])
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', ({ action }) => {
+      setPendingCourseId(null)
+      void queryClient.invalidateQueries()
+      if (action === 'accept') router.dismissTo('/(tabs)')
+    })
+    return () => sub.remove()
+  }, [router, segments])
+
   // ── Course entrante : détection de l'événement qui doit ouvrir l'écran d'appel ──
 
   // 1. Cold start : l'app a été lancée par le full-screen intent Notifee.
@@ -85,6 +127,8 @@ export default function RootLayout() {
     if (IS_EXPO_GO) return
     notifee.getInitialNotification().then((initial) => {
       const data = initial?.notification?.data as any
+      if (data?.alert_mode === 'notification') return
+      if (initial?.pressAction?.id === 'accept' || initial?.pressAction?.id === 'decline') return
       if (isCallType(data?.type) && data?.course_id != null) {
         setPendingCourseId(Number(data.course_id))
       }
@@ -101,7 +145,13 @@ export default function RootLayout() {
       try {
         const items = await getRingQueue()
         const head = items[0]
-        if (head) setPendingCourseId(head.course_id)
+        if (head) {
+          if (head.payload.type === 'course.offered') {
+            const offered = await fetchOfferedCourses()
+            if (!offered.some((course) => course.id === head.course_id)) return
+          }
+          setPendingCourseId(head.course_id)
+        }
       } catch {
         /* ignore */
       }
@@ -117,11 +167,19 @@ export default function RootLayout() {
   useEffect(() => {
     if (IS_EXPO_GO) return
     return notifee.onForegroundEvent(async (event) => {
-      handleNotifeeEvent(event) // boutons Accepter/Refuser pressés app ouverte
       const { type, detail } = event
+      if (type === EventType.ACTION_PRESS) {
+        setPendingCourseId(null)
+        try { await handleNotifeeEvent(event) }
+        catch (error: any) {
+          Alert.alert('Action impossible', error?.response?.data?.message ?? 'Vérifie ta connexion et réessaie.')
+        }
+        return
+      }
       const data = detail.notification?.data as any
       if (
-        type !== EventType.DISMISSED &&
+        type === EventType.PRESS &&
+        detail.pressAction?.id === 'incoming-course' &&
         isCallType(data?.type) &&
         data?.course_id != null
       ) {
@@ -142,8 +200,10 @@ export default function RootLayout() {
           if (data.notification_id != null) {
             void acknowledgePushReceipt(data.notification_id).catch(() => {})
           }
-          const head = await enqueueCourseFromPush(data)
-          setPendingCourseId(head ?? Number(data.course_id))
+          if (AppState.currentState === 'active') {
+            await showIncomingCourseNotification(data)
+            void queryClient.invalidateQueries()
+          }
         }
       })
     })
@@ -154,13 +214,14 @@ export default function RootLayout() {
   useEffect(() => {
     if (pendingCourseId == null) return
     // Déjà sur l'écran d'appel → on ignore (évite le double-empilement).
-    if (segments[0] === 'incoming-course') {
+    if (segments[0] === 'incoming-course' || getActiveIncomingCourse() != null) {
       setPendingCourseId(null)
       return
     }
     if (hydrated && user) {
       const id = pendingCourseId
       setPendingCourseId(null)
+      setActiveIncomingCourse(id)
       router.push({ pathname: '/incoming-course', params: { course_id: String(id) } })
     }
   }, [pendingCourseId, hydrated, user, router, segments])

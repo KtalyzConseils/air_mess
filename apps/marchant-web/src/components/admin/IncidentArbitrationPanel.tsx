@@ -62,6 +62,7 @@ export default function IncidentArbitrationPanel({
       })
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'incidents'] })
       queryClient.invalidateQueries({ queryKey: ['course', course.id] })
       queryClient.invalidateQueries({ queryKey: ['course', String(course.id)] })
     },
@@ -78,6 +79,7 @@ export default function IncidentArbitrationPanel({
   const noShowMutation = useMutation({
     mutationFn: () => noShowPartial(incident.id, resolutionNote.trim()),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'incidents'] })
       queryClient.invalidateQueries({ queryKey: ['course', course.id] })
       queryClient.invalidateQueries({ queryKey: ['course', String(course.id)] })
     },
@@ -104,6 +106,7 @@ export default function IncidentArbitrationPanel({
   const returnMutation = useMutation({
     mutationFn: () => returnTripConfirmed(incident.id, resolutionNote.trim()),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'incidents'] })
       queryClient.invalidateQueries({ queryKey: ['course', course.id] })
       queryClient.invalidateQueries({ queryKey: ['course', String(course.id)] })
     },
@@ -130,6 +133,7 @@ export default function IncidentArbitrationPanel({
   const marchandCancelMutation = useMutation({
     mutationFn: () => marchandCancelConfirmed(incident.id, resolutionNote.trim()),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'incidents'] })
       queryClient.invalidateQueries({ queryKey: ['course', course.id] })
       queryClient.invalidateQueries({ queryKey: ['course', String(course.id)] })
     },
@@ -156,10 +160,6 @@ export default function IncidentArbitrationPanel({
     setError(null)
     if (resolutionNote.trim().length < 5) {
       setError(t('admin.incidentArbitration.resolutionNoteRequired'))
-      return
-    }
-    if (!reasonCodeMarchand && !reasonCodeDriver) {
-      setError(t('admin.incidentArbitration.atLeastOneAdjustment'))
       return
     }
     if (reasonCodeMarchand) {
