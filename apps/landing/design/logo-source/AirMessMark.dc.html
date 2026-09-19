@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="108 146 542 320" width="100%" height="100%" style="display:block;overflow:visible" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="amWing" gradientUnits="userSpaceOnUse" x1="121" y1="330" x2="591" y2="156">
+      <stop offset="0" stop-color="{{ wingA }}"></stop>
+      <stop offset="1" stop-color="{{ wingB }}"></stop>
+    </linearGradient>
+    <linearGradient id="amBlade" gradientUnits="userSpaceOnUse" x1="628" y1="170" x2="400" y2="452">
+      <stop offset="0" stop-color="{{ bladeA }}"></stop>
+      <stop offset="1" stop-color="{{ bladeB }}"></stop>
+    </linearGradient>
+  </defs>
+  <polygon points="591,156 318,210 401,228 215,270 301,288 121,330 252,345"
+    fill="{{ wingPaint }}" stroke="{{ wingPaint }}" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"></polygon>
+  <polygon points="628,156 438,452 356,438 466,278 442,270"
+    fill="{{ bladePaint }}" stroke="{{ bladePaint }}" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"></polygon>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:300,&quot;height&quot;:170},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;color&quot;,&quot;white&quot;],&quot;default&quot;:&quot;color&quot;,&quot;tsType&quot;:&quot;'color'|'white'&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const v = this.props.variant || 'color';
+    const white = v === 'white';
+    return {
+      wingA: '#FFD633', wingB: '#FFCC00',
+      bladeA: '#E2231A', bladeB: '#D40511',
+      wingPaint: white ? '#ffffff' : 'url(#amWing)',
+      bladePaint: white ? '#ffffff' : 'url(#amBlade)',
+    };
+  }
+}
+</script>
+</body>
+</html>

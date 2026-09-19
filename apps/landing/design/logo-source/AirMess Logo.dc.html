@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body{margin:0;background:#ECE9E3;}
+    *{box-sizing:border-box;}
+  </style>
+</helmet>
+
+<div style="min-height:100vh;background:#ECE9E3;padding:56px 40px;font-family:'Inter',sans-serif;display:flex;justify-content:center;">
+  <div style="width:1180px;background:#ffffff;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.10),0 18px 50px -28px rgba(0,0,0,.25);overflow:hidden;">
+
+    <!-- Header -->
+    <div style="padding:40px 56px 28px;border-bottom:1px solid #EEEBE5;display:flex;align-items:baseline;justify-content:space-between;">
+      <div style="font-family:'Baloo 2';font-weight:700;font-size:22px;color:#1A1D1F;letter-spacing:.2px;">AirMess <span style="color:#9A958C;font-weight:600;">— planche vectorielle</span></div>
+      <div style="font-size:13px;color:#9A958C;font-weight:500;">SVG · tracé vectoriel éditable</div>
+    </div>
+
+    <!-- Primary lockup -->
+    <div style="padding:64px 56px 56px;border-bottom:1px solid #EEEBE5;">
+      <div style="font-size:12px;font-weight:600;letter-spacing:1.5px;color:#B6B0A6;text-transform:uppercase;margin-bottom:36px;">Logo principal</div>
+      <div style="display:flex;align-items:center;gap:30px;">
+        <dc-import name="AirMessMark" variant="color" hint-size="320px,189px" style="width:320px;height:189px;flex:none;"></dc-import>
+        <dc-import name="AirMessWordmark" variant="color" hint-size="620px,168px" style="width:620px;height:168px;flex:none;"></dc-import>
+      </div>
+    </div>
+
+    <!-- Dark + mark -->
+    <div style="display:flex;border-bottom:1px solid #EEEBE5;">
+      <div style="flex:1;background:#16191B;padding:52px 56px;display:flex;align-items:center;gap:22px;">
+        <dc-import name="AirMessMark" variant="color" hint-size="172px,101px" style="width:172px;height:101px;flex:none;"></dc-import>
+        <dc-import name="AirMessWordmark" variant="color" hint-size="345px,93px" style="width:345px;height:93px;flex:none;"></dc-import>
+      </div>
+      <div style="width:340px;flex:none;padding:52px 48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border-left:1px solid #EEEBE5;">
+        <dc-import name="AirMessMark" variant="color" hint-size="220px,130px" style="width:220px;height:130px;"></dc-import>
+        <div style="font-size:12px;color:#B6B0A6;font-weight:500;">Symbole seul</div>
+      </div>
+    </div>
+
+    <!-- App icons -->
+    <div style="padding:56px 56px 60px;border-bottom:1px solid #EEEBE5;">
+      <div style="font-size:12px;font-weight:600;letter-spacing:1.5px;color:#B6B0A6;text-transform:uppercase;margin-bottom:38px;">Icônes d'application</div>
+      <div style="display:flex;gap:56px;align-items:flex-start;">
+
+        <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="width:188px;height:188px;border-radius:44px;background:#ffffff;border:1px solid #ECE9E3;box-shadow:0 10px 30px -12px rgba(0,0,0,.18);display:flex;align-items:center;justify-content:center;">
+            <dc-import name="AirMessMark" variant="color" hint-size="124px,73px" style="width:124px;height:73px;"></dc-import>
+          </div>
+          <div style="font-size:12px;color:#9A958C;font-weight:500;">Fond clair</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="width:188px;height:188px;border-radius:44px;background:linear-gradient(150deg,#FFE066 0%,#FFCC00 55%,#F2B800 100%);box-shadow:0 10px 30px -10px rgba(242,184,0,.55);display:flex;align-items:center;justify-content:center;">
+            <dc-import name="AirMessMark" variant="white" hint-size="128px,76px" style="width:128px;height:76px;"></dc-import>
+          </div>
+          <div style="font-size:12px;color:#9A958C;font-weight:500;">Dégradé jaune</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="width:188px;height:188px;border-radius:44px;background:#16191B;box-shadow:0 10px 30px -12px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;">
+            <dc-import name="AirMessMark" variant="color" hint-size="124px,73px" style="width:124px;height:73px;"></dc-import>
+          </div>
+          <div style="font-size:12px;color:#9A958C;font-weight:500;">Fond sombre</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Palette -->
+    <div style="padding:52px 56px 60px;">
+      <div style="font-size:12px;font-weight:600;letter-spacing:1.5px;color:#B6B0A6;text-transform:uppercase;margin-bottom:34px;">Palette</div>
+      <div style="display:flex;gap:20px;">
+        <sc-for list="{{ swatches }}" as="sw" hint-placeholder-count="4">
+          <div style="flex:1;">
+            <div style="height:96px;border-radius:6px;background:{{ sw.css }};box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);"></div>
+            <div style="margin-top:12px;font-size:13px;font-weight:600;color:#1A1D1F;">{{ sw.name }}</div>
+            <div style="margin-top:3px;font-size:12px;color:#9A958C;font-family:'Inter';letter-spacing:.3px;">{{ sw.hex }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1260,&quot;height&quot;:980}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      swatches: [
+        { name: 'Jaune DHL', hex: '#FFCC00', css: '#FFCC00' },
+        { name: 'Jaune clair', hex: '#FFD633', css: '#FFD633' },
+        { name: 'Rouge DHL', hex: '#D40511', css: '#D40511' },
+        { name: 'Encre', hex: '#16191B', css: '#16191B' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
