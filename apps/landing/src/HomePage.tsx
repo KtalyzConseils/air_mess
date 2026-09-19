@@ -23,6 +23,9 @@ export default function HomePage() {
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       document.querySelectorAll('animateMotion').forEach((node) => node.remove())
+      document.querySelectorAll('.courier').forEach((courier) => {
+        courier.setAttribute('transform', 'translate(296 141)')
+      })
     }
 
     const revealItems = document.querySelectorAll<HTMLElement>('.reveal')
