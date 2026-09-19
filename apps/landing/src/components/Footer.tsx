@@ -5,7 +5,7 @@ import LanguageToggle from './LanguageToggle'
 
 export default function Footer() {
   const c = useContent()
-  const year = 2026
+  const year = new Date().getFullYear()
 
   return (
     <footer className="bg-ink text-paper">

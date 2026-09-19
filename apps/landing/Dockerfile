@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 # VITE_APP_URL is baked into the bundle AT BUILD TIME (Vite freezes it).
-# Point it at the deployed AirMess app (e.g. https://app.rmess.app).
+# Point it at the deployed AirMess app (https://app.airmess-logistics.com).
 ARG VITE_APP_URL
 ENV VITE_APP_URL=$VITE_APP_URL
 RUN npm run build

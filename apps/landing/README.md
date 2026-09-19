@@ -7,7 +7,7 @@ own build and deploy, and links out to the AirMess app (`marchant-web`) for sign
 
 - Vite + React 19 + TypeScript
 - Tailwind CSS v4
-- `react-i18next` — bilingual **EN (default) / FR**
+- `react-i18next` — bilingual **FR (default) / EN**
 
 ## Develop
 
@@ -30,17 +30,17 @@ Outbound links are centralised in [`src/config.ts`](src/config.ts):
 
 ## Internationalisation
 
-- English is the default and the fallback language.
-- The visitor's choice is stored in `localStorage` (`rmess_lang`) and `<html lang>` stays in sync.
+- French is the default and the fallback language for the primary market.
+- The visitor's language is detected from `localStorage` (`rmess_lang`) or the browser, and `<html lang>` stays in sync.
 - All copy lives in [`src/locales/en.ts`](src/locales/en.ts) and [`src/locales/fr.ts`](src/locales/fr.ts);
   `fr.ts` is typed against `en.ts`, so a missing key fails the build.
 
 ## Build & deploy
 
 ```bash
-VITE_APP_URL=https://app.rmess.app npm run build   # outputs dist/
+VITE_APP_URL=https://app.airmess-logistics.com npm run build   # outputs dist/
 ```
 
 Production is served by Caddy from `dist/` (see `Dockerfile` + `Caddyfile`), mirroring
-`marchant-web`. Deploy as a separate service on its own (sub)domain, e.g. `rmess.app`
-for the landing and `app.rmess.app` for the app.
+`marchant-web`. Deploy as a separate service on its own (sub)domain, e.g. `airmess-logistics.com`
+for the landing and `app.airmess-logistics.com` for the app.

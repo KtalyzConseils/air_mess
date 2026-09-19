@@ -68,12 +68,15 @@ export default function Features() {
             <div
               key={item.title}
               style={{ opacity: 0, willChange: 'transform', borderRadius: shapes[i] }}
-              className="feature-card flex items-center gap-4 border border-faint bg-paper p-6"
+              className="feature-card flex items-start gap-4 border border-faint bg-paper p-6"
             >
               <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink text-yellow">
                 <FeatureIcon index={i} />
               </span>
-              <h3 className="font-display text-lg font-bold">{item.title}</h3>
+              <div>
+                <h3 className="font-display text-lg font-bold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">{item.body}</p>
+              </div>
             </div>
           ))}
         </div>

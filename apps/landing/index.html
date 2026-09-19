@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -10,22 +10,42 @@
     <meta name="google-site-verification" content="GtyBXepPy-IxB1kmqNrXSltRK4LvaG3UytgLrsBglbE" />
     <link rel="canonical" href="https://airmess-logistics.com/" />
 
-    <title>Airmess — Livraison le jour même à Cotonou</title>
-    <meta
-      name="description"
-      content="Airmess gère la livraison de vos commandes à Cotonou. Vos clients suivent chaque course en direct et vous encaissez via votre portefeuille marchand (MTN MoMo, Moov Money). À partir de 500 FCFA."
-    />
-    <meta name="theme-color" content="#161514" />
+    <title>AIRMESS — Vous vendez, nous livrons</title>
+    <meta name="description" content="AIRMESS simplifie la livraison des commandes à Cotonou : création de course, suivi en direct et livraison jusqu'au client." />
+    <meta name="theme-color" content="#141414" />
+
+    <!-- Google Analytics 4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-KVMJQF9J8Z"></script>
+    <script>
+      window.dataLayer = window.dataLayer || []
+      function gtag() {
+        window.dataLayer.push(arguments)
+      }
+      gtag('js', new Date())
+      gtag('config', 'G-KVMJQF9J8Z')
+
+      document.addEventListener('click', function (event) {
+        const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
+        if (!anchor) return
+
+        const url = anchor.getAttribute('href') || ''
+        const send = function (name) {
+          gtag('event', name, { link_url: url })
+        }
+
+        if (url.includes('/register/driver')) return send('click_register_driver')
+        if (url.includes('/register')) return send('click_register_sender')
+        if (url.includes('wa.me')) return send('click_whatsapp')
+        if (url.includes('expo.dev')) return send('click_download_driver_app')
+      })
+    </script>
 
     <!-- Open Graph / social -->
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="fr_FR" />
     <meta property="og:site_name" content="Airmess" />
-    <meta property="og:title" content="Airmess — Vous vendez. Nous livrons." />
-    <meta
-      property="og:description"
-      content="Créez une livraison à Cotonou, suivez chaque course en direct et encaissez via Mobile Money. À partir de 500 FCFA."
-    />
+    <meta property="og:title" content="AIRMESS — Vous vendez, nous livrons." />
+    <meta property="og:description" content="AIRMESS simplifie la livraison des commandes à Cotonou : création de course, suivi en direct et livraison jusqu'au client." />
     <meta property="og:url" content="https://airmess-logistics.com/" />
     <meta property="og:image" content="https://airmess-logistics.com/og.png" />
     <meta property="og:image:width" content="1200" />
@@ -41,7 +61,7 @@
         "name": "Airmess",
         "url": "https://airmess-logistics.com/",
         "logo": "https://airmess-logistics.com/icon-512.png",
-        "description": "Airmess gère la livraison de vos commandes à Cotonou.",
+        "description": "AIRMESS simplifie la livraison des commandes à Cotonou.",
         "areaServed": "Cotonou, Bénin"
       }
     </script>
@@ -49,7 +69,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
   </head>

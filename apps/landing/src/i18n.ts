@@ -12,12 +12,12 @@ void i18n
       en: { translation: en },
       fr: { translation: fr },
     },
-    // English is the default and the fallback.
-    fallbackLng: 'en',
+    // French is the primary market language and the fallback.
+    fallbackLng: 'fr',
     supportedLngs: ['en', 'fr'],
-    // Respect a previously chosen language; otherwise default to English.
+    // Respect a previously chosen language; otherwise follow the browser and French.
     detection: {
-      order: ['localStorage'],
+      order: ['localStorage', 'navigator'],
       lookupLocalStorage: 'rmess_lang',
       caches: ['localStorage'],
     },
@@ -28,7 +28,7 @@ void i18n
 const applyHtmlLang = (lng: string) => {
   document.documentElement.lang = lng
 }
-applyHtmlLang(i18n.resolvedLanguage ?? 'en')
+applyHtmlLang(i18n.resolvedLanguage ?? 'fr')
 i18n.on('languageChanged', applyHtmlLang)
 
 export default i18n

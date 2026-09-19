@@ -11,5 +11,5 @@ const dictionaries: Record<string, Translation> = { en, fr }
  */
 export function useContent(): Translation {
   const { i18n } = useTranslation()
-  return dictionaries[i18n.resolvedLanguage ?? 'en'] ?? en
+  return dictionaries[i18n.resolvedLanguage ?? 'fr'] ?? fr
 }

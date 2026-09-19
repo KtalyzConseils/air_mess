@@ -12,15 +12,15 @@ const APP_URL = (RAW || FALLBACK).replace(/\/$/, '')
 export const links = {
   app: APP_URL,
   login: `${APP_URL}/login`,
-  // CTA marchand → page de connexion ; CTA livreur → inscription livreur.
-  registerSender: `${APP_URL}/login`,
+  // CTA marchand → inscription envoyeur ; CTA livreur → inscription livreur.
+  registerSender: `${APP_URL}/register`,
   registerDriver: `${APP_URL}/register/driver`,
   // Direct download of the courier (driver) Android app (APK build, Expo).
-  driverApp: 'https://play.google.com/store/apps/details?id=com.anonymous.driver&pcampaignid=web_share',
+  driverApp: 'https://expo.dev/artifacts/eas/oJPb6g6nH13FGy08U2lQ893OL-I52H0yNJ8AQRMIsZs.apk',
 } as const
 
 export const contact = {
-  email: 'contact@rmess.app',
+  email: 'support@airmess-logistics.com',
   phone: '+229 94 18 07 94',
   // WhatsApp number in international format (no +), used to build wa.me links.
   whatsapp: '22994180794',
