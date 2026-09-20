@@ -21,9 +21,9 @@ export const links = {
 
 export const contact = {
   email: 'support@airmess-logistics.com',
-  phone: '+229 94 18 07 94',
+  phone: '+229 01 40 26 57 57',
   // WhatsApp number in international format (no +), used to build wa.me links.
-  whatsapp: '22994180794',
+  whatsapp: '2290140265757',
 } as const
 
 /** Build a wa.me link with a pre-filled message. */
