@@ -187,6 +187,10 @@ class CourseBillingService
                 'delivery_code'   => Course::generateCode(),
             ]));
 
+            if (($payment->metadata['discount_code'] ?? null) !== null) {
+                $this->firstCourseDiscount->markRedeemed($payment->user);
+            }
+
             // Lier le Payment à la course pour la traçabilité
             $payment->update([
                 'metadata' => array_merge($payment->metadata, ['course_id' => $course->id]),

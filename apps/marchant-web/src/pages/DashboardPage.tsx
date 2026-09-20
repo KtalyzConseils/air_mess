@@ -32,6 +32,9 @@ export default function DashboardPage() {
   const [showIndividualBonus, setShowIndividualBonus] = useState(
     () => Boolean((location.state as { showWelcomeBonus?: boolean } | null)?.showWelcomeBonus),
   )
+  const showMerchantBonus = Boolean(
+    (location.state as { showMerchantBonus?: boolean } | null)?.showMerchantBonus,
+  )
 
   // Onboarding — 1er passage : la modale de bienvenue s'affiche. Le bouton "Aide"
   // du header remet le flag à false pour la rejouer à la demande.
@@ -111,15 +114,17 @@ export default function DashboardPage() {
               {t('auth.registerSuccess.message')}
             </p>
 
-            <div className="mb-7 rounded-xl border border-airmess-yellow/50 bg-airmess-yellow/10 px-5 py-5">
-              <p className="text-sm font-semibold uppercase tracking-wide text-warm-600">
-                {t('auth.registerSuccess.giftLabel')}
-              </p>
-              <p className="mt-1 text-3xl font-bold text-ink">500 FCFA</p>
-              <p className="mt-1 text-body-s text-warm-600">
-                {t('auth.registerSuccess.giftBody')}
-              </p>
-            </div>
+            {showMerchantBonus && (
+              <div className="mb-7 rounded-xl border border-airmess-yellow/50 bg-airmess-yellow/10 px-5 py-5">
+                <p className="text-sm font-semibold uppercase tracking-wide text-warm-600">
+                  {t('auth.registerSuccess.giftLabel')}
+                </p>
+                <p className="mt-1 text-3xl font-bold text-ink">500 FCFA</p>
+                <p className="mt-1 text-body-s text-warm-600">
+                  {t('auth.registerSuccess.giftBody')}
+                </p>
+              </div>
+            )}
 
             <Button
               variant="primary"

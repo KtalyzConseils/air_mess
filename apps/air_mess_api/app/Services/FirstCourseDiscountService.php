@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Course;
+use App\Models\MerchantWaitlist;
 use App\Models\Payment;
 use App\Models\User;
 
@@ -26,7 +27,11 @@ class FirstCourseDiscountService
             })
             ->exists();
 
-        $eligible = in_array($user->type, [User::TYPE_MARCHANT, User::TYPE_INDIVIDUAL], true)
+        $eligible = $user->type === User::TYPE_MARCHANT
+            && $user->email !== null
+            && MerchantWaitlist::whereRaw('LOWER(email) = ?', [mb_strtolower($user->email)])
+                ->whereNull('bonus_redeemed_at')
+                ->exists()
             && ! Course::where('sender_id', $user->id)->exists()
             && ! $discountAlreadyReserved;
         $discount = $eligible ? min(self::AMOUNT_FCFA, $originalFee) : 0;
@@ -37,5 +42,16 @@ class FirstCourseDiscountService
             'fee' => max(0, $originalFee - $discount),
             'discount_code' => $discount > 0 ? self::CODE : null,
         ];
+    }
+
+    public function markRedeemed(User $user): void
+    {
+        if ($user->type !== User::TYPE_MARCHANT || $user->email === null) {
+            return;
+        }
+
+        MerchantWaitlist::whereRaw('LOWER(email) = ?', [mb_strtolower($user->email)])
+            ->whereNull('bonus_redeemed_at')
+            ->update(['bonus_redeemed_at' => now()]);
     }
 }

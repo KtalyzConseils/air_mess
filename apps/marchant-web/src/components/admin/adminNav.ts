@@ -88,8 +88,6 @@ export function useAdminNav() {
       title: t('admin.nav.accounts'),
       items: filterItems([
         { to: '/admin/marchants', label: t('admin.nav.marchants'), Icon: StoreIcon, visible: canBrowseEntities },
-        { to: '/admin/waitlists/merchants', label: t('admin.nav.merchantWaitlists'), Icon: UsersIcon, visible: canBrowseEntities },
-        { to: '/admin/waitlists/drivers', label: t('admin.nav.driverWaitlists'), Icon: UsersIcon, visible: canBrowseEntities },
         { to: '/admin/form-results', label: t('admin.nav.formResults'), Icon: FileTextIcon, visible: canBrowseEntities },
         { to: '/admin/individuals', label: t('admin.nav.individuals'), Icon: UsersIcon, visible: canBrowseEntities },
         { to: '/admin/waitlist', label: t('admin.nav.waitlist'), Icon: UsersIcon, visible: canBrowseEntities, badge: waitlist?.total ?? 0 },

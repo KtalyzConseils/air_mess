@@ -149,5 +149,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('waitlist', function (Request $request) {
             return Limit::perHour(5)->by($request->ip());
         });
+
+        // Consultation d'un lien personnel : plusieurs chargements peuvent être
+        // légitimes pendant que le candidat finalise son dossier.
+        RateLimiter::for('waitlist-activation', function (Request $request) {
+            return Limit::perMinute(30)->by($request->ip().':'.hash('sha256', (string) $request->route('token')));
+        });
     }
 }

@@ -34,7 +34,6 @@ export interface MerchantWaitlistResponse {
     id: number
     status: string
     bonus_amount: number
-    bonus_code: string
     created_at: string | null
   }
 }
@@ -85,4 +84,21 @@ export async function submitDriverWaitlist(
 ): Promise<DriverWaitlistResponse> {
   const { data } = await api.post('/waitlist/drivers', payload)
   return data
+}
+
+export interface WaitlistActivationPrefill {
+  kind: 'merchant' | 'driver'
+  email: string
+  phone?: string | null
+  name?: string | null
+  raison_sociale?: string | null
+  secteur_activite?: 'supermarche' | 'restaurant' | 'boutique' | 'pharmacie' | 'ecommerce' | 'autre'
+  first_name?: string
+  last_name?: string
+  vehicle_type?: 'scooter' | 'moto' | 'voiture' | 'velo'
+}
+
+export async function fetchWaitlistActivation(token: string): Promise<WaitlistActivationPrefill> {
+  const { data } = await api.get(`/waitlist/activation/${encodeURIComponent(token)}`)
+  return data.prefill
 }

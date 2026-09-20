@@ -23,6 +23,7 @@ import { cn } from '../lib/cn'
 import { VEHICLE_BRANDS } from '../lib/constants'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
+import { fetchWaitlistActivation } from '../api/waitlist'
 
 const selectClass =
   'w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink ' +
@@ -50,6 +51,7 @@ export default function DriverRegisterPage() {
   const [searchParams] = useSearchParams()
   const registerDriver = useAuthStore((s) => s.registerDriver)
   const referralCode = (searchParams.get('ref') ?? '').trim().toUpperCase()
+  const activationToken = searchParams.get('activation') ?? ''
 
   const [photo, setPhoto] = useState<File | null>(null)
   const [cni, setCni] = useState<File | null>(null)
@@ -86,6 +88,20 @@ export default function DriverRegisterPage() {
   useEffect(() => {
     if (referralCode) setValue('referral_code', referralCode)
   }, [referralCode, setValue])
+
+  useEffect(() => {
+    if (!activationToken) return
+    void fetchWaitlistActivation(activationToken)
+      .then((prefill) => {
+        if (prefill.kind !== 'driver') throw new Error('wrong_kind')
+        if (prefill.first_name) setValue('first_name', prefill.first_name)
+        if (prefill.last_name) setValue('last_name', prefill.last_name)
+        if (prefill.email) setValue('email', prefill.email)
+        if (prefill.phone) setValue('phone', prefill.phone)
+        if (prefill.vehicle_type) setValue('vehicle_type', prefill.vehicle_type)
+      })
+      .catch(() => setServerError("Ce lien d'activation est invalide, expiré ou déjà utilisé."))
+  }, [activationToken, setValue])
 
   /** Étape 1 → 2 : valide les champs de l'étape. */
   async function goToStep2() {
@@ -133,10 +149,13 @@ export default function DriverRegisterPage() {
         // Permis pris en compte uniquement pour une voiture.
         driving_license: carSelected ? drivingLicense : null,
         accepted_terms: true,
+        activation_token: activationToken || undefined,
       })
       // Le token Sanctum permet à la page succès d'enregistrer le canal de
       // réponse préféré (navigation state uniquement, jamais localStorage).
-      navigate('/register/driver/success', { state: { registrationToken: token } })
+      navigate('/register/driver/success', {
+        state: { registrationToken: token, completedPublicApplication: Boolean(activationToken) },
+      })
     } catch (err) {
       // Messages toujours en FR : cohérence avec les messages Laravel côté API.
       if (err instanceof AxiosError) {
@@ -599,7 +618,7 @@ export default function DriverRegisterPage() {
                   rightIcon={!isSubmitting && <ArrowRightIcon size={18} />}
                   className="flex-1"
                 >
-                  {t('driverRegister.submitCta')}
+                  {activationToken ? t('driverRegister.activationSubmitCta') : t('driverRegister.submitCta')}
                 </Button>
               </div>
               <p className="text-center text-body-s text-warm-500 mt-4">

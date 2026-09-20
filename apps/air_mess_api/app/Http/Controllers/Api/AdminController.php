@@ -840,6 +840,36 @@ class AdminController extends Controller
         );
     }
 
+    public function notifyPublicWaitlist(Request $request, string $kind, int $id): JsonResponse
+    {
+        $model = $kind === 'merchants'
+            ? MerchantWaitlist::findOrFail($id)
+            : DriverWaitlist::findOrFail($id);
+
+        $this->sendPublicWaitlistReadyMail($model, $kind);
+
+        return response()->json(['message' => 'Le candidat a été informé.', 'notified_at' => $model->fresh()->notified_at]);
+    }
+
+    private function sendPublicWaitlistReadyMail(MerchantWaitlist|DriverWaitlist $model, string $kind): void
+    {
+        $email = $model->email;
+        if (! $email) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['email' => ['Cette candidature ne contient aucune adresse email.']]);
+        }
+
+        $name = $kind === 'merchants'
+            ? ($model->contact_name ?: $model->shop_name ?: 'partenaire')
+            : ($model->full_name ?: 'partenaire');
+
+        $activationToken = app(\App\Services\PublicWaitlistActivationService::class)->issue($model);
+
+        \Illuminate\Support\Facades\Mail::to($email)
+            ->send(new \App\Mail\PublicWaitlistReadyMail($name, $kind === 'merchants' ? 'merchant' : 'driver', $activationToken));
+
+        $model->update(['status' => 'notified', 'notified_at' => now()]);
+    }
+
     public function merchantWaitlistsExport(Request $request, string $format): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $format = strtolower($format);

@@ -11,6 +11,8 @@ import {
   ChevronRightIcon,
 } from '../ui/icons'
 import { useAdminNav } from './adminNav'
+import EnableNotificationsButton from '../EnableNotificationsButton'
+import LanguageToggle from '../ui/LanguageToggle'
 
 interface AdminSidebarProps {
   mobileOpen: boolean
@@ -141,6 +143,14 @@ export default function AdminSidebar({ mobileOpen, onMobileClose }: AdminSidebar
               </p>
             </div>
           )}
+
+          <div className={`mb-2 space-y-2 px-3 ${collapsed ? 'lg:hidden' : ''}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-caption font-semibold text-white/50">{t('common.language')}</span>
+                <LanguageToggle variant="dark" showIcon={false} />
+              </div>
+              <EnableNotificationsButton />
+          </div>
 
           <button
             onClick={() => logout()}

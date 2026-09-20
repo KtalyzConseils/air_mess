@@ -3,7 +3,9 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use App\Models\MerchantWaitlist;
 use App\Services\FirebaseTokenVerifier;
+use App\Services\PublicWaitlistActivationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -122,5 +124,41 @@ class RegisterMarchantIndividualTest extends TestCase
         $this->assertSame('+2290191223344', $user->phone);
         $this->assertNotNull($user->phone_verified_at);
         $this->assertNotNull($user->email_verified_at);
+    }
+
+    public function test_activation_link_prefills_and_is_consumed_by_merchant_registration(): void
+    {
+        $candidate = MerchantWaitlist::create([
+            'commerce_type' => 'Restauration rapide / plats préparés', 'zone' => 'Cotonou',
+            'weekly_orders' => 'Moins de 10', 'delivery_methods' => ['Vente sur place'],
+            'problems' => ['Aucun problème particulier'], 'worst_experience' => 'Aucune',
+            'cash_collection_issue' => 'Non, jamais', 'time_lost_weekly' => "Moins d'1 heure",
+            'orders_lost_weekly' => 'Aucune', 'expected_benefit' => 'Livrer rapidement',
+            'commission_acceptance' => 'Oui, sans hésiter', 'reasonable_fee' => '300 à 500 FCFA',
+            'mobile_money_trust' => 'Oui, totalement', 'interest_level' => 5,
+            'trial_interest' => 'Oui', 'shop_name' => 'Kponou Market',
+            'contact_name' => 'Jean Kponou', 'email' => 'shop@example.com',
+            'whatsapp' => '+2290191223344', 'status' => 'waitlisted', 'bonus_amount' => 500,
+        ]);
+        $token = app(PublicWaitlistActivationService::class)->issue($candidate);
+
+        $this->getJson('/api/waitlist/activation/'.$token)
+            ->assertOk()
+            ->assertJsonPath('prefill.name', 'Jean Kponou')
+            ->assertJsonPath('prefill.raison_sociale', 'Kponou Market')
+            ->assertJsonPath('prefill.secteur_activite', 'restaurant');
+
+        $this->postJson('/api/auth/register/marchant', $this->marchantPayload([
+            'activation_token' => $token,
+        ]))->assertCreated();
+
+        $candidate->refresh();
+        $this->assertSame('activated', $candidate->status);
+        $this->assertNotNull($candidate->activated_at);
+        $this->assertSame(User::where('email', 'shop@example.com')->firstOrFail()->id, $candidate->activated_user_id);
+
+        $this->getJson('/api/waitlist/activation/'.$token)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['activation_token']);
     }
 }

@@ -490,8 +490,9 @@ export type MerchantWaitlistListItem = {
   whatsapp: string | null
   status: string
   bonus_amount: number
-  bonus_code: string
+  bonus_code: string | null
   bonus_redeemed_at: string | null
+  notified_at: string | null
   created_at: string
 }
 
@@ -533,6 +534,7 @@ export type DriverWaitlistListItem = {
   interest_level: number
   launch_availability: string
   status: string
+  notified_at: string | null
   created_at: string
 }
 
@@ -547,6 +549,13 @@ export async function fetchDriverWaitlists(
 ): Promise<Paginated<DriverWaitlistListItem>> {
   const { data } = await api.get('/admin/waitlists/drivers', { params })
   return data
+}
+
+export async function notifyPublicWaitlist(
+  kind: 'merchants' | 'drivers',
+  id: number,
+): Promise<void> {
+  await api.post(`/admin/waitlists/${kind}/${id}/notify`)
 }
 
 export type WaitlistExportFormat = 'csv' | 'txt'

@@ -205,9 +205,9 @@
       }
     },
     "registerSuccess": {
-      "eyebrow": "Inscription confirmée",
-      "title": "Félicitations, vous êtes sur la liste d’attente !",
-      "message": "Votre compte Airmess a bien été créé. Nous vous préviendrons par e-mail dès que le service sera opérationnel.",
+      "eyebrow": "Bienvenue chez Airmess",
+      "title": "Votre dossier a bien été soumis !",
+      "message": "Votre compte marchand a été créé et votre dossier est maintenant en cours de validation. Nous vous informerons par e-mail dès qu’il sera validé.",
       "giftLabel": "Votre cadeau de bienvenue",
       "giftBody": "500 FCFA seront automatiquement déduits de votre première course.",
       "individualEyebrow": "Bienvenue chez Airmess",
@@ -262,6 +262,7 @@
       "passwordMinLength": "8 caractères minimum",
       "confirmRequired": "Confirmation requise",
       "submit": "Créer mon compte",
+      "activationSubmit": "Finaliser mon inscription",
       "alreadyRegistered": "Déjà un compte ?",
       "loginLink": "Se connecter",
       "driverPrompt": "Vous êtes livreur ?",
@@ -1308,8 +1309,8 @@
     "appBanner": {
       "title": "L'app Air Mess Livreur",
       "body": "Une fois ton dossier validé, télécharge l'application pour recevoir tes courses en temps réel sur ton téléphone.",
-      "cta": "Télécharger l'APK (Android)",
-      "note": "À installer après validation · Android uniquement pour le moment"
+      "cta": "Télécharger sur Google Play",
+      "note": "Disponible sur Android · À utiliser après validation"
     },
     "otp": {
       "verifyCta": "Vérifier ce numéro",
@@ -1344,6 +1345,7 @@
       "previewAlt": "Aperçu — {{label}}"
     },
     "submitCta": "Soumettre ma candidature",
+    "activationSubmitCta": "Finaliser mon dossier",
     "alreadyRegistered": "Déjà inscrit ?",
     "loginLink": "Se connecter",
     "fileClickReplace": "cliquez pour remplacer",
@@ -1351,6 +1353,7 @@
     "fileRemoveAria": "Retirer le fichier",
     "success": {
       "cardTitle": "Candidature reçue",
+      "activatedCardTitle": "Dossier soumis",
       "cardBody": "Vos informations et documents sont en cours de vérification par notre équipe.",
       "nextStepBadge": "Prochaine étape",
       "nextStepBodyBefore": "Vous recevrez un",
@@ -1363,7 +1366,7 @@
       "playStore": "Play Store",
       "appStore": "App Store",
       "soon": "bientôt",
-      "downloadApk": "Télécharger l'app (APK)",
+      "downloadApk": "Télécharger sur Google Play",
       "channelTitle": "Par quel canal souhaitez-vous recevoir la réponse à votre candidature ?",
       "channelEmail": "Email",
       "channelSms": "SMS",
@@ -1389,11 +1392,11 @@
       "archivedCourses": "Courses archivées",
       "incidents": "Incidents",
       "marchants": "Marchands",
-      "merchantWaitlists": "Liste d'attente commerçants",
-      "driverWaitlists": "Liste d'attente livreurs",
+      "merchantWaitlists": "Candidatures commerçants",
+      "driverWaitlists": "Candidatures livreurs",
       "formResults": "Résultats des formulaires",
       "individuals": "Particuliers",
-      "waitlist": "Liste d'attente",
+      "waitlist": "Comptes à valider",
       "drivers": "Livreurs",
       "apiApps": "Apps dev",
       "withdraws": "Retraits",
@@ -1677,8 +1680,8 @@
       }
     },
     "merchantWaitlists": {
-      "title": "Liste d'attente commerçants",
-      "subtitle": "Inscriptions issues de l'étude de marché.",
+      "title": "Candidatures commerçants",
+      "subtitle": "Prospects issus du formulaire public de l'étude de marché.",
       "searchPlaceholder": "Commerce, contact, WhatsApp, zone…",
       "emptyResults": "Aucune inscription trouvée.",
       "itemLabel": "inscription",
@@ -1690,8 +1693,8 @@
       "colDate": "Date"
     },
     "driverWaitlists": {
-      "title": "Liste d'attente livreurs",
-      "subtitle": "Inscriptions livreurs issues de l'étude de marché.",
+      "title": "Candidatures livreurs",
+      "subtitle": "Prospects livreurs issus du formulaire public de l'étude de marché.",
       "searchPlaceholder": "Nom, email, WhatsApp, zone…",
       "emptyResults": "Aucune inscription trouvée.",
       "itemLabel": "inscription",
@@ -1717,6 +1720,12 @@
       "exportExcel": "Excel (.csv)",
       "exportTxt": "TXT",
       "exportError": "Échec de l'exportation. Réessayez.",
+      "informByEmail": "Informer par email",
+      "informAgain": "Renvoyer l'email",
+      "informing": "Envoi…",
+      "informedAt": "Informé le",
+      "notInformed": "Pas encore informé",
+      "informError": "L'email n'a pas pu être envoyé. Vérifiez la configuration mail.",
       "sections": {
         "contact": "Coordonnées",
         "activity": "Activité actuelle",
@@ -2417,8 +2426,8 @@
       }
     },
     "waitlist": {
-      "title": "Liste d'attente",
-      "subtitle": "Activez les comptes et prévenez les utilisateurs lorsque Airmess est disponible.",
+      "title": "Comptes en attente de validation",
+      "subtitle": "Validez les comptes déjà inscrits et prévenez leurs utilisateurs lorsque Airmess est disponible.",
       "validateSelection": "Valider la sélection ({{count}})",
       "searchPlaceholder": "Nom, entreprise, e-mail ou téléphone",
       "waiting": "En attente",

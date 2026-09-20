@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\ProfileRoleController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\MerchantWaitlistController;
 use App\Http\Controllers\Api\DriverWaitlistController;
+use App\Http\Controllers\Api\PublicWaitlistActivationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -101,6 +102,7 @@ Route::post('/waitlist/merchants', [MerchantWaitlistController::class, 'store'])
 // Inscription livreurs à la liste d'attente + étude de marché.
 // Endpoint public, sans compte User, rate-limité par IP (voir AppServiceProvider).
 Route::post('/waitlist/drivers', [DriverWaitlistController::class, 'store'])->middleware('throttle:waitlist');
+Route::get('/waitlist/activation/{token}', [PublicWaitlistActivationController::class, 'show'])->middleware('throttle:waitlist-activation');
 
 // Routes protégées (token Sanctum requis)
 Route::middleware('auth:sanctum')->group(function () {
@@ -320,6 +322,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/marchants/{marchant}',      [AdminController::class, 'showMarchant']);
         Route::get('/waitlists/merchants',       [AdminController::class, 'merchantWaitlists']);
         Route::get('/waitlists/drivers',         [AdminController::class, 'driverWaitlists']);
+        Route::post('/waitlists/{kind}/{id}/notify', [AdminController::class, 'notifyPublicWaitlist'])
+            ->whereIn('kind', ['merchants', 'drivers']);
         Route::get('/waitlists/merchants/export.{format}', [AdminController::class, 'merchantWaitlistsExport'])
             ->whereIn('format', ['csv', 'txt']);
         Route::get('/waitlists/drivers/export.{format}',   [AdminController::class, 'driverWaitlistsExport'])

@@ -32,8 +32,15 @@ class DriverWaitlist extends Model
         'email',
         'whatsapp',
         'status',
+        'notified_at',
+        'activation_token_hash',
+        'activation_expires_at',
+        'activated_user_id',
+        'activated_at',
         'ip_address',
     ];
+
+    protected $hidden = ['activation_token_hash'];
 
     protected function casts(): array
     {
@@ -41,6 +48,9 @@ class DriverWaitlist extends Model
             'platforms_used' => 'array',
             'problems' => 'array',
             'interest_level' => 'integer',
+            'notified_at' => 'datetime',
+            'activation_expires_at' => 'datetime',
+            'activated_at' => 'datetime',
         ];
     }
 }

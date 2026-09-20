@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
@@ -16,6 +16,7 @@ import InstallPwaButton from '../components/InstallPwaButton'
 import TermsCheckbox from '../components/TermsCheckbox'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
+import { fetchWaitlistActivation } from '../api/waitlist'
 
 type AccountType = 'individual' | 'marchant'
 
@@ -40,10 +41,14 @@ const selectClass =
 export default function RegisterPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const activationToken = searchParams.get('activation') ?? ''
   const registerIndividual = useAuthStore((s) => s.registerIndividual)
   const registerMarchant = useAuthStore((s) => s.registerMarchant)
 
-  const [type, setType] = useState<AccountType>('individual')
+  const [type, setType] = useState<AccountType>(() =>
+    activationToken || searchParams.get('type') === 'marchant' ? 'marchant' : 'individual',
+  )
   const [error, setError] = useState<string | null>(null)
   // Erreurs 422 par champ renvoyées par Laravel. Chaque champ récupère son
   // premier message via `serverErr(field)` en fallback des validations client.
@@ -64,6 +69,21 @@ export default function RegisterPage() {
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>()
+
+  useEffect(() => {
+    if (!activationToken) return
+    void fetchWaitlistActivation(activationToken)
+      .then((prefill) => {
+        if (prefill.kind !== 'merchant') throw new Error('wrong_kind')
+        setType('marchant')
+        if (prefill.email) setValue('email', prefill.email)
+        if (prefill.phone) setValue('phone', prefill.phone)
+        if (prefill.name) setValue('name', prefill.name)
+        if (prefill.raison_sociale) setValue('raison_sociale', prefill.raison_sociale)
+        if (prefill.secteur_activite) setValue('secteur_activite', prefill.secteur_activite)
+      })
+      .catch(() => setError("Ce lien d'activation est invalide, expiré ou déjà utilisé."))
+  }, [activationToken, setValue])
 
   async function handleGoogle() {
     setError(null)
@@ -129,11 +149,15 @@ export default function RegisterPage() {
           ifu_rccm: values.ifu_rccm || undefined,
           firebase_google_id_token: googleStillValid ? googleToken : undefined,
           accepted_terms: true,
+          activation_token: activationToken || undefined,
         })
       }
       navigate('/dashboard', {
         replace: true,
-        state: { showWelcomeBonus: type === 'individual' },
+        state: {
+          showWelcomeBonus: type === 'individual',
+          showMerchantBonus: type === 'marchant' && Boolean(activationToken),
+        },
       })
     } catch (err) {
       // Messages toujours en FR : cohérence avec les messages Laravel côté API.
@@ -376,7 +400,9 @@ export default function RegisterPage() {
               loading={isSubmitting}
               rightIcon={!isSubmitting && <ArrowRightIcon size={18} />}
             >
-              {t('auth.register.submit')}
+              {activationToken && type === 'marchant'
+                ? t('auth.register.activationSubmit')
+                : t('auth.register.submit')}
             </Button>
           </form>
 

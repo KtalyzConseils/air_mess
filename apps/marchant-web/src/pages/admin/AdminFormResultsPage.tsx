@@ -1,6 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import AdminPagination from '../../components/admin/AdminPagination'
@@ -16,6 +17,7 @@ import {
   type WaitlistExportFormat,
   downloadMerchantWaitlistsExport,
   downloadDriverWaitlistsExport,
+  notifyPublicWaitlist,
 } from '../../api/admin'
 
 type Tab = 'merchants' | 'drivers'
@@ -93,7 +95,7 @@ function ResultCard({
   )
 }
 
-function MerchantResultCard({ item }: { item: MerchantWaitlistListItem }) {
+function MerchantResultCard({ item, onNotify, notifying }: { item: MerchantWaitlistListItem; onNotify: () => void; notifying: boolean }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
 
@@ -126,9 +128,17 @@ function MerchantResultCard({ item }: { item: MerchantWaitlistListItem }) {
             </span>
             <span> · {t('admin.formResults.submittedAt')} {formatDate(item.created_at)}</span>
           </p>
+          <p className={`mt-1 text-caption font-semibold ${item.notified_at ? 'text-success' : 'text-airmess-red'}`}>
+            {item.notified_at ? `${t('admin.formResults.informedAt')} ${formatDate(item.notified_at)}` : t('admin.formResults.notInformed')}
+          </p>
         </>
       }
     >
+      <div className="mb-5 flex justify-end">
+        <AdminButton size="sm" variant="primary" disabled={notifying || !item.email} onClick={onNotify}>
+          {notifying ? t('admin.formResults.informing') : item.notified_at ? t('admin.formResults.informAgain') : t('admin.formResults.informByEmail')}
+        </AdminButton>
+      </div>
       <Section title={t('admin.formResults.sections.contact')}>
         <Field label={t('admin.formResults.merchant.commerceType')} value={item.commerce_type} />
         <Field label={t('admin.formResults.merchant.commerceTypeOther')} value={item.commerce_type_other} />
@@ -187,7 +197,7 @@ function MerchantResultCard({ item }: { item: MerchantWaitlistListItem }) {
   )
 }
 
-function DriverResultCard({ item }: { item: DriverWaitlistListItem }) {
+function DriverResultCard({ item, onNotify, notifying }: { item: DriverWaitlistListItem; onNotify: () => void; notifying: boolean }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
 
@@ -217,9 +227,17 @@ function DriverResultCard({ item }: { item: DriverWaitlistListItem }) {
           <p className="mt-1 text-caption text-warm-500">
             {t('admin.formResults.submittedAt')} {formatDate(item.created_at)}
           </p>
+          <p className={`mt-1 text-caption font-semibold ${item.notified_at ? 'text-success' : 'text-airmess-red'}`}>
+            {item.notified_at ? `${t('admin.formResults.informedAt')} ${formatDate(item.notified_at)}` : t('admin.formResults.notInformed')}
+          </p>
         </>
       }
     >
+      <div className="mb-5 flex justify-end">
+        <AdminButton size="sm" variant="primary" disabled={notifying || !item.email} onClick={onNotify}>
+          {notifying ? t('admin.formResults.informing') : item.notified_at ? t('admin.formResults.informAgain') : t('admin.formResults.informByEmail')}
+        </AdminButton>
+      </div>
       <Section title={t('admin.formResults.sections.contact')}>
         <Field label={t('admin.formResults.driver.fullName')} value={item.full_name} />
         <Field label={t('admin.formResults.driver.email')} value={item.email} />
@@ -334,10 +352,18 @@ function ResultList<T extends { id: number }>({
 
 export default function AdminFormResultsPage() {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<Tab>('merchants')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const tab: Tab = requestedTab === 'drivers' ? 'drivers' : 'merchants'
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
   const [exporting, setExporting] = useState(false)
+  const queryClient = useQueryClient()
+  const notifyMutation = useMutation({
+    mutationFn: ({ kind, id }: { kind: 'merchants' | 'drivers'; id: number }) => notifyPublicWaitlist(kind, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'form-results'] }),
+    onError: () => window.alert(t('admin.formResults.informError')),
+  })
 
   const search = q.trim()
   const merchantParams: MerchantWaitlistListParams = search ? { q: search, page } : { page }
@@ -359,7 +385,7 @@ export default function AdminFormResultsPage() {
 
   const changeTab = (nextTab: Tab) => {
     if (nextTab === tab) return
-    setTab(nextTab)
+    setSearchParams({ tab: nextTab }, { replace: true })
     setPage(1)
     setQ('')
   }
@@ -445,7 +471,7 @@ export default function AdminFormResultsPage() {
             itemLabel={t('admin.formResults.itemLabelMerchant')}
             emptyText={t('admin.formResults.emptyResults')}
             onChange={setPage}
-            renderItem={(item) => <MerchantResultCard item={item} />}
+                renderItem={(item) => <MerchantResultCard item={item} notifying={notifyMutation.isPending && notifyMutation.variables?.id === item.id} onNotify={() => notifyMutation.mutate({ kind: 'merchants', id: item.id })} />}
           />
         ) : (
           <ResultList
@@ -456,7 +482,7 @@ export default function AdminFormResultsPage() {
             itemLabel={t('admin.formResults.itemLabelDriver')}
             emptyText={t('admin.formResults.emptyResults')}
             onChange={setPage}
-            renderItem={(item) => <DriverResultCard item={item} />}
+                renderItem={(item) => <DriverResultCard item={item} notifying={notifyMutation.isPending && notifyMutation.variables?.id === item.id} onNotify={() => notifyMutation.mutate({ kind: 'drivers', id: item.id })} />}
           />
         )}
       </div>

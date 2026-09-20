@@ -6,7 +6,7 @@ import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
 import { CheckIcon, MailIcon, PhoneIcon, WhatsappIcon, SmartphoneIcon } from '../components/ui/icons'
-import { DRIVER_APK_URL } from '../lib/constants'
+import { DRIVER_APP_URL } from '../lib/constants'
 import { cn } from '../lib/cn'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import mark from '../assets/logo/airmess-mark.svg'
@@ -15,10 +15,14 @@ type Channel = 'email' | 'sms' | 'whatsapp'
 
 export default function DriverRegisterSuccessPage() {
   const { t } = useTranslation()
+  const locationState = useLocation().state as {
+    registrationToken?: string
+    completedPublicApplication?: boolean
+  } | null
   // Token Sanctum passé par le formulaire (navigation state, jamais localStorage).
   // Absent après un refresh/accès direct : le bloc canal est masqué (fallback email).
-  const registrationToken = (useLocation().state as { registrationToken?: string } | null)
-    ?.registrationToken
+  const registrationToken = locationState?.registrationToken
+  const completedPublicApplication = Boolean(locationState?.completedPublicApplication)
 
   const [channel, setChannel] = useState<Channel | null>(null)
   const [channelStatus, setChannelStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -64,7 +68,11 @@ export default function DriverRegisterSuccessPage() {
             </div>
           </div>
 
-          <h1 className="text-h1 text-ink text-center">{t('driverRegister.success.cardTitle')}</h1>
+          <h1 className="text-h1 text-ink text-center">
+            {completedPublicApplication
+              ? t('driverRegister.success.activatedCardTitle')
+              : t('driverRegister.success.cardTitle')}
+          </h1>
           <p className="text-body text-warm-600 text-center mt-3">
             {t('driverRegister.success.cardBody')}
           </p>
@@ -134,8 +142,9 @@ export default function DriverRegisterSuccessPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <a
-                href={DRIVER_APK_URL}
-                download
+                href={DRIVER_APP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-airmess-dark text-cream rounded-md text-body-s font-medium transition-colors hover:bg-ink"
               >
                 <SmartphoneIcon size={16} /> {t('driverRegister.success.downloadApk')}

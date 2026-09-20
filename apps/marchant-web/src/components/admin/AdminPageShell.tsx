@@ -6,7 +6,6 @@ import AdminQuickNav from './AdminQuickNav'
 import { MenuIcon } from '../ui/icons'
 import mark from '../../assets/logo/airmess-mark.svg'
 import { useUiPrefsStore } from '../../stores/uiPrefsStore'
-import EnableNotificationsButton from '../EnableNotificationsButton'
 import { useDesktopNotifications } from '../../hooks/useDesktopNotifications'
 
 interface AdminPageShellProps {
@@ -65,9 +64,6 @@ export default function AdminPageShell({ children }: AdminPageShellProps) {
 
       {showFab && <AdminQuickNav />}
 
-      <div className="fixed right-4 top-4 z-40">
-        <EnableNotificationsButton />
-      </div>
     </div>
   )
 }

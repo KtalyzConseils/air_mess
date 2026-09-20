@@ -38,8 +38,15 @@ class MerchantWaitlist extends Model
         'bonus_amount',
         'bonus_code',
         'bonus_redeemed_at',
+        'notified_at',
+        'activation_token_hash',
+        'activation_expires_at',
+        'activated_user_id',
+        'activated_at',
         'ip_address',
     ];
+
+    protected $hidden = ['activation_token_hash'];
 
     protected function casts(): array
     {
@@ -48,6 +55,9 @@ class MerchantWaitlist extends Model
             'problems' => 'array',
             'bonus_amount' => 'integer',
             'bonus_redeemed_at' => 'datetime',
+            'notified_at' => 'datetime',
+            'activation_expires_at' => 'datetime',
+            'activated_at' => 'datetime',
         ];
     }
 }

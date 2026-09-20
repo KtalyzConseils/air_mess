@@ -520,7 +520,6 @@ export default function LandingCommercantsPage() {
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState('')
   const [response, setResponse] = useState<MerchantWaitlistResponse | null>(null)
-  const [copied, setCopied] = useState(false)
 
   const totalSteps = STEPS.length
   const isLastStep = step === totalSteps - 1
@@ -702,25 +701,13 @@ export default function LandingCommercantsPage() {
     setStep(0)
     setServerError('')
     setResponse(null)
-    setCopied(false)
-  }
-
-  const copyBonusCode = async () => {
-    if (!response || !navigator.clipboard) return
-    try {
-      await navigator.clipboard.writeText(response.waitlist.bonus_code)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Ignore copy failures; the code remains visible on screen.
-    }
   }
 
   const shareOnWhatsApp = () => {
     if (!response) return
     const text =
-      `Je viens de rejoindre la liste d'attente Airmess et j'ai débloqué 500 F CFA ` +
-      `sur ma première commande. Mon code bonus : ${response.waitlist.bonus_code}. ` +
+      `Je viens de rejoindre la liste d'attente Airmess et j'ai débloqué ${response.waitlist.bonus_amount} F CFA ` +
+      `sur ma première commande, appliqués automatiquement avec mon futur compte. ` +
       `https://airmess-logistics.com/landing/merchants_learn`
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
   }
@@ -733,8 +720,6 @@ export default function LandingCommercantsPage() {
         {response ? (
           <SuccessPanel
             response={response}
-            copied={copied}
-            onCopy={copyBonusCode}
             onShare={shareOnWhatsApp}
             onReset={resetForm}
           />
@@ -1238,14 +1223,10 @@ function Benefits() {
 
 function SuccessPanel({
   response,
-  copied,
-  onCopy,
   onShare,
   onReset,
 }: {
   response: MerchantWaitlistResponse
-  copied: boolean
-  onCopy: () => void
   onShare: () => void
   onReset: () => void
 }) {
@@ -1268,25 +1249,14 @@ function SuccessPanel({
               Votre bonus de bienvenue
             </p>
             <p className="mt-2 text-body font-bold text-ink">
-              500 F CFA offerts sur votre première commande
+              {response.waitlist.bonus_amount} F CFA offerts sur votre première commande
             </p>
             <p className="mt-1 text-caption text-warm-500">
-              À présenter dès le lancement du service
+              Appliqués automatiquement sur votre première course avec le compte associé à vos coordonnées.
             </p>
-            <div className="mt-5 rounded-lg bg-airmess-yellow px-4 py-4">
-              <p className="text-caption font-bold uppercase tracking-wider text-ink/70">
-                Code bonus
-              </p>
-              <p className="mt-1 text-h3 font-bold tracking-wide text-ink">
-                {response.waitlist.bonus_code}
-              </p>
-            </div>
           </div>
 
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button type="button" variant="secondary" onClick={onCopy} leftIcon={<CheckIcon size={17} />}>
-              {copied ? 'Code copié' : 'Copier mon code'}
-            </Button>
             <Button type="button" variant="dark" onClick={onShare} leftIcon={<ShareIcon size={17} />}>
               Partager sur WhatsApp
             </Button>

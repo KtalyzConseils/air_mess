@@ -112,6 +112,10 @@ class CourseController extends Controller
                     'delivery_code'   => Course::generateCode(),
                 ]));
 
+                if ($discountQuote['discount_code'] !== null) {
+                    $firstCourseDiscount->markRedeemed($lockedUser);
+                }
+
                 // Hold wallet : sous lock pessimiste. Si le pre-check a passé mais
                 // qu'un autre thread a vidé le wallet entre temps (race), throw → rollback
                 // de la course + fallback checkout côté catch ci-dessous.

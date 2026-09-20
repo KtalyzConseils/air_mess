@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { DRIVER_APK_URL } from '../../lib/constants'
+import { DRIVER_APP_URL } from '../../lib/constants'
 import { SmartphoneIcon, ArrowRightIcon } from '../ui/icons'
 
 /**
@@ -29,8 +29,9 @@ export default function AppDownloadBanner() {
             </p>
           </div>
           <a
-            href={DRIVER_APK_URL}
-            download
+            href={DRIVER_APP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-airmess-yellow px-5 py-2.5 text-body font-medium text-ink shadow-sm transition-all duration-200 hover:bg-airmess-yellow-light hover:shadow-md"
           >
             {t('driverRegister.appBanner.cta')}

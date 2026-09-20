@@ -205,9 +205,9 @@
       }
     },
     "registerSuccess": {
-      "eyebrow": "Registration confirmed",
-      "title": "Congratulations, you’re on the waiting list!",
-      "message": "Your Airmess account has been created. We’ll notify you by email as soon as the service is live.",
+      "eyebrow": "Welcome to Airmess",
+      "title": "Your application has been submitted!",
+      "message": "Your merchant account has been created and your application is now being reviewed. We will notify you by email as soon as it is approved.",
       "giftLabel": "Votre cadeau de bienvenue",
       "giftBody": "500 FCFA seront automatiquement déduits de votre première course.",
       "individualEyebrow": "Bienvenue chez Airmess",
@@ -262,6 +262,7 @@
       "passwordMinLength": "8 characters minimum",
       "confirmRequired": "Confirmation is required",
       "submit": "Create my account",
+      "activationSubmit": "Complete my registration",
       "alreadyRegistered": "Already have an account?",
       "loginLink": "Sign in",
       "driverPrompt": "Are you a courier?",
@@ -1308,8 +1309,8 @@
     "appBanner": {
       "title": "The Air Mess Courier app",
       "body": "Once your file is approved, download the app to receive your deliveries on your phone in real time.",
-      "cta": "Download the APK (Android)",
-      "note": "To install after approval · Android only for now"
+      "cta": "Get it on Google Play",
+      "note": "Available on Android · Use after approval"
     },
     "otp": {
       "verifyCta": "Verify this number",
@@ -1344,6 +1345,7 @@
       "previewAlt": "Preview — {{label}}"
     },
     "submitCta": "Submit my application",
+    "activationSubmitCta": "Complete my application",
     "alreadyRegistered": "Already registered?",
     "loginLink": "Sign in",
     "fileClickReplace": "click to replace",
@@ -1351,6 +1353,7 @@
     "fileRemoveAria": "Remove file",
     "success": {
       "cardTitle": "Application received",
+      "activatedCardTitle": "Application submitted",
       "cardBody": "Your information and documents are being reviewed by our team.",
       "nextStepBadge": "Next step",
       "nextStepBodyBefore": "You will receive an",
@@ -1363,7 +1366,7 @@
       "playStore": "Play Store",
       "appStore": "App Store",
       "soon": "soon",
-      "downloadApk": "Download the app (APK)",
+      "downloadApk": "Get it on Google Play",
       "channelTitle": "How would you like to receive the answer to your application?",
       "channelEmail": "Email",
       "channelSms": "SMS",
@@ -1389,11 +1392,11 @@
       "archivedCourses": "Archived deliveries",
       "incidents": "Incidents",
       "marchants": "Merchants",
-      "merchantWaitlists": "Merchant waitlist",
-      "driverWaitlists": "Courier waitlist",
+      "merchantWaitlists": "Merchant applications",
+      "driverWaitlists": "Courier applications",
       "formResults": "Form results",
       "individuals": "Individuals",
-      "waitlist": "Waitlist",
+      "waitlist": "Accounts to approve",
       "drivers": "Couriers",
       "apiApps": "Dev apps",
       "withdraws": "Withdrawals",
@@ -1677,8 +1680,8 @@
       }
     },
     "merchantWaitlists": {
-      "title": "Merchant waitlist",
-      "subtitle": "Market study sign-ups.",
+      "title": "Merchant applications",
+      "subtitle": "Prospects who completed the public market-research form.",
       "searchPlaceholder": "Shop, contact, WhatsApp, area…",
       "emptyResults": "No sign-up found.",
       "itemLabel": "sign-up",
@@ -1690,8 +1693,8 @@
       "colDate": "Date"
     },
     "driverWaitlists": {
-      "title": "Courier waitlist",
-      "subtitle": "Courier sign-ups from the market study.",
+      "title": "Courier applications",
+      "subtitle": "Courier prospects who completed the public market-research form.",
       "searchPlaceholder": "Name, email, WhatsApp, area…",
       "emptyResults": "No sign-up found.",
       "itemLabel": "sign-up",
@@ -1717,6 +1720,12 @@
       "exportExcel": "Excel (.csv)",
       "exportTxt": "TXT",
       "exportError": "Export failed. Please try again.",
+      "informByEmail": "Notify by email",
+      "informAgain": "Resend email",
+      "informing": "Sending…",
+      "informedAt": "Notified on",
+      "notInformed": "Not notified yet",
+      "informError": "The email could not be sent. Check the mail configuration.",
       "sections": {
         "contact": "Contact",
         "activity": "Current activity",
@@ -2417,8 +2426,8 @@
       }
     },
     "waitlist": {
-      "title": "Waitlist",
-      "subtitle": "Activate accounts and notify users once Airmess is available.",
+      "title": "Accounts awaiting approval",
+      "subtitle": "Approve already registered accounts and notify their users when Airmess becomes available.",
       "validateSelection": "Validate selection ({{count}})",
       "searchPlaceholder": "Name, company, email or phone",
       "waiting": "Waiting",

@@ -207,6 +207,7 @@ class AuthController extends Controller
     public function registerMarchant(
         Request $request,
         \App\Services\FirebaseTokenVerifier $firebaseVerifier,
+        \App\Services\PublicWaitlistActivationService $waitlistActivations,
     ): JsonResponse {
         $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
 
@@ -226,7 +227,14 @@ class AuthController extends Controller
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms'   => ['required', 'accepted'],
             'defer_login'      => ['nullable', 'boolean'],
+            'activation_token' => ['nullable', 'string', 'size:64'],
         ]);
+
+        $waitlistCandidate = $waitlistActivations->assertForRegistration(
+            $data['activation_token'] ?? null,
+            'merchant',
+            $data['email'],
+        );
 
         // Vérification Google (optionnelle) : si un token Google est fourni, on vérifie
         // que l'email Google correspond à l'email soumis.
@@ -241,7 +249,7 @@ class AuthController extends Controller
             $emailVerifiedAt = now();
         }
 
-        $user = DB::transaction(function () use ($data, $emailVerifiedAt) {
+        $user = DB::transaction(function () use ($data, $emailVerifiedAt, $waitlistCandidate, $waitlistActivations) {
             $user = User::create([
                 'name'                   => $data['name'],
                 'email'                  => $data['email'],
@@ -267,6 +275,8 @@ class AuthController extends Controller
                 'subscription_plan' => 'trial',
                 'subscription_status' => 'trial',
             ]);
+
+            $waitlistActivations->consume($waitlistCandidate, $user);
 
             return $user;
         });
@@ -372,6 +382,7 @@ class AuthController extends Controller
         Request $request,
         NotificationService $notifier,
         DriverReferralService $referrals,
+        \App\Services\PublicWaitlistActivationService $waitlistActivations,
     ): JsonResponse {
         // Le numéro est normalisé en E.164 AVANT validation pour que l'unicité
         // users.phone porte sur un format canonique (+2290190123456) et que la
@@ -428,7 +439,14 @@ class AuthController extends Controller
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms' => ['required', 'accepted'],
             'referral_code'  => ['nullable', 'string', 'max:24'],
+            'activation_token' => ['nullable', 'string', 'size:64'],
         ]);
+
+        $waitlistCandidate = $waitlistActivations->assertForRegistration(
+            $data['activation_token'] ?? null,
+            'driver',
+            $data['email'],
+        );
 
         // Stockage des documents AVANT la transaction (les fichiers sont indépendants de la DB).
         // Si la transaction échoue, on supprime le dossier dans le catch ci-dessous pour ne pas
@@ -436,7 +454,7 @@ class AuthController extends Controller
         $paths = $this->storeDriverFiles($request);
 
         try {
-            $driver = DB::transaction(function () use ($data, $paths, $referrals) {
+            $driver = DB::transaction(function () use ($data, $paths, $referrals, $waitlistCandidate, $waitlistActivations) {
                 $user = User::create([
                     'name'                   => $data['first_name'] . ' ' . $data['last_name'],
                     'email'                  => $data['email'],
@@ -485,6 +503,7 @@ class AuthController extends Controller
 
                 $referrals->ensureReferralCode($driver);
                 $referrals->attachReferral($driver, $data['referral_code'] ?? null);
+                $waitlistActivations->consume($waitlistCandidate, $user);
 
                 return $driver;
             });

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreMerchantWaitlistRequest;
 use App\Mail\MerchantWaitlistNotificationMail;
 use App\Models\MerchantWaitlist;
+use App\Services\FirstCourseDiscountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -14,12 +15,12 @@ class MerchantWaitlistController extends Controller
 {
     public function store(StoreMerchantWaitlistRequest $request): JsonResponse
     {
-        $bonusCode = strtoupper(bin2hex(random_bytes(8)));
-
         $waitlist = MerchantWaitlist::create($request->validated() + [
             'status' => MerchantWaitlist::STATUS_WAITLISTED,
-            'bonus_amount' => 500,
-            'bonus_code' => $bonusCode,
+            // Information commerciale uniquement : l'éligibilité et l'application
+            // du bon restent centralisées dans FirstCourseDiscountService.
+            'bonus_amount' => FirstCourseDiscountService::AMOUNT_FCFA,
+            'bonus_code' => null,
             'ip_address' => $request->ip(),
         ]);
 
@@ -39,7 +40,6 @@ class MerchantWaitlistController extends Controller
                 'id' => $waitlist->id,
                 'status' => $waitlist->status,
                 'bonus_amount' => $waitlist->bonus_amount,
-                'bonus_code' => $waitlist->bonus_code,
                 'created_at' => $waitlist->created_at?->toIso8601String(),
             ],
         ], 201);

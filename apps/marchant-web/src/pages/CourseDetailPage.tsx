@@ -486,7 +486,9 @@ export default function CourseDetailPage() {
             {/* Tarification */}
             <Section title={t('courses.detail.pricing')}>
               <KV label={t('courses.detail.deliveryFee')} value={`${course.delivery_fee.toLocaleString(locale)} FCFA`} />
-              <KV label={t('admin.reconciliation.driverEarnings')} value={`${course.driver_earnings.toLocaleString(locale)} FCFA`} />
+              {isAdmin && (
+                <KV label={t('admin.reconciliation.driverEarnings')} value={`${course.driver_earnings.toLocaleString(locale)} FCFA`} />
+              )}
               {course.has_collection && (
                 <>
                   <KV label={t('courses.detail.collectionAmount')} value={`${course.collection_amount?.toLocaleString(locale)} FCFA`} />

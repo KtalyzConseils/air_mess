@@ -14,8 +14,6 @@ import AdminCoursesPage from './pages/admin/AdminCoursesPage'
 import AdminUnassignedCoursesPage from './pages/admin/AdminUnassignedCoursesPage'
 import AdminArchivedCoursesPage from './pages/admin/AdminArchivedCoursesPage'
 import AdminMarchantsPage from './pages/admin/AdminMarchantsPage'
-import AdminMerchantWaitlistsPage from './pages/admin/AdminMerchantWaitlistsPage'
-import AdminDriverWaitlistsPage from './pages/admin/AdminDriverWaitlistsPage'
 import AdminFormResultsPage from './pages/admin/AdminFormResultsPage'
 import AdminIndividualsPage from './pages/admin/AdminIndividualsPage'
 import AdminWaitlistPage from './pages/admin/AdminWaitlistPage'
@@ -172,8 +170,8 @@ function App() {
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial', 'ops', 'support']} />}>
             <Route path="/admin/marchants" element={<AdminMarchantsPage />} />
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
-            <Route path="/admin/waitlists/merchants" element={<AdminMerchantWaitlistsPage />} />
-            <Route path="/admin/waitlists/drivers" element={<AdminDriverWaitlistsPage />} />
+            <Route path="/admin/waitlists/merchants" element={<Navigate to="/admin/form-results?tab=merchants" replace />} />
+            <Route path="/admin/waitlists/drivers" element={<Navigate to="/admin/form-results?tab=drivers" replace />} />
             <Route path="/admin/form-results" element={<AdminFormResultsPage />} />
             <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
             <Route path="/admin/waitlist" element={<AdminWaitlistPage />} />
