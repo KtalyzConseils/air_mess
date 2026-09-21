@@ -1180,6 +1180,19 @@ export async function fetchReconciliation(from?: string, to?: string): Promise<R
   return data
 }
 
+export interface SandboxRepairResult {
+  snapshot_token: string
+  applied: boolean
+  user_adjustments: Array<{ user_id: number; amount_fcfa: number }>
+  driver_adjustments: Array<{ driver_id: number; amount_fcfa: number }>
+  notes: string
+}
+
+export async function applySandboxRepair(snapshotToken: string): Promise<{ message: string; result: SandboxRepairResult }> {
+  const { data } = await api.post('/admin/sandbox/repair', { snapshot_token: snapshotToken })
+  return data
+}
+
 /**
  * Construit l'URL absolue pour télécharger le CSV avec params from/to.
  * Le téléchargement passe par axios pour bénéficier du Bearer token, puis on génère un Blob.

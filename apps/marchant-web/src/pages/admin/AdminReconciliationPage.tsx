@@ -8,6 +8,7 @@ import { AlertTriangleIcon, CheckIcon } from '../../components/ui/icons'
 import {
   fetchReconciliation,
   downloadReconciliationCsv,
+  applySandboxRepair,
   type ReconciliationFlow,
 } from '../../api/admin'
 
@@ -91,6 +92,8 @@ export default function AdminReconciliationPage() {
   const [from, setFrom] = useState<string>(isoDateNDaysAgo(30))
   const [to, setTo] = useState<string>(todayIso())
   const [isDownloading, setIsDownloading] = useState(false)
+  const [isRepairing, setIsRepairing] = useState(false)
+  const [repairMessage, setRepairMessage] = useState<string | null>(null)
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['admin', 'reconciliation', from, to],
@@ -105,6 +108,28 @@ export default function AdminReconciliationPage() {
       window.alert(t('admin.reconciliation.exportError'))
     } finally {
       setIsDownloading(false)
+    }
+  }
+
+  async function handleApplySandboxRepair() {
+    if (!data?.sandbox_audit?.snapshot_token) return
+    const confirmed = window.confirm(t('admin.reconciliation.sandboxApplyConfirm'))
+    if (!confirmed) return
+
+    setIsRepairing(true)
+    setRepairMessage(null)
+
+    try {
+      const response = await applySandboxRepair(data.sandbox_audit.snapshot_token)
+      setRepairMessage(response.message)
+      window.alert(response.message)
+      await refetch()
+    } catch (error: any) {
+      const msg = error?.response?.data?.message ?? t('admin.reconciliation.sandboxApplyError')
+      setRepairMessage(msg)
+      window.alert(msg)
+    } finally {
+      setIsRepairing(false)
     }
   }
 
@@ -233,7 +258,7 @@ export default function AdminReconciliationPage() {
             </section>
 
             <Section title={t('admin.reconciliation.sandboxAuditTitle')}>
-              <div className="bg-warning-bg border border-warning/30 rounded-md p-4 space-y-3">
+              <div className="bg-warning-bg border border-warning/30 rounded-md p-4 space-y-4">
                 <p className="text-body-s text-ink">{t('admin.reconciliation.sandboxAuditWarning')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <MarginTile label={t('admin.reconciliation.sandboxPayments')} value={data.sandbox_audit.payments.count} />
@@ -241,10 +266,33 @@ export default function AdminReconciliationPage() {
                   <MarginTile label={t('admin.reconciliation.sandboxUserResidual')} value={formatFcfa(data.sandbox_audit.user_wallets.residual_upper_bound)} tone="warning" compact />
                   <MarginTile label={t('admin.reconciliation.sandboxDriverExposure')} value={formatFcfa(data.sandbox_audit.driver_wallets.exposed_residual_upper_bound)} tone="warning" compact />
                 </div>
+                <div className="rounded-md border border-warm-300 bg-white/60 p-3">
+                  <p className="text-body-s font-bold text-ink mb-2">{t('admin.reconciliation.sandboxGuideTitle')}</p>
+                  <ol className="list-decimal pl-5 text-body-s text-warm-700 space-y-1.5">
+                    <li>{t('admin.reconciliation.sandboxGuide1')}</li>
+                    <li>{t('admin.reconciliation.sandboxGuide2')}</li>
+                    <li>{t('admin.reconciliation.sandboxGuide3')}</li>
+                  </ol>
+                </div>
                 <p className="text-caption text-warm-600">
                   {t('admin.reconciliation.sandboxSnapshot')} <code className="font-mono break-all">{data.sandbox_audit.snapshot_token}</code>
                 </p>
-                <p className="text-caption font-bold text-airmess-red">{t('admin.reconciliation.sandboxNoCorrection')}</p>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <p className="text-caption font-bold text-airmess-red">{t('admin.reconciliation.sandboxNoCorrection')}</p>
+                  <AdminButton
+                    variant="primary"
+                    size="sm"
+                    onClick={handleApplySandboxRepair}
+                    disabled={isRepairing || !data.sandbox_audit.correction_ready}
+                  >
+                    {isRepairing
+                      ? t('admin.reconciliation.sandboxApplying')
+                      : t('admin.reconciliation.sandboxApplyButton')}
+                  </AdminButton>
+                </div>
+                {repairMessage && (
+                  <p className="text-caption text-airmess-red font-bold break-all">{repairMessage}</p>
+                )}
               </div>
             </Section>
 

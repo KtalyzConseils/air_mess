@@ -3702,6 +3702,34 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ]);
     }
 
+    public function sandboxRepair(
+        Request $request,
+        \App\Services\SandboxFinancialAuditService $auditService,
+    ): JsonResponse {
+        $admin = $request->user()->admin;
+        if (! $admin || ! $admin->isSuper()) {
+            return response()->json(['message' => 'Seul le super-admin peut appliquer une correction sandbox.'], 403);
+        }
+
+        $data = $request->validate([
+            'snapshot_token' => ['required', 'string', 'min:10'],
+        ]);
+
+        try {
+            $result = $auditService->applyRepair($data['snapshot_token'], (int) $admin->id);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'snapshot_token' => $data['snapshot_token'],
+            ], 409);
+        }
+
+        return response()->json([
+            'message' => $result['applied'] ? 'Correction sandbox appliquée.' : 'Aucune correction requisée.',
+            'result' => $result,
+        ]);
+    }
+
     public function markWithdrawRequestPaid(
         Request $request,
         \App\Models\WalletWithdrawRequest $withdraw,

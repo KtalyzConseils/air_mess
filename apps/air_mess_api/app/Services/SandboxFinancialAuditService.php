@@ -102,6 +102,185 @@ class SandboxFinancialAuditService
         ];
     }
 
+    /**
+     * Prévisualise un plan de compensation sans effectuer d'écriture.
+     * Refuse tout snapshot expiré ou périmé par une modification de données.
+     */
+    public function previewRepair(string $snapshotToken): array
+    {
+        $snapshot = $this->snapshot();
+        $currentToken = hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR));
+
+        if (! hash_equals($currentToken, $snapshotToken)) {
+            throw new \RuntimeException('Snapshot token invalid or stale: the financial state has changed since the audit was prepared.');
+        }
+
+        $audit = $this->audit();
+        $userAdjustments = collect($audit['user_wallets']['items'])
+            ->filter(fn (array $row) => (int) $row['sandbox_residual_upper_bound'] > 0)
+            ->map(fn (array $row) => [
+                'user_id' => (int) $row['user_id'],
+                'amount_fcfa' => -(int) $row['sandbox_residual_upper_bound'],
+                'reason' => 'sandbox_compensation',
+                'wallet_balance_before' => (int) $row['balance'],
+                'pending_reserved' => (int) $row['pending_reserved'],
+            ])
+            ->values()
+            ->all();
+
+        $driverAdjustments = collect($audit['driver_wallets']['items'])
+            ->filter(fn (array $row) => (int) $row['exposed_residual_upper_bound'] > 0)
+            ->map(fn (array $row) => [
+                'driver_id' => (int) $row['driver_id'],
+                'amount_fcfa' => -(int) $row['exposed_residual_upper_bound'],
+                'reason' => 'sandbox_compensation',
+                'wallet_balance_before' => (int) $row['balance'],
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'correction_ready' => $userAdjustments !== [] || $driverAdjustments !== [],
+            'snapshot_token' => $snapshotToken,
+            'user_adjustments' => $userAdjustments,
+            'driver_adjustments' => $driverAdjustments,
+            'notes' => 'Preview only: no wallet mutation is performed.',
+        ];
+    }
+
+    /**
+     * Applique une correction sandbox validée.
+     * La transaction est atomique, et l'opération est refusée si le snapshot a changé.
+     */
+    public function applyRepair(string $snapshotToken, ?int $adminId = null): array
+    {
+        $snapshot = $this->snapshot();
+        $currentToken = hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR));
+
+        if (! hash_equals($currentToken, $snapshotToken)) {
+            throw new \RuntimeException('Snapshot token invalid or stale: the financial state has changed since the audit was prepared.');
+        }
+
+        $audit = $this->audit();
+        $plan = $this->previewRepair($snapshotToken);
+
+        if (! $plan['correction_ready']) {
+            return [
+                'snapshot_token' => $snapshotToken,
+                'applied' => false,
+                'user_adjustments' => [],
+                'driver_adjustments' => [],
+                'notes' => 'No sandbox exposure found in the current snapshot.',
+            ];
+        }
+
+        $created = ['user' => [], 'driver' => []];
+
+        DB::transaction(function () use ($audit, $adminId, &$created) {
+            foreach ($audit['user_wallets']['items'] as $row) {
+                $amount = (int) $row['sandbox_residual_upper_bound'];
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                $user = \App\Models\User::find((int) $row['user_id']);
+                if (! $user) {
+                    continue;
+                }
+
+                $wallet = \App\Models\UserWallet::where('user_id', $user->id)->lockForUpdate()->first();
+                if (! $wallet) {
+                    continue;
+                }
+
+                $wallet->balance = max(0, (int) $wallet->balance - $amount);
+                $wallet->save();
+
+                $tx = \App\Models\UserWalletTransaction::create([
+                    'user_id' => $user->id,
+                    'type' => \App\Models\UserWalletTransaction::TYPE_ADJUSTMENT_DEBIT,
+                    'amount_fcfa' => -$amount,
+                    'balance_after' => $wallet->balance,
+                    'metadata' => [
+                        'admin_id' => $adminId,
+                        'reason' => 'sandbox_compensation',
+                        'snapshot_token' => $audit['snapshot_token'],
+                    ],
+                    'created_at' => now(),
+                ]);
+
+                app(\App\Services\AccountingLedgerService::class)->recordUserWalletTransaction($tx);
+                \App\Models\WalletAdjustment::create([
+                    'wallet_type' => \App\Models\WalletAdjustment::WALLET_TYPE_USER,
+                    'wallet_owner_id' => $user->id,
+                    'amount_fcfa' => -$amount,
+                    'reason_code' => \App\Models\WalletAdjustment::REASON_MANUAL_DEBIT,
+                    'notes' => 'sandbox_compensation',
+                    'admin_id' => $adminId,
+                    'balance_after' => $wallet->balance,
+                    'created_at' => now(),
+                ]);
+
+                $created['user'][] = ['user_id' => $user->id, 'amount_fcfa' => -$amount];
+            }
+
+            foreach ($audit['driver_wallets']['items'] as $row) {
+                $amount = (int) $row['exposed_residual_upper_bound'];
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                $driver = \App\Models\Driver::find((int) $row['driver_id']);
+                if (! $driver) {
+                    continue;
+                }
+
+                $wallet = \App\Models\DriverWallet::where('driver_id', $driver->id)->lockForUpdate()->first();
+                if (! $wallet) {
+                    continue;
+                }
+
+                $wallet->balance = max(0, (int) $wallet->balance - $amount);
+                $wallet->save();
+
+                $tx = \App\Models\WalletTransaction::create([
+                    'driver_id' => $driver->id,
+                    'type' => \App\Models\WalletTransaction::TYPE_ADJUSTMENT_DEBIT,
+                    'amount_fcfa' => -$amount,
+                    'balance_after' => $wallet->balance,
+                    'metadata' => [
+                        'admin_id' => $adminId,
+                        'reason' => 'sandbox_compensation',
+                        'snapshot_token' => $audit['snapshot_token'],
+                    ],
+                    'created_at' => now(),
+                ]);
+
+                app(\App\Services\AccountingLedgerService::class)->recordDriverWalletTransaction($tx);
+                \App\Models\WalletAdjustment::create([
+                    'wallet_type' => \App\Models\WalletAdjustment::WALLET_TYPE_DRIVER,
+                    'wallet_owner_id' => $driver->id,
+                    'amount_fcfa' => -$amount,
+                    'reason_code' => \App\Models\WalletAdjustment::REASON_MANUAL_DEBIT,
+                    'notes' => 'sandbox_compensation',
+                    'admin_id' => $adminId,
+                    'balance_after' => $wallet->balance,
+                    'created_at' => now(),
+                ]);
+
+                $created['driver'][] = ['driver_id' => $driver->id, 'amount_fcfa' => -$amount];
+            }
+        });
+
+        return [
+            'snapshot_token' => $snapshotToken,
+            'applied' => true,
+            'user_adjustments' => $created['user'],
+            'driver_adjustments' => $created['driver'],
+            'notes' => 'Transaction executed atomically with token validation.',
+        ];
+    }
+
     private function paymentMode(object $payment): ?string
     {
         $raw = is_string($payment->raw_response) ? json_decode($payment->raw_response, true) : (array) $payment->raw_response;

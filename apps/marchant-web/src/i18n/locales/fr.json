@@ -2292,7 +2292,15 @@
       "sandboxUserResidual": "Résiduel wallets clients",
       "sandboxDriverExposure": "Exposition wallets livreurs",
       "sandboxSnapshot": "Jeton de l’instantané :",
-      "sandboxNoCorrection": "Aucune correction automatique : un nouvel audit et une validation humaine restent obligatoires."
+      "sandboxNoCorrection": "Aucune correction automatique : un nouvel audit et une validation humaine restent obligatoires.",
+      "sandboxGuideTitle": "Guide de correction sandbox",
+      "sandboxGuide1": "Copiez le jeton ci-dessous et vérifiez qu'aucune autre mutation n'a touché le wallet depuis l'audit.",
+      "sandboxGuide2": "L'application de correction est réservée au super-admin et applique une compensation atomique en une seule transaction.",
+      "sandboxGuide3": "Si le jeton est obsolète, la correction est refusée et aucun solde n'est modifié.",
+      "sandboxApplyButton": "Appliquer la correction",
+      "sandboxApplyConfirm": "Confirmer la correction sandbox ? Elle appliquera une compensation atomique vérifiée sur le snapshot courant.",
+      "sandboxApplyError": "La correction sandbox a été refusée.",
+      "sandboxApplying": "Application…"
     },
     "settings": {
       "title": "Paramètres globaux",

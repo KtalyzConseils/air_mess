@@ -2292,7 +2292,15 @@
       "sandboxUserResidual": "Client wallet residual",
       "sandboxDriverExposure": "Driver wallet exposure",
       "sandboxSnapshot": "Snapshot token:",
-      "sandboxNoCorrection": "No automatic correction: a fresh audit and human approval remain mandatory."
+      "sandboxNoCorrection": "No automatic correction: a fresh audit and human approval remain mandatory.",
+      "sandboxGuideTitle": "Sandbox correction guide",
+      "sandboxGuide1": "Copy the token below and verify that no wallet mutation has occurred since the audit snapshot was created.",
+      "sandboxGuide2": "The correction is restricted to the super-admin and applies one atomic compensation transaction.",
+      "sandboxGuide3": "If the token is stale, the correction is rejected and no wallet balance is altered.",
+      "sandboxApplyButton": "Apply correction",
+      "sandboxApplyConfirm": "Confirm the sandbox correction? It will apply one validated atomic compensation based on the current snapshot.",
+      "sandboxApplyError": "The sandbox correction was rejected.",
+      "sandboxApplying": "Applying…"
     },
     "settings": {
       "title": "Global settings",
