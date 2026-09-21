@@ -1,8 +1,20 @@
-export const OTP_SEND_URL = (import.meta.env.VITE_OTP_SEND_URL as string | undefined) ?? ''
-export const OTP_VERIFY_URL = (import.meta.env.VITE_OTP_VERIFY_URL as string | undefined) ?? ''
-export const DRIVER_SURVEY_URL = (import.meta.env.VITE_DRIVER_SURVEY_URL as string | undefined) ?? ''
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+  'https://api.airmess-logistics.com/api'
 
-export const DRIVER_DEMO_MODE = !OTP_SEND_URL || !OTP_VERIFY_URL || !DRIVER_SURVEY_URL
+export const OTP_SEND_URL =
+  (import.meta.env.VITE_OTP_SEND_URL as string | undefined) ??
+  `${API_BASE_URL}/auth/phone/otp/send`
+export const OTP_VERIFY_URL =
+  (import.meta.env.VITE_OTP_VERIFY_URL as string | undefined) ??
+  `${API_BASE_URL}/auth/phone/otp/verify`
+export const DRIVER_SURVEY_URL =
+  (import.meta.env.VITE_DRIVER_SURVEY_URL as string | undefined) ??
+  `${API_BASE_URL}/waitlist/drivers`
+
+// Demo data must be an explicit opt-in. Falling back to a fake success when an
+// environment variable is missing makes real respondents disappear silently.
+export const DRIVER_DEMO_MODE = import.meta.env.VITE_DRIVER_DEMO_MODE === 'true'
 
 const DEMO_SMS_CODE = '123456'
 const API_HEADERS = {
@@ -61,8 +73,8 @@ export interface DriverAccountPayload {
 
 export interface DriverSurveyResponse {
   compte: {
-    id: string
-    statut: 'en_liste_attente'
+    id: string | null
+    statut: 'en_liste_attente' | 'non_ouvert'
     deja_existant: boolean
   }
   liste_attente: {
@@ -78,7 +90,9 @@ export interface DriverSurveyResponse {
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
   if (digits.length === 8) return `+229${digits}`
+  if (digits.length === 10 && digits.startsWith('01')) return `+229${digits}`
   if (digits.length === 11 && digits.startsWith('229')) return `+${digits}`
+  if (digits.length === 13 && digits.startsWith('22901')) return `+${digits}`
   return phone
 }
 
@@ -116,8 +130,7 @@ export async function sendDriverOtp(phone: string): Promise<SendDriverOtpResult>
     method: 'POST',
     headers: API_HEADERS,
     body: JSON.stringify({
-      telephone: normalizePhone(phone),
-      purpose: 'ouverture_compte_livreur',
+      phone: normalizePhone(phone),
     }),
   })
 
@@ -149,9 +162,8 @@ export async function verifyDriverOtp(phone: string, code: string): Promise<Veri
     method: 'POST',
     headers: API_HEADERS,
     body: JSON.stringify({
-      telephone: normalizePhone(phone),
+      phone: normalizePhone(phone),
       code,
-      purpose: 'ouverture_compte_livreur',
     }),
   })
 
@@ -163,7 +175,16 @@ export async function verifyDriverOtp(phone: string, code: string): Promise<Veri
     })
   }
 
-  return { ...data, verification_token: data.verification_token ?? '', expires_in: data.expires_in ?? 604800, demo: false }
+  const apiData = data as Partial<VerifyDriverOtpResult> & {
+    phone_verification_token?: string
+  }
+
+  return {
+    verification_token:
+      apiData.verification_token ?? apiData.phone_verification_token ?? '',
+    expires_in: apiData.expires_in ?? 900,
+    demo: false,
+  }
 }
 
 export async function submitDriverSurvey(payload: DriverSurveyPayload): Promise<DriverSurveyResponse> {

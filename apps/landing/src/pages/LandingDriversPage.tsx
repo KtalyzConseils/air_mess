@@ -106,12 +106,14 @@ const FORMATION_OPTIONS = [
   'Autre',
 ]
 
-const PHONE_PATTERN = /^(\+229)?[0-9]{8}$/
+const PHONE_PATTERN = /^(?:\+229)?(?:01)?[0-9]{8}$/
 
 function normalizeBeninPhone(value: string): string {
   const digits = value.replace(/\D/g, '')
   if (digits.length === 8) return `+229${digits}`
+  if (digits.length === 10 && digits.startsWith('01')) return `+229${digits}`
   if (digits.length === 11 && digits.startsWith('229')) return `+${digits}`
+  if (digits.length === 13 && digits.startsWith('22901')) return `+${digits}`
   return value
 }
 
@@ -773,6 +775,7 @@ export default function LandingDriversPage() {
   const [otpSent, setOtpSent] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(60)
   const [startedAt] = useState(() => Date.now())
+  const [responseId, setResponseId] = useState(createResponseId)
 
   useEffect(() => {
     const previousTitle = document.title
@@ -856,7 +859,7 @@ export default function LandingDriversPage() {
     if (!account.telephone.trim()) {
       nextErrors.telephone = 'Indiquez votre numéro Mobile Money.'
     } else if (!isValidBeninPhone(account.telephone)) {
-      nextErrors.telephone = 'Format attendu : 8 chiffres, avec ou sans +229.'
+      nextErrors.telephone = 'Format attendu : 8 chiffres ou 10 chiffres commençant par 01, avec ou sans +229.'
     }
     if (!account.majeur) {
       nextErrors.majeur = 'Vous devez certifier avoir 18 ans ou plus pour ouvrir un compte.'
@@ -870,7 +873,10 @@ export default function LandingDriversPage() {
   const accountZone = survey.zone === 'Autre' ? survey.zone_other.trim() : survey.zone
   const src = new URLSearchParams(window.location.search).get('src') ?? 'site_web'
 
-  const buildPayload = (withAccount: boolean): DriverSurveyPayload => {
+  const buildPayload = (
+    withAccount: boolean,
+    verifiedToken: string = verificationToken,
+  ): DriverSurveyPayload => {
     const submittedAt = new Date().toISOString()
     const duration = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
     const mobileMoney = getMobileMoneyList(survey)
@@ -888,7 +894,7 @@ export default function LandingDriversPage() {
             cgu_at: submittedAt,
             confidentialite_at: submittedAt,
           },
-          verification_token: verificationToken,
+          verification_token: verifiedToken,
           profil_operationnel: {
             moto: survey.moto_usage === 'Oui' ? "M'appartient" : 'Non renseigné',
             permis: survey.permis,
@@ -914,7 +920,7 @@ export default function LandingDriversPage() {
       version: '2.0',
       mode: 'web',
       response: {
-        response_id: createResponseId(),
+        response_id: responseId,
         started_at: new Date(startedAt).toISOString(),
         submitted_at: submittedAt,
         duration_s: duration,
@@ -943,12 +949,26 @@ export default function LandingDriversPage() {
     }
   }
 
-  const handleSurveyContinue = () => {
+  const handleSurveyContinue = async () => {
     const nextErrors = validateSurvey()
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
     if (isEarlyStop) {
-      setStage('early_stop')
+      setLoading(true)
+      setServerError('')
+      try {
+        const payload = buildPayload(false)
+        payload.response.completed = false
+        payload.response.stop_reason = 'moto_absente_et_aucune_intention'
+        await submitDriverSurvey(payload)
+        setStage('early_stop')
+      } catch (error) {
+        setServerError(
+          error instanceof Error ? error.message : 'Vos réponses n’ont pas pu être envoyées.',
+        )
+      } finally {
+        setLoading(false)
+      }
       return
     }
     setStep(1)
@@ -1000,8 +1020,10 @@ export default function LandingDriversPage() {
 
     setLoading(true)
     setServerError('')
+    let verifiedToken = ''
     try {
       const result = await verifyDriverOtp(account.telephone, otp.trim())
+      verifiedToken = result.verification_token
       setVerificationToken(result.verification_token)
     } catch (error) {
       setServerError(error instanceof Error ? error.message : 'Ce code n’est pas valide.')
@@ -1011,7 +1033,7 @@ export default function LandingDriversPage() {
 
     setStage('sending')
     try {
-      const payload = buildPayload(true)
+      const payload = buildPayload(true, verifiedToken)
       const data = await submitDriverSurvey(payload)
       setResponse(data)
       setStage('confirmation')
@@ -1063,6 +1085,7 @@ export default function LandingDriversPage() {
     setOtp('')
     setOtpSent(false)
     setSecondsLeft(60)
+    setResponseId(createResponseId())
   }
 
   const shareOnWhatsApp = () => {
@@ -1439,7 +1462,7 @@ export default function LandingDriversPage() {
                       <Button type="button" variant="ghost" onClick={() => setStage('early_stop')}>
                         Refuser de participer
                       </Button>
-                      <Button type="button" size="lg" onClick={handleSurveyContinue} rightIcon={<ArrowRightIcon size={18} />}>
+                      <Button type="button" size="lg" loading={loading} onClick={handleSurveyContinue} rightIcon={<ArrowRightIcon size={18} />}>
                         Continuer
                       </Button>
                     </div>
