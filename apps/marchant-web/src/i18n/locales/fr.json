@@ -2284,7 +2284,15 @@
       "flowTypeEarning": "Gains course",
       "flowTypeAdjustmentCredit": "Crédits admin",
       "flowTypeAdjustmentDebit": "Débits admin",
-      "flowTypeCourseCharge": "Charges course (livraison)"
+      "flowTypeCourseCharge": "Charges course (livraison)",
+      "sandboxAuditTitle": "Audit des fonds sandbox",
+      "sandboxAuditWarning": "Analyse recalculée sur l’état actuel de la base. Les montants affichés sont des bornes d’exposition et non une autorisation de correction.",
+      "sandboxPayments": "Paiements détectés",
+      "sandboxPaid": "Total payé sandbox",
+      "sandboxUserResidual": "Résiduel wallets clients",
+      "sandboxDriverExposure": "Exposition wallets livreurs",
+      "sandboxSnapshot": "Jeton de l’instantané :",
+      "sandboxNoCorrection": "Aucune correction automatique : un nouvel audit et une validation humaine restent obligatoires."
     },
     "settings": {
       "title": "Paramètres globaux",

@@ -2284,7 +2284,15 @@
       "flowTypeEarning": "Delivery earnings",
       "flowTypeAdjustmentCredit": "Admin credits",
       "flowTypeAdjustmentDebit": "Admin debits",
-      "flowTypeCourseCharge": "Delivery charges"
+      "flowTypeCourseCharge": "Delivery charges",
+      "sandboxAuditTitle": "Sandbox funds audit",
+      "sandboxAuditWarning": "Analysis recalculated from the current database state. Displayed amounts are exposure bounds, not authorization to correct data.",
+      "sandboxPayments": "Detected payments",
+      "sandboxPaid": "Sandbox paid total",
+      "sandboxUserResidual": "Client wallet residual",
+      "sandboxDriverExposure": "Driver wallet exposure",
+      "sandboxSnapshot": "Snapshot token:",
+      "sandboxNoCorrection": "No automatic correction: a fresh audit and human approval remain mandatory."
     },
     "settings": {
       "title": "Global settings",

@@ -27,6 +27,8 @@ Le modèle `payments` n'enregistre pas explicitement l'environnement FedaPay uti
 
 Produire, sans écrire en base, un tableau avant/après par utilisateur, wallet et course. Vérifier les invariants : sommes disponibles, réservations, débits de courses et gains livreurs.
 
+La section `sandbox_audit` de `/admin/reconciliation` est recalculée sur la base courante et fournit un `snapshot_token`. Un export ancien ou une copie locale ne doit jamais autoriser une correction. Toute future commande d'application devra recalculer ce jeton dans sa transaction et refuser l'opération s'il diffère du jeton explicitement validé.
+
 ## Phase 3 — correction validée
 
 Après sauvegarde et validation humaine de la liste exacte : exécuter une transaction atomique, créer des écritures compensatoires portant un identifiant d'opération, conserver les historiques sources, puis générer un rapport final. Aucun script ne doit sélectionner des lignes uniquement par date ou par montant.

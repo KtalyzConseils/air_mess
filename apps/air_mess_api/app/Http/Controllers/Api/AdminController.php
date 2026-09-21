@@ -3309,7 +3309,10 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      *
      * Cf. project_wallet_driver_todo #6.
      */
-    public function reconciliation(Request $request): JsonResponse
+    public function reconciliation(
+        Request $request,
+        \App\Services\SandboxFinancialAuditService $sandboxAudit,
+    ): JsonResponse
     {
         $data = $request->validate([
             'from' => ['nullable', 'date'],
@@ -3453,6 +3456,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     || count($driftDrivers) > 0
                     || count($driftUsers) > 0,
             ],
+            'sandbox_audit' => $sandboxAudit->audit(),
         ]);
     }
 

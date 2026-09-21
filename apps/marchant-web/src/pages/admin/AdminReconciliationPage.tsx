@@ -232,6 +232,22 @@ export default function AdminReconciliationPage() {
               </div>
             </section>
 
+            <Section title={t('admin.reconciliation.sandboxAuditTitle')}>
+              <div className="bg-warning-bg border border-warning/30 rounded-md p-4 space-y-3">
+                <p className="text-body-s text-ink">{t('admin.reconciliation.sandboxAuditWarning')}</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <MarginTile label={t('admin.reconciliation.sandboxPayments')} value={data.sandbox_audit.payments.count} />
+                  <MarginTile label={t('admin.reconciliation.sandboxPaid')} value={formatFcfa(data.sandbox_audit.payments.paid_total)} compact />
+                  <MarginTile label={t('admin.reconciliation.sandboxUserResidual')} value={formatFcfa(data.sandbox_audit.user_wallets.residual_upper_bound)} tone="warning" compact />
+                  <MarginTile label={t('admin.reconciliation.sandboxDriverExposure')} value={formatFcfa(data.sandbox_audit.driver_wallets.exposed_residual_upper_bound)} tone="warning" compact />
+                </div>
+                <p className="text-caption text-warm-600">
+                  {t('admin.reconciliation.sandboxSnapshot')} <code className="font-mono break-all">{data.sandbox_audit.snapshot_token}</code>
+                </p>
+                <p className="text-caption font-bold text-airmess-red">{t('admin.reconciliation.sandboxNoCorrection')}</p>
+              </div>
+            </Section>
+
             {/* Marge brute */}
             <Section title={t('admin.reconciliation.marginTitle')}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">

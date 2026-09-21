@@ -37,3 +37,11 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 ## Règle d'évolution
 
 Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `FirstCourseDiscountService`, `FIRST_COURSE_500`, `waitlisted_at`, `MerchantWaitlist`, `DriverWaitlist`, les routes admin correspondantes et leurs tests.
+
+## Réconciliation financière et fonds sandbox
+
+- Source de vérité administrative : `GET /api/admin/reconciliation` et sa section `sandbox_audit`.
+- Analyse en lecture seule : `SandboxFinancialAuditService` ; elle doit être étendue plutôt que dupliquée.
+- Le `snapshot_token` représente l'état financier courant. Un plan préparé sur un dump ou avec un ancien jeton est obsolète.
+- Les boutons de remise à zéro d'un wallet ne constituent pas un outil d'assainissement global.
+- Toute correction future doit conserver les historiques, utiliser des écritures compensatoires et revérifier le jeton dans la transaction d'application.

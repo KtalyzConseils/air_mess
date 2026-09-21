@@ -1163,6 +1163,16 @@ export interface ReconciliationResponse {
     drift_users: Array<{ user_id: number; name: string; balance: number; sum_tx: number; drift: number }>
     has_any: boolean
   }
+  sandbox_audit: {
+    generated_at: string
+    snapshot_token: string
+    correction_ready: boolean
+    payments: { count: number; nominal_total: number; paid_total: number; refunded_total: number; ids: number[] }
+    user_wallets: { sandbox_credit_total: number; residual_upper_bound: number; items: unknown[] }
+    driver_wallets: { exposed_residual_upper_bound: number; items: unknown[] }
+    courses: Array<{ course_id: number; reference: string; status: string; classification: string; delivery_fee: number; driver_earnings: number }>
+    withdrawals_requiring_review: Array<{ withdrawal_id: number; owner_type: string; owner_id: number; amount: number; status: string; paid: boolean; payout_failed: boolean }>
+  }
 }
 
 export async function fetchReconciliation(from?: string, to?: string): Promise<ReconciliationResponse> {
