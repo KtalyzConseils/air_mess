@@ -94,6 +94,7 @@ export default function AdminReconciliationPage() {
   const [isDownloading, setIsDownloading] = useState(false)
   const [isRepairing, setIsRepairing] = useState(false)
   const [repairMessage, setRepairMessage] = useState<string | null>(null)
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['admin', 'reconciliation', from, to],
@@ -266,29 +267,26 @@ export default function AdminReconciliationPage() {
                   <MarginTile label={t('admin.reconciliation.sandboxUserResidual')} value={formatFcfa(data.sandbox_audit.user_wallets.residual_upper_bound)} tone="warning" compact />
                   <MarginTile label={t('admin.reconciliation.sandboxDriverExposure')} value={formatFcfa(data.sandbox_audit.driver_wallets.exposed_residual_upper_bound)} tone="warning" compact />
                 </div>
-                <div className="rounded-md border border-warm-300 bg-white/60 p-3">
-                  <p className="text-body-s font-bold text-ink mb-2">{t('admin.reconciliation.sandboxGuideTitle')}</p>
-                  <ol className="list-decimal pl-5 text-body-s text-warm-700 space-y-1.5">
-                    <li>{t('admin.reconciliation.sandboxGuide1')}</li>
-                    <li>{t('admin.reconciliation.sandboxGuide2')}</li>
-                    <li>{t('admin.reconciliation.sandboxGuide3')}</li>
-                  </ol>
-                </div>
                 <p className="text-caption text-warm-600">
                   {t('admin.reconciliation.sandboxSnapshot')} <code className="font-mono break-all">{data.sandbox_audit.snapshot_token}</code>
                 </p>
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <p className="text-caption font-bold text-airmess-red">{t('admin.reconciliation.sandboxNoCorrection')}</p>
-                  <AdminButton
-                    variant="primary"
-                    size="sm"
-                    onClick={handleApplySandboxRepair}
-                    disabled={isRepairing || !data.sandbox_audit.correction_ready}
-                  >
-                    {isRepairing
-                      ? t('admin.reconciliation.sandboxApplying')
-                      : t('admin.reconciliation.sandboxApplyButton')}
-                  </AdminButton>
+                  <div className="flex flex-wrap gap-2">
+                    <AdminButton variant="secondary" size="sm" onClick={() => setIsGuideOpen(true)}>
+                      {t('admin.reconciliation.sandboxGuideButton')}
+                    </AdminButton>
+                    <AdminButton
+                      variant="primary"
+                      size="sm"
+                      onClick={handleApplySandboxRepair}
+                      disabled={isRepairing || !data.sandbox_audit.snapshot_token}
+                    >
+                      {isRepairing
+                        ? t('admin.reconciliation.sandboxApplying')
+                        : t('admin.reconciliation.sandboxApplyButton')}
+                    </AdminButton>
+                  </div>
                 </div>
                 {repairMessage && (
                   <p className="text-caption text-airmess-red font-bold break-all">{repairMessage}</p>
@@ -296,6 +294,32 @@ export default function AdminReconciliationPage() {
               </div>
             </Section>
 
+
+          {isGuideOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4" role="presentation" onMouseDown={() => setIsGuideOpen(false)}>
+              <div className="w-full max-w-2xl rounded-md bg-white shadow-xl p-5 md:p-6" role="dialog" aria-modal="true" aria-labelledby="sandbox-guide-title" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h2 id="sandbox-guide-title" className="text-h3 text-ink">{t('admin.reconciliation.sandboxGuideTitle')}</h2>
+                    <p className="text-body-s text-warm-700 mt-1">{t('admin.reconciliation.sandboxGuideIntro')}</p>
+                  </div>
+                  <button type="button" className="text-warm-600 hover:text-ink text-xl" aria-label={t('common.close')} onClick={() => setIsGuideOpen(false)}>×</button>
+                </div>
+                <ol className="list-decimal pl-5 text-body-s text-warm-700 space-y-2">
+                  <li>{t('admin.reconciliation.sandboxGuide1')}</li>
+                  <li>{t('admin.reconciliation.sandboxGuide2')}</li>
+                  <li>{t('admin.reconciliation.sandboxGuide3')}</li>
+                </ol>
+                <div className="mt-5 rounded-md border border-warm-300 bg-warning-bg p-4">
+                  <p className="text-body-s font-bold text-ink mb-2">{t('admin.reconciliation.sandboxExampleTitle')}</p>
+                  <p className="text-body-s text-warm-700">{t('admin.reconciliation.sandboxExample')}</p>
+                </div>
+                <div className="mt-5 flex justify-end">
+                  <AdminButton variant="secondary" size="sm" onClick={() => setIsGuideOpen(false)}>{t('common.close')}</AdminButton>
+                </div>
+              </div>
+            </div>
+          )}
             {/* Marge brute */}
             <Section title={t('admin.reconciliation.marginTitle')}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
