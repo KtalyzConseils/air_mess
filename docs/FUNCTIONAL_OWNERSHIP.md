@@ -25,6 +25,15 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 - La création du compte consomme le jeton et rattache la candidature au nouvel utilisateur via `activated_user_id`.
 - Ne pas recréer un second mécanisme de lien, de code ou de conversion des candidatures.
 
+## Collecte du questionnaire public livreur
+
+- Source de vérité : la table `driver_waitlists`, pour l'ancien formulaire comme pour le questionnaire versionné de la landing.
+- Endpoint public unique : `POST /api/waitlist/drivers`. Le contrôleur distingue le questionnaire versionné par le champ `survey`.
+- Idempotence : `survey_response_id` est unique afin qu'une reprise après coupure réseau ne crée pas de doublon.
+- Les coordonnées d'ouverture de compte ne sont acceptées qu'avec un jeton de vérification correspondant au numéro normalisé.
+- Le mode démonstration de la landing doit rester explicitement activé et ne doit jamais être la valeur par défaut en production.
+- Restitution administrative : `Résultats des formulaires`, onglet livreurs, avec les réponses brutes conservées dans `survey_payload` et `account_payload`.
+
 ## Règle d'évolution
 
 Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `FirstCourseDiscountService`, `FIRST_COURSE_500`, `waitlisted_at`, `MerchantWaitlist`, `DriverWaitlist`, les routes admin correspondantes et leurs tests.

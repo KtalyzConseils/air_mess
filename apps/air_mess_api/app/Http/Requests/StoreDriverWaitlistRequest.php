@@ -14,6 +14,13 @@ class StoreDriverWaitlistRequest extends FormRequest
 
     public function rules(): array
     {
+        // The current landing questionnaire is validated in the controller
+        // because it has a versioned nested payload. Both questionnaire formats
+        // still use this single public waitlist endpoint.
+        if ($this->input('survey') === 'airmess_livreurs') {
+            return [];
+        }
+
         return [
             'vehicle_type' => ['required', 'string', Rule::in([
                 'Vélo',

@@ -9,6 +9,15 @@ class DriverWaitlist extends Model
     public const STATUS_WAITLISTED = 'waitlisted';
 
     protected $fillable = [
+        'survey_response_id',
+        'survey_version',
+        'survey_mode',
+        'survey_payload',
+        'account_payload',
+        'survey_started_at',
+        'survey_submitted_at',
+        'survey_duration_seconds',
+        'survey_suspect',
         'vehicle_type',
         'zone',
         'zone_other',
@@ -45,6 +54,12 @@ class DriverWaitlist extends Model
     protected function casts(): array
     {
         return [
+            'survey_payload' => 'array',
+            'account_payload' => 'array',
+            'survey_started_at' => 'datetime',
+            'survey_submitted_at' => 'datetime',
+            'survey_duration_seconds' => 'integer',
+            'survey_suspect' => 'boolean',
             'platforms_used' => 'array',
             'problems' => 'array',
             'interest_level' => 'integer',

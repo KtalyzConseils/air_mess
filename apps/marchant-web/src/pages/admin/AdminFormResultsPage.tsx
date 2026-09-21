@@ -40,6 +40,18 @@ function formatList(values?: string[] | null): string {
   return values.filter(Boolean).join(', ')
 }
 
+function formatSurveyValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—'
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ') || '—'
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .filter(([, item]) => item !== null && item !== undefined && item !== '')
+      .map(([key, item]) => `${key}: ${formatSurveyValue(item)}`)
+      .join(', ') || '—'
+  }
+  return String(value)
+}
+
 function Field({
   label,
   value,
@@ -203,6 +215,8 @@ function DriverResultCard({ item, onNotify, notifying }: { item: DriverWaitlistL
 
   const name = item.full_name || t('admin.common.unknown')
   const contact = [item.email, item.whatsapp].filter(Boolean).join(' · ')
+  const answers = item.survey_payload?.answers ?? {}
+  const profile = item.account_payload?.profil_operationnel ?? {}
 
   return (
     <ResultCard
@@ -238,6 +252,25 @@ function DriverResultCard({ item, onNotify, notifying }: { item: DriverWaitlistL
           {notifying ? t('admin.formResults.informing') : item.notified_at ? t('admin.formResults.informAgain') : t('admin.formResults.informByEmail')}
         </AdminButton>
       </div>
+      {item.survey_response_id && (
+        <Section title={t('admin.formResults.sections.survey')}>
+          <Field label={t('admin.formResults.driver.operator')} value={item.account_payload?.operateur} />
+          <Field label={t('admin.formResults.driver.motoUsage')} value={answers.A2 as string | undefined} />
+          <Field label={t('admin.formResults.driver.license')} value={answers.A4 as string | undefined} />
+          <Field label={t('admin.formResults.driver.phoneType')} value={answers.A5 as string | undefined} />
+          <Field label={t('admin.formResults.driver.mobileMoneyAccounts')} value={formatSurveyValue(answers.A7)} />
+          <Field label={t('admin.formResults.driver.language')} value={answers.A10 as string | undefined} />
+          <Field label={t('admin.formResults.driver.daysPerWeek')} value={answers.B1 as string | undefined} />
+          <Field label={t('admin.formResults.driver.dayPeriods')} value={formatSurveyValue(answers.B2)} />
+          <Field label={t('admin.formResults.driver.deliveryExperience')} value={answers.S4 as string | undefined} />
+          <Field label={t('admin.formResults.driver.seniority')} value={answers.S5 as string | undefined} />
+          <Field label={t('admin.formResults.driver.meeting')} value={formatSurveyValue(profile.reunion)} />
+          <Field label={t('admin.formResults.driver.training')} value={answers.H5 as string | undefined} />
+          <Field label={t('admin.formResults.driver.intent')} value={answers.Z1 as string | undefined} />
+          <Field label={t('admin.formResults.driver.responseId')} value={item.survey_response_id} />
+        </Section>
+      )}
+
       <Section title={t('admin.formResults.sections.contact')}>
         <Field label={t('admin.formResults.driver.fullName')} value={item.full_name} />
         <Field label={t('admin.formResults.driver.email')} value={item.email} />
@@ -296,20 +329,24 @@ function DriverResultCard({ item, onNotify, notifying }: { item: DriverWaitlistL
 function ResultList<T extends { id: number }>({
   isLoading,
   isFetching,
+  isError,
   items,
   pageData,
   itemLabel,
   emptyText,
   onChange,
+  onRetry,
   renderItem,
 }: {
   isLoading: boolean
   isFetching: boolean
+  isError: boolean
   items: T[]
   pageData?: PageData<T>
   itemLabel: string
   emptyText: string
   onChange: (page: number) => void
+  onRetry: () => void
   renderItem: (item: T) => ReactNode
 }) {
   const { t } = useTranslation()
@@ -318,6 +355,17 @@ function ResultList<T extends { id: number }>({
     return (
       <div className="p-10 text-center text-warm-500 text-body-s">
         {t('admin.common.loading')}
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="p-10 text-center text-body-s">
+        <p className="text-airmess-red">{t('admin.formResults.loadError')}</p>
+        <AdminButton className="mt-4" size="sm" variant="secondary" onClick={onRetry}>
+          {t('admin.formResults.retry')}
+        </AdminButton>
       </div>
     )
   }
@@ -466,23 +514,27 @@ export default function AdminFormResultsPage() {
           <ResultList
             isLoading={merchantsQuery.isLoading}
             isFetching={merchantsQuery.isFetching}
+            isError={merchantsQuery.isError}
             items={merchantsQuery.data?.data ?? []}
             pageData={merchantsQuery.data}
             itemLabel={t('admin.formResults.itemLabelMerchant')}
             emptyText={t('admin.formResults.emptyResults')}
             onChange={setPage}
-                renderItem={(item) => <MerchantResultCard item={item} notifying={notifyMutation.isPending && notifyMutation.variables?.id === item.id} onNotify={() => notifyMutation.mutate({ kind: 'merchants', id: item.id })} />}
+            onRetry={() => void merchantsQuery.refetch()}
+            renderItem={(item) => <MerchantResultCard item={item} notifying={notifyMutation.isPending && notifyMutation.variables?.id === item.id} onNotify={() => notifyMutation.mutate({ kind: 'merchants', id: item.id })} />}
           />
         ) : (
           <ResultList
             isLoading={driversQuery.isLoading}
             isFetching={driversQuery.isFetching}
+            isError={driversQuery.isError}
             items={driversQuery.data?.data ?? []}
             pageData={driversQuery.data}
             itemLabel={t('admin.formResults.itemLabelDriver')}
             emptyText={t('admin.formResults.emptyResults')}
             onChange={setPage}
-                renderItem={(item) => <DriverResultCard item={item} notifying={notifyMutation.isPending && notifyMutation.variables?.id === item.id} onNotify={() => notifyMutation.mutate({ kind: 'drivers', id: item.id })} />}
+            onRetry={() => void driversQuery.refetch()}
+            renderItem={(item) => <DriverResultCard item={item} notifying={notifyMutation.isPending && notifyMutation.variables?.id === item.id} onNotify={() => notifyMutation.mutate({ kind: 'drivers', id: item.id })} />}
           />
         )}
       </div>

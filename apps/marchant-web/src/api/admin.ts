@@ -511,28 +511,46 @@ export async function fetchMerchantWaitlists(
 
 export type DriverWaitlistListItem = {
   id: number
-  full_name: string
-  email: string
-  whatsapp: string
-  vehicle_type: string
-  zone: string
+  survey_response_id: string | null
+  survey_version: string | null
+  survey_mode: string | null
+  survey_payload: {
+    answers?: Record<string, unknown>
+    completed?: boolean
+    stop_reason?: string | null
+    src?: string | null
+  } | null
+  account_payload: {
+    operateur?: string
+    consentements?: Record<string, unknown>
+    profil_operationnel?: Record<string, unknown>
+  } | null
+  survey_started_at: string | null
+  survey_submitted_at: string | null
+  survey_duration_seconds: number | null
+  survey_suspect: boolean
+  full_name: string | null
+  email: string | null
+  whatsapp: string | null
+  vehicle_type: string | null
+  zone: string | null
   zone_other: string | null
-  experience: string
-  availability: string
+  experience: string | null
+  availability: string | null
   source: string | null
   source_other: string | null
-  platforms_used: string[]
+  platforms_used: string[] | null
   platforms_used_other: string | null
-  weekly_deliveries: string
-  weekly_income: string
-  problems: string[]
+  weekly_deliveries: string | null
+  weekly_income: string | null
+  problems: string[] | null
   problems_other: string | null
-  worst_experience: string
-  expected_payment_model: string
-  expected_weekly_income: string
-  mobile_money_trust: string
-  interest_level: number
-  launch_availability: string
+  worst_experience: string | null
+  expected_payment_model: string | null
+  expected_weekly_income: string | null
+  mobile_money_trust: string | null
+  interest_level: number | null
+  launch_availability: string | null
   status: string
   notified_at: string | null
   created_at: string
