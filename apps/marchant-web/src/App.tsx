@@ -27,8 +27,6 @@ import RegisterSuccessPage from './pages/RegisterSuccessPage'
 import DriverRegisterPage from './pages/DriverRegisterPage'
 import DriverRegisterSuccessPage from './pages/DriverRegisterSuccessPage'
 import MarchantFromDriverPage from './pages/MarchantFromDriverPage'
-import LandingCommercantsPage from './pages/LandingCommercantsPage'
-import LandingDriversPage from './pages/LandingDriversPage'
 import AdminDriversPage from './pages/admin/AdminDriversPage'
 import AdminDriverDetailPage from './pages/admin/AdminDriverDetailPage'
 import AdminIncidentsPage from './pages/admin/AdminIncidentsPage'
@@ -53,6 +51,7 @@ import PwaReloadPrompt from './components/PwaReloadPrompt'
 import AnalyticsTracker from './components/AnalyticsTracker'
 import api from './api/client'
 import { useAuthStore } from './stores/authStore'
+import { MARKETING_SITE_URL } from './lib/constants'
 
 
 const queryClient = new QueryClient({
@@ -97,6 +96,13 @@ function AuthProfileRefresher() {
   return null
 }
 
+function LandingRedirect({ to }: { to: string }) {
+  useEffect(() => {
+    window.location.replace(to)
+  }, [to])
+  return null
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -118,10 +124,10 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/legal/terms" element={<TermsPage />} />
           <Route path="/legal/privacy" element={<PrivacyPage />} />
-          <Route path="/landing/merchants" element={<Navigate to="/landing/merchants_learn" replace />} />
-          <Route path="/landing/merchants_learn" element={<LandingCommercantsPage />} />
-          <Route path="/landing/drivers" element={<Navigate to="/landing/drivers_learn" replace />} />
-          <Route path="/landing/drivers_learn" element={<LandingDriversPage />} />
+          <Route path="/landing/merchants" element={<LandingRedirect to={`${MARKETING_SITE_URL}/landing/merchants_learn`} />} />
+          <Route path="/landing/merchants_learn" element={<LandingRedirect to={`${MARKETING_SITE_URL}/landing/merchants_learn`} />} />
+          <Route path="/landing/drivers" element={<LandingRedirect to={`${MARKETING_SITE_URL}/landing/drivers_learn`} />} />
+          <Route path="/landing/drivers_learn" element={<LandingRedirect to={`${MARKETING_SITE_URL}/landing/drivers_learn`} />} />
           <Route path="/t/:token" element={<TrackingPage />} />  {/* PUBLIQUE POUR LE TRACKING */}
           <Route path="/billing/return" element={<BillingReturnPage />} />  {/* PUBLIQUE : retour Fedapay, le webhook fait foi */}
 

@@ -5,6 +5,11 @@
 export const DRIVER_APP_URL =
   'https://play.google.com/store/apps/details?id=com.anonymous.driver&pcampaignid=web_share'
 /**
+ * Site vitrine AirMess — source de vérité des pages publiques (landing).
+ * Les routes /landing/* de l'app redirigent vers ce domaine.
+ */
+export const MARKETING_SITE_URL = 'https://airmess-logistics.com'
+/**
  * Marques de véhicules les plus courantes au Bénin, par type — suggestions
  * du champ "Marque" (datalist) du formulaire driver. Saisie libre possible :
  * le candidat peut taper une marque absente de la liste.

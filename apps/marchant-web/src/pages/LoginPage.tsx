@@ -12,6 +12,7 @@ import AuthSupportFooter from '../components/AuthSupportFooter'
 import InstallPwaButton from '../components/InstallPwaButton'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
 import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
+import { MARKETING_SITE_URL } from '../lib/constants'
 
 export default function LoginPage() {
   const { t } = useTranslation()
@@ -63,7 +64,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Logo */}
           <Link to="/" className="inline-block mb-12">
-            <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
+            <img src={wordmark} alt="AirMess" className="h-8 w-auto" />
           </Link>
 
           {/* Headline */}
@@ -78,8 +79,8 @@ export default function LoginPage() {
           <InstallPwaButton variant="light" className="mb-8" />
 
           {/* CTA enquête commerçants : inscription liste d'attente + bonus 500 F */}
-          <Link
-            to="/landing/merchants_learn"
+          <a
+            href={`${MARKETING_SITE_URL}/landing/merchants_learn`}
             className="mb-8 flex items-center justify-between gap-3 rounded-xl border border-airmess-yellow/40 bg-airmess-yellow/10 px-4 py-3 text-left transition-colors hover:bg-airmess-yellow/20"
           >
             <span>
@@ -91,7 +92,7 @@ export default function LoginPage() {
               </span>
             </span>
             <ArrowRightIcon size={18} className="shrink-0 text-ink" />
-          </Link>
+          </a>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
