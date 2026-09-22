@@ -29,7 +29,7 @@ const PADDING_CLASSES: Record<NonNullable<Props['padding']>, string> = {
 }
 
 /**
- * Card Air Mess — conteneur unifié pour tableaux, formulaires, sections.
+ * Card AirMess — conteneur unifié pour tableaux, formulaires, sections.
  *
  * Variants :
  * - `default` : la plus courante (listes, info secondaire)

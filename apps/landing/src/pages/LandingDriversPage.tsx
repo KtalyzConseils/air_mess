@@ -341,8 +341,8 @@ function Header() {
   return (
     <header className="bg-airmess-dark text-cream">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <a href="/" aria-label="Airmess — retour à l'accueil" className="inline-flex">
-          <img src={wordmarkWhite} alt="Airmess" className="h-8 w-auto" />
+        <a href="/" aria-label="AirMess — retour à l'accueil" className="inline-flex">
+          <img src={wordmarkWhite} alt="AirMess" className="h-8 w-auto" />
         </a>
         <a
           href="https://app.airmess-logistics.com/login"
@@ -396,7 +396,7 @@ function Hero({ onStart }: { onStart: () => void }) {
           </Button>
           <a href="/">
             <Button type="button" variant="secondary" size="lg">
-              Découvrir Air Mess
+              Découvrir AirMess
             </Button>
           </a>
         </div>
@@ -748,7 +748,7 @@ function Footer() {
     <footer className="border-t border-warm-200 py-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 text-center sm:px-6 lg:px-8">
         <p className="text-caption text-warm-500">
-          © {new Date().getFullYear()} Air Mess — Enquête livreurs et ouverture de compte en liste d’attente.
+          © {new Date().getFullYear()} AirMess — Enquête livreurs et ouverture de compte en liste d’attente.
         </p>
         <p className="text-caption text-warm-400">
           Cette page ne constitue ni une offre d’emploi ni une promesse d’embauche. Un compte en

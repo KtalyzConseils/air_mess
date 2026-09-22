@@ -233,7 +233,7 @@ export async function fetchDriver(
 }
 
 /**
- * Bascule le type d'un livreur : freelance ↔ salarié Air Mess.
+ * Bascule le type d'un livreur : freelance ↔ salarié AirMess.
  * Réservé au super-admin (403 sinon). Trace automatique dans support_notes.
  */
 export async function updateDriverKind(

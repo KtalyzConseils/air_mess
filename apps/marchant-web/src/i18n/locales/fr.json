@@ -73,7 +73,7 @@
     "eyebrow": "Accès non autorisé",
     "title": "Vous n'avez pas accès à cet espace",
     "body": "Votre compte ne permet pas d'ouvrir cette page. Revenez à votre espace pour continuer.",
-    "driverHint": "Le tableau de bord livreur est disponible dans l'application mobile Air Mess Livreur.",
+    "driverHint": "Le tableau de bord livreur est disponible dans l'application mobile AirMess Livreur.",
     "home": "Revenir à mon espace",
     "logout": "Se déconnecter"
   },
@@ -95,7 +95,7 @@
     "whatsappAction": "WhatsApp",
     "whatsappHint": "Message pré-rempli avec ton compte",
     "emailAction": "Envoyer un email",
-    "emailSubject": "Demande support Air Mess",
+    "emailSubject": "Demande support AirMess",
     "messagePrefix": "Bonjour, j'ai besoin d'aide.",
     "noContactYet": "Les contacts support ne sont pas encore configurés. Réessayez plus tard.",
     "needHelpLink": "Besoin d'aide ?"
@@ -110,7 +110,7 @@
     "terms": {
       "title": "Conditions",
       "titleHighlight": "générales",
-      "subtitle": "Les règles qui encadrent votre utilisation d'Air Mess.",
+      "subtitle": "Les règles qui encadrent votre utilisation d'AirMess.",
       "lastUpdated": "Dernière mise à jour : 1er août 2026 — version 2 (projet)."
     },
     "privacy": {
@@ -120,7 +120,7 @@
       "lastUpdated": "Dernière mise à jour : 1er août 2026 — version 2 (projet)."
     },
     "checkbox": {
-      "label": "J'ai lu et j'accepte les <terms>conditions générales</terms> et la <privacy>politique de confidentialité</privacy> d'Air Mess.",
+      "label": "J'ai lu et j'accepte les <terms>conditions générales</terms> et la <privacy>politique de confidentialité</privacy> d'AirMess.",
       "requiredError": "Vous devez accepter les conditions pour continuer."
     },
     "acceptModal": {
@@ -128,7 +128,7 @@
       "body": "Depuis votre inscription, nous avons formalisé nos règles d'utilisation et notre politique de confidentialité. Prenez un moment pour les lire.",
       "readTerms": "Lire les conditions générales",
       "readPrivacy": "Lire la politique de confidentialité",
-      "checkbox": "J'ai lu et j'accepte les conditions générales et la politique de confidentialité d'Air Mess.",
+      "checkbox": "J'ai lu et j'accepte les conditions générales et la politique de confidentialité d'AirMess.",
       "submit": "J'accepte et continue",
       "errorGeneric": "Impossible d'enregistrer votre acceptation. Vérifiez votre connexion et réessayez."
     }
@@ -147,7 +147,7 @@
       },
       "assign": {
         "title": "Un livreur prend en charge",
-        "body": "Air Mess trouve automatiquement un livreur près de vous. Un code de pickup et un code de livraison vous sont remis — à donner uniquement aux bonnes personnes."
+        "body": "AirMess trouve automatiquement un livreur près de vous. Un code de pickup et un code de livraison vous sont remis — à donner uniquement aux bonnes personnes."
       },
       "track": {
         "title": "Suivez en temps réel",
@@ -169,7 +169,7 @@
       },
       "declared": {
         "title": "Valeur du colis (indemnisation)",
-        "body": "En cas de vol ou perte, c'est le montant qu'Air Mess vous rembourse. Soyez honnête : sous-déclarer réduit votre indemnisation."
+        "body": "En cas de vol ou perte, c'est le montant qu'AirMess vous rembourse. Soyez honnête : sous-déclarer réduit votre indemnisation."
       }
     }
   },
@@ -190,7 +190,7 @@
       "merchantSurveyButton": "Commerçant ? Répondre à notre enquête",
       "merchantSurveyCta": "Inscription automatique à la liste d’attente + 500 F CFA offerts",
       "loginError": "Erreur de connexion.",
-      "copyright": "© 2026 KTALYZ — Air Mess",
+      "copyright": "© 2026 KTALYZ — AirMess",
       "sidePanel": {
         "eyebrow": "Marchands",
         "taglineStart": "Pilotez vos",
@@ -205,12 +205,12 @@
       }
     },
     "registerSuccess": {
-      "eyebrow": "Bienvenue chez Airmess",
+      "eyebrow": "Bienvenue chez AirMess",
       "title": "Votre dossier a bien été soumis !",
       "message": "Votre compte marchand a été créé et votre dossier est maintenant en cours de validation. Nous vous informerons par e-mail dès qu’il sera validé.",
       "giftLabel": "Votre cadeau de bienvenue",
       "giftBody": "500 FCFA seront automatiquement déduits de votre première course.",
-      "individualEyebrow": "Bienvenue chez Airmess",
+      "individualEyebrow": "Bienvenue chez AirMess",
       "individualTitle": "Votre bon de bienvenue est prêt !",
       "individualMessage": "Votre compte particulier est actif immédiatement. Pour bien commencer, vous bénéficiez d’une réduction sur votre première course.",
       "understood": "OK, j’ai compris",
@@ -219,7 +219,7 @@
     },
     "register": {
       "title": "Créer un compte.",
-      "subtitle": "Rejoignez Air Mess en moins de 2 minutes.",
+      "subtitle": "Rejoignez AirMess en moins de 2 minutes.",
       "typeIndividual": "👤 Particulier",
       "typeMarchant": "🏢 Entreprise",
       "firstName": "Prénom",
@@ -269,7 +269,7 @@
       "driverLink": "Inscrivez-vous ici",
       "registerError": "Erreur lors de l'inscription.",
       "sidePanel": {
-        "eyebrow": "Rejoignez Air Mess",
+        "eyebrow": "Rejoignez AirMess",
         "taglineStart": "Faites livrer vos",
         "taglineHighlight": "commandes",
         "taglineEnd": "partout dans Cotonou.",
@@ -289,7 +289,7 @@
       "emailPlaceholder": "vous@exemple.com",
       "submit": "Envoyer le lien",
       "submittedTitle": "📧 Demande prise en compte",
-      "submittedBody": "Si cet email est associé à un compte Air Mess, un lien de réinitialisation y a été envoyé. Vérifiez votre boîte (et vos spams).",
+      "submittedBody": "Si cet email est associé à un compte AirMess, un lien de réinitialisation y a été envoyé. Vérifiez votre boîte (et vos spams).",
       "submittedExpiry": "Le lien expire dans 60 minutes.",
       "requestError": "Erreur lors de la demande."
     },
@@ -436,7 +436,7 @@
       "fraudModalNotePlaceholder": "Contexte, sources, preuves (appels marchand, GPS coupé, tentatives infructueuses…)",
       "fraudModalAckLabel": "Je comprends que cette action est irréversible.",
       "fraudModalSubmit": "Bannir et rembourser",
-      "waMessage": "Bonjour, votre colis Air Mess (réf. {{reference}}) arrive.\nSuivez la livraison ici : {{url}}\n🔑 Code de livraison à remettre au livreur : {{code}}",
+      "waMessage": "Bonjour, votre colis AirMess (réf. {{reference}}) arrive.\nSuivez la livraison ici : {{url}}\n🔑 Code de livraison à remettre au livreur : {{code}}",
       "durationMinutes": "{{count}} min",
       "durationHoursMinutes": "{{hours}} h {{minutes}}"
     },
@@ -541,7 +541,7 @@
       "paidByOptionRecipientHint": "Le livreur collecte les frais à la remise.",
       "paidByPreviewFeeOnly": "Le livreur collectera {{fee}} FCFA de frais de livraison chez votre destinataire.",
       "paidByPreviewCombined": "Le livreur collectera {{product}} + {{fee}} = {{total}} FCFA à la remise (produit + livraison).",
-      "paidByAirmessNote": "Le livreur collectera les frais à la remise. Les indépendants peuvent prendre la course si leur caution couvre la part AirMess ; sinon l'ops la confiera à un livreur AirMess.",
+      "paidByAirMessNote": "Le livreur collectera les frais à la remise. Les indépendants peuvent prendre la course si leur caution couvre la part AirMess ; sinon l'ops la confiera à un livreur AirMess.",
       "collectionSectionTitle": "Encaissement à la livraison",
       "collectionSectionDesc": "Le livreur doit-il encaisser de l'argent ?",
       "collectionYes": "Oui, le livreur doit encaisser",
@@ -932,7 +932,7 @@
     "titleStart": "Vos",
     "titleHighlight": "alertes",
     "titleEnd": ".",
-    "subtitle": "Toutes les notifications de votre activité Air Mess.",
+    "subtitle": "Toutes les notifications de votre activité AirMess.",
     "empty": "Aucune notification pour l'instant.",
     "center": "🔔 Centre de notifications",
     "unreadSuffixOne": "notification non lue.",
@@ -977,7 +977,7 @@
     "titleHighlight": "informations",
     "titleEnd": ".",
     "subtitle": "Modifiez vos informations de contact et votre mot de passe.",
-    "subtitleAccount": "Informations de votre compte Air Mess.",
+    "subtitleAccount": "Informations de votre compte AirMess.",
     "loadingProfile": "Chargement du profil…",
     "account": "Compte",
     "fullName": "Nom complet",
@@ -994,7 +994,7 @@
     "pendingValidation": "⏳ En attente",
     "displayPrefs": "Préférences d'affichage",
     "navStyle": "Style de navigation",
-    "navStyleHint": "Choisis comment tu veux naviguer dans Air Mess.",
+    "navStyleHint": "Choisis comment tu veux naviguer dans AirMess.",
     "navStyleHintSaved": "Réglage sauvegardé sur cet appareil.",
     "navHorizontal": "Barre horizontale",
     "navHorizontalDesc": "Classique. Le menu est toujours visible en haut de l'écran.",
@@ -1023,10 +1023,10 @@
     "titleStart": "Ton accès",
     "titleHighlight": "API",
     "titleEnd": ".",
-    "subtitle": "Utilise Air Mess depuis ton propre site : ton e-commerce crée une commande, la course part chez nous. Choisis un plan, génère une clé, lance ta première requête.",
+    "subtitle": "Utilise AirMess depuis ton propre site : ton e-commerce crée une commande, la course part chez nous. Choisis un plan, génère une clé, lance ta première requête.",
     "docsLink": "Doc API",
     "emptyLabel": "Aucune app pour l'instant",
-    "emptyTitle": "Air Mess depuis ton système",
+    "emptyTitle": "AirMess depuis ton système",
     "emptyBody": "Crée une app pour obtenir une clé, choisis ton plan (15, 100 ou 500 requêtes / mois) et lance des courses depuis ton propre back-office.",
     "createFirst": "Créer ma première app",
     "myApps": "Mes apps",
@@ -1157,7 +1157,7 @@
     "yourPackagePrefix": "Votre",
     "yourPackageHighlight": "colis",
     "history": "Historique",
-    "footerAutoRefresh": "© 2026 Air Mess · Auto-rafraîchissement toutes les 10 secondes",
+    "footerAutoRefresh": "© 2026 AirMess · Auto-rafraîchissement toutes les 10 secondes",
     "locale": "fr-FR",
     "dispute": {
       "recordedTitle": "Contestation enregistrée",
@@ -1190,7 +1190,7 @@
   },
   "driverRegister": {
     "title": "Devenir livreur.",
-    "subtitle": "Rejoignez le réseau Air Mess et gagnez de l'argent en livrant.",
+    "subtitle": "Rejoignez le réseau AirMess et gagnez de l'argent en livrant.",
     "identity": "Identité",
     "birthDate": "Date de naissance",
     "gender": "Genre",
@@ -1226,7 +1226,7 @@
     "sideTaglineLine1": "Sillonnez la ville.",
     "sideTaglineLine2Prefix": "Soyez payé pour",
     "sideTaglineLine2Highlight": "ça",
-    "sideSubtext": "Rejoignez le réseau de livreurs Air Mess et commencez à accepter des courses dès l'activation de votre compte.",
+    "sideSubtext": "Rejoignez le réseau de livreurs AirMess et commencez à accepter des courses dès l'activation de votre compte.",
     "benefit1Title": "Choisissez vos horaires",
     "benefit1Body": "Vous travaillez quand vous voulez. Vous vous mettez en pause ou hors-ligne en un tap.",
     "benefit2Title": "Rémunération transparente",
@@ -1234,7 +1234,7 @@
     "benefit3Title": "Paiements hebdomadaires",
     "benefit3Body": "Vos gains sont versés sur votre Mobile Money chaque semaine. Retrait à la demande.",
     "sideFooter": "Livraison express à Cotonou",
-    "formTitle": "Devenir livreur Air Mess.",
+    "formTitle": "Devenir livreur AirMess.",
     "formSubtitle": "Remplissez ce formulaire — nos équipes vérifient vos documents sous 48h.",
     "sectionIdentityTitle": "Votre identité",
     "sectionIdentityDesc": "Tel que sur votre pièce d'identité.",
@@ -1307,7 +1307,7 @@
       "back": "Retour"
     },
     "appBanner": {
-      "title": "L'app Air Mess Livreur",
+      "title": "L'app AirMess Livreur",
       "body": "Une fois ton dossier validé, télécharge l'application pour recevoir tes courses en temps réel sur ton téléphone.",
       "cta": "Télécharger sur Google Play",
       "note": "Disponible sur Android · À utiliser après validation"
@@ -1359,7 +1359,7 @@
       "nextStepBodyBefore": "Vous recevrez un",
       "nextStepBodyBold": "email sous 48h",
       "nextStepBodyMid": "dès que votre compte sera activé. Vous pourrez alors vous connecter à",
-      "nextStepBodyBrand": "Air Mess Livreur",
+      "nextStepBodyBrand": "AirMess Livreur",
       "nextStepBodyEnd": "et commencer à accepter des courses.",
       "meanwhileEyebrow": "En attendant",
       "meanwhileBody": "Téléchargez l'application livreur pour être prêt dès l'activation :",
@@ -1375,12 +1375,12 @@
       "channelError": "Enregistrement impossible. Vous recevrez la réponse par email.",
       "backToLogin": "Retour à la connexion",
       "home": "Accueil →",
-      "copyright": "© 2026 KTALYZ — Air Mess"
+      "copyright": "© 2026 KTALYZ — AirMess"
     }
   },
   "pwa": {
     "install": "Installer l'app",
-    "updateAvailable": "Une nouvelle version d'Air Mess est disponible.",
+    "updateAvailable": "Une nouvelle version d'AirMess est disponible.",
     "reload": "Recharger",
     "later": "Plus tard"
   },
@@ -1440,7 +1440,7 @@
       "titleStart": "Vue",
       "titleHighlight": "d'ensemble",
       "titleEnd": ".",
-      "subtitle": "Chiffres clés en direct de l'activité Air Mess.",
+      "subtitle": "Chiffres clés en direct de l'activité AirMess.",
       "activeCourses": "Courses actives",
       "todayCourses": "Aujourd'hui",
       "monthDelivered": "Livrées (mois)",
@@ -1536,7 +1536,7 @@
       "reassignChipCollection": "Encaissement {{amount}} FCFA",
       "reassignFilterKind": "Type de livreur",
       "reassignFilterKindAll": "Tous types",
-      "reassignKindAirmess": "Airmess",
+      "reassignKindAirMess": "AirMess",
       "reassignKindIndependent": "Indépendant",
       "reassignFilterVehicle": "Type de véhicule",
       "reassignFilterVehicleAll": "Tous véhicules",
@@ -1549,8 +1549,8 @@
       "reassignEligible": "Éligible pour cette course",
       "reassignReasonNotAvailable": "Livreur indisponible",
       "reassignReasonNotActive": "Compte inactif",
-      "reassignReasonPremiumAirmess": "Course premium — Airmess uniquement",
-      "reassignReasonRecipientAirmess": "Caution insuffisante pour couvrir la part AirMess : {{balance}} FCFA disponible, {{amount}} FCFA requis",
+      "reassignReasonPremiumAirMess": "Course premium — AirMess uniquement",
+      "reassignReasonRecipientAirMess": "Caution insuffisante pour couvrir la part AirMess : {{balance}} FCFA disponible, {{amount}} FCFA requis",
       "reassignReasonCollectionCaution": "Caution insuffisante : {{balance}} FCFA disponible, {{amount}} FCFA à encaisser",
       "reassignForceLabel": "Forcer l'assignation malgré les règles",
       "reassignForceHelp": "Réservé aux cas exceptionnels (urgence ops). Le livreur pourra prendre la course même s'il n'aurait pas dû la voir dans son app."
@@ -1828,15 +1828,15 @@
     "drivers": {
       "title": "Livreurs",
       "subtitle": "Tous les livreurs du réseau. Validation, activation, gestion.",
-      "kindAirmessBadge": "Airmess",
-      "kindAirmessTooltip": "Livreur salarié Air Mess — bypass caution, prend les courses aux frais du client et high value.",
+      "kindAirMessBadge": "AirMess",
+      "kindAirMessTooltip": "Livreur salarié AirMess — bypass caution, prend les courses aux frais du client et high value.",
       "kindSectionTitle": "Type de livreur",
       "kindDescIndependent": "Livreur indépendant — dépose une caution, prend une commission sur chaque course, ne voit pas les courses aux frais du destinataire.",
-      "kindDescAirmess": "Livreur salarié Air Mess — bypass caution, seul autorisé sur les courses aux frais du destinataire et high value. Rémunération salaire + prime hors app.",
-      "kindPromoteCta": "Passer en Airmess",
+      "kindDescAirMess": "Livreur salarié AirMess — bypass caution, seul autorisé sur les courses aux frais du destinataire et high value. Rémunération salaire + prime hors app.",
+      "kindPromoteCta": "Passer en AirMess",
       "kindDemoteCta": "Repasser indépendant",
       "kindSuperOnly": "Seul un super-admin peut modifier ce paramètre.",
-      "kindConfirmPromote": "Confirmer le passage en livreur salarié Air Mess ? Ce livreur bypassera la caution et pourra prendre les courses high value.",
+      "kindConfirmPromote": "Confirmer le passage en livreur salarié AirMess ? Ce livreur bypassera la caution et pourra prendre les courses high value.",
       "kindConfirmDemote": "Confirmer le retour en livreur indépendant ? Il perdra l'accès aux courses aux frais du client et devra à nouveau respecter le seuil caution.",
       "kindErrorGeneric": "Impossible de modifier le type de livreur.",
       "limitsSectionTitle": "Plafonds retrait personnalisés",
@@ -2444,7 +2444,7 @@
     },
     "waitlist": {
       "title": "Comptes en attente de validation",
-      "subtitle": "Validez les comptes déjà inscrits et prévenez leurs utilisateurs lorsque Airmess est disponible.",
+      "subtitle": "Validez les comptes déjà inscrits et prévenez leurs utilisateurs lorsque AirMess est disponible.",
       "validateSelection": "Valider la sélection ({{count}})",
       "searchPlaceholder": "Nom, entreprise, e-mail ou téléphone",
       "waiting": "En attente",

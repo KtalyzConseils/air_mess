@@ -71,9 +71,9 @@ export default function AdminSidebar({ mobileOpen, onMobileClose }: AdminSidebar
             onClick={onMobileClose}
           >
             {collapsed ? (
-              <img src={mark} alt="Air Mess" className="h-7 w-7" />
+              <img src={mark} alt="AirMess" className="h-7 w-7" />
             ) : (
-              <img src={wordmark} alt="Air Mess" className="h-6 w-auto" />
+              <img src={wordmark} alt="AirMess" className="h-6 w-auto" />
             )}
           </Link>
 

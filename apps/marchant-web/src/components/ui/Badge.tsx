@@ -57,7 +57,7 @@ const SIZE_CLASSES: Record<Size, string> = {
 }
 
 /**
- * Badge Air Mess — pastille d'état (course, statut wallet, etc.)
+ * Badge AirMess — pastille d'état (course, statut wallet, etc.)
  *
  * `variant="live"` ajoute un point rouge qui pulse — réservé aux courses
  * actuellement en cours pour signaler l'état temps réel.

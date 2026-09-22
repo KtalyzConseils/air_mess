@@ -14,7 +14,7 @@ interface Props extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 /**
- * Input Air Mess — champ texte unifié avec label + helper + error.
+ * Input AirMess — champ texte unifié avec label + helper + error.
  *
  * - Label toujours au-dessus (jamais flottant — moins lisible pour les seniors)
  * - Focus ring jaune brand cohérent avec le reste

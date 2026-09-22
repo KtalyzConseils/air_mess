@@ -336,7 +336,7 @@ export default function AdminCoursesPage() {
                 className="w-full"
               >
                 <option value="">{t('admin.courses.reassignFilterKindAll')}</option>
-                <option value="airmess">{t('admin.courses.reassignKindAirmess')}</option>
+                <option value="airmess">{t('admin.courses.reassignKindAirMess')}</option>
                 <option value="independent">{t('admin.courses.reassignKindIndependent')}</option>
               </AdminSelect>
             </div>
@@ -529,7 +529,7 @@ function DriverEligibilityRow({
   const balance = driver.wallet?.balance ?? 0
   const kindLabel =
     driver.kind === 'airmess'
-      ? t('admin.courses.reassignKindAirmess')
+      ? t('admin.courses.reassignKindAirMess')
       : t('admin.courses.reassignKindIndependent')
 
   return (
@@ -609,9 +609,9 @@ function formatReason(
     case 'not_active':
       return t('admin.courses.reassignReasonNotActive')
     case 'premium_needs_airmess':
-      return t('admin.courses.reassignReasonPremiumAirmess')
+      return t('admin.courses.reassignReasonPremiumAirMess')
     case 'recipient_paid_platform_share_exceeds_wallet':
-      return t('admin.courses.reassignReasonRecipientAirmess')
+      return t('admin.courses.reassignReasonRecipientAirMess')
     case 'collection_exceeds_wallet':
       return t('admin.courses.reassignReasonCollectionCaution', {
         amount: Number(reason.context?.amount ?? 0).toLocaleString('fr-FR'),

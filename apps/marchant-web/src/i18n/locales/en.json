@@ -73,7 +73,7 @@
     "eyebrow": "Access denied",
     "title": "You don't have access to this area",
     "body": "Your account is not allowed to open this page. Go back to your workspace to continue.",
-    "driverHint": "The driver dashboard is available in the Air Mess Livreur mobile app.",
+    "driverHint": "The driver dashboard is available in the AirMess Livreur mobile app.",
     "home": "Back to my workspace",
     "logout": "Log out"
   },
@@ -95,7 +95,7 @@
     "whatsappAction": "WhatsApp",
     "whatsappHint": "Message pre-filled with your account",
     "emailAction": "Send an email",
-    "emailSubject": "Air Mess support request",
+    "emailSubject": "AirMess support request",
     "messagePrefix": "Hi, I need help.",
     "noContactYet": "Support contacts aren't configured yet. Try again later.",
     "needHelpLink": "Need help?"
@@ -110,7 +110,7 @@
     "terms": {
       "title": "Terms of",
       "titleHighlight": "service",
-      "subtitle": "The rules that frame your use of Air Mess.",
+      "subtitle": "The rules that frame your use of AirMess.",
       "lastUpdated": "Last updated: August 1, 2026 — version 2 (draft)."
     },
     "privacy": {
@@ -120,7 +120,7 @@
       "lastUpdated": "Last updated: August 1, 2026 — version 2 (draft)."
     },
     "checkbox": {
-      "label": "I have read and I accept the <terms>Terms of service</terms> and the <privacy>Privacy policy</privacy> of Air Mess.",
+      "label": "I have read and I accept the <terms>Terms of service</terms> and the <privacy>Privacy policy</privacy> of AirMess.",
       "requiredError": "You must accept the terms to continue."
     },
     "acceptModal": {
@@ -128,7 +128,7 @@
       "body": "Since you signed up, we have formalised our terms of service and privacy policy. Take a moment to review them.",
       "readTerms": "Read the Terms of service",
       "readPrivacy": "Read the Privacy policy",
-      "checkbox": "I have read and I accept Air Mess's Terms of service and Privacy policy.",
+      "checkbox": "I have read and I accept AirMess's Terms of service and Privacy policy.",
       "submit": "Accept and continue",
       "errorGeneric": "We couldn't record your acceptance. Please check your connection and retry."
     }
@@ -147,7 +147,7 @@
       },
       "assign": {
         "title": "A driver takes it on",
-        "body": "Air Mess automatically finds a nearby driver. You get a pickup code and a delivery code — give each one only to the right person."
+        "body": "AirMess automatically finds a nearby driver. You get a pickup code and a delivery code — give each one only to the right person."
       },
       "track": {
         "title": "Track in real time",
@@ -169,7 +169,7 @@
       },
       "declared": {
         "title": "Package value (insurance)",
-        "body": "If the package is lost or stolen, this is the amount Air Mess refunds you. Be honest: under-declaring means less refund."
+        "body": "If the package is lost or stolen, this is the amount AirMess refunds you. Be honest: under-declaring means less refund."
       }
     }
   },
@@ -190,7 +190,7 @@
       "merchantSurveyButton": "Merchant? Take our survey",
       "merchantSurveyCta": "Automatic waitlist signup + 500 F CFA bonus",
       "loginError": "Sign-in failed.",
-      "copyright": "© 2026 KTALYZ — Air Mess",
+      "copyright": "© 2026 KTALYZ — AirMess",
       "sidePanel": {
         "eyebrow": "Merchants",
         "taglineStart": "Track your",
@@ -205,12 +205,12 @@
       }
     },
     "registerSuccess": {
-      "eyebrow": "Welcome to Airmess",
+      "eyebrow": "Welcome to AirMess",
       "title": "Your application has been submitted!",
       "message": "Your merchant account has been created and your application is now being reviewed. We will notify you by email as soon as it is approved.",
       "giftLabel": "Votre cadeau de bienvenue",
       "giftBody": "500 FCFA seront automatiquement déduits de votre première course.",
-      "individualEyebrow": "Bienvenue chez Airmess",
+      "individualEyebrow": "Bienvenue chez AirMess",
       "individualTitle": "Votre bon de bienvenue est prêt !",
       "individualMessage": "Votre compte particulier est actif immédiatement. Pour bien commencer, vous bénéficiez d’une réduction sur votre première course.",
       "understood": "OK, j’ai compris",
@@ -219,7 +219,7 @@
     },
     "register": {
       "title": "Create an account.",
-      "subtitle": "Join Air Mess in under 2 minutes.",
+      "subtitle": "Join AirMess in under 2 minutes.",
       "typeIndividual": "👤 Individual",
       "typeMarchant": "🏢 Business",
       "firstName": "First name",
@@ -269,7 +269,7 @@
       "driverLink": "Register here",
       "registerError": "Registration failed.",
       "sidePanel": {
-        "eyebrow": "Join Air Mess",
+        "eyebrow": "Join AirMess",
         "taglineStart": "Get your",
         "taglineHighlight": "orders",
         "taglineEnd": "delivered across Cotonou.",
@@ -289,7 +289,7 @@
       "emailPlaceholder": "you@example.com",
       "submit": "Send the link",
       "submittedTitle": "📧 Request received",
-      "submittedBody": "If this email is linked to an Air Mess account, a reset link has been sent. Check your inbox (and spam folder).",
+      "submittedBody": "If this email is linked to an AirMess account, a reset link has been sent. Check your inbox (and spam folder).",
       "submittedExpiry": "The link expires in 60 minutes.",
       "requestError": "Request failed."
     },
@@ -436,7 +436,7 @@
       "fraudModalNotePlaceholder": "Context, sources, evidence (merchant calls, GPS cut off, failed attempts…)",
       "fraudModalAckLabel": "I understand this action is irreversible.",
       "fraudModalSubmit": "Ban and refund",
-      "waMessage": "Hello, your Air Mess package (ref. {{reference}}) is on its way.\nTrack the delivery here: {{url}}\n🔑 Delivery code to give the driver: {{code}}",
+      "waMessage": "Hello, your AirMess package (ref. {{reference}}) is on its way.\nTrack the delivery here: {{url}}\n🔑 Delivery code to give the driver: {{code}}",
       "durationMinutes": "{{count}} min",
       "durationHoursMinutes": "{{hours}} h {{minutes}}"
     },
@@ -541,7 +541,7 @@
       "paidByOptionRecipientHint": "The courier collects the fee at drop-off.",
       "paidByPreviewFeeOnly": "The courier will collect {{fee}} FCFA in delivery fees from your recipient.",
       "paidByPreviewCombined": "The courier will collect {{product}} + {{fee}} = {{total}} FCFA at drop-off (product + delivery).",
-      "paidByAirmessNote": "The courier will collect the delivery fee at drop-off. Independent couriers can take this course if their deposit covers the AirMess share; otherwise ops will assign it to an AirMess courier.",
+      "paidByAirMessNote": "The courier will collect the delivery fee at drop-off. Independent couriers can take this course if their deposit covers the AirMess share; otherwise ops will assign it to an AirMess courier.",
       "collectionSectionTitle": "Collection on delivery",
       "collectionSectionDesc": "Does the courier need to collect money?",
       "collectionYes": "Yes, the courier must collect",
@@ -932,7 +932,7 @@
     "titleStart": "Your",
     "titleHighlight": "alerts",
     "titleEnd": ".",
-    "subtitle": "All notifications from your Air Mess activity.",
+    "subtitle": "All notifications from your AirMess activity.",
     "empty": "No notifications yet.",
     "center": "🔔 Notification center",
     "unreadSuffixOne": "unread notification.",
@@ -977,7 +977,7 @@
     "titleHighlight": "details",
     "titleEnd": ".",
     "subtitle": "Update your contact information and password.",
-    "subtitleAccount": "Details of your Air Mess account.",
+    "subtitleAccount": "Details of your AirMess account.",
     "loadingProfile": "Loading profile…",
     "account": "Account",
     "fullName": "Full name",
@@ -994,7 +994,7 @@
     "pendingValidation": "⏳ Pending",
     "displayPrefs": "Display preferences",
     "navStyle": "Navigation style",
-    "navStyleHint": "Choose how you want to navigate Air Mess.",
+    "navStyleHint": "Choose how you want to navigate AirMess.",
     "navStyleHintSaved": "Setting saved on this device.",
     "navHorizontal": "Horizontal bar",
     "navHorizontalDesc": "Classic. The menu stays visible at the top of the screen.",
@@ -1023,10 +1023,10 @@
     "titleStart": "Your",
     "titleHighlight": "API",
     "titleEnd": "access.",
-    "subtitle": "Use Air Mess from your own site: your e-commerce creates an order, the delivery runs on our side. Pick a plan, generate a key, fire your first request.",
+    "subtitle": "Use AirMess from your own site: your e-commerce creates an order, the delivery runs on our side. Pick a plan, generate a key, fire your first request.",
     "docsLink": "API docs",
     "emptyLabel": "No app yet",
-    "emptyTitle": "Air Mess from your system",
+    "emptyTitle": "AirMess from your system",
     "emptyBody": "Create an app to get a key, choose your plan (15, 100 or 500 requests/month) and launch deliveries from your own back-office.",
     "createFirst": "Create my first app",
     "myApps": "My apps",
@@ -1157,7 +1157,7 @@
     "yourPackagePrefix": "Your",
     "yourPackageHighlight": "package",
     "history": "History",
-    "footerAutoRefresh": "© 2026 Air Mess · Auto-refresh every 10 seconds",
+    "footerAutoRefresh": "© 2026 AirMess · Auto-refresh every 10 seconds",
     "locale": "en-US",
     "dispute": {
       "recordedTitle": "Dispute recorded",
@@ -1190,7 +1190,7 @@
   },
   "driverRegister": {
     "title": "Become a courier.",
-    "subtitle": "Join the Air Mess network and earn money by delivering.",
+    "subtitle": "Join the AirMess network and earn money by delivering.",
     "identity": "Identity",
     "birthDate": "Date of birth",
     "gender": "Gender",
@@ -1226,7 +1226,7 @@
     "sideTaglineLine1": "Ride across the city.",
     "sideTaglineLine2Prefix": "Get paid for",
     "sideTaglineLine2Highlight": "it",
-    "sideSubtext": "Join the Air Mess courier network and start accepting deliveries as soon as your account is activated.",
+    "sideSubtext": "Join the AirMess courier network and start accepting deliveries as soon as your account is activated.",
     "benefit1Title": "Choose your hours",
     "benefit1Body": "Work whenever you want. Pause or go offline with a tap.",
     "benefit2Title": "Transparent earnings",
@@ -1234,7 +1234,7 @@
     "benefit3Title": "Weekly payouts",
     "benefit3Body": "Your earnings are paid to your Mobile Money every week. Withdraw on demand.",
     "sideFooter": "Express delivery in Cotonou",
-    "formTitle": "Become an Air Mess courier.",
+    "formTitle": "Become an AirMess courier.",
     "formSubtitle": "Fill in this form — our team reviews your documents within 48h.",
     "sectionIdentityTitle": "Your identity",
     "sectionIdentityDesc": "As shown on your ID.",
@@ -1307,7 +1307,7 @@
       "back": "Back"
     },
     "appBanner": {
-      "title": "The Air Mess Courier app",
+      "title": "The AirMess Courier app",
       "body": "Once your file is approved, download the app to receive your deliveries on your phone in real time.",
       "cta": "Get it on Google Play",
       "note": "Available on Android · Use after approval"
@@ -1359,7 +1359,7 @@
       "nextStepBodyBefore": "You will receive an",
       "nextStepBodyBold": "email within 48h",
       "nextStepBodyMid": "as soon as your account is activated. You will then be able to sign in to",
-      "nextStepBodyBrand": "Air Mess Courier",
+      "nextStepBodyBrand": "AirMess Courier",
       "nextStepBodyEnd": "and start accepting deliveries.",
       "meanwhileEyebrow": "In the meantime",
       "meanwhileBody": "Download the courier app to be ready as soon as you are activated:",
@@ -1375,12 +1375,12 @@
       "channelError": "Could not save. You will receive the answer by email.",
       "backToLogin": "Back to sign-in",
       "home": "Home →",
-      "copyright": "© 2026 KTALYZ — Air Mess"
+      "copyright": "© 2026 KTALYZ — AirMess"
     }
   },
   "pwa": {
     "install": "Install the app",
-    "updateAvailable": "A new version of Air Mess is available.",
+    "updateAvailable": "A new version of AirMess is available.",
     "reload": "Reload",
     "later": "Later"
   },
@@ -1440,7 +1440,7 @@
       "titleStart": "",
       "titleHighlight": "Overview",
       "titleEnd": ".",
-      "subtitle": "Live key figures for Air Mess activity.",
+      "subtitle": "Live key figures for AirMess activity.",
       "activeCourses": "Active deliveries",
       "todayCourses": "Today",
       "monthDelivered": "Delivered (month)",
@@ -1536,7 +1536,7 @@
       "reassignChipCollection": "Cash on delivery {{amount}} FCFA",
       "reassignFilterKind": "Courier type",
       "reassignFilterKindAll": "All types",
-      "reassignKindAirmess": "Airmess",
+      "reassignKindAirMess": "AirMess",
       "reassignKindIndependent": "Independent",
       "reassignFilterVehicle": "Vehicle type",
       "reassignFilterVehicleAll": "All vehicles",
@@ -1549,8 +1549,8 @@
       "reassignEligible": "Eligible for this course",
       "reassignReasonNotAvailable": "Courier unavailable",
       "reassignReasonNotActive": "Inactive account",
-      "reassignReasonPremiumAirmess": "Premium course — Airmess only",
-      "reassignReasonRecipientAirmess": "Insufficient deposit to cover the AirMess share: {{balance}} FCFA available, {{amount}} FCFA required",
+      "reassignReasonPremiumAirMess": "Premium course — AirMess only",
+      "reassignReasonRecipientAirMess": "Insufficient deposit to cover the AirMess share: {{balance}} FCFA available, {{amount}} FCFA required",
       "reassignReasonCollectionCaution": "Insufficient deposit: {{balance}} FCFA available, {{amount}} FCFA to collect",
       "reassignForceLabel": "Force assignment despite the rules",
       "reassignForceHelp": "Reserved for exceptional cases (ops emergency). The courier will get the course even though they wouldn't have seen it in their app."
@@ -1828,15 +1828,15 @@
     "drivers": {
       "title": "Couriers",
       "subtitle": "All couriers on the network. Validation, activation, management.",
-      "kindAirmessBadge": "Airmess",
-      "kindAirmessTooltip": "Air Mess employee — no caution required, handles cash-on-delivery and high-value courses.",
+      "kindAirMessBadge": "AirMess",
+      "kindAirMessTooltip": "AirMess employee — no caution required, handles cash-on-delivery and high-value courses.",
       "kindSectionTitle": "Courier type",
       "kindDescIndependent": "Independent courier — deposits a caution, takes a commission on each course, doesn't see cash-on-delivery courses.",
-      "kindDescAirmess": "Air Mess employee — no caution required, exclusive on cash-on-delivery and high-value courses. Paid by salary + bonus outside the app.",
-      "kindPromoteCta": "Promote to Airmess",
+      "kindDescAirMess": "AirMess employee — no caution required, exclusive on cash-on-delivery and high-value courses. Paid by salary + bonus outside the app.",
+      "kindPromoteCta": "Promote to AirMess",
       "kindDemoteCta": "Revert to independent",
       "kindSuperOnly": "Only a super-admin can change this setting.",
-      "kindConfirmPromote": "Confirm switching this courier to an Air Mess employee? They will bypass caution and get access to high-value courses.",
+      "kindConfirmPromote": "Confirm switching this courier to an AirMess employee? They will bypass caution and get access to high-value courses.",
       "kindConfirmDemote": "Confirm reverting to an independent courier? They will lose access to cash-on-delivery courses and must respect the caution threshold again.",
       "kindErrorGeneric": "Unable to change courier type.",
       "limitsSectionTitle": "Custom withdrawal caps",
@@ -2444,7 +2444,7 @@
     },
     "waitlist": {
       "title": "Accounts awaiting approval",
-      "subtitle": "Approve already registered accounts and notify their users when Airmess becomes available.",
+      "subtitle": "Approve already registered accounts and notify their users when AirMess becomes available.",
       "validateSelection": "Validate selection ({{count}})",
       "searchPlaceholder": "Name, company, email or phone",
       "waiting": "Waiting",

@@ -52,7 +52,7 @@ export default function ResetPasswordPage() {
     <div className="min-h-[100svh] bg-cream flex flex-col">
       <div className="px-4 py-4 sm:p-6 md:p-8 flex items-center justify-between gap-3">
         <Link to="/" className="inline-block min-w-0">
-          <img src={wordmark} alt="Air Mess" className="h-7 sm:h-8 w-auto max-w-[160px] sm:max-w-none" />
+          <img src={wordmark} alt="AirMess" className="h-7 sm:h-8 w-auto max-w-[160px] sm:max-w-none" />
         </Link>
         <LanguageToggle variant="light" />
       </div>

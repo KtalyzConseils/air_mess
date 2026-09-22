@@ -14,8 +14,8 @@ export default function RegisterSuccessPage() {
   return (
     <main className="min-h-screen bg-cream px-6 py-8 flex flex-col">
       <div className="flex items-center justify-between">
-        <Link to={user ? '/dashboard' : '/login'} aria-label="Airmess">
-          <img src={wordmark} alt="Airmess" className="h-8 w-auto" />
+        <Link to={user ? '/dashboard' : '/login'} aria-label="AirMess">
+          <img src={wordmark} alt="AirMess" className="h-8 w-auto" />
         </Link>
         <LanguageToggle variant="light" />
       </div>

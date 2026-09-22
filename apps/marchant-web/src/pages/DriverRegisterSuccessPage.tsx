@@ -50,7 +50,7 @@ export default function DriverRegisterSuccessPage() {
       {/* Header minimal */}
       <div className="p-6 md:p-8">
         <Link to="/" className="inline-block">
-          <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
+          <img src={wordmark} alt="AirMess" className="h-8 w-auto" />
         </Link>
       </div>
 

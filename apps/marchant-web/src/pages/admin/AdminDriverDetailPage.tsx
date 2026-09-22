@@ -216,7 +216,7 @@ export default function AdminDriverDetailPage() {
               />
               {data.driver.kind === 'airmess' && (
                 <Badge
-                  label={t('admin.drivers.kindAirmessBadge')}
+                  label={t('admin.drivers.kindAirMessBadge')}
                   classes="bg-airmess-yellow/20 text-ink border border-airmess-yellow/50"
                 />
               )}
@@ -279,7 +279,7 @@ export default function AdminDriverDetailPage() {
               </section>
             )}
 
-            {/* Section : Type de livreur (indépendant ↔ salarié Airmess) — super-admin only */}
+            {/* Section : Type de livreur (indépendant ↔ salarié AirMess) — super-admin only */}
             <section className="bg-off-white border border-warm-200 rounded-lg px-5 py-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
@@ -288,7 +288,7 @@ export default function AdminDriverDetailPage() {
                   </h2>
                   <p className="text-caption text-warm-600 max-w-lg">
                     {data.driver.kind === 'airmess'
-                      ? t('admin.drivers.kindDescAirmess')
+                      ? t('admin.drivers.kindDescAirMess')
                       : t('admin.drivers.kindDescIndependent')}
                   </p>
                 </div>

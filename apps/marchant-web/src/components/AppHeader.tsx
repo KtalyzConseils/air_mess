@@ -96,7 +96,7 @@ export default function AppHeader() {
           className="h-9 w-auto md:h-10 shrink-0"
         />
         <div className="min-w-0 hidden sm:block">
-          <h1 className="text-body font-bold leading-none truncate">Air Mess</h1>
+          <h1 className="text-body font-bold leading-none truncate">AirMess</h1>
           <p className="text-caption text-warm-400 truncate mt-0.5">{t('header.workspace')}</p>
         </div>
       </Link>

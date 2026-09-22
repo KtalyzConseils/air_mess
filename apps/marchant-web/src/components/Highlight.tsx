@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 /**
- * Composant signature Air Mess — surligneur "Stabilo" jaune (ou rouge) sous un mot.
+ * Composant signature AirMess — surligneur "Stabilo" jaune (ou rouge) sous un mot.
  *
  * Règles d'usage (à respecter pour préserver l'impact) :
  * - Max 1 mot par phrase, jamais 2 mots côte à côte

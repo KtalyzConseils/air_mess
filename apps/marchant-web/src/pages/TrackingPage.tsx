@@ -80,7 +80,7 @@ export default function TrackingPage() {
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <img src={mark} alt="" aria-hidden className="h-9 w-auto md:h-10" />
           <div className="min-w-0">
-            <h1 className="text-body font-bold leading-none">Air Mess</h1>
+            <h1 className="text-body font-bold leading-none">AirMess</h1>
             <p className="text-caption text-warm-400 mt-0.5">{t('tracking.headerSubtitle')}</p>
           </div>
         </div>

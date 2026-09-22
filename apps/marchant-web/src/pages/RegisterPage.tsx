@@ -187,7 +187,7 @@ export default function RegisterPage() {
         <div className="w-full max-w-md">
           {/* Logo */}
           <Link to="/" className="inline-block mb-10">
-            <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
+            <img src={wordmark} alt="AirMess" className="h-8 w-auto" />
           </Link>
 
           <h1 className="text-h1 text-ink mb-2">{t('auth.register.title')}</h1>

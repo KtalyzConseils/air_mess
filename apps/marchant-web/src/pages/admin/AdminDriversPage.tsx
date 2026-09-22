@@ -202,9 +202,9 @@ export default function AdminDriversPage() {
                             {d.kind === 'airmess' && (
                               <span
                                 className="text-[10px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-airmess-yellow/20 text-ink border border-airmess-yellow/50"
-                                title={t('admin.drivers.kindAirmessTooltip')}
+                                title={t('admin.drivers.kindAirMessTooltip')}
                               >
-                                {t('admin.drivers.kindAirmessBadge')}
+                                {t('admin.drivers.kindAirMessBadge')}
                               </span>
                             )}
                           </div>

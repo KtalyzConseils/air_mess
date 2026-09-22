@@ -94,7 +94,7 @@ const SOURCE_OPTIONS = [
   'WhatsApp',
   'Publicité Facebook',
   'Publicité Google',
-  'Site web Airmess',
+  'Site web AirMess',
   'LinkedIn',
   'Autre',
 ]
@@ -717,7 +717,7 @@ export default function LandingCommercantsPage() {
   const shareOnWhatsApp = () => {
     if (!response) return
     const text =
-      `Je viens de rejoindre la liste d'attente Airmess et j'ai débloqué 500 F CFA ` +
+      `Je viens de rejoindre la liste d'attente AirMess et j'ai débloqué 500 F CFA ` +
       `sur ma première commande. Mon code bonus : ${response.waitlist.bonus_code}. ` +
       `https://airmess-logistics.com/landing/merchants_learn`
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
@@ -1123,10 +1123,10 @@ function Header() {
   return (
     <header className="bg-airmess-dark text-cream">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <a href="/" aria-label="Airmess — retour à l'accueil" className="inline-flex">
+        <a href="/" aria-label="AirMess — retour à l'accueil" className="inline-flex">
           <img
             src={wordmarkWhite}
-            alt="Airmess"
+            alt="AirMess"
             className="h-8 w-auto"
           />
         </a>
@@ -1172,7 +1172,7 @@ function Hero() {
           </Button>
           <a href="/">
             <Button type="button" variant="secondary" size="lg">
-              Découvrir Air Mess
+              Découvrir AirMess
             </Button>
           </a>
         </div>
@@ -1187,7 +1187,7 @@ function Hero() {
         <div className="overflow-hidden rounded-2xl border border-warm-200 shadow-md">
           <img
             src="/images/recrutement-commercants.png"
-            alt="Illustration de la solution de livraison Airmess pour commerçants"
+            alt="Illustration de la solution de livraison AirMess pour commerçants"
             className="h-auto w-full object-contain"
           />
         </div>
@@ -1308,7 +1308,7 @@ function Footer() {
     <footer className="border-t border-warm-200 py-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 text-center sm:px-6 lg:px-8">
         <p className="text-caption text-warm-500">
-          © {new Date().getFullYear()} Air Mess — Étude de marché auprès des commerçants.
+          © {new Date().getFullYear()} AirMess — Étude de marché auprès des commerçants.
         </p>
         <p className="text-caption text-warm-400">
           Le bonus de 500 F CFA sera applicable sur la première commande de livraison après

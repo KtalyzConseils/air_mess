@@ -194,7 +194,7 @@ export default function DriverRegisterPage() {
 
         <div className="relative max-w-md">
           <Link to="/" className="inline-block mb-12">
-            <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
+            <img src={wordmark} alt="AirMess" className="h-8 w-auto" />
           </Link>
 
           <h2 className="text-display-2 leading-tight mb-3">

@@ -278,8 +278,8 @@ function PageShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-cream flex flex-col">
       <header className="border-b border-warm-200 bg-off-white">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-2">
-          <img src={mark} alt="Air Mess" className="h-7 w-7" />
-          <span className="text-body font-semibold text-ink">Air Mess</span>
+          <img src={mark} alt="AirMess" className="h-7 w-7" />
+          <span className="text-body font-semibold text-ink">AirMess</span>
         </div>
       </header>
       <main className="flex-1 px-4 py-8 md:py-12">{children}</main>
