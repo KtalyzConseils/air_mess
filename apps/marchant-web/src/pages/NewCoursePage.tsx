@@ -28,6 +28,7 @@ import OriginDrawer from '../components/course/OriginDrawer'
 import CoursePriceRecap from '../components/course/CoursePriceRecap'
 import MobileCoursePriceBar from '../components/course/MobileCoursePriceBar'
 import DualPinMap from '../components/course/DualPinMap'
+import PlaceSearchInput from '../components/course/PlaceSearchInput'
 import MissingFieldsBanner, {
   type MissingField,
 } from '../components/course/MissingFieldsBanner'
@@ -1107,13 +1108,6 @@ export default function NewCoursePage() {
                         <p className="text-body font-extrabold text-ink">{t('courses.new.senderSectionTitle')}</p>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Field label={t('courses.new.originDrawer.streetLabel')} required className="md:col-span-2">
-                          <input
-                            {...register('origin_street')}
-                            className={inputClass}
-                            placeholder={t('courses.new.originDrawer.streetPlaceholder')}
-                          />
-                        </Field>
                         <Field label={t('courses.new.senderName')} required>
                           <input
                             {...register('origin_name', { required: t('courses.new.required') })}
@@ -1125,6 +1119,17 @@ export default function NewCoursePage() {
                             {...register('origin_phone', { required: t('courses.new.required') })}
                             className={inputClass}
                             placeholder="+229..."
+                          />
+                        </Field>
+                        <Field label={t('courses.new.originDrawer.streetLabel')} required className="md:col-span-2">
+                          <input type="hidden" {...register('origin_street')} />
+                          <PlaceSearchInput
+                            activePinLabel={t('courses.new.dualMap.aLabel')}
+                            placeholder={t('courses.new.originDrawer.streetPlaceholder')}
+                            onSelect={(place) => {
+                              setLocationTarget('A')
+                              fillOriginFromPlace(place)
+                            }}
                           />
                         </Field>
                       </div>
@@ -1145,13 +1150,6 @@ export default function NewCoursePage() {
                       <div className="flex justify-end">
                         <AddressPicker onSelect={fillDestinationFromAddress} />
                       </div>
-                      <Field label={t('courses.new.destinationFieldLabel')} required>
-                        <input
-                          {...register('destination_street')}
-                          className={inputClass}
-                          placeholder={t('courses.new.destinationSearchPlaceholder')}
-                        />
-                      </Field>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Field label={t('courses.new.recipientNameLabel')} required>
                           <input
@@ -1165,6 +1163,17 @@ export default function NewCoursePage() {
                             {...register('destination_phone', { required: t('courses.new.required') })}
                             className={inputClass}
                             placeholder="+229..."
+                          />
+                        </Field>
+                        <Field label={t('courses.new.destinationFieldLabel')} required className="md:col-span-2">
+                          <input type="hidden" {...register('destination_street')} />
+                          <PlaceSearchInput
+                            activePinLabel={t('courses.new.dualMap.bLabel')}
+                            placeholder={t('courses.new.destinationSearchPlaceholder')}
+                            onSelect={(place) => {
+                              setLocationTarget('B')
+                              fillDestinationFromPlace(place)
+                            }}
                           />
                         </Field>
                       </div>
@@ -1221,6 +1230,8 @@ export default function NewCoursePage() {
                       setOpenTripPanel(pin === 'A' ? 'origin' : 'destination')
                     }}
                     height="260px"
+                    showPinToggle={false}
+                    showSearch={false}
                     onOriginChange={fillOriginFromMapClick}
                     onOriginPlaceSelect={fillOriginFromPlace}
                     onDestChange={fillDestinationFromMapClick}
