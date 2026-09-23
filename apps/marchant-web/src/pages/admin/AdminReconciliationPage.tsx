@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
@@ -145,8 +146,11 @@ export default function AdminReconciliationPage() {
       setRepairMessage(response.message)
       window.alert(response.message)
       await refetch()
-    } catch (error: any) {
-      const msg = error?.response?.data?.message ?? t('admin.reconciliation.sandboxApplyError')
+    } catch (error: unknown) {
+      const msg = error instanceof AxiosError
+        ? (error.response?.data as { message?: string } | undefined)?.message
+          ?? t('admin.reconciliation.sandboxApplyError')
+        : t('admin.reconciliation.sandboxApplyError')
       setRepairMessage(msg)
       window.alert(msg)
     } finally {
@@ -317,7 +321,7 @@ export default function AdminReconciliationPage() {
 
           {isGuideOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4" role="presentation" onMouseDown={() => setIsGuideOpen(false)}>
-              <div className="w-full max-w-2xl rounded-md bg-white shadow-xl p-5 md:p-6" role="dialog" aria-modal="true" aria-labelledby="sandbox-guide-title" onMouseDown={(event) => event.stopPropagation()}>
+              <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-md bg-white shadow-xl p-5 md:p-6" role="dialog" aria-modal="true" aria-labelledby="sandbox-guide-title" onMouseDown={(event) => event.stopPropagation()}>
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <h2 id="sandbox-guide-title" className="text-h3 text-ink">{t('admin.reconciliation.sandboxGuideTitle')}</h2>
@@ -325,11 +329,37 @@ export default function AdminReconciliationPage() {
                   </div>
                   <button type="button" className="text-warm-600 hover:text-ink text-xl" aria-label={t('common.close')} onClick={() => setIsGuideOpen(false)}>×</button>
                 </div>
-                <ol className="list-decimal pl-5 text-body-s text-warm-700 space-y-2">
-                  <li>{t('admin.reconciliation.sandboxGuide1')}</li>
-                  <li>{t('admin.reconciliation.sandboxGuide2')}</li>
-                  <li>{t('admin.reconciliation.sandboxGuide3')}</li>
-                </ol>
+                <div className="space-y-4 text-body-s text-warm-700">
+                  <section>
+                    <h3 className="font-bold text-ink mb-2">{t('admin.reconciliation.sandboxGuideEffectsTitle')}</h3>
+                    <ul className="list-disc pl-5 space-y-1.5">
+                      <li><strong>{t('admin.reconciliation.sandboxGuideCourseLabel')}</strong> {t('admin.reconciliation.sandboxGuideCourse')}</li>
+                      <li><strong>{t('admin.reconciliation.sandboxGuideClientLabel')}</strong> {t('admin.reconciliation.sandboxGuideClient')}</li>
+                      <li><strong>{t('admin.reconciliation.sandboxGuideDriverLabel')}</strong> {t('admin.reconciliation.sandboxGuideDriver')}</li>
+                      <li><strong>{t('admin.reconciliation.sandboxGuidePlatformLabel')}</strong> {t('admin.reconciliation.sandboxGuidePlatform')}</li>
+                    </ul>
+                  </section>
+                  <section className="rounded-md border border-warm-300 bg-cream p-4">
+                    <h3 className="font-bold text-ink mb-2">{t('admin.reconciliation.sandboxGuideExcludedTitle')}</h3>
+                    <p>{t('admin.reconciliation.sandboxGuideExcludedIntro')}</p>
+                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedCourses')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedPayments')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedReservations')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedWithdrawals')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedSpent')}</li>
+                    </ul>
+                    <p className="mt-2 font-semibold text-airmess-red">{t('admin.reconciliation.sandboxGuideManualReview')}</p>
+                  </section>
+                  <section>
+                    <h3 className="font-bold text-ink mb-2">{t('admin.reconciliation.sandboxGuideSecurityTitle')}</h3>
+                    <ol className="list-decimal pl-5 space-y-1.5">
+                      <li>{t('admin.reconciliation.sandboxGuide1')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuide2')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuide3')}</li>
+                    </ol>
+                  </section>
+                </div>
                 <div className="mt-5 rounded-md border border-warm-300 bg-warning-bg p-4">
                   <p className="text-body-s font-bold text-ink mb-2">{t('admin.reconciliation.sandboxExampleTitle')}</p>
                   <p className="text-body-s text-warm-700">{t('admin.reconciliation.sandboxExample')}</p>
