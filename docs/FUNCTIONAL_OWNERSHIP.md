@@ -45,3 +45,4 @@ Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `Firs
 - Le `snapshot_token` représente l'état financier courant. Un plan préparé sur un dump ou avec un ancien jeton est obsolète.
 - Les boutons de remise à zéro d'un wallet ne constituent pas un outil d'assainissement global.
 - Toute correction future doit conserver les historiques, utiliser des écritures compensatoires et revérifier le jeton dans la transaction d'application.
+- L'application exige une préparation serveur et un code temporaire à usage unique lié au super-admin, au snapshot et au hash du plan. Une simple confirmation navigateur ne suffit pas.

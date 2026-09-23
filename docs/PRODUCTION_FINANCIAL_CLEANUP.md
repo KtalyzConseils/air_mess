@@ -29,6 +29,8 @@ Produire, sans écrire en base, un tableau avant/après par utilisateur, wallet 
 
 La section `sandbox_audit` de `/admin/reconciliation` est recalculée sur la base courante et fournit un `snapshot_token`. Un export ancien ou une copie locale ne doit jamais autoriser une correction. Toute future commande d'application devra recalculer ce jeton dans sa transaction et refuser l'opération s'il diffère du jeton explicitement validé.
 
+L'application depuis l'admin suit obligatoirement deux étapes : préparation du plan, puis confirmation par un code temporaire à six chiffres lié au super-admin, au jeton et au contenu exact du plan. Le code expire après dix minutes et est invalidé après cinq erreurs ou après son utilisation. Les montants réservés par une course active sont différés et ne doivent jamais être débités par la compensation.
+
 ## Phase 3 — correction validée
 
 Après sauvegarde et validation humaine de la liste exacte : exécuter une transaction atomique, créer des écritures compensatoires portant un identifiant d'opération, conserver les historiques sources, puis générer un rapport final. Aucun script ne doit sélectionner des lignes uniquement par date ou par montant.

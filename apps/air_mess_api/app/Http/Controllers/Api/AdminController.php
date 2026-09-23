@@ -23,6 +23,8 @@ use App\Models\WalletWithdrawRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use App\Services\NotificationService;
 use App\Services\DriverWalletService;
@@ -3702,6 +3704,44 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ]);
     }
 
+    public function prepareSandboxRepair(
+        Request $request,
+        \App\Services\SandboxFinancialAuditService $auditService,
+    ): JsonResponse {
+        $admin = $request->user()->admin;
+        if (! $admin || ! $admin->isSuper()) {
+            return response()->json(['message' => 'Seul le super-admin peut préparer une correction sandbox.'], 403);
+        }
+
+        $data = $request->validate([
+            'snapshot_token' => ['required', 'string', 'min:10'],
+        ]);
+
+        try {
+            $plan = $auditService->previewRepair($data['snapshot_token']);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'snapshot_token' => $data['snapshot_token'],
+            ], 409);
+        }
+
+        $code = (string) random_int(100000, 999999);
+        Cache::put("sandbox-repair:confirmation:{$admin->id}", [
+            'code_hash' => Hash::make($code),
+            'snapshot_token' => $data['snapshot_token'],
+            'plan_hash' => hash('sha256', json_encode($plan, JSON_THROW_ON_ERROR)),
+            'attempts' => 0,
+        ], now()->addMinutes(10));
+
+        return response()->json([
+            'message' => 'Plan préparé. Saisissez le code dans les 10 minutes pour confirmer.',
+            'confirmation_code' => $code,
+            'expires_in_seconds' => 600,
+            'plan' => $plan,
+        ]);
+    }
+
     public function sandboxRepair(
         Request $request,
         \App\Services\SandboxFinancialAuditService $auditService,
@@ -3713,19 +3753,34 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         $data = $request->validate([
             'snapshot_token' => ['required', 'string', 'min:10'],
+            'confirmation_code' => ['required', 'digits:6'],
         ]);
+        $key = "sandbox-repair:confirmation:{$admin->id}";
+        $challenge = Cache::get($key);
+        if (! is_array($challenge) || ! hash_equals((string) ($challenge['snapshot_token'] ?? ''), $data['snapshot_token'])) {
+            return response()->json(['message' => 'Code absent, expiré ou lié à un autre audit. Préparez de nouveau la correction.'], 422);
+        }
+        if (! Hash::check($data['confirmation_code'], (string) $challenge['code_hash'])) {
+            $challenge['attempts'] = (int) ($challenge['attempts'] ?? 0) + 1;
+            if ($challenge['attempts'] >= 5) Cache::forget($key);
+            else Cache::put($key, $challenge, now()->addMinutes(10));
+            return response()->json(['message' => 'Code de confirmation incorrect.'], 422);
+        }
 
         try {
+            $currentPlan = $auditService->previewRepair($data['snapshot_token']);
+            if (! hash_equals((string) $challenge['plan_hash'], hash('sha256', json_encode($currentPlan, JSON_THROW_ON_ERROR)))) {
+                throw new \RuntimeException('Le plan a changé depuis sa préparation. Relancez un audit.');
+            }
+            Cache::forget($key);
             $result = $auditService->applyRepair($data['snapshot_token'], (int) $admin->id);
         } catch (\RuntimeException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'snapshot_token' => $data['snapshot_token'],
-            ], 409);
+            Cache::forget($key);
+            return response()->json(['message' => $e->getMessage(), 'snapshot_token' => $data['snapshot_token']], 409);
         }
 
         return response()->json([
-            'message' => $result['applied'] ? 'Correction sandbox appliquée.' : 'Aucune correction requisée.',
+            'message' => $result['applied'] ? 'Correction sandbox appliquée.' : 'Aucune correction requise.',
             'result' => $result,
         ]);
     }

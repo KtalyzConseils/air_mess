@@ -187,10 +187,65 @@ class SandboxFinancialAuditTest extends TestCase
 
         $token = app(SandboxFinancialAuditService::class)->audit()['snapshot_token'];
 
-        $response = $this->postJson('/api/admin/sandbox/repair', ['snapshot_token' => $token]);
+        $prepare = $this->postJson('/api/admin/sandbox/repair/prepare', ['snapshot_token' => $token]);
+        $prepare->assertOk()->assertJsonStructure(['confirmation_code', 'plan']);
+
+        $this->postJson('/api/admin/sandbox/repair', [
+            'snapshot_token' => $token,
+            'confirmation_code' => '000000',
+        ])->assertStatus(422);
+
+        $response = $this->postJson('/api/admin/sandbox/repair', [
+            'snapshot_token' => $token,
+            'confirmation_code' => $prepare->json('confirmation_code'),
+        ]);
 
         $response->assertOk();
         $this->assertSame(0, (int) DB::table('user_wallets')->where('user_id', $user->id)->value('balance'));
         $this->assertSame('sandbox_compensation', DB::table('wallet_adjustments')->where('wallet_owner_id', $user->id)->value('notes'));
+    }
+
+    public function test_repair_preserves_active_reservations(): void
+    {
+        $user = User::factory()->create();
+        $paymentId = DB::table('payments')->insertGetId([
+            'user_id' => $user->id,
+            'type' => Payment::TYPE_USER_WALLET_DEPOSIT,
+            'amount_fcfa' => 5000,
+            'currency' => 'XOF',
+            'status' => Payment::STATUS_PAID,
+            'provider' => Payment::PROVIDER_FEDAPAY,
+            'raw_response' => json_encode(['mode' => 'momo_test']),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('user_wallets')->insert([
+            'user_id' => $user->id,
+            'balance' => 5000,
+            'pending_reserved' => 1500,
+            'total_deposited' => 5000,
+            'total_spent' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('user_wallet_transactions')->insert([
+            'user_id' => $user->id,
+            'type' => 'deposit',
+            'amount_fcfa' => 5000,
+            'balance_after' => 5000,
+            'payment_id' => $paymentId,
+            'created_at' => now(),
+        ]);
+
+        $audit = app(SandboxFinancialAuditService::class)->audit();
+        $plan = app(SandboxFinancialAuditService::class)->previewRepair($audit['snapshot_token']);
+
+        $this->assertSame(-3500, $plan['user_adjustments'][0]['amount_fcfa']);
+        $this->assertSame(1500, $plan['user_adjustments'][0]['deferred_reserved_fcfa']);
+
+        app(SandboxFinancialAuditService::class)->applyRepair($audit['snapshot_token']);
+        $wallet = DB::table('user_wallets')->where('user_id', $user->id)->first();
+        $this->assertSame(1500, (int) $wallet->balance);
+        $this->assertSame(1500, (int) $wallet->pending_reserved);
     }
 }

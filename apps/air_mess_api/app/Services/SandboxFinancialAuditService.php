@@ -117,14 +117,21 @@ class SandboxFinancialAuditService
 
         $audit = $this->audit();
         $userAdjustments = collect($audit['user_wallets']['items'])
-            ->filter(fn (array $row) => (int) $row['sandbox_residual_upper_bound'] > 0)
-            ->map(fn (array $row) => [
-                'user_id' => (int) $row['user_id'],
-                'amount_fcfa' => -(int) $row['sandbox_residual_upper_bound'],
-                'reason' => 'sandbox_compensation',
-                'wallet_balance_before' => (int) $row['balance'],
-                'pending_reserved' => (int) $row['pending_reserved'],
-            ])
+            ->map(function (array $row): array {
+                $residual = (int) $row['sandbox_residual_upper_bound'];
+                $available = max(0, (int) $row['balance'] - (int) $row['pending_reserved']);
+                $amount = min($residual, $available);
+
+                return [
+                    'user_id' => (int) $row['user_id'],
+                    'amount_fcfa' => -$amount,
+                    'reason' => 'sandbox_compensation',
+                    'wallet_balance_before' => (int) $row['balance'],
+                    'pending_reserved' => (int) $row['pending_reserved'],
+                    'deferred_reserved_fcfa' => $residual - $amount,
+                ];
+            })
+            ->filter(fn (array $row) => $row['amount_fcfa'] < 0)
             ->values()
             ->all();
 
@@ -161,7 +168,6 @@ class SandboxFinancialAuditService
             throw new \RuntimeException('Snapshot token invalid or stale: the financial state has changed since the audit was prepared.');
         }
 
-        $audit = $this->audit();
         $plan = $this->previewRepair($snapshotToken);
 
         if (! $plan['correction_ready']) {
@@ -176,9 +182,9 @@ class SandboxFinancialAuditService
 
         $created = ['user' => [], 'driver' => []];
 
-        DB::transaction(function () use ($audit, $adminId, &$created) {
-            foreach ($audit['user_wallets']['items'] as $row) {
-                $amount = (int) $row['sandbox_residual_upper_bound'];
+        DB::transaction(function () use ($plan, $snapshotToken, $adminId, &$created) {
+            foreach ($plan['user_adjustments'] as $row) {
+                $amount = abs((int) $row['amount_fcfa']);
                 if ($amount <= 0) {
                     continue;
                 }
@@ -193,6 +199,14 @@ class SandboxFinancialAuditService
                     continue;
                 }
 
+                if ((int) $wallet->balance !== (int) $row['wallet_balance_before']
+                    || (int) $wallet->pending_reserved !== (int) $row['pending_reserved']) {
+                    throw new \RuntimeException('Wallet user modifié depuis la préparation. Relancez un audit.');
+                }
+                if ($amount > (int) $wallet->balance - (int) $wallet->pending_reserved) {
+                    throw new \RuntimeException('La compensation empiéterait sur une réservation active. Relancez un audit.');
+                }
+
                 $wallet->balance = max(0, (int) $wallet->balance - $amount);
                 $wallet->save();
 
@@ -204,7 +218,7 @@ class SandboxFinancialAuditService
                     'metadata' => [
                         'admin_id' => $adminId,
                         'reason' => 'sandbox_compensation',
-                        'snapshot_token' => $audit['snapshot_token'],
+                        'snapshot_token' => $snapshotToken,
                     ],
                     'created_at' => now(),
                 ]);
@@ -224,8 +238,8 @@ class SandboxFinancialAuditService
                 $created['user'][] = ['user_id' => $user->id, 'amount_fcfa' => -$amount];
             }
 
-            foreach ($audit['driver_wallets']['items'] as $row) {
-                $amount = (int) $row['exposed_residual_upper_bound'];
+            foreach ($plan['driver_adjustments'] as $row) {
+                $amount = abs((int) $row['amount_fcfa']);
                 if ($amount <= 0) {
                     continue;
                 }
@@ -240,6 +254,10 @@ class SandboxFinancialAuditService
                     continue;
                 }
 
+                if ((int) $wallet->balance !== (int) $row['wallet_balance_before']) {
+                    throw new \RuntimeException('Wallet livreur modifié depuis la préparation. Relancez un audit.');
+                }
+
                 $wallet->balance = max(0, (int) $wallet->balance - $amount);
                 $wallet->save();
 
@@ -251,7 +269,7 @@ class SandboxFinancialAuditService
                     'metadata' => [
                         'admin_id' => $adminId,
                         'reason' => 'sandbox_compensation',
-                        'snapshot_token' => $audit['snapshot_token'],
+                        'snapshot_token' => $snapshotToken,
                     ],
                     'created_at' => now(),
                 ]);

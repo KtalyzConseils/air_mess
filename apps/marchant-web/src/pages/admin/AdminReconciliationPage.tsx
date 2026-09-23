@@ -8,6 +8,7 @@ import { AlertTriangleIcon, CheckIcon } from '../../components/ui/icons'
 import {
   fetchReconciliation,
   downloadReconciliationCsv,
+  prepareSandboxRepair,
   applySandboxRepair,
   type ReconciliationFlow,
 } from '../../api/admin'
@@ -114,14 +115,33 @@ export default function AdminReconciliationPage() {
 
   async function handleApplySandboxRepair() {
     if (!data?.sandbox_audit?.snapshot_token) return
-    const confirmed = window.confirm(t('admin.reconciliation.sandboxApplyConfirm'))
-    if (!confirmed) return
 
     setIsRepairing(true)
     setRepairMessage(null)
 
     try {
-      const response = await applySandboxRepair(data.sandbox_audit.snapshot_token)
+      const preparation = await prepareSandboxRepair(data.sandbox_audit.snapshot_token)
+      if (!preparation.plan.correction_ready) {
+        window.alert(t('admin.reconciliation.sandboxNothingToApply'))
+        return
+      }
+      const userTotal = preparation.plan.user_adjustments.reduce((sum, row) => sum + Math.abs(row.amount_fcfa), 0)
+      const driverTotal = preparation.plan.driver_adjustments.reduce((sum, row) => sum + Math.abs(row.amount_fcfa), 0)
+      const userIds = preparation.plan.user_adjustments.map((row) => `#${row.user_id}`).join(', ') || '—'
+      const driverIds = preparation.plan.driver_adjustments.map((row) => `#${row.driver_id}`).join(', ') || '—'
+      const enteredCode = window.prompt(t('admin.reconciliation.sandboxCodePrompt', {
+        code: preparation.confirmation_code,
+        userTotal: formatFcfa(userTotal),
+        driverTotal: formatFcfa(driverTotal),
+        userIds,
+        driverIds,
+      }))
+      if (enteredCode === null) return
+      if (enteredCode.trim() !== preparation.confirmation_code) {
+        window.alert(t('admin.reconciliation.sandboxCodeMismatch'))
+        return
+      }
+      const response = await applySandboxRepair(data.sandbox_audit.snapshot_token, enteredCode.trim())
       setRepairMessage(response.message)
       window.alert(response.message)
       await refetch()

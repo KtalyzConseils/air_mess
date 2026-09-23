@@ -2297,14 +2297,17 @@
       "sandboxGuideButton": "Ouvrir le guide",
       "sandboxGuideIntro": "La correction ne supprime pas l'historique : elle ajoute une compensation tracée et vérifiée.",
       "sandboxGuide1": "Copiez le jeton ci-dessous et vérifiez qu'aucune autre mutation n'a touché le wallet depuis l'audit.",
-      "sandboxGuide2": "L'application de correction est réservée au super-admin et applique une compensation atomique en une seule transaction.",
+      "sandboxGuide2": "L'application est réservée au super-admin : le serveur prépare le plan puis exige un code temporaire à usage unique, valable 10 minutes.",
       "sandboxGuide3": "Si le jeton est obsolète, la correction est refusée et aucun solde n'est modifié.",
       "sandboxExampleTitle": "Exemple pratique",
       "sandboxExample": "Un utilisateur a 10 000 FCFA dans son wallet après un paiement sandbox qui ne devrait pas être comptabilisé. L'audit crée un snapshot. Après validation, le bouton applique une compensation de -10 000 FCFA, inscrit l'opération dans wallet_adjustments et le ledger, puis l'utilisateur revient à 0 FCFA. Si quelqu'un modifie le wallet entre-temps, le token devient obsolète : le bouton est refusé et aucun solde n'est touché.",
       "sandboxApplyButton": "Appliquer la correction",
       "sandboxApplyConfirm": "Confirmer la correction sandbox ? Elle appliquera une compensation atomique vérifiée sur le snapshot courant.",
       "sandboxApplyError": "La correction sandbox a été refusée.",
-      "sandboxApplying": "Application…"
+      "sandboxApplying": "Application…",
+      "sandboxNothingToApply": "Aucune compensation disponible ne peut être appliquée sur cet instantané.",
+      "sandboxCodePrompt": "PLAN À CONFIRMER\nWallets clients : {{userTotal}} — utilisateurs {{userIds}}\nWallets livreurs : {{driverTotal}} — livreurs {{driverIds}}\n\nCode temporaire (10 minutes) : {{code}}\n\nRecopiez exactement ce code pour appliquer la correction.",
+      "sandboxCodeMismatch": "Le code saisi ne correspond pas. Aucune correction n’a été appliquée."
     },
     "settings": {
       "title": "Paramètres globaux",

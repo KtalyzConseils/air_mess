@@ -463,6 +463,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         // Réconciliation comptable : dashboard financier + export CSV
         Route::get('/reconciliation',            [AdminController::class, 'reconciliation']);
         Route::get('/reconciliation/export.csv', [AdminController::class, 'reconciliationExportCsv']);
+        Route::post('/sandbox/repair/prepare', [AdminController::class, 'prepareSandboxRepair']);
         Route::post('/sandbox/repair', [AdminController::class, 'sandboxRepair']);
     });
 

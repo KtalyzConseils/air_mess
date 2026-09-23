@@ -1188,8 +1188,28 @@ export interface SandboxRepairResult {
   notes: string
 }
 
-export async function applySandboxRepair(snapshotToken: string): Promise<{ message: string; result: SandboxRepairResult }> {
-  const { data } = await api.post('/admin/sandbox/repair', { snapshot_token: snapshotToken })
+export interface SandboxRepairPlan {
+  correction_ready: boolean
+  snapshot_token: string
+  user_adjustments: Array<{ user_id: number; amount_fcfa: number; deferred_reserved_fcfa: number }>
+  driver_adjustments: Array<{ driver_id: number; amount_fcfa: number }>
+}
+
+export async function prepareSandboxRepair(snapshotToken: string): Promise<{
+  message: string
+  confirmation_code: string
+  expires_in_seconds: number
+  plan: SandboxRepairPlan
+}> {
+  const { data } = await api.post('/admin/sandbox/repair/prepare', { snapshot_token: snapshotToken })
+  return data
+}
+
+export async function applySandboxRepair(snapshotToken: string, confirmationCode: string): Promise<{ message: string; result: SandboxRepairResult }> {
+  const { data } = await api.post('/admin/sandbox/repair', {
+    snapshot_token: snapshotToken,
+    confirmation_code: confirmationCode,
+  })
   return data
 }
 
