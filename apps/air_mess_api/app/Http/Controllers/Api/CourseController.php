@@ -41,7 +41,11 @@ class CourseController extends Controller
             $urgency,
         );
         $originalDeliveryFee = $estimate['fee'];
-        $discountQuote = $firstCourseDiscount->quote($user, $originalDeliveryFee);
+        $paidBy = $data['delivery_fee_paid_by'] ?? Course::PAID_BY_RECIPIENT;
+        $isSenderPaid = $paidBy === Course::PAID_BY_SENDER;
+        $discountQuote = $isSenderPaid
+            ? $firstCourseDiscount->quote($user, $originalDeliveryFee)
+            : $this->withoutDiscount($originalDeliveryFee);
         $deliveryFee    = $discountQuote['fee'];
         $driverPercent  = (int) \App\Models\AppSetting::get('driver_commission_percent', 75);
         // Le cadeau est financé par Airmess : le gain du livreur reste calculé
@@ -56,8 +60,6 @@ class CourseController extends Controller
         // Nouveau : si `delivery_fee_paid_by = recipient`, le marchand ne paie RIEN
         // à la création. Le driver Airmess collectera les frais chez le destinataire
         // à la livraison, et le revenu ira directement dans platform_earnings.
-        $paidBy = $data['delivery_fee_paid_by'] ?? Course::PAID_BY_SENDER;
-        $isSenderPaid = $paidBy === Course::PAID_BY_SENDER;
         $isPayer = ($user->isMarchant() || $user->isIndividual()) && $isSenderPaid;
 
         // Si payeur (mode sender-paid uniquement), on tente d'abord le wallet.
@@ -81,11 +83,13 @@ class CourseController extends Controller
         $isHighValue = $threshold > 0 && $exposure >= $threshold;
 
         try {
-            $course = DB::transaction(function () use ($data, $user, $originalDeliveryFee, $driverEarnings, $isPayer, $walletService, $isHighValue, $firstCourseDiscount) {
+            $course = DB::transaction(function () use ($data, $user, $originalDeliveryFee, $driverEarnings, $isSenderPaid, $isPayer, $walletService, $isHighValue, $firstCourseDiscount) {
                 // Sérialise deux créations simultanées du même compte : une seule
                 // peut constater qu'aucune première course n'existe encore.
                 $lockedUser = \App\Models\User::whereKey($user->id)->lockForUpdate()->firstOrFail();
-                $discountQuote = $firstCourseDiscount->quote($lockedUser, $originalDeliveryFee);
+                $discountQuote = $isSenderPaid
+                    ? $firstCourseDiscount->quote($lockedUser, $originalDeliveryFee)
+                    : $this->withoutDiscount($originalDeliveryFee);
                 $deliveryFee = $discountQuote['fee'];
 
                 $course = Course::create(array_merge($data, [
@@ -103,7 +107,7 @@ class CourseController extends Controller
                     'is_high_value'   => $isHighValue,
                     // Défaut explicite si le front n'envoie rien : marchand paie (comportement historique).
                     // Le pipeline financier reste inchangé en 5b — pas de branchement conditionnel encore.
-                    'delivery_fee_paid_by' => $data['delivery_fee_paid_by'] ?? Course::PAID_BY_SENDER,
+                    'delivery_fee_paid_by' => $data['delivery_fee_paid_by'] ?? Course::PAID_BY_RECIPIENT,
 
                     // Filet de sécurité : on génère reference+token ici même si les events firent
                     'reference'       => $this->generateReference(),
@@ -235,6 +239,7 @@ class CourseController extends Controller
             'destination_lat' => ['required', 'numeric', 'between:-90,90'],
             'destination_lng' => ['required', 'numeric', 'between:-180,180'],
             'urgency'         => ['nullable', Rule::in(['standard', 'express'])],
+            'delivery_fee_paid_by' => ['nullable', Rule::in([Course::PAID_BY_SENDER, Course::PAID_BY_RECIPIENT])],
         ]);
 
         $breakdown = $priceCalculator->estimate(
@@ -245,7 +250,10 @@ class CourseController extends Controller
             $data['urgency'] ?? 'standard',
         );
 
-        $discount = $firstCourseDiscount->quote($request->user(), (int) $breakdown['fee']);
+        $paidBy = $data['delivery_fee_paid_by'] ?? Course::PAID_BY_RECIPIENT;
+        $discount = $paidBy === Course::PAID_BY_SENDER
+            ? $firstCourseDiscount->quote($request->user(), (int) $breakdown['fee'])
+            : $this->withoutDiscount((int) $breakdown['fee']);
 
         return response()->json(array_merge($breakdown, [
             'original_fee' => $discount['original_fee'],
@@ -704,6 +712,19 @@ class CourseController extends Controller
         abort(403, 'Accès refusé à cette course.');
     }
 
+
+    /**
+     * @return array{original_fee:int, discount_amount:int, fee:int, discount_code:?string}
+     */
+    private function withoutDiscount(int $fee): array
+    {
+        return [
+            'original_fee' => $fee,
+            'discount_amount' => 0,
+            'fee' => $fee,
+            'discount_code' => null,
+        ];
+    }
 
     /**
      * Génère une référence unique du type AM-2026-00001.

@@ -48,6 +48,7 @@ import {
 
 type FormValues = CreateCoursePayload
 type CourseFormStep = 1 | 2 | 3
+type TripSubStep = 'origin' | 'destination'
 type PackagePreset = {
   id: string
   categoryCode: string
@@ -99,6 +100,22 @@ const STEP_FIELD_NAMES: Record<CourseFormStep, Array<keyof FormValues>> = {
   ],
   3: [],
 }
+
+const ORIGIN_STEP_FIELDS: Array<keyof FormValues> = [
+  'origin_name',
+  'origin_phone',
+  'origin_quartier',
+  'origin_lat',
+  'origin_lng',
+]
+
+const DESTINATION_STEP_FIELDS: Array<keyof FormValues> = [
+  'destination_name',
+  'destination_phone',
+  'destination_quartier',
+  'destination_lat',
+  'destination_lng',
+]
 
 const PACKAGE_PRESETS: PackagePreset[] = [
   {
@@ -204,15 +221,16 @@ export default function NewCoursePage() {
       origin_city: 'Cotonou',
       destination_city: 'Cotonou',
       has_collection: false,
-      delivery_fee_paid_by: 'sender',
+      delivery_fee_paid_by: 'recipient',
     },
   })
 
   const hasCollection = watch('has_collection')
   const collectionAmountWatch = Number(watch('collection_amount') ?? 0)
   const declaredValueWatch = Number(watch('package_declared_value') ?? 0)
-  const paidBy = watch('delivery_fee_paid_by') ?? 'sender'
+  const paidBy = watch('delivery_fee_paid_by') ?? 'recipient'
   const isRecipientPaid = paidBy === 'recipient'
+  const merchantPaysDelivery = paidBy === 'sender'
   const urgencyWatch = (watch('urgency') ?? 'standard') as 'standard' | 'express'
   const packageSizeWatch = (watch('package_size') ?? 'M') as 'S' | 'M' | 'L' | 'XL'
   const originName = watch('origin_name') ?? ''
@@ -223,6 +241,9 @@ export default function NewCoursePage() {
   const destinationName = watch('destination_name') ?? ''
   const selectedCategoryId = Number(watch('package_category_id')) || undefined
   const [currentStep, setCurrentStep] = useState<CourseFormStep>(1)
+  const [tripSubStep, setTripSubStep] = useState<TripSubStep>('origin')
+  const [openTripPanel, setOpenTripPanel] = useState<TripSubStep | null>('origin')
+  const [tripAutoAdvanced, setTripAutoAdvanced] = useState(false)
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
   const selectedPackagePreset = useMemo(
     () =>
@@ -250,7 +271,7 @@ export default function NewCoursePage() {
   const [showDestExtra, setShowDestExtra] = useState(false)
   const [showDeclared, setShowDeclared] = useState(false)
   const [originDrawerOpen, setOriginDrawerOpen] = useState(false)
-  const [locationTarget, setLocationTarget] = useState<'A' | 'B'>('B')
+  const [locationTarget, setLocationTarget] = useState<'A' | 'B'>('A')
 
   // Onboarding — coach-marks du formulaire. Si l'utilisateur ne les a pas
   // encore vus, on ouvre l'accordion "Options" pour que les cibles
@@ -420,15 +441,18 @@ export default function NewCoursePage() {
       setCurrentStep(1)
     } else if (meta.location === 'drawer' || meta.location === 'map_A') {
       setCurrentStep(2)
+      setTripSubStep('origin')
+      setOpenTripPanel('origin')
       setLocationTarget('A')
     } else if (meta.location === 'main' || meta.location === 'map_B') {
       setCurrentStep(2)
+      setTripSubStep('destination')
+      setOpenTripPanel('destination')
       setLocationTarget('B')
     } else if (meta.location === 'options') {
       setCurrentStep(3)
       setOptionsOpen(true)
     }
-    if (meta.location === 'drawer') setOriginDrawerOpen(true)
 
     // Petit tick pour laisser le drawer/accordion se monter avant focus.
     setTimeout(() => {
@@ -498,11 +522,23 @@ export default function NewCoursePage() {
       setValue('package_description', preset.title, { shouldDirty: true })
     }
     setCurrentStep(2)
+    setTripSubStep('origin')
+    setOpenTripPanel('origin')
+    setTripAutoAdvanced(false)
+    setLocationTarget('A')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function goToNextStep() {
+    const fieldsToValidate =
+      currentStep === 2 && tripSubStep === 'origin'
+        ? ORIGIN_STEP_FIELDS
+        : currentStep === 2 && tripSubStep === 'destination'
+          ? DESTINATION_STEP_FIELDS
+          : STEP_FIELD_NAMES[currentStep]
+
     const missingFieldsBeforeTrigger = getMissingStepFields(currentStep)
+      .filter((field) => fieldsToValidate.includes(field.fieldName as keyof FormValues))
     if (missingFieldsBeforeTrigger.length > 0) {
       missingFieldsBeforeTrigger.forEach((field) => {
         setError(field.fieldName as keyof FormValues, {
@@ -515,13 +551,24 @@ export default function NewCoursePage() {
       return
     }
 
-    const valid = await trigger(STEP_FIELD_NAMES[currentStep], { shouldFocus: false })
+    const valid = await trigger(fieldsToValidate, { shouldFocus: false })
     if (!valid) {
       const fields = getMissingStepFields(currentStep)
+        .filter((field) => fieldsToValidate.includes(field.fieldName as keyof FormValues))
       window.scrollTo({ top: 0, behavior: 'smooth' })
       handleFirstMissing(fields)
       return
     }
+
+    if (currentStep === 2 && tripSubStep === 'origin') {
+      setTripSubStep('destination')
+      setOpenTripPanel('destination')
+      setTripAutoAdvanced(true)
+      setLocationTarget('B')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
     setCurrentStep((step) => Math.min(3, step + 1) as CourseFormStep)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -578,7 +625,10 @@ export default function NewCoursePage() {
     const dLng = Number(values.destination_lng)
     if (!Number.isFinite(oLat) || !Number.isFinite(oLng) || oLat === 0 || oLng === 0) {
       setQuotaError(t('courses.new.originPositionMissing'))
-      setOriginDrawerOpen(true)
+      setCurrentStep(2)
+      setTripSubStep('origin')
+      setOpenTripPanel('origin')
+      setLocationTarget('A')
       return
     }
     if (!Number.isFinite(dLat) || !Number.isFinite(dLng) || dLat === 0 || dLng === 0) {
@@ -681,12 +731,32 @@ export default function NewCoursePage() {
   const destinationLng = Number(watch('destination_lng')) || 0
   const hasFullCoords =
     originLat !== 0 && originLng !== 0 && destinationLat !== 0 && destinationLng !== 0
+  const originSubStepComplete =
+    String(originName ?? '').trim() !== '' &&
+    String(watch('origin_phone') ?? '').trim() !== '' &&
+    String(originQuartier || watch('origin_street') || '').trim() !== '' &&
+    originLat !== 0 &&
+    originLng !== 0
+
+  useEffect(() => {
+    if (currentStep !== 2 || tripSubStep !== 'origin' || tripAutoAdvanced || !originSubStepComplete) return
+
+    const timeout = window.setTimeout(() => {
+      setTripSubStep('destination')
+      setOpenTripPanel('destination')
+      setLocationTarget('B')
+      setTripAutoAdvanced(true)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, 450)
+
+    return () => window.clearTimeout(timeout)
+  }, [currentStep, originSubStepComplete, tripAutoAdvanced, tripSubStep])
 
   // Estimation tarif live — appelée dès que les 2 pins sont posés et à chaque
   // changement d'urgence. React Query mémoïse par clé donc pas d'appel doublon
   // si les valeurs ne changent pas.
   const { data: estimate } = useQuery<CourseFeeEstimate>({
-    queryKey: ['course-estimate', originLat, originLng, destinationLat, destinationLng, urgencyWatch],
+    queryKey: ['course-estimate', originLat, originLng, destinationLat, destinationLng, urgencyWatch, paidBy],
     queryFn: () =>
       estimateCourseFee({
         origin_lat: originLat,
@@ -694,6 +764,7 @@ export default function NewCoursePage() {
         destination_lat: destinationLat,
         destination_lng: destinationLng,
         urgency: urgencyWatch,
+        delivery_fee_paid_by: paidBy as 'sender' | 'recipient',
       }),
     enabled: hasFullCoords,
     staleTime: 30_000,
@@ -711,7 +782,7 @@ export default function NewCoursePage() {
   const stepPrimaryAction =
     currentStep < 3
       ? {
-          label: 'Continuer',
+          label: currentStep === 2 && tripSubStep === 'origin' ? 'Continuer vers le destinataire' : 'Continuer',
           onClick: () => {
             void goToNextStep()
           },
@@ -917,26 +988,43 @@ export default function NewCoursePage() {
                 </section>
               )}
 
-              {/* Bloc TRAJET (destinataire + carte destination) */}
+              {/* Bloc TRAJET (expediteur puis destinataire) */}
               {currentStep === 2 && (
               <>
               <section className="bg-off-white border border-warm-200 rounded-lg p-5 md:p-6">
-                <div className="mb-4 pb-3 border-b border-warm-100 flex items-center gap-2">
-                  <span className="text-warm-600">
-                    <RouteIcon size={18} />
-                  </span>
-                  <h3 className="text-h3 text-ink font-bold">
-                    {t('courses.new.blocks.trip.title')}
-                  </h3>
+                <div className="mb-5 pb-4 border-b border-warm-100">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-1 text-warm-600">
+                      <RouteIcon size={18} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-caption font-bold uppercase text-warm-500">
+                        {t('courses.new.blocks.trip.title')}
+                      </p>
+                      <h3 className="text-h2 text-ink font-bold">
+                        {tripSubStep === 'origin' ? 'Adresse de prise en charge' : 'Adresse de livraison'}
+                      </h3>
+                      <p className="mt-1 text-body-s text-warm-600">
+                        {tripSubStep === 'origin'
+                          ? 'Confirme le point ou le livreur recupere le colis.'
+                          : 'Renseigne le destinataire et le lieu exact de livraison.'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="mb-4 rounded-2xl border border-warm-200 bg-cream p-2 shadow-sm">
                   <button
                     type="button"
-                    onClick={() => setLocationTarget('A')}
+                          onClick={() => {
+                            setTripSubStep('origin')
+                            setTripAutoAdvanced(false)
+                            setOpenTripPanel((panel) => (panel === 'origin' ? null : 'origin'))
+                            setLocationTarget('A')
+                          }}
                     className={[
                       'w-full rounded-xl p-3 text-left transition-colors flex items-center gap-3',
-                      locationTarget === 'A' ? 'bg-airmess-yellow/20' : 'hover:bg-off-white',
+                      openTripPanel === 'origin' ? 'bg-airmess-yellow/20' : 'hover:bg-off-white',
                     ].join(' ')}
                   >
                     <span className="grid h-10 w-10 place-items-center rounded-xl bg-off-white text-ink shrink-0">
@@ -953,16 +1041,29 @@ export default function NewCoursePage() {
                         {originQuartier || watch('origin_street') || 'Position actuelle'}
                       </span>
                     </span>
+                    <span
+                      className={[
+                        'text-warm-500 transition-transform duration-200',
+                        openTripPanel === 'origin' ? 'rotate-180' : '',
+                      ].join(' ')}
+                      aria-hidden
+                    >
+                      <ChevronDownIcon size={18} />
+                    </span>
                   </button>
 
                   <div className="mx-14 h-px bg-warm-200" />
 
                   <button
                     type="button"
-                    onClick={() => setLocationTarget('B')}
+                    onClick={() => {
+                      setTripSubStep('destination')
+                      setOpenTripPanel((panel) => (panel === 'destination' ? null : 'destination'))
+                      setLocationTarget('B')
+                    }}
                     className={[
                       'w-full rounded-xl p-3 text-left transition-colors flex items-center gap-3',
-                      locationTarget === 'B' ? 'bg-airmess-red/10' : 'hover:bg-off-white',
+                      openTripPanel === 'destination' ? 'bg-airmess-red/10' : 'hover:bg-off-white',
                     ].join(' ')}
                   >
                     <span className="grid h-10 w-10 place-items-center rounded-xl bg-airmess-red text-white shrink-0">
@@ -979,93 +1080,100 @@ export default function NewCoursePage() {
                         {watch('destination_street') || destinationQuartier || 'Où livrer ?'}
                       </span>
                     </span>
+                    <span
+                      className={[
+                        'text-warm-500 transition-transform duration-200',
+                        openTripPanel === 'destination' ? 'rotate-180' : '',
+                      ].join(' ')}
+                      aria-hidden
+                    >
+                      <ChevronDownIcon size={18} />
+                    </span>
                   </button>
                 </div>
 
-                <div className="mb-4" id="dual-pin-map">
-                  <DualPinMap
-                    originLat={Number(watch('origin_lat')) || undefined}
-                    originLng={Number(watch('origin_lng')) || undefined}
-                    destLat={Number(watch('destination_lat')) || undefined}
-                    destLng={Number(watch('destination_lng')) || undefined}
-                    defaultActive="B"
-                    activePin={locationTarget}
-                    onActivePinChange={setLocationTarget}
-                    height="280px"
-                    onOriginChange={fillOriginFromMapClick}
-                    onOriginPlaceSelect={fillOriginFromPlace}
-                    onDestChange={fillDestinationFromMapClick}
-                    onDestPlaceSelect={fillDestinationFromPlace}
-                  />
-                  {geoStatus === 'success' && (
-                    <p className="text-caption text-success mt-1.5">{t('courses.new.geoSuccess')}</p>
-                  )}
-                  {geoStatus === 'denied' && (
-                    <p className="text-caption text-warning mt-1.5">{t('courses.new.geoDenied')}</p>
-                  )}
+                <div
+                  className={[
+                    'grid transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out',
+                    openTripPanel === 'origin'
+                      ? 'grid-rows-[1fr] opacity-100 translate-y-0 mb-4'
+                      : 'grid-rows-[0fr] opacity-0 -translate-y-1 mb-0',
+                  ].join(' ')}
+                >
+                  <div className="overflow-hidden">
+                    <div className="rounded-xl border border-warm-200 bg-cream p-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <StoreIcon size={18} />
+                        <p className="text-body font-extrabold text-ink">{t('courses.new.senderSectionTitle')}</p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Field label={t('courses.new.originDrawer.streetLabel')} required className="md:col-span-2">
+                          <input
+                            {...register('origin_street')}
+                            className={inputClass}
+                            placeholder={t('courses.new.originDrawer.streetPlaceholder')}
+                          />
+                        </Field>
+                        <Field label={t('courses.new.senderName')} required>
+                          <input
+                            {...register('origin_name', { required: t('courses.new.required') })}
+                            className={inputClass}
+                          />
+                        </Field>
+                        <Field label={t('courses.new.phoneLabel')} required>
+                          <input
+                            {...register('origin_phone', { required: t('courses.new.required') })}
+                            className={inputClass}
+                            placeholder="+229..."
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {locationTarget === 'B' ? (
-                  <div className="space-y-4">
-                    <div className="flex justify-end">
-                      <AddressPicker onSelect={fillDestinationFromAddress} />
-                    </div>
-                    <Field label={t('courses.new.destinationFieldLabel')} required>
-                      <input
-                        {...register('destination_street')}
-                        className={inputClass}
-                        placeholder={t('courses.new.destinationSearchPlaceholder')}
-                      />
-                    </Field>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Field label={t('courses.new.recipientNameLabel')} required>
+                <div
+                  className={[
+                    'grid transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out',
+                    openTripPanel === 'destination'
+                      ? 'grid-rows-[1fr] opacity-100 translate-y-0 mb-4'
+                      : 'grid-rows-[0fr] opacity-0 -translate-y-1 mb-0',
+                  ].join(' ')}
+                >
+                  <div className="overflow-hidden">
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <AddressPicker onSelect={fillDestinationFromAddress} />
+                      </div>
+                      <Field label={t('courses.new.destinationFieldLabel')} required>
                         <input
-                          {...register('destination_name', { required: t('courses.new.required') })}
+                          {...register('destination_street')}
                           className={inputClass}
-                          placeholder={t('courses.new.recipientNamePlaceholder')}
+                          placeholder={t('courses.new.destinationSearchPlaceholder')}
                         />
                       </Field>
-                      <Field label={t('courses.new.recipientPhoneLabel')} required>
-                        <input
-                          {...register('destination_phone', { required: t('courses.new.required') })}
-                          className={inputClass}
-                          placeholder="+229..."
-                        />
-                      </Field>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-warm-200 bg-cream p-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <StoreIcon size={18} />
-                      <p className="text-body font-extrabold text-ink">{t('courses.new.senderSectionTitle')}</p>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Field label={t('courses.new.originDrawer.streetLabel')} required>
-                        <input
-                          {...register('origin_street')}
-                          className={inputClass}
-                          placeholder={t('courses.new.originDrawer.streetPlaceholder')}
-                        />
-                      </Field>
-                      <Field label={t('courses.new.senderName')} required>
-                        <input
-                          {...register('origin_name', { required: t('courses.new.required') })}
-                          className={inputClass}
-                        />
-                      </Field>
-                      <Field label={t('courses.new.phoneLabel')} required>
-                        <input
-                          {...register('origin_phone', { required: t('courses.new.required') })}
-                          className={inputClass}
-                          placeholder="+229..."
-                        />
-                      </Field>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Field label={t('courses.new.recipientNameLabel')} required>
+                          <input
+                            {...register('destination_name', { required: t('courses.new.required') })}
+                            className={inputClass}
+                            placeholder={t('courses.new.recipientNamePlaceholder')}
+                          />
+                        </Field>
+                        <Field label={t('courses.new.recipientPhoneLabel')} required>
+                          <input
+                            {...register('destination_phone', { required: t('courses.new.required') })}
+                            className={inputClass}
+                            placeholder="+229..."
+                          />
+                        </Field>
+                      </div>
                     </div>
                   </div>
-                )}
+                </div>
 
                 {/* Précisions destination (rue + landmark + instructions) */}
+                {openTripPanel === 'destination' && (
                 <div className="mt-3">
                   <button
                     type="button"
@@ -1096,6 +1204,36 @@ export default function NewCoursePage() {
                     </div>
                   )}
                 </div>
+                )}
+
+                {openTripPanel && (
+                <div className="mt-4" id="dual-pin-map">
+                  <DualPinMap
+                    originLat={Number(watch('origin_lat')) || undefined}
+                    originLng={Number(watch('origin_lng')) || undefined}
+                    destLat={Number(watch('destination_lat')) || undefined}
+                    destLng={Number(watch('destination_lng')) || undefined}
+                    defaultActive={openTripPanel === 'origin' ? 'A' : 'B'}
+                    activePin={locationTarget}
+                    onActivePinChange={(pin) => {
+                      setLocationTarget(pin)
+                      setTripSubStep(pin === 'A' ? 'origin' : 'destination')
+                      setOpenTripPanel(pin === 'A' ? 'origin' : 'destination')
+                    }}
+                    height="260px"
+                    onOriginChange={fillOriginFromMapClick}
+                    onOriginPlaceSelect={fillOriginFromPlace}
+                    onDestChange={fillDestinationFromMapClick}
+                    onDestPlaceSelect={fillDestinationFromPlace}
+                  />
+                  {geoStatus === 'success' && (
+                    <p className="text-caption text-success mt-1.5">{t('courses.new.geoSuccess')}</p>
+                  )}
+                  {geoStatus === 'denied' && (
+                    <p className="text-caption text-warning mt-1.5">{t('courses.new.geoDenied')}</p>
+                  )}
+                </div>
+                )}
               </section>
               </>
               )}
@@ -1290,44 +1428,43 @@ export default function NewCoursePage() {
                       )}
                     </div>
 
-                    {/* Qui paie les frais */}
+                    {/* Frais de livraison */}
                     <div>
                       <p className="text-caption text-warm-600 font-medium mb-2">
                         {t('courses.new.paidBySectionTitle')}
                       </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {(['sender', 'recipient'] as const).map((opt) => {
-                          const selected = paidBy === opt
-                          return (
-                            <label
-                              key={opt}
-                              className={[
-                                'block cursor-pointer rounded-xl border-2 px-4 py-3 transition-all',
-                                selected
-                                  ? 'border-airmess-yellow bg-airmess-yellow/10'
-                                  : 'border-warm-200 hover:border-warm-300 bg-off-white',
-                              ].join(' ')}
-                            >
-                              <input
-                                type="radio"
-                                value={opt}
-                                {...register('delivery_fee_paid_by')}
-                                className="sr-only"
-                              />
-                              <p className="text-body font-bold text-ink">
-                                {opt === 'sender'
-                                  ? t('courses.new.paidByOptionSender')
-                                  : t('courses.new.paidByOptionRecipient')}
-                              </p>
-                              <p className="text-caption text-warm-600 mt-0.5">
-                                {opt === 'sender'
-                                  ? t('courses.new.paidByOptionSenderHint')
-                                  : t('courses.new.paidByOptionRecipientHint')}
-                              </p>
-                            </label>
-                          )
-                        })}
-                      </div>
+                      <input type="hidden" {...register('delivery_fee_paid_by')} />
+                      <label
+                        className={[
+                          'flex cursor-pointer items-start gap-3 rounded-xl border-2 px-4 py-3 transition-all',
+                          merchantPaysDelivery
+                            ? 'border-airmess-yellow bg-airmess-yellow/10'
+                            : 'border-warm-200 hover:border-warm-300 bg-off-white',
+                        ].join(' ')}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={merchantPaysDelivery}
+                          onChange={(event) =>
+                            setValue(
+                              'delivery_fee_paid_by',
+                              event.target.checked ? 'sender' : 'recipient',
+                              { shouldDirty: true, shouldValidate: true },
+                            )
+                          }
+                          className="mt-1 h-4 w-4 rounded border-warm-300 accent-airmess-yellow"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-body font-bold text-ink">
+                            {t('courses.new.paidByMerchantCheckbox')}
+                          </span>
+                          <span className="block text-caption text-warm-600 mt-0.5">
+                            {merchantPaysDelivery
+                              ? t('courses.new.paidByMerchantHint')
+                              : t('courses.new.paidByRecipientHint')}
+                          </span>
+                        </span>
+                      </label>
 
                       {isRecipientPaid && currentFee != null && (() => {
                         const feeToCollect = currentFee
@@ -1348,6 +1485,14 @@ export default function NewCoursePage() {
                           </div>
                         )
                       })()}
+
+                      {merchantPaysDelivery && currentFee != null && (
+                        <div className="mt-3 rounded-md bg-warm-100 border border-warm-200 px-3 py-2.5 text-body-s text-ink">
+                          {t('courses.new.paidByMerchantPreview', {
+                            fee: currentFee.toLocaleString(locale),
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Valeur déclarée du colis */}
@@ -1415,7 +1560,13 @@ export default function NewCoursePage() {
                     size="md"
                     pill
                     onClick={() => {
-                      setCurrentStep((step) => Math.max(1, step - 1) as CourseFormStep)
+                      if (currentStep === 2 && tripSubStep === 'destination') {
+                        setTripSubStep('origin')
+                        setTripAutoAdvanced(false)
+                        setLocationTarget('A')
+                      } else {
+                        setCurrentStep((step) => Math.max(1, step - 1) as CourseFormStep)
+                      }
                       window.scrollTo({ top: 0, behavior: 'smooth' })
                     }}
                   >
@@ -1435,7 +1586,7 @@ export default function NewCoursePage() {
                     }}
                     rightIcon={<ArrowRightIcon size={16} />}
                   >
-                    Continuer
+                    {currentStep === 2 && tripSubStep === 'origin' ? 'Continuer vers le destinataire' : 'Continuer'}
                   </Button>
                 )}
               </div>

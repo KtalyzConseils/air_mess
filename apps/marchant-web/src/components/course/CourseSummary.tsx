@@ -134,17 +134,17 @@ export default function CourseSummary({ data }: Props) {
         )}
       </div>
 
-      {/* ============ QUI PAIE (uniquement si "recipient") ============ */}
-      {data.paidBy === 'recipient' && (
-        <div className="px-5 py-3">
-          <p className="text-caption text-warm-500 uppercase tracking-wide">
-            {t('courses.new.summary.paidByEyebrow')}
-          </p>
-          <p className="text-body-s font-medium text-ink mt-0.5">
-            {t('courses.new.summary.paidByRecipient')}
-          </p>
-        </div>
-      )}
+      {/* ============ FRAIS DE LIVRAISON ============ */}
+      <div className="px-5 py-3">
+        <p className="text-caption text-warm-500 uppercase tracking-wide">
+          {t('courses.new.summary.paidByEyebrow')}
+        </p>
+        <p className="text-body-s font-medium text-ink mt-0.5">
+          {data.paidBy === 'recipient'
+            ? t('courses.new.summary.paidByRecipient')
+            : t('courses.new.summary.paidBySender')}
+        </p>
+      </div>
 
       {/* ============ ENCAISSEMENT (uniquement si activé) ============ */}
       {data.hasCollection && data.collectionAmount ? (
