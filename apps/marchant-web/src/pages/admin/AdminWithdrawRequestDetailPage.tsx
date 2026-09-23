@@ -296,6 +296,36 @@ export default function AdminWithdrawRequestDetailPage() {
             </dl>
           </div>
 
+          {canMarkPaid && request.payout_failed_at !== null && (
+            <AlertBand tone="danger">
+              <div className="flex items-start gap-2">
+                <AlertTriangleIcon size={16} />
+                <div className="flex-1">
+                  <strong>{t('admin.withdraws.payoutFailedTitle')}</strong>{' '}
+                  {t('admin.withdraws.payoutFailedAt', {
+                    date: formatDateTime(request.payout_failed_at, locale),
+                  })}
+                  <div className="mt-1 font-mono text-caption bg-white/40 rounded px-2 py-1">
+                    {request.payout_failure_reason ?? t('admin.withdraws.payoutFailureUnknown')}
+                  </div>
+                  <div className="mt-2 flex gap-2 items-center flex-wrap">
+                    <AdminButton
+                      variant="danger"
+                      size="sm"
+                      onClick={() => retryPayoutMutation.mutate()}
+                      disabled={retryPayoutMutation.isPending}
+                    >
+                      {retryPayoutMutation.isPending
+                        ? t('admin.withdraws.payoutRetrying')
+                        : t('admin.withdraws.payoutRetryCta')}
+                    </AdminButton>
+                    <span className="text-caption">{t('admin.withdraws.payoutRetryHint')}</span>
+                  </div>
+                </div>
+              </div>
+            </AlertBand>
+          )}
+
           {/* Actions */}
           {(canApprove || canReject || canMarkPaid) && (
             <div className="bg-off-white border border-warm-200 rounded-lg p-5 space-y-3">
@@ -690,7 +720,10 @@ export default function AdminWithdrawRequestDetailPage() {
           ) : (
             <ul className="divide-y divide-warm-200">
               {recent_transactions.map((tx) => {
-                const meta = TX_META[tx.type]
+                const meta = TX_META[tx.type] ?? {
+                  i18nKey: 'wallet.txOther',
+                  positive: tx.amount_fcfa >= 0,
+                }
                 return (
                   <li
                     key={tx.id}
