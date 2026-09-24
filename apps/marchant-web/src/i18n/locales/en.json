@@ -2329,6 +2329,7 @@
       "sandboxApplying": "Applying…",
       "sandboxNothingToApply": "No available compensation can be applied to this snapshot.",
       "sandboxCodePrompt": "PLAN TO CONFIRM\nClient wallets: {{userTotal}} — users {{userIds}}\nDriver wallets: {{driverTotal}} — drivers {{driverIds}}\n\nTemporary code (10 minutes): {{code}}\n\nEnter this exact code to apply the correction.",
+      "sandboxCodeLabel": "Confirmation code",
       "sandboxCodeMismatch": "The entered code does not match. No correction was applied."
     },
     "settings": {

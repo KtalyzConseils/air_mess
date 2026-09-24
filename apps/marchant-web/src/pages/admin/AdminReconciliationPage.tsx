@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminModal from '../../components/admin/AdminModal'
 import { AdminButton } from '../../components/admin/AdminToolbar'
 import { AlertTriangleIcon, CheckIcon } from '../../components/ui/icons'
 import {
@@ -97,6 +98,23 @@ export default function AdminReconciliationPage() {
   const [isRepairing, setIsRepairing] = useState(false)
   const [repairMessage, setRepairMessage] = useState<string | null>(null)
   const [isGuideOpen, setIsGuideOpen] = useState(false)
+  const repairLock = useRef(false)
+  const confirmationResolver = useRef<((code: string | null) => void) | null>(null)
+  const [confirmation, setConfirmation] = useState<{ message: string; code: string } | null>(null)
+  const [enteredCode, setEnteredCode] = useState('')
+  const [codeError, setCodeError] = useState(false)
+  useEffect(() => () => {
+    confirmationResolver.current?.(null)
+    confirmationResolver.current = null
+  }, [])
+
+  function closeConfirmation(code: string | null) {
+    const resolve = confirmationResolver.current
+    confirmationResolver.current = null
+    setConfirmation(null)
+    setEnteredCode('')
+    resolve?.(code)
+  }
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['admin', 'reconciliation', from, to],
@@ -115,7 +133,8 @@ export default function AdminReconciliationPage() {
   }
 
   async function handleApplySandboxRepair() {
-    if (!data?.sandbox_audit?.snapshot_token) return
+    if (!data?.sandbox_audit?.snapshot_token || repairLock.current) return
+    repairLock.current = true
 
     setIsRepairing(true)
     setRepairMessage(null)
@@ -123,28 +142,33 @@ export default function AdminReconciliationPage() {
     try {
       const preparation = await prepareSandboxRepair(data.sandbox_audit.snapshot_token)
       if (!preparation.plan.correction_ready) {
-        window.alert(t('admin.reconciliation.sandboxNothingToApply'))
+        setRepairMessage(t('admin.reconciliation.sandboxNothingToApply'))
         return
       }
       const userTotal = preparation.plan.user_adjustments.reduce((sum, row) => sum + Math.abs(row.amount_fcfa), 0)
       const driverTotal = preparation.plan.driver_adjustments.reduce((sum, row) => sum + Math.abs(row.amount_fcfa), 0)
       const userIds = preparation.plan.user_adjustments.map((row) => `#${row.user_id}`).join(', ') || '—'
       const driverIds = preparation.plan.driver_adjustments.map((row) => `#${row.driver_id}`).join(', ') || '—'
-      const enteredCode = window.prompt(t('admin.reconciliation.sandboxCodePrompt', {
+      const message = t('admin.reconciliation.sandboxCodePrompt', {
         code: preparation.confirmation_code,
         userTotal: formatFcfa(userTotal),
         driverTotal: formatFcfa(driverTotal),
         userIds,
         driverIds,
-      }))
+      })
+      const enteredCode = await new Promise<string | null>((resolve) => {
+        confirmationResolver.current = resolve
+        setEnteredCode('')
+        setCodeError(false)
+        setConfirmation({ message, code: preparation.confirmation_code })
+      })
       if (enteredCode === null) return
       if (enteredCode.trim() !== preparation.confirmation_code) {
-        window.alert(t('admin.reconciliation.sandboxCodeMismatch'))
+        setRepairMessage(t('admin.reconciliation.sandboxCodeMismatch'))
         return
       }
-      const response = await applySandboxRepair(data.sandbox_audit.snapshot_token, enteredCode.trim())
+      const response = await applySandboxRepair(preparation.plan.snapshot_token, enteredCode.trim())
       setRepairMessage(response.message)
-      window.alert(response.message)
       await refetch()
     } catch (error: unknown) {
       const msg = error instanceof AxiosError
@@ -152,8 +176,8 @@ export default function AdminReconciliationPage() {
           ?? t('admin.reconciliation.sandboxApplyError')
         : t('admin.reconciliation.sandboxApplyError')
       setRepairMessage(msg)
-      window.alert(msg)
     } finally {
+      repairLock.current = false
       setIsRepairing(false)
     }
   }
@@ -168,6 +192,35 @@ export default function AdminReconciliationPage() {
 
   return (
     <AdminPageShell>
+      <AdminModal open={!!confirmation} onClose={() => closeConfirmation(null)}
+        title={t('admin.reconciliation.sandboxApplyButton')}
+        footer={<>
+          <AdminButton onClick={() => closeConfirmation(null)}>{t('common.cancel')}</AdminButton>
+          <AdminButton variant="primary" type="submit" form="sandbox-confirmation" disabled={!enteredCode.trim()}>{t('admin.reconciliation.sandboxApplyButton')}</AdminButton>
+        </>}>
+        <form id="sandbox-confirmation" className="space-y-4" onSubmit={(event) => {
+          event.preventDefault()
+          if (enteredCode.trim() !== confirmation?.code) { setCodeError(true); return }
+          closeConfirmation(enteredCode.trim())
+        }}>
+          <div className="flex gap-3 rounded-md border border-airmess-yellow/40 bg-airmess-yellow/10 p-3 text-body-s text-ink">
+            <AlertTriangleIcon size={20} className="shrink-0" />
+            <p>{t('admin.reconciliation.sandboxApplyConfirm')}</p>
+          </div>
+          <p id="sandbox-plan" className="whitespace-pre-line break-words rounded-md border border-warm-200 bg-cream p-4 text-body-s text-ink">{confirmation?.message}</p>
+          <label htmlFor="sandbox-code" className="block text-body-s font-bold text-ink">{t('admin.reconciliation.sandboxCodeLabel')}</label>
+          <input id="sandbox-code" autoFocus autoComplete="off" value={enteredCode}
+            onCopy={(event) => event.preventDefault()}
+            onCut={(event) => event.preventDefault()}
+            onPaste={(event) => event.preventDefault()}
+            onDrop={(event) => event.preventDefault()}
+            onDragOver={(event) => event.preventDefault()}
+            onChange={(event) => { setEnteredCode(event.target.value); setCodeError(false) }}
+            aria-describedby={codeError ? 'sandbox-plan sandbox-error' : 'sandbox-plan'} aria-invalid={codeError}
+            className="w-full h-11 px-3 rounded-md border border-warm-300 bg-off-white font-mono text-ink focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow" />
+          {codeError && <p id="sandbox-error" role="alert" className="text-body-s text-airmess-red">{t('admin.reconciliation.sandboxCodeMismatch')}</p>}
+        </form>
+      </AdminModal>
       <AdminPageHeader
         title={t('admin.reconciliation.title')}
         subtitle={t('admin.reconciliation.subtitleFull')}

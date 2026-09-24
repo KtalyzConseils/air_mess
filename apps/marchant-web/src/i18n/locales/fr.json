@@ -2329,6 +2329,7 @@
       "sandboxApplying": "Application…",
       "sandboxNothingToApply": "Aucune compensation disponible ne peut être appliquée sur cet instantané.",
       "sandboxCodePrompt": "PLAN À CONFIRMER\nWallets clients : {{userTotal}} — utilisateurs {{userIds}}\nWallets livreurs : {{driverTotal}} — livreurs {{driverIds}}\n\nCode temporaire (10 minutes) : {{code}}\n\nRecopiez exactement ce code pour appliquer la correction.",
+      "sandboxCodeLabel": "Code de confirmation",
       "sandboxCodeMismatch": "Le code saisi ne correspond pas. Aucune correction n’a été appliquée."
     },
     "settings": {
