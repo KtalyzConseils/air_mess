@@ -1095,13 +1095,13 @@ export default function NewCoursePage() {
 
                 <div
                   className={[
-                    'grid transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out',
+                    'grid relative transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out',
                     openTripPanel === 'origin'
-                      ? 'grid-rows-[1fr] opacity-100 translate-y-0 mb-4'
-                      : 'grid-rows-[0fr] opacity-0 -translate-y-1 mb-0',
+                      ? 'grid-rows-[1fr] opacity-100 translate-y-0 mb-4 z-30'
+                      : 'grid-rows-[0fr] opacity-0 -translate-y-1 mb-0 z-0',
                   ].join(' ')}
                 >
-                  <div className="overflow-hidden">
+                  <div className={openTripPanel === 'origin' ? 'overflow-visible' : 'overflow-hidden'}>
                     <div className="rounded-xl border border-warm-200 bg-cream p-4">
                       <div className="mb-3 flex items-center gap-2">
                         <StoreIcon size={18} />
@@ -1139,13 +1139,13 @@ export default function NewCoursePage() {
 
                 <div
                   className={[
-                    'grid transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out',
+                    'grid relative transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out',
                     openTripPanel === 'destination'
-                      ? 'grid-rows-[1fr] opacity-100 translate-y-0 mb-4'
-                      : 'grid-rows-[0fr] opacity-0 -translate-y-1 mb-0',
+                      ? 'grid-rows-[1fr] opacity-100 translate-y-0 mb-4 z-30'
+                      : 'grid-rows-[0fr] opacity-0 -translate-y-1 mb-0 z-0',
                   ].join(' ')}
                 >
-                  <div className="overflow-hidden">
+                  <div className={openTripPanel === 'destination' ? 'overflow-visible' : 'overflow-hidden'}>
                     <div className="space-y-4">
                       <div className="flex justify-end">
                         <AddressPicker onSelect={fillDestinationFromAddress} />
