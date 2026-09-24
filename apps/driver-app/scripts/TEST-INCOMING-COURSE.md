@@ -2,10 +2,12 @@
 
 ## Retour utilisateur du 24 septembre 2026
 
-Le parcours corrigé fonctionne lors des essais. Deux anomalies restent à corriger :
+Le parcours corrigé fonctionne lors des essais. Deux correctifs locaux restent à valider sur téléphone :
 
 - La notification utilise le son système au lieu du son personnalisé. Vérifier le canal et la ressource sonore sur le téléphone.
 - Refuser une réaffectation fait apparaître brièvement le modal actif avant sa fermeture. Vérifier l'actualisation au retour à l'accueil sans masquer les courses normales `assigned`.
+
+Le correctif sonore utilise désormais le canal stable `incoming-call-v2` avec le même son personnalisé. Le refus confirmé annule la lecture active en cours et retire uniquement la course refusée du cache avant le retour à l'accueil. Les tests couvrent une réponse de lecture tardive et préservent l'ouverture d'une course normale `assigned` après acceptation.
 
 Exécuter depuis `apps/driver-app` :
 
@@ -38,4 +40,4 @@ Lancer Metro avec `npx.cmd expo start --dev-client`, puis ouvrir l'application d
 | Application en arrière-plan / téléphone verrouillé | Notification sonore et actions, puis reprise correcte dans l'application. |
 | Abandon avant / après récupération | Avant : remise en attente. Après : incident et instructions des opérations, parcours de retour ou transfert accessible. |
 
-Le canal sonore de référence reste `incoming-call` avec `new_course_ring`. Les tests simulés vérifient la configuration demandée, pas les réglages déjà enregistrés par Android sur le téléphone.
+Le canal sonore de référence est `incoming-call-v2` avec `new_course_ring`. Les tests simulés vérifient la configuration demandée, pas les réglages ni le rendu sonore sur le téléphone. Les deux ressources sonores sont présentes dans l'APK debug local ; leur présence dans l'application effectivement installée reste à vérifier si elle provient d'un autre build.

@@ -19,7 +19,7 @@ import {
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import { acknowledgePushReceipt } from '../api/notifications'
-import { fetchOfferedCourses } from '../api/driver'
+import { fetchOfferedCourses, type DriverCourseSummary } from '../api/driver'
 import { useIosVoipCall } from '../hooks/useIosVoipCall'
 import BrandSplash from '../components/BrandSplash'
 import BackgroundLocationDisclosure from '../components/BackgroundLocationDisclosure'
@@ -108,8 +108,16 @@ export default function RootLayout() {
   }, [])
 
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', ({ action }) => {
+    const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', ({ courseId, action }) => {
       setPendingCourseId(null)
+      if (action === 'decline') {
+        // Annuler la lecture en vol avant de retirer la course : elle ne doit pas
+        // réintroduire une réaffectation refusée au retour immédiat sur l'accueil.
+        void queryClient.cancelQueries({ queryKey: ['my-active'] }, { revert: false })
+        queryClient.setQueryData<DriverCourseSummary[]>(
+          ['my-active'], (courses) => courses?.filter((course) => course.id !== courseId),
+        )
+      }
       void queryClient.invalidateQueries()
       if (action === 'accept') router.dismissTo('/(tabs)')
     })

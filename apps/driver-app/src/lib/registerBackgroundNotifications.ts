@@ -33,7 +33,9 @@ import { acknowledgePushReceipt } from '../api/notifications'
  * sinon rien n'est défini quand l'app est tuée (contexte headless).
  */
 export const INCOMING_TASK = 'AIRMESS-INCOMING-COURSE-TASK'
-export const INCOMING_CHANNEL = 'incoming-call' // canal avec la sonnerie longue
+// Migration unique : Android ne modifie pas le son d'un canal existant.
+// Garder cet identifiant stable ; ne pas recréer le canal à chaque réception.
+export const INCOMING_CHANNEL = 'incoming-call-v2'
 export const INCOMING_NOTIF_ID = 'incoming-course-alert'
 export const COURSE_ALERT_STOP = 'airmess-course-alert-stop'
 const actionsInFlight = new Map<number, Promise<void>>()
@@ -244,6 +246,7 @@ async function displayRingNotification(item: RingItem, foreground = false): Prom
     data,
     android: {
       channelId: INCOMING_CHANNEL,
+      sound: 'new_course_ring', // Android < 8 ; sur Android >= 8, le canal décide.
       category: AndroidCategory.CALL,
       importance: AndroidImportance.HIGH,
       visibility: AndroidVisibility.PUBLIC,

@@ -4,6 +4,56 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const ts = require('typescript')
+const { QueryClient } = require('@tanstack/react-query')
+
+// Evaluate the actual event handler from the layout against a real query cache.
+function completionHandler(queryClient, navigations) {
+  const source = ts.createSourceFile('layout.tsx', fs.readFileSync(
+    path.join(__dirname, '../src/app/_layout.tsx'), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const handlers = []
+  function visit(node) {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === 'addListener'
+      && node.arguments[0]?.text === 'airmess-course-action-completed') handlers.push(node.arguments[1])
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  assert.equal(handlers.length, 1, 'There must be one global completion handler')
+  const js = ts.transpileModule(`const handle = ${handlers[0].getText(source)};`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  return vm.runInNewContext(`${js}\nhandle`, {
+    queryClient, setPendingCourseId: () => {},
+    router: { dismissTo: (route) => navigations.push(route) },
+  })
+}
+
+test('refusal removes only its course before navigation and cancels a stale fetch', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
+  const courses = [{ id: 1, status: 'assigned' }, { id: 2, status: 'assigned' }]
+  client.setQueryData(['my-active'], courses)
+  let release
+  const pending = client.fetchQuery({ queryKey: ['my-active'], queryFn: () => new Promise((resolve) => { release = resolve }) }).catch(() => {})
+  const navigations = []
+  const handle = completionHandler(client, navigations)
+  handle({ courseId: 1, action: 'decline' })
+  assert.deepEqual(client.getQueryData(['my-active']).map((course) => course.id), [2])
+  release(courses)
+  await pending
+  assert.deepEqual(client.getQueryData(['my-active']).map((course) => course.id), [2])
+  assert.equal(navigations.length, 0)
+  client.clear()
+})
+
+test('normal acceptance keeps the assigned course accessible and navigates once', () => {
+  const client = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } })
+  client.setQueryData(['my-active'], [{ id: 1, status: 'assigned' }])
+  const navigations = []
+  completionHandler(client, navigations)({ courseId: 1, action: 'accept' })
+  assert.equal(client.getQueryData(['my-active'])[0].status, 'assigned')
+  assert.deepEqual(navigations, ['/(tabs)'])
+  client.clear()
+})
 
 // Execute the production coordinator with native boundaries replaced by local fakes.
 function harness(overrides = {}) {
@@ -142,6 +192,9 @@ test('first foreground offer opens a call; subsequent offers keep the reference 
   await h.coordinator.showIncomingCourseNotification({ type: 'course.offered', course_id: 2 })
   assert.equal(h.notifications.length, 1)
   assert.equal(h.channels[0].sound, 'new_course_ring')
+  assert.equal(h.channels[0].id, 'incoming-call-v2')
+  assert.equal(h.notifications[0].android.channelId, h.channels[0].id)
+  assert.equal(h.notifications[0].android.sound, 'new_course_ring')
   assert.equal(h.notifications[0].android.actions.length, 2)
   assert.equal(h.notifications[0].android.fullScreenAction, undefined)
   h.coordinator.releaseActiveIncomingCourse(2)
