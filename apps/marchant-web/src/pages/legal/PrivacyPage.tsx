@@ -1,18 +1,42 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import type { ReactNode } from 'react'
 import Card from '../../components/ui/Card'
 import PageEyebrow from '../../components/ui/PageEyebrow'
 import Highlight from '../../components/Highlight'
 import wordmark from '../../assets/logo/airmess-wordmark.svg'
 
+function LegalSection({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <section className="mt-6">
+      <h2 className="text-h2 text-ink font-bold mb-3">{title}</h2>
+      <div className="space-y-4 text-body text-warm-700 leading-relaxed">{children}</div>
+    </section>
+  )
+}
+
+function LegalList({ items }: { items: ReactNode[] }) {
+  return (
+    <ul className="list-disc pl-6 space-y-2">
+      {items.map((item, index) => (
+        <li key={index}>{item}</li>
+      ))}
+    </ul>
+  )
+}
+
 /**
- * Politique de confidentialité — page publique.
+ * Politique de confidentialite AirMess.
  *
- * ⚠️ Version 2 (2026-08-01) : projet rédigé en visant la conformité à la
- * Loi n°2009-09 du 22 mai 2009 portant protection des données à caractère
- * personnel au Bénin et au Code du numérique (Loi n°2017-20 du 20 avril 2018).
- * À faire relire par un avocat / le DPO avant version définitive.
- * Les mentions "[À VÉRIFIER : …]" doivent être validées par l'éditeur.
+ * Version 3 (2026-09-24) : alignee sur les apps marchand, particulier,
+ * livreur, admin, API, wallet, notifications et localisation.
+ * A faire relire par un conseil juridique / DPO avant publication definitive.
  */
 export default function PrivacyPage() {
   const { t } = useTranslation()
@@ -21,7 +45,7 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-cream">
       <header className="bg-airmess-dark text-cream px-4 md:px-6 py-3 md:py-4 border-b border-warm-600/20">
         <Link to="/" className="inline-flex items-center gap-3">
-          <img src={wordmark} alt="Air Mess" className="h-6 invert" />
+          <img src={wordmark} alt="AirMess" className="h-6 invert" />
         </Link>
       </header>
 
@@ -30,208 +54,281 @@ export default function PrivacyPage() {
         <h1 className="text-h1 md:text-display-2 text-ink leading-tight mb-2">
           {t('legal.privacy.title')} <Highlight>{t('legal.privacy.titleHighlight')}</Highlight>
         </h1>
-        <p className="text-body-l text-warm-500 mb-8">
-          {t('legal.privacy.subtitle')}
-        </p>
+        <p className="text-body-l text-warm-500 mb-8">{t('legal.privacy.subtitle')}</p>
 
         <Card variant="default" padding="lg" className="prose prose-warm max-w-none">
           <p className="text-caption text-warm-500 italic mb-6">
             {t('legal.placeholderNotice')}
           </p>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">1. Responsable du traitement</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Le responsable du traitement des données à caractère personnel
-            collectées via la Plateforme Air Mess est :<br />
-            <strong>KTALYZ CONSEILS</strong>, société de droit béninois, siège
-            {/* social <strong>[À VÉRIFIER : adresse, Cotonou]</strong>,
-            RCCM <strong>[À VÉRIFIER : n° RCCM]</strong>,
-            IFU <strong>[À VÉRIFIER : n° IFU]</strong>. */}
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Pour toute question relative à vos données personnelles, vous
-            pouvez contacter notre Délégué à la Protection des Données (DPO) :
-            <br />
-            E-mail : <strong>ktalyzconseils@gmail.com</strong>
-          </p>
+          <LegalSection title="1. Responsable du traitement">
+            <p>
+              Le responsable du traitement des donnees personnelles collectees via
+              AirMess est <strong>KTALYZ CONSEILS</strong>, a Cotonou, Republique
+              du Benin.
+            </p>
+            <p>
+              Pour toute question relative a vos donnees personnelles, vous pouvez
+              ecrire a : <strong>ktalyzconseils@gmail.com</strong>.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">2. Cadre légal applicable</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Le traitement de vos données est soumis à la législation
-            béninoise, en particulier :
-          </p>
-          <ul className="list-disc pl-6 mb-4 text-body text-warm-700 leading-relaxed space-y-1">
-            <li>Loi n°2009-09 du 22 mai 2009 portant protection des données à caractère personnel en République du Bénin ;</li>
-            <li>Loi n°2017-20 du 20 avril 2018 portant Code du numérique en République du Bénin, notamment ses Livres IV (données personnelles) et V (cybercriminalité) ;</li>
-            <li>Contrôle exercé par l'Autorité de Protection des Données à caractère Personnel (APDP) du Bénin.</li>
-          </ul>
+          <LegalSection title="2. Cadre applicable">
+            <p>
+              AirMess traite les donnees personnelles conformement au droit beninois,
+              notamment au Code du numerique en Republique du Benin et aux regles
+              applicables a la protection des donnees a caractere personnel. L'APDP
+              est l'autorite competente en matiere de controle et de recours.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">3. Données collectées</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Tous Utilisateurs</strong> — nom, prénom, adresse
-            électronique, numéro de téléphone (vérifié par SMS), mot de passe
-            (haché, jamais lisible), date de création du compte, préférences
-            de langue et de notification, identifiants d'appareil pour les
-            notifications push, adresse IP de connexion.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Marchands</strong> — raison sociale, secteur d'activité,
-            IFU / RCCM, adresses de retrait fréquentes, historique des Courses
-            passées.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Particuliers</strong> — adresses fréquentes, historique
-            des Courses passées.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Livreurs</strong> — genre, date de naissance, pièce
-            d'identité (CNI, CIP ou passeport recto/verso selon type), permis
-            de conduire (voiture uniquement), photographie personnelle,
-            contacts d'urgence, informations véhicule (type, marque,
-            immatriculation), position GPS pendant les périodes de
-            disponibilité (marche uniquement quand vous êtes « en ligne »),
-            historique des Courses réalisées, statistiques de performance
-            (taux d'acceptation, note, incidents).
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Paiements</strong> — Air Mess ne stocke jamais votre
-            numéro complet de carte, PIN ou code Mobile Money. Ces données
-            sont traitées directement par nos prestataires de paiement
-            agréés. Nous conservons uniquement un identifiant de transaction
-            et le statut (succès / échec).
-          </p>
+          <LegalSection title="3. Donnees collectees">
+            <p>
+              Les donnees collectees dependent du role de l'utilisateur, des
+              fonctionnalites utilisees et des permissions accordees.
+            </p>
+            <LegalList
+              items={[
+                <>
+                  <strong>Compte et identification</strong> : nom, prenom ou nom
+                  commercial, email, telephone, mot de passe chiffre, date de
+                  creation, derniere connexion, type de compte, statut, version et
+                  date d'acceptation des conditions.
+                </>,
+                <>
+                  <strong>Marchands et particuliers</strong> : informations de
+                  commerce ou de profil, adresses frequentes, contacts de retrait,
+                  destinataires, historique de courses, preferences et documents
+                  transmis au support.
+                </>,
+                <>
+                  <strong>Livreurs</strong> : informations personnelles, photo,
+                  pieces d'identite, permis si necessaire, contacts d'urgence,
+                  informations vehicule, type de livreur, statut de validation,
+                  disponibilite, positions GPS, courses acceptees, refusees ou
+                  realisees, incidents et statistiques operationnelles.
+                </>,
+                <>
+                  <strong>Courses</strong> : points de retrait et livraison,
+                  coordonnees GPS, contacts expediteur/destinataire, type de colis,
+                  taille, urgence, valeur declaree, montant a encaisser, frais,
+                  statut, codes, photos optionnelles, incidents et preuves associees.
+                </>,
+                <>
+                  <strong>Wallets et paiements</strong> : soldes, rechargements,
+                  retraits, reservations, gains, cautions, transactions, references
+                  de paiement, statut de paiement, methode de retrait et informations
+                  strictement necessaires au traitement financier.
+                </>,
+                <>
+                  <strong>Technique et securite</strong> : adresse IP, appareil,
+                  version d'application, systeme d'exploitation, identifiants de
+                  notification push, logs d'acces, actions administrateur et erreurs
+                  techniques.
+                </>,
+              ]}
+            />
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">4. Finalités et bases légales</h2>
-          <ul className="list-disc pl-6 mb-4 text-body text-warm-700 leading-relaxed space-y-2">
-            <li><strong>Fourniture du service</strong> (mise en relation, calcul de tarif, suivi de course, notifications) — exécution du contrat.</li>
-            <li><strong>Vérification d'identité des Livreurs</strong> — obligation légale et exécution du contrat.</li>
-            <li><strong>Traitement des paiements et tenue de la comptabilité</strong> — exécution du contrat et obligations fiscales et comptables.</li>
-            <li><strong>Prévention de la fraude et sécurité</strong> — intérêt légitime.</li>
-            <li><strong>Amélioration du service et statistiques anonymisées</strong> — intérêt légitime.</li>
-            <li><strong>Envoi de messages transactionnels</strong> (statut de course, alertes de paiement) — exécution du contrat.</li>
-            <li><strong>Envoi de communications commerciales</strong> — consentement, révocable à tout moment.</li>
-          </ul>
+          <LegalSection title="4. Donnees de localisation">
+            <p>
+              La localisation est essentielle au fonctionnement d'AirMess : calcul de
+              distance, affichage des points de retrait/livraison, attribution de
+              courses, suivi de l'approche du livreur et resolution d'incidents.
+            </p>
+            <p>
+              Pour les livreurs, la position peut etre collectee lorsque
+              l'utilisateur est en ligne, lorsqu'une course est proposee, acceptee ou
+              en cours, et, si l'autorisation systeme est accordee, en arriere-plan.
+              Cette collecte en arriere-plan permet de recevoir des courses, de
+              suivre une livraison active et d'assurer la securite operationnelle du
+              service.
+            </p>
+            <p>
+              Si la permission de localisation est refusee ou retiree, certaines
+              fonctions peuvent etre indisponibles, notamment la reception de
+              propositions de courses ou le suivi d'une livraison.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">5. Destinataires</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Vos données ne sont accessibles qu'aux personnes strictement
-            habilitées au sein de KTALYZ SARL (support, opérations,
-            comptabilité, développement) et à nos sous-traitants ci-dessous,
-            liés par des obligations contractuelles de confidentialité.
-            Certaines données sont partagées entre Utilisateurs pour la
-            réalisation de la Course (nom du Livreur, numéro de téléphone
-            temporairement visible, position en temps réel côté expéditeur).
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Nous ne revendons jamais vos données à des tiers.</strong>
-          </p>
+          <LegalSection title="5. Finalites des traitements">
+            <LegalList
+              items={[
+                'creer, verifier et securiser les comptes utilisateurs ;',
+                'creer, attribuer, suivre, annuler, archiver et facturer les courses ;',
+                'mettre en relation expediteurs, destinataires, livreurs et support ;',
+                'calculer les prix, encaissements, cautions, gains, retraits et ajustements ;',
+                'envoyer des notifications transactionnelles, emails, SMS ou messages necessaires au service ;',
+                'gerer les incidents, reclamations, fraudes, litiges et preuves ;',
+                "administrer la plateforme, les roles, les droits et les journaux d'activite ;",
+                "ameliorer la stabilite, la securite, la qualite et l'ergonomie des applications ;",
+                'respecter les obligations comptables, fiscales, juridiques et de securite.',
+              ]}
+            />
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">6. Sous-traitants et prestataires</h2>
-          <ul className="list-disc pl-6 mb-4 text-body text-warm-700 leading-relaxed space-y-2">
-            <li><strong>Fedapay</strong> (paiements, agrégation Mobile Money) — Bénin.</li>
-            <li><strong>MTN Mobile Money, Moov Africa Money</strong> — opérateurs Mobile Money agréés.</li>
-            <li><strong>Google Firebase</strong> (vérification OTP téléphone, notifications push, Google Maps) — États-Unis / Europe, encadré par les clauses contractuelles types.</li>
-            <li><strong>Brevo</strong> (envoi d'e-mails transactionnels et OTP) — Union européenne.</li>
-            <li><strong>Hébergement infrastructure</strong> : <strong>Hostiger , USA</strong>.</li>
-          </ul>
+          <LegalSection title="6. Bases juridiques">
+            <p>
+              Selon les cas, les traitements reposent sur l'execution du contrat
+              AirMess, le consentement de l'utilisateur, le respect d'obligations
+              legales, l'interet legitime d'AirMess a securiser et ameliorer son
+              service, ou la constatation, l'exercice et la defense de droits.
+            </p>
+            <p>
+              Les permissions mobiles telles que notifications, camera, galerie ou
+              localisation sont demandees via le systeme d'exploitation et peuvent
+              etre modifiees depuis les reglages de l'appareil.
+            </p>
+          </LegalSection>
 
-          {/* <h2 className="text-h2 text-ink font-bold mt-6 mb-3">7. Transferts hors du Bénin</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Certains de nos prestataires sont établis hors du Bénin
-            (Union européenne, États-Unis). Ces transferts sont encadrés par
-            des garanties appropriées : décisions d'adéquation locales,
-            clauses contractuelles types, ou dispositions équivalentes prévues
-            par le Code du numérique béninois. Vous pouvez obtenir copie de
-            ces garanties en écrivant au DPO.
-          </p> */}
+          <LegalSection title="7. Destinataires des donnees">
+            <p>
+              Les donnees sont accessibles uniquement aux personnes et services qui
+              en ont besoin : operations, support, comptabilite, administration,
+              developpement, securite, et utilisateurs directement concernes par une
+              course.
+            </p>
+            <p>
+              Certaines informations sont partagees entre utilisateurs pour executer
+              la livraison : nom, telephone, adresse, position de course, statut,
+              reference, codes ou consignes utiles. AirMess ne vend pas les donnees
+              personnelles de ses utilisateurs.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">7. Durées de conservation</h2>
-          <ul className="list-disc pl-6 mb-4 text-body text-warm-700 leading-relaxed space-y-2">
-            <li><strong>Compte actif</strong> : tant que le compte n'est pas supprimé.</li>
-            <li><strong>Compte supprimé</strong> : anonymisation sous 30 jours des données non soumises à obligation de conservation.</li>
-            <li><strong>Traces comptables et pièces justificatives</strong> (factures, Courses, transactions wallet) : 10 ans à compter de la clôture de l'exercice, conformément aux obligations fiscales et comptables.</li>
-            <li><strong>Documents d'identité Livreur</strong> : conservés le temps de la validation puis chiffrés et archivés pendant la durée d'exercice de l'activité + 5 ans, en cas de contentieux ou de demande d'autorité compétente.</li>
-            <li><strong>Positions GPS</strong> : supprimées 30 jours après la fin de chaque Course.</li>
-            <li><strong>Journaux de connexion et logs techniques</strong> : 12 mois.</li>
-            <li><strong>Cookies</strong> : voir article 12.</li>
-          </ul>
+          <LegalSection title="8. Prestataires et sous-traitants">
+            <p>
+              AirMess peut faire appel a des prestataires techniques, notamment pour
+              l'hebergement, la base de donnees, les sauvegardes, les paiements,
+              Mobile Money, emails, SMS, OTP, notifications push, cartes, recherche
+              de lieux, analytics techniques, support et supervision.
+            </p>
+            <p>
+              Ces prestataires peuvent inclure, selon les environnements actifs :
+              FedaPay, operateurs Mobile Money, Firebase/Google, Expo, Brevo,
+              services d'hebergement, services de cartographie et services de
+              messagerie transactionnelle. Ils agissent selon leurs propres
+              obligations de securite et les instructions donnees par AirMess lorsque
+              cela est applicable.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">8. Sécurité</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Nous mettons en œuvre des mesures techniques et organisationnelles
-            adaptées : mots de passe hachés avec bcrypt, communications
-            chiffrées en TLS 1.2 minimum, chiffrement au repos des documents
-            d'identité, séparation des environnements, journalisation des
-            accès administrateurs, principe du moindre privilège, sauvegardes
-            régulières. En cas de violation de données susceptible d'engendrer
-            un risque pour vos droits, nous notifierons l'APDP et, si
-            nécessaire, les personnes concernées, dans les délais prévus par
-            la loi.
-          </p>
+          <LegalSection title="9. Transferts hors du Benin">
+            <p>
+              Certains prestataires peuvent traiter ou heberger des donnees hors du
+              Benin. Lorsque c'est le cas, AirMess s'efforce de retenir des
+              prestataires offrant des garanties de securite, de confidentialite et
+              de protection compatibles avec la nature des donnees traitees.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">10. Vos droits</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Conformément à la Loi n°2009-09 et au Livre IV du Code du
-            numérique, vous disposez des droits suivants sur vos données :
-          </p>
-          <ul className="list-disc pl-6 mb-4 text-body text-warm-700 leading-relaxed space-y-1">
-            <li><strong>Droit d'accès</strong> — obtenir la confirmation qu'un traitement est effectué et une copie des données.</li>
-            <li><strong>Droit de rectification</strong> — faire corriger toute donnée inexacte ou incomplète.</li>
-            <li><strong>Droit à l'effacement</strong> — demander la suppression, sous réserve des données à conserver légalement.</li>
-            <li><strong>Droit d'opposition</strong> — vous opposer à un traitement fondé sur l'intérêt légitime, à des fins commerciales.</li>
-            <li><strong>Droit à la limitation</strong> du traitement.</li>
-            <li><strong>Droit à la portabilité</strong> — recevoir vos données dans un format structuré et lisible.</li>
-            <li><strong>Droit de définir des directives</strong> relatives au sort de vos données après votre décès.</li>
-          </ul>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Ces droits s'exercent auprès du DPO à l'adresse mentionnée à
-            l'article 1 (une preuve d'identité pourra être demandée en cas
-            de doute). Nous répondons dans un délai maximal d'un mois.
-          </p>
+          <LegalSection title="10. Durees de conservation">
+            <LegalList
+              items={[
+                <>
+                  <strong>Compte actif</strong> : pendant toute la duree
+                  d'utilisation du service.
+                </>,
+                <>
+                  <strong>Compte supprime</strong> : suppression ou anonymisation des
+                  donnees non necessaires, sous reserve des obligations legales,
+                  comptables, securitaires ou contentieuses.
+                </>,
+                <>
+                  <strong>Courses, paiements, wallet et comptabilite</strong> :
+                  conservation pendant la duree necessaire a la preuve, aux audits,
+                  aux obligations fiscales/comptables et a la resolution des litiges.
+                </>,
+                <>
+                  <strong>Pieces livreur</strong> : conservation pendant la duree de
+                  validation et d'activite, puis archivage limite lorsque necessaire
+                  pour la securite, la fraude ou le contentieux.
+                </>,
+                <>
+                  <strong>Positions GPS</strong> : conservation limitee aux besoins
+                  operationnels, de preuve et de support lies aux courses et
+                  incidents.
+                </>,
+                <>
+                  <strong>Logs techniques et administratifs</strong> : conservation
+                  limitee aux besoins de securite, diagnostic, audit et preuve.
+                </>,
+              ]}
+            />
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">11. Recours</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Si vous estimez que le traitement de vos données n'est pas
-            conforme à la loi, vous pouvez introduire une réclamation auprès
-            de l'Autorité de Protection des Données à caractère Personnel
-            (APDP) du Bénin, ou saisir la juridiction compétente.
-          </p>
+          <LegalSection title="11. Securite">
+            <p>
+              AirMess met en oeuvre des mesures techniques et organisationnelles
+              raisonnables : chiffrement des communications, mots de passe haches,
+              controle des acces, journalisation des actions sensibles, separation
+              des roles, sauvegardes, surveillance des erreurs et limitation des
+              acces administratifs.
+            </p>
+            <p>
+              Aucun systeme n'est totalement exempt de risque. En cas d'incident de
+              securite affectant des donnees personnelles, AirMess prend les mesures
+              necessaires pour limiter l'impact, informer les personnes concernees
+              lorsque la loi l'exige et cooperer avec l'autorite competente.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">12. Cookies et traceurs</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Le site web utilise des cookies strictement nécessaires à son
-            fonctionnement (maintien de session, préférence de langue),
-            exemptés de consentement. Nous n'utilisons pas actuellement de
-            cookies publicitaires ni de traceurs tiers à des fins de mesure
-            d'audience commerciale. Toute évolution sur ce point fera l'objet
-            d'un bandeau de consentement conforme.
-          </p>
+          <LegalSection title="12. Vos droits">
+            <p>
+              Vous pouvez demander l'acces a vos donnees, leur rectification, leur
+              suppression lorsque possible, la limitation ou l'opposition a certains
+              traitements, ainsi que toute information utile sur l'utilisation de vos
+              donnees.
+            </p>
+            <p>
+              Pour exercer vos droits, contactez AirMess a l'adresse indiquee a
+              l'article 1. Une verification d'identite peut etre demandee pour
+              proteger votre compte et eviter qu'un tiers accede a vos donnees.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">13. Notifications push et géolocalisation</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Notifications push</strong> — envoyées via Google Firebase
-            Cloud Messaging pour vous alerter d'événements liés à vos
-            Courses. Vous pouvez les désactiver à tout moment depuis les
-            réglages système de votre appareil.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Géolocalisation Livreur</strong> — active uniquement
-            quand vous êtes « en ligne » ou en cours de livraison, y compris
-            en tâche de fond, ce qui est nécessaire à l'attribution et au
-            suivi des Courses. Vous pouvez la désactiver en repassant en mode
-            hors-ligne : dans ce cas, aucune Course ne peut vous être
-            proposée.
-          </p>
+          <LegalSection title="13. Recours">
+            <p>
+              Si vous estimez que vos droits ne sont pas respectes, vous pouvez
+              contacter AirMess afin de rechercher une solution. Vous pouvez
+              egalement vous adresser a l'Autorite de Protection des Donnees a
+              caractere Personnel (APDP) du Benin ou a la juridiction competente.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">14. Modifications</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            La présente politique peut être modifiée pour tenir compte de
-            l'évolution de la réglementation, des fonctionnalités de la
-            Plateforme ou de nos pratiques. Toute modification substantielle
-            est portée à votre connaissance via l'application ou par e-mail,
-            et fait l'objet d'une nouvelle acceptation lorsque cela est
-            requis par la loi.
-          </p>
+          <LegalSection title="14. Cookies, stockage local et outils similaires">
+            <p>
+              Les sites et applications AirMess peuvent utiliser des cookies,
+              jetons, stockage local ou stockage securise pour maintenir la session,
+              retenir certaines preferences, securiser l'acces, enregistrer un token
+              de notification ou ameliorer l'experience utilisateur.
+            </p>
+            <p>
+              Si des outils de mesure d'audience ou d'analyse sont actives, ils sont
+              utilises pour comprendre l'usage du service et ameliorer les parcours.
+              Les reglages de consentement seront adaptes lorsque la loi ou la
+              nature de l'outil l'exige.
+            </p>
+          </LegalSection>
+
+          <LegalSection title="15. Camera, galerie et documents">
+            <p>
+              Les applications peuvent demander l'acces a la camera ou a la galerie
+              pour joindre une photo de colis, une photo de profil, un document
+              d'identite, un justificatif ou une preuve d'incident. Ces fichiers sont
+              utilises uniquement pour la fonctionnalite demandee, la verification,
+              le support ou la resolution d'un litige.
+            </p>
+          </LegalSection>
+
+          <LegalSection title="16. Modifications de la politique">
+            <p>
+              AirMess peut modifier la presente politique pour tenir compte de
+              l'evolution des applications, de la reglementation, des prestataires
+              ou des pratiques internes. En cas de modification substantielle, une
+              nouvelle acceptation peut etre demandee dans l'application.
+            </p>
+          </LegalSection>
 
           <p className="text-caption text-warm-500 mt-8 pt-6 border-t border-warm-200">
             {t('legal.privacy.lastUpdated')}

@@ -102,7 +102,7 @@
   },
   "legal": {
     "eyebrow": "Legal documents",
-    "placeholderNotice": "This document has been prepared following Beninese law standards. It must be reviewed and approved by a lawyer before its final version. Items shown in [brackets] remain to be filled in by the publisher.",
+    "placeholderNotice": "This document describes AirMess rules and practices. It must remain consistent with the actual service and be reviewed by legal counsel before final publication.",
     "readTermsInstead": "Read the terms of service instead",
     "readPrivacyInstead": "Read the privacy policy instead",
     "footerLinkTerms": "Terms",
@@ -110,17 +110,17 @@
     "terms": {
       "title": "Terms of",
       "titleHighlight": "service",
-      "subtitle": "The rules that frame your use of Air Mess.",
-      "lastUpdated": "Last updated: August 1, 2026 — version 2 (draft)."
+      "subtitle": "The rules that frame your use of AirMess.",
+      "lastUpdated": "Last updated: September 24, 2026 — version 3."
     },
     "privacy": {
       "title": "Privacy",
       "titleHighlight": "policy",
       "subtitle": "What we collect, why, and how we protect your data.",
-      "lastUpdated": "Last updated: August 1, 2026 — version 2 (draft)."
+      "lastUpdated": "Last updated: September 24, 2026 — version 3."
     },
     "checkbox": {
-      "label": "I have read and I accept the <terms>Terms of service</terms> and the <privacy>Privacy policy</privacy> of Air Mess.",
+      "label": "I have read and I accept the <terms>Terms of service</terms> and the <privacy>Privacy policy</privacy> of AirMess.",
       "requiredError": "You must accept the terms to continue."
     },
     "acceptModal": {
@@ -128,7 +128,7 @@
       "body": "Since you signed up, we have formalised our terms of service and privacy policy. Take a moment to review them.",
       "readTerms": "Read the Terms of service",
       "readPrivacy": "Read the Privacy policy",
-      "checkbox": "I have read and I accept Air Mess's Terms of service and Privacy policy.",
+      "checkbox": "I have read and I accept AirMess's Terms of service and Privacy policy.",
       "submit": "Accept and continue",
       "errorGeneric": "We couldn't record your acceptance. Please check your connection and retry."
     }

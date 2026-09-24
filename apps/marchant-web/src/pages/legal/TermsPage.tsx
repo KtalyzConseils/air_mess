@@ -1,19 +1,43 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import type { ReactNode } from 'react'
 import Card from '../../components/ui/Card'
 import PageEyebrow from '../../components/ui/PageEyebrow'
 import Highlight from '../../components/Highlight'
 import wordmark from '../../assets/logo/airmess-wordmark.svg'
 
+function LegalSection({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <section className="mt-6">
+      <h2 className="text-h2 text-ink font-bold mb-3">{title}</h2>
+      <div className="space-y-4 text-body text-warm-700 leading-relaxed">{children}</div>
+    </section>
+  )
+}
+
+function LegalList({ items }: { items: ReactNode[] }) {
+  return (
+    <ul className="list-disc pl-6 space-y-2">
+      {items.map((item, index) => (
+        <li key={index}>{item}</li>
+      ))}
+    </ul>
+  )
+}
+
 /**
- * Conditions générales d'utilisation — page publique.
+ * Conditions generales d'utilisation AirMess.
  *
- * ⚠️ Version 2 (2026-08-01) : projet rédigé selon les usages du droit béninois
- * (Loi n°2017-20 du 20 avril 2018 portant Code du numérique, Loi n°2009-09 du
- * 22 mai 2009 sur la protection des données à caractère personnel, Actes
- * uniformes OHADA). À relire par un avocat avant version définitive.
- * Les mentions "[À VÉRIFIER : …]" doivent être validées par l'éditeur.
- * Bumper `TERMS_VERSION` côté back après chaque modification substantielle.
+ * Version 3 (2026-09-24) : texte aligne sur les flux actuels :
+ * marchand/particulier, livreur, admin, wallet, caution, paiement par destinataire
+ * par defaut, geolocalisation et notifications.
+ * A faire relire par un conseil juridique avant publication definitive.
  */
 export default function TermsPage() {
   const { t } = useTranslation()
@@ -22,7 +46,7 @@ export default function TermsPage() {
     <div className="min-h-screen bg-cream">
       <header className="bg-airmess-dark text-cream px-4 md:px-6 py-3 md:py-4 border-b border-warm-600/20">
         <Link to="/" className="inline-flex items-center gap-3">
-          <img src={wordmark} alt="Air Mess" className="h-6 invert" />
+          <img src={wordmark} alt="AirMess" className="h-6 invert" />
         </Link>
       </header>
 
@@ -31,264 +55,324 @@ export default function TermsPage() {
         <h1 className="text-h1 md:text-display-2 text-ink leading-tight mb-2">
           {t('legal.terms.title')} <Highlight>{t('legal.terms.titleHighlight')}</Highlight>
         </h1>
-        <p className="text-body-l text-warm-500 mb-8">
-          {t('legal.terms.subtitle')}
-        </p>
+        <p className="text-body-l text-warm-500 mb-8">{t('legal.terms.subtitle')}</p>
 
         <Card variant="default" padding="lg" className="prose prose-warm max-w-none">
           <p className="text-caption text-warm-500 italic mb-6">
             {t('legal.placeholderNotice')}
           </p>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">1. Éditeur et objet</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            La plateforme Air Mess est éditée par
-            <strong> KTALYZ CONSEILS</strong>, société de droit béninois, dont le
-            siège social est situé à <strong>Hindé, Cotonou</strong>,
-            {/* immatriculée au Registre du Commerce et du Crédit Mobilier sous le
-            numéro <strong>[À VÉRIFIER : n° RCCM]</strong>,
-            IFU <strong>[À VÉRIFIER : n° IFU]</strong>. */}
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Les présentes Conditions Générales d'Utilisation (« CGU ») ont pour
-            objet de définir les modalités d'accès et d'utilisation de la
-            Plateforme, qui met en relation, à titre onéreux, des expéditeurs
-            (marchands et particuliers) avec des livreurs indépendants opérant
-            en République du Bénin.
-          </p>
+          <LegalSection title="1. Editeur et objet">
+            <p>
+              AirMess est exploite par <strong>KTALYZ CONSEILS</strong>, a Cotonou,
+              Republique du Benin. Les presentes conditions generales encadrent
+              l'acces et l'utilisation de la plateforme AirMess, incluant le site
+              web marchand et administrateur, l'application mobile marchand
+              AirMess, l'application mobile livreur, les services API et les
+              services de support associes.
+            </p>
+            <p>
+              AirMess organise la creation, l'attribution, le suivi et la
+              supervision de courses de livraison entre expediteurs, destinataires
+              et livreurs. L'utilisation du service implique l'acceptation des
+              presentes conditions et de la{' '}
+              <Link to="/legal/privacy" className="underline hover:text-ink">
+                politique de confidentialite
+              </Link>.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">2. Définitions</h2>
-          <ul className="list-disc pl-6 mb-4 text-body text-warm-700 leading-relaxed space-y-2">
-            <li><strong>Plateforme</strong> : le site web app.airmess-logistics.com et les applications mobiles Air Mess Livreur et Air Mess Marchand.</li>
-            <li><strong>Utilisateur</strong> : toute personne physique ou morale disposant d'un compte, quel que soit son type (Marchand, Particulier, Livreur).</li>
-            <li><strong>Marchand</strong> : professionnel titulaire d'un IFU exerçant une activité commerciale déclarée.</li>
-            <li><strong>Particulier</strong> : personne physique majeure agissant à titre non professionnel.</li>
-            <li><strong>Livreur</strong> : personne physique majeure exerçant une activité indépendante de coursier ou livreur, dont le compte a été validé par Air Mess après vérification documentaire.</li>
-            <li><strong>Course</strong> : opération de prise en charge, transport et remise d'un colis, réservée via la Plateforme.</li>
-            <li><strong>Wallet</strong> : compte de paiement interne à la Plateforme, adossé ou Mobile Money de l'Utilisateur.</li>
-            <li><strong>Caution</strong> : provision financière constituée par le Livreur, prélevée sur son wallet dédié au moment de la prise en charge de la course, et libérée à sa clôture.</li>
-          </ul>
+          <LegalSection title="2. Roles sur la plateforme">
+            <LegalList
+              items={[
+                <>
+                  <strong>Marchand</strong> : professionnel ou commerce utilisant
+                  AirMess pour creer et suivre des courses, gerer ses adresses,
+                  son wallet, ses encaissements et ses retraits.
+                </>,
+                <>
+                  <strong>Particulier</strong> : utilisateur non professionnel
+                  pouvant creer et suivre des courses depuis les interfaces
+                  AirMess ouvertes a cet usage.
+                </>,
+                <>
+                  <strong>Livreur independant</strong> : coursier valide par
+                  AirMess, utilisant son propre moyen de transport, disposant
+                  d'un wallet caution et recevant des propositions de courses
+                  selon son profil, sa position et son solde disponible.
+                </>,
+                <>
+                  <strong>Livreur AirMess</strong> : livreur autorise par AirMess
+                  a traiter certaines courses sensibles, notamment les courses a
+                  frais payes par le destinataire et les courses a forte valeur,
+                  selon les regles operationnelles internes.
+                </>,
+                <>
+                  <strong>Administrateur</strong> : utilisateur habilite par
+                  AirMess a superviser les comptes, les courses, les incidents,
+                  les wallets, les retraits, les parametres et les journaux
+                  d'activite.
+                </>,
+                <>
+                  <strong>Destinataire</strong> : personne recevant le colis. Il
+                  peut etre amene a payer les frais de livraison ou le montant du
+                  colis a la remise lorsque la course le prevoit.
+                </>,
+              ]}
+            />
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">3. Acceptation et modifications</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            L'acceptation des CGU est matérialisée par la case à cocher lors
-            de la création du compte. Elle vaut adhésion pleine, entière et
-            sans réserve. Air Mess se réserve le droit de modifier les CGU à
-            tout moment. En cas de modification substantielle, l'Utilisateur
-            est invité à accepter la nouvelle version dès sa prochaine
-            connexion : l'accès aux fonctionnalités du service est conditionné
-            à cette acceptation.
-          </p>
+          <LegalSection title="3. Compte, verification et securite">
+            <p>
+              L'utilisateur doit fournir des informations exactes, a jour et
+              verifiables. AirMess peut demander une verification par telephone,
+              email, SMS, code OTP ou tout autre moyen raisonnable.
+            </p>
+            <p>
+              Les livreurs doivent fournir les informations et pieces requises :
+              identite, telephone, photo, informations du vehicule, permis lorsque
+              necessaire, contacts d'urgence et, le cas echeant, tout justificatif
+              utile a la validation du compte. AirMess peut accepter, refuser,
+              suspendre ou reactiver un profil livreur selon ses controles de
+              securite, de conformite et de qualite de service.
+            </p>
+            <p>
+              Chaque utilisateur est responsable de la confidentialite de ses
+              identifiants. Toute action realisee depuis un compte authentifie est
+              reputee effectuee par son titulaire, sauf preuve contraire.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">4. Description du service</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Air Mess est une plateforme de mise en relation. Les Marchands et
-            Particuliers commandent des Courses en indiquant les points
-            d'enlèvement et de livraison, la nature du colis et sa valeur
-            déclarée. La Plateforme calcule un tarif indicatif basé sur la
-            distance et attribue la Course à un Livreur disponible selon des
-            règles de proximité et de performance.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Air Mess n'est pas partie au contrat de transport conclu entre
-            l'expéditeur et le Livreur. Elle intervient en qualité
-            d'intermédiaire technique et financier, garante de la bonne
-            exécution du service via ses règles internes (validation,
-            caution, réclamations, indemnisation forfaitaire).
-          </p>
+          <LegalSection title="4. Creation et execution d'une course">
+            <p>
+              Pour creer une course, l'expediteur renseigne notamment le type de
+              colis, les informations de retrait, les informations du destinataire,
+              les positions de retrait et de livraison, l'urgence, la valeur
+              declaree lorsqu'elle est utile, et les options d'encaissement.
+            </p>
+            <p>
+              La course suit plusieurs etapes : creation, attente d'attribution,
+              acceptation par un livreur, deplacement vers le point de retrait,
+              prise en charge, livraison, validation ou incident. Des codes de
+              retrait, livraison ou retour peuvent etre utilises pour securiser
+              certaines etapes.
+            </p>
+            <p>
+              AirMess peut refuser, bloquer, reattribuer, archiver ou annuler une
+              course lorsqu'elle est incomplete, frauduleuse, dangereuse, impossible
+              a executer ou contraire aux presentes conditions.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">5. Inscription et compte</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            L'inscription est ouverte aux personnes majeures. L'Utilisateur
-            garantit l'exactitude des informations qu'il communique et
-            s'engage à les tenir à jour. Il est seul responsable de la
-            confidentialité de son mot de passe et de toute action réalisée
-            depuis son compte.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Un même Utilisateur peut cumuler plusieurs profils (par exemple
-            Livreur et Marchand), chacun soumis à sa propre procédure de
-            validation. Un seul mode peut être « actif » à un instant donné.
-          </p>
+          <LegalSection title="5. Prix, paiement et encaissement">
+            <p>
+              Les prix sont affiches en francs CFA (XOF). Le montant de livraison
+              est calcule selon les parametres AirMess, notamment la distance, le
+              minimum tarifaire, l'urgence, les plafonds et les reglages
+              administratifs applicables.
+            </p>
+            <p>
+              Par defaut, les frais de livraison sont payes par le destinataire a
+              la remise. Si le marchand ou l'expediteur coche l'option
+              <strong> "Je paie moi-meme la livraison"</strong>, les frais sont
+              factures au compte de l'expediteur, via wallet ou paiement direct
+              selon le solde disponible et le parcours propose.
+            </p>
+            <p>
+              Une course peut aussi prevoir un <strong>encaissement a la livraison</strong>.
+              Dans ce cas, le livreur collecte aupres du destinataire le montant
+              indique pour le colis, et, lorsque les frais de livraison sont a la
+              charge du destinataire, le total peut comprendre le montant du colis
+              et les frais de livraison.
+            </p>
+            <p>
+              Les paiements et rechargements peuvent etre traites par des
+              prestataires tiers tels que FedaPay, Mobile Money ou tout autre canal
+              active par AirMess. AirMess ne demande jamais le code PIN Mobile Money
+              ni les donnees completes de carte bancaire.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">6. Vérification d'identité — Livreurs</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            L'inscription des Livreurs est soumise à validation manuelle par
-            Air Mess sur la base des pièces suivantes :
-          </p>
-          <ul className="list-disc pl-6 mb-4 text-body text-warm-700 leading-relaxed space-y-1">
-            <li>pièce d'identité en cours de validité (CNI, CIP ou passeport) ;</li>
-            <li>permis de conduire correspondant au véhicule déclaré, le cas échéant ;</li>
-            <li>photographie personnelle ;</li>
-            <li>contacts d'urgence.</li>
-          </ul>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            La validation intervient sous un délai indicatif de 48 heures
-            ouvrées. Air Mess peut refuser une inscription sans avoir à en
-            justifier les motifs, notamment en cas de doute sur l'identité,
-            l'authenticité des documents ou les antécédents.
-          </p>
+          <LegalSection title="6. Wallets, cautions et retraits">
+            <p>
+              AirMess utilise des wallets pour suivre les soldes, rechargements,
+              paiements de courses, gains, cautions, retraits et ajustements. Un
+              wallet ne constitue pas un compte bancaire et ne produit pas
+              d'interets.
+            </p>
+            <p>
+              Les marchands et particuliers peuvent recharger leur wallet et
+              demander un retrait selon les limites, delais et controles en vigueur.
+              AirMess peut bloquer temporairement un retrait en cas d'anomalie,
+              suspicion de fraude, course ouverte, transaction en attente ou besoin
+              de verification.
+            </p>
+            <p>
+              Les livreurs independants peuvent devoir maintenir une caution ou un
+              solde suffisant. Cette caution peut etre reservee, debitee, liberee ou
+              ajustee selon les courses, incidents, retraits et arbitrages. Le
+              livreur AirMess peut etre soumis a un regime operationnel distinct.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">7. Obligations et comportements interdits</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            L'Utilisateur s'engage à utiliser la Plateforme conformément à
-            sa destination, aux présentes CGU et aux lois en vigueur. Sont
-            notamment interdits :
-          </p>
-          <ul className="list-disc pl-6 mb-4 text-body text-warm-700 leading-relaxed space-y-1">
-            <li>l'usurpation d'identité ou la création de faux comptes ;</li>
-            <li>l'utilisation de la Plateforme à des fins frauduleuses, de blanchiment ou de contournement de l'ordre public ;</li>
-            <li>tout comportement portant atteinte à la sécurité, à l'intégrité ou à la réputation d'un autre Utilisateur (harcèlement, menaces, propos discriminatoires) ;</li>
-            <li>toute tentative d'accès non autorisé aux systèmes de la Plateforme, extraction massive de données, ou contournement des mécanismes techniques de sécurité (constitutif des infractions prévues au Livre V du Code du numérique).</li>
-          </ul>
+          <LegalSection title="7. Obligations des expediteurs">
+            <LegalList
+              items={[
+                'renseigner des informations exactes sur le colis, la valeur declaree, les contacts et les adresses ;',
+                'etre disponible au point de retrait ou designer une personne habilitee ;',
+                'ne pas remettre de colis interdit, dangereux, illicite ou mal emballe ;',
+                'payer ou faire payer les montants dus selon le mode choisi ;',
+                'signaler rapidement tout incident depuis les outils prevus.',
+              ]}
+            />
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">8. Objets interdits au transport</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Sont strictement interdits comme objet d'une Course :
-          </p>
-          <ul className="list-disc pl-6 mb-4 text-body text-warm-700 leading-relaxed space-y-1">
-            <li>armes, munitions, explosifs, produits pyrotechniques ;</li>
-            <li>stupéfiants et substances psychotropes ;</li>
-            <li>animaux vivants ;</li>
-            <li>matières dangereuses ou classées ADR (inflammables, corrosives, radioactives, gaz sous pression) ;</li>
-            <li>espèces monétaires (sauf convention particulière avec Air Mess), lingots, valeurs négociables ;</li>
-            <li>tout bien dont la détention, le transport ou la commercialisation est prohibé par la loi béninoise.</li>
-          </ul>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            L'expéditeur est seul responsable de la nature du colis remis.
-            Toute fausse déclaration engage sa responsabilité civile et pénale
-            et prive automatiquement le colis de toute garantie ou
-            indemnisation.
-          </p>
+          <LegalSection title="8. Obligations des livreurs">
+            <LegalList
+              items={[
+                "fournir des informations d'inscription exactes et conserver ses documents a jour ;",
+                'respecter le code de la route, les regles de securite et les consignes raisonnables de livraison ;',
+                "activer la geolocalisation necessaire lorsqu'il est disponible ou en course ;",
+                'ne pas conserver, detourner, ouvrir ou endommager un colis ;',
+                "utiliser les codes et actions d'application uniquement pour la course concernee ;",
+                'remettre les montants encaisses et respecter les procedures de cloture, retour ou incident.',
+              ]}
+            />
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">9. Tarifs, paiements et facturation</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Les tarifs sont exprimés en francs CFA (XOF), toutes taxes comprises
-            le cas échéant, et calculés en fonction de la distance, du type de
-            véhicule et de paramètres réglables par Air Mess. Le prix
-            définitif est affiché avant validation de la Course.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Les paiements sont opérés via des prestataires agréés (Fedapay,
-            opérateurs Mobile Money — MTN Mobile Money, Moov Africa Money, et
-            tout autre canal ajouté ultérieurement). Air Mess n'a pas accès
-            aux données de paiement complètes de l'Utilisateur, qui sont
-            traitées directement par ces prestataires.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Une facture peut être émise sur demande. Les Marchands reçoivent
-            un relevé mensuel de leurs opérations, disponible dans leur espace.
-          </p>
+          <LegalSection title="9. Colis interdits ou soumis a restriction">
+            <p>Sont interdits, sauf accord ecrit specifique d'AirMess lorsque la loi le permet :</p>
+            <LegalList
+              items={[
+                'armes, munitions, explosifs, produits inflammables ou dangereux ;',
+                'stupéfiants, substances psychotropes, produits contrefaits ou illicites ;',
+                'animaux vivants, denrees perissables non adaptees au transport declare, produits medicaux sensibles sans autorisation ;',
+                'argent liquide, bijoux, valeurs negotiables ou objets de tres forte valeur sans validation prealable ;',
+                'tout bien dont la detention, le transport ou la remise est interdit par la loi applicable.',
+              ]}
+            />
+            <p>
+              L'expediteur reste responsable de la nature du colis. Une fausse
+              declaration peut entrainer l'annulation de la course, la suspension du
+              compte, la perte de toute indemnisation et, si necessaire, un
+              signalement aux autorites competentes.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">10. Wallet et caution Livreur</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Wallet Marchand/Particulier</strong> — l'Utilisateur peut
-            approvisionner un wallet interne à la Plateforme pour régler ses
-            Courses. Les fonds ne portent pas intérêt. Ils sont retirables à
-            tout moment, sous réserve des vérifications anti-fraude et d'un
-            délai de traitement pouvant atteindre <strong>[À VÉRIFIER : X]</strong> jours
-            ouvrés.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            <strong>Caution Livreur</strong> — pour chaque Course prise en
-            charge, une caution est prélevée sur le wallet Livreur au moment
-            du pickup et automatiquement libérée à la clôture de la Course.
-            La caution garantit la valeur du colis en cas de perte, vol ou
-            détournement imputable au Livreur. En cas d'incident, elle peut
-            être partiellement ou totalement retenue selon les règles
-            décrites à l'article 12.
-          </p>
+          <LegalSection title="10. Annulation, echec, retour et incident">
+            <p>
+              Une course peut etre annulee par l'expediteur, le livreur ou AirMess
+              selon son etat d'avancement. Des frais peuvent rester dus lorsque le
+              livreur s'est deplace, a pris en charge le colis ou qu'un retour est
+              necessaire.
+            </p>
+            <p>
+              En cas d'absence, refus du destinataire, adresse incorrecte, colis
+              endommage, perte, vol, contestation d'encaissement ou comportement
+              abusif, AirMess peut ouvrir ou arbitrer un incident. L'arbitrage peut
+              entrainer un ajustement de wallet, une retenue sur caution, un
+              remboursement partiel, une suspension ou toute mesure proportionnee.
+            </p>
+            <p>
+              Les preuves examinees peuvent inclure les statuts de course, photos,
+              positions GPS, historiques d'actions, notifications, appels support et
+              informations transmises par les parties.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">11. Responsabilité et indemnisation</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            En cas de perte, vol ou détérioration d'un colis pendant une
-            Course, l'expéditeur peut ouvrir un incident depuis son espace
-            dans un délai de <strong>1</strong> jour  suivant la clôture
-            (ou la fin annoncée) de la Course. Air Mess instruit le dossier
-            et prononce, s'il y a lieu, une indemnisation forfaitaire dans la
-            limite de la valeur déclarée du colis renseignée lors de la
-            création de la Course, plafonnée <strong> au montant juger par l'administrateur de la plateforme </strong>.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            L'indemnisation est exclue lorsque la déclaration est manifestement
-            insincère, en cas de fausse déclaration sur la nature du colis
-            (article 8), en cas de force majeure (article 14), ou lorsque
-            l'expéditeur ne peut apporter aucun commencement de preuve de la
-            valeur invoquée.
-          </p>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Air Mess ne saurait être tenue responsable des retards, dommages
-            indirects ou pertes économiques (manque à gagner, préjudice
-            d'image) subis à l'occasion d'une Course.
-          </p>
+          <LegalSection title="11. API, integrations et comptes professionnels">
+            <p>
+              AirMess peut proposer des cles API et plans d'utilisation permettant a
+              des marchands ou partenaires de creer des courses depuis leurs propres
+              outils. L'utilisateur d'une cle API est responsable de sa conservation,
+              de ses appels, des donnees transmises et du respect des limites de son
+              plan.
+            </p>
+            <p>
+              AirMess peut suspendre une cle ou une integration en cas d'abus,
+              depassement, faille de securite, tentative de fraude ou atteinte a la
+              stabilite du service.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">12. Incidents et litiges entre Utilisateurs</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Tout incident (colis endommagé, contestation destinataire,
-            comportement inapproprié, absence à un rendez-vous, etc.) doit
-            être signalé via les outils prévus dans l'application. Air Mess
-            statue au regard des éléments transmis (photos, historique de
-            positions GPS, historique des échanges) et applique le cas
-            échéant les mesures suivantes : ajustement du prix, retenue sur
-            caution, avertissement, suspension temporaire, résiliation du
-            compte.
-          </p>
+          <LegalSection title="12. Notifications, localisation et permissions">
+            <p>
+              Les applications peuvent demander l'autorisation d'envoyer des
+              notifications pour signaler les nouvelles courses, changements de
+              statut, paiements, retraits, incidents et messages importants.
+            </p>
+            <p>
+              L'application livreur utilise la geolocalisation, y compris en arriere
+              plan lorsque le livreur est en ligne ou en course, afin d'attribuer les
+              courses, suivre l'approche, securiser la livraison et aider le support
+              en cas d'incident. Le livreur peut se mettre hors ligne ou retirer les
+              permissions systeme, mais cela peut empecher la reception ou
+              l'execution des courses.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">13. Propriété intellectuelle</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            La marque « Air Mess », les logos, l'identité visuelle, les
-            interfaces, les textes et l'ensemble des composants logiciels de
-            la Plateforme sont la propriété exclusive de KTALYZ SARL ou de
-            ses concédants et sont protégés par les législations sur la
-            propriété intellectuelle et par la Convention de Berne. Toute
-            reproduction, extraction ou réutilisation non expressément
-            autorisée est interdite.
-          </p>
+          <LegalSection title="13. Suspension, restriction et suppression de compte">
+            <p>
+              AirMess peut restreindre, suspendre ou supprimer un compte en cas de
+              fraude, impaye, usage abusif, comportement dangereux, pieces invalides,
+              incident grave, atteinte au systeme ou violation des presentes
+              conditions.
+            </p>
+            <p>
+              L'utilisateur peut demander la suppression de son compte depuis les
+              outils prevus ou via le support. Certaines donnees peuvent rester
+              conservees lorsque la loi, la comptabilite, la prevention de la fraude,
+              la resolution d'un litige ou la securite des courses l'exigent.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">14. Force majeure</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Aucune Partie ne pourra être tenue responsable d'un manquement à
-            ses obligations résultant d'un cas de force majeure au sens de la
-            jurisprudence : notamment coupure généralisée d'électricité ou de
-            réseau, catastrophe naturelle, épidémie déclarée, émeute, grève
-            générale, décision d'autorité publique rendant l'exécution du
-            service impossible.
-          </p>
+          <LegalSection title="14. Responsabilite">
+            <p>
+              AirMess fournit une plateforme technique et operationnelle de mise en
+              relation, de suivi, de paiement et de supervision. AirMess met en
+              oeuvre des moyens raisonnables pour assurer le fonctionnement du
+              service, mais ne garantit pas l'absence totale d'interruption, de
+              retard, d'erreur de reseau, d'indisponibilite d'un prestataire tiers ou
+              de force majeure.
+            </p>
+            <p>
+              AirMess ne peut etre tenue responsable des dommages indirects, pertes
+              commerciales, pertes d'exploitation, prejudices d'image ou consequences
+              d'une mauvaise declaration, d'un emballage insuffisant, d'un colis
+              interdit ou d'une information erronee fournie par l'utilisateur.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">15. Suspension et résiliation</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Air Mess peut suspendre ou résilier un compte, sans indemnité et
-            sans préavis, en cas de manquement grave aux CGU, de fraude
-            avérée, d'incidents répétés ou de comportement mettant en danger
-            un autre Utilisateur. L'Utilisateur peut résilier son compte à
-            tout moment depuis son espace ; les données sont ensuite
-            conservées dans les conditions décrites dans la Politique de
-            confidentialité.
-          </p>
+          <LegalSection title="15. Donnees personnelles">
+            <p>
+              Les traitements de donnees personnelles sont decrits dans la{' '}
+              <Link to="/legal/privacy" className="underline hover:text-ink">
+                Politique de confidentialite
+              </Link>, qui fait partie integrante des presentes conditions.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">16. Données personnelles</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Le traitement des données personnelles fait l'objet d'un document
-            distinct — la <Link to="/legal/privacy" className="text-warm-700 underline hover:text-ink">Politique de confidentialité</Link> —
-            qui fait partie intégrante des présentes CGU.
-          </p>
+          <LegalSection title="16. Droit applicable et reglement des differends">
+            <p>
+              Les presentes conditions sont regies par le droit beninois. En cas de
+              litige, les parties rechercheront d'abord une solution amiable avec le
+              support AirMess. A defaut d'accord, le differend pourra etre porte
+              devant les juridictions competentes de Cotonou, sous reserve des
+              regles imperatives applicables.
+            </p>
+          </LegalSection>
 
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">17. Loi applicable et juridiction</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Les présentes CGU sont régies par le droit béninois. Tout
-            différend relatif à leur interprétation ou à leur exécution sera
-            soumis, à défaut de résolution amiable dans un délai de trente
-            (30) jours, à la compétence exclusive des tribunaux de Cotonou.
-          </p>
-
-          <h2 className="text-h2 text-ink font-bold mt-6 mb-3">18. Contact</h2>
-          <p className="text-body text-warm-700 leading-relaxed mb-4">
-            Toute demande relative aux présentes CGU peut être adressée à :
-            <br />
-            <strong>KTALYZ SARL — Air Mess</strong><br />
-            E-mail : <strong>ktalyzconseils@gmail.com</strong><br />
-            Téléphone : <strong> +229 XX XX XX XX</strong>
-          </p>
+          <LegalSection title="17. Contact">
+            <p>
+              Pour toute question relative aux presentes conditions :
+              <br />
+              <strong>KTALYZ CONSEILS - AirMess</strong>
+              <br />
+              Email : <strong>ktalyzconseils@gmail.com</strong>
+              <br />
+              Site : <strong>app.airmess-logistics.com</strong>
+            </p>
+          </LegalSection>
 
           <p className="text-caption text-warm-500 mt-8 pt-6 border-t border-warm-200">
             {t('legal.terms.lastUpdated')}
