@@ -60,6 +60,9 @@ export default function LoginScreen() {
             err.code === 'ECONNABORTED'
               ? 'Le serveur met trop de temps à répondre. Réessaie.'
               : 'Impossible de joindre le serveur. Vérifie ta connexion internet.'
+          if (__DEV__) {
+            msg += `\nAPI : ${err.config?.baseURL ?? '(adresse absente)'}\n${err.code ?? 'Erreur réseau'} : ${err.message}`
+          }
         } else if (err.response.status === 401) {
           msg = 'Email ou mot de passe incorrect.'
         } else {
