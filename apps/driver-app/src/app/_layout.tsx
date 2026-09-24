@@ -67,10 +67,6 @@ export default function RootLayout() {
     import('expo-notifications').then((Notifications) => {
       sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data as any
-        if (isCallType(data?.type) && AppState.currentState === 'active') {
-          router.push('/(tabs)/notifications')
-          return
-        }
         if (isCallType(data?.type) && data?.course_id != null) {
           if (data.notification_id != null) {
             void acknowledgePushReceipt(data.notification_id).catch(() => {})
@@ -140,7 +136,7 @@ export default function RootLayout() {
   // TÊTE de file (course la plus ancienne non traitée). Indépendant des events Notifee
   // (capricieux au réveil). La file est vidée par l'écran d'appel au fil des actions.
   useEffect(() => {
-    if (IS_EXPO_GO) return
+    if (IS_EXPO_GO || !hydrated || !user) return
     async function checkQueue() {
       try {
         const items = await getRingQueue()
@@ -161,7 +157,7 @@ export default function RootLayout() {
       if (s === 'active') checkQueue()
     })
     return () => sub.remove()
-  }, [])
+  }, [hydrated, user?.id])
 
   // 2. App vivante : notif full-screen pressée / délivrée (événement Notifee).
   useEffect(() => {
@@ -179,7 +175,7 @@ export default function RootLayout() {
       const data = detail.notification?.data as any
       if (
         type === EventType.PRESS &&
-        detail.pressAction?.id === 'incoming-course' &&
+        (detail.pressAction?.id === 'incoming-course' || detail.pressAction?.id === 'default') &&
         isCallType(data?.type) &&
         data?.course_id != null
       ) {

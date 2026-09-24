@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { View, Text, Pressable, RefreshControl } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useQuery } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '../../stores/authStore'
 import AvailabilityToggle from '../../components/AvailabilityToggle'
@@ -27,6 +27,11 @@ export default function DriverDashboard() {
   const { user } = useAuthStore()
   const setUser = useAuthStore((state) => state.setUser)
   const router = useRouter()
+  const [isFocused, setIsFocused] = useState(false)
+  useFocusEffect(useCallback(() => {
+    setIsFocused(true)
+    return () => setIsFocused(false)
+  }, []))
 
   const meQuery = useQuery({
     queryKey: ['me'],
@@ -323,7 +328,7 @@ export default function DriverDashboard() {
       {activeCourse && (
         <ActiveCourseModal
           course={activeCourse}
-          visible={activeModalOpen}
+          visible={activeModalOpen && isFocused}
           onClose={() => setActiveModalOpen(false)}
         />
       )}
