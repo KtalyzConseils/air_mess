@@ -34,6 +34,16 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 - Le mode démonstration de la landing doit rester explicitement activé et ne doit jamais être la valeur par défaut en production.
 - Restitution administrative : `Résultats des formulaires`, onglet livreurs, avec les réponses brutes conservées dans `survey_payload` et `account_payload`.
 
+## Remise de colis entre livreurs
+
+- Source unique de confirmation : `Course::confirmParcelTransfer`, utilisée par la transition livreur et l'exception ops. Aucun mouvement financier n'y est ajouté.
+- `AdminController::reassignCourse` renouvelle le code à chaque désignation et conserve le détenteur réel si le second livreur est remplacé avant remise.
+- Code à six chiffres chiffré en base et masqué par défaut. Seule la liste des courses du détenteur courant expose `handover_code` ; ne jamais l'ajouter aux notifications, historiques ou réponses destinées au second livreur/client.
+- Cinq erreurs entraînent un blocage de quinze minutes. La confirmation est verrouillée en transaction, consomme le code et trace les deux livreurs. Une répétition ne doit pas renotifier ou libérer une seconde fois.
+- Exception : endpoint admin réservé super/ops, motif de vérification obligatoire et événement distinct. Confirmer une remise ne clôture pas automatiquement l'incident.
+- Déploiement : migration `2026_09_25_000001_secure_parcel_transfers` (inclut les transferts en cours), puis API/web et application mobile compatible. Prévenir les opérations avant activation : une ancienne app ne peut plus confirmer sans saisir le code ; utiliser la procédure exceptionnelle seulement après vérification physique.
+- Validation locale encore requise : les tests PostgreSQL ont été bloqués par un disque plein lors de cette implémentation. Ne pas déployer sans relancer les tests de transfert et tester les deux comptes sur appareil.
+
 ## Diagnostic des courses sans livreur
 
 - Source unique : `AdminController::unassignedCourses`, accessible aux rôles super, ops et support. Les compteurs et listes `assignment_diagnostic.people` sont calculés ensemble.

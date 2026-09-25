@@ -304,6 +304,10 @@ class CourseController extends Controller
         if ($user->isDriver()) {
             $courses->getCollection()->each(function ($course) use ($user) {
                 $course->setAttribute('holding_for_transfer', $course->previous_driver_id === $user->driver?->id && $course->pickup_from_previous_driver);
+                if ($course->holding_for_transfer && ! $course->isTerminal()) {
+                    $course->setAttribute('handover_code', $course->transfer_code);
+                    $course->setAttribute('handover_to', ['id' => $course->driver_id, 'name' => $course->driver?->user?->name]);
+                }
             });
         }
         return response()->json($courses);

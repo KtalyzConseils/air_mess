@@ -377,6 +377,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // Les retraits (argent) restent strictement ops — pas accessibles au support.
     Route::middleware('admin:ops')->group(function () {
         Route::post('/courses/{course}/reassign',      [AdminController::class, 'reassignCourse']);
+        Route::post('/courses/{course}/confirm-transfer-exception', [AdminController::class, 'confirmTransferException']);
         Route::post('/courses/{course}/rebroadcast',   [AdminController::class, 'rebroadcastCourse']);
         Route::post('/courses/{course}/dispute',       [AdminController::class, 'disputeCourse']);
         Route::post('/drivers',                        [AdminController::class, 'createDriver']);

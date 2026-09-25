@@ -662,7 +662,7 @@ export interface AdminIncident {
   resolution_note: string | null
   resolved_at: string | null
   created_at: string
-  course: { id: number; reference: string; status: string } | null
+  course: { id: number; reference: string; status: string; pickup_from_previous_driver?: boolean; previous_driver_id?: number; driver_id?: number } | null
   reported_by: { id: number; name: string; type: string } | null
 }
 
@@ -671,6 +671,10 @@ export interface IncidentListParams {
   type?: string
   page?: number
   per_page?: number
+}
+
+export async function confirmTransferException(courseId: number, reason: string): Promise<void> {
+  await api.post(`/admin/courses/${courseId}/confirm-transfer-exception`, { reason })
 }
 
 

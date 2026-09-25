@@ -41,10 +41,66 @@ class Course extends Model
     public const PAID_BY_RECIPIENT = 'recipient';
 
     protected $guarded = ['id']; // mass assignment OK sur tous les champs sauf id
+    protected $hidden = ['transfer_code', 'transfer_code_attempts', 'transfer_code_locked_until'];
+
+    /** Source unique de remise physique (livreur ou exception ops). Aucun mouvement financier. */
+    public function confirmParcelTransfer(User $actor, ?string $code, ?string $overrideReason = null): bool
+    {
+        $result = \Illuminate\Support\Facades\DB::transaction(function () use ($actor, $code, $overrideReason) {
+            $course = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
+            $override = $overrideReason !== null;
+            if ($override) {
+                abort_unless($actor->isAdmin() && in_array($actor->admin?->sub_role, ['super', 'ops'], true), 403);
+                abort_if(mb_strlen(trim($overrideReason)) < 10, 422, 'Précisez les vérifications effectuées (10 caractères minimum).');
+            } else {
+                abort_unless($actor->isDriver() && $course->driver_id === $actor->driver?->id, 403);
+            }
+            if (! $course->pickup_from_previous_driver && $course->transfer_confirmed_at) return ['changed' => false];
+            abort_unless($course->pickup_from_previous_driver && $course->previous_driver_id && $course->driver_id
+                && in_array($course->status, [self::STATUS_PICKED_UP, self::STATUS_AT_DROPOFF], true), 422, 'Aucun transfert à confirmer.');
+            if (! $override) {
+                if ($course->transfer_code_locked_until?->isFuture()) return ['error' => 'Trop de tentatives. Réessayez après 15 minutes ou contactez les opérations.', 'status' => 429];
+                if (! $course->transfer_code || ! hash_equals($course->transfer_code, trim($code ?? ''))) {
+                    $attempts = $course->transfer_code_locked_until ? 1 : $course->transfer_code_attempts + 1;
+                    $course->update(['transfer_code_attempts' => $attempts, 'transfer_code_locked_until' => $attempts >= 5 ? now()->addMinutes(15) : null]);
+                    return ['error' => 'Code de remise incorrect. Demandez le code au livreur qui détient le colis.', 'status' => 422];
+                }
+            }
+            $previous = $course->previous_driver_id;
+            $status = $course->status;
+            $course->update(['pickup_from_previous_driver' => false, 'status' => self::STATUS_PICKED_UP,
+                'transfer_code' => null, 'transfer_code_attempts' => 0, 'transfer_code_locked_until' => null, 'transfer_confirmed_at' => now()]);
+            CourseStatusHistory::create([
+                'course_id' => $course->id, 'from_status' => $status, 'to_status' => self::STATUS_PICKED_UP,
+                'changed_by_id' => $actor->id, 'changed_by_type' => 'user',
+                'reason' => $override ? 'Remise confirmée exceptionnellement par les opérations : '.trim($overrideReason) : 'Remise physique confirmée avec le code du précédent livreur',
+                'metadata' => ['previous_driver_id' => $previous, 'new_driver_id' => $course->driver_id, 'transfer_confirmed' => true, 'ops_override' => $override],
+            ]);
+            $stillHolding = self::whereNotIn('status', self::TERMINAL_STATUSES)->where(function ($q) use ($previous) {
+                $q->where('driver_id', $previous)->orWhere(fn ($q) => $q->where('previous_driver_id', $previous)->where('pickup_from_previous_driver', true));
+            })->exists();
+            if (! $stillHolding) Driver::whereKey($previous)->where('availability_status', 'busy')->update(['availability_status' => 'available']);
+            return ['changed' => true, 'previous' => $previous];
+        });
+        if (isset($result['error'])) abort($result['status'], $result['error']);
+        if (! $result['changed']) return false;
+        $this->refresh();
+        $notifier = app(\App\Services\NotificationService::class);
+        $recipients = User::whereIn('id', array_filter([
+            $this->sender_id, Driver::find($result['previous'])?->user_id, $this->driver?->user_id,
+        ]))->pluck('id')->merge(Admin::whereIn('sub_role', ['super', 'ops'])->pluck('user_id'))->unique()->all();
+        $notifier->sendToUsers($recipients, 'course.transfer_confirmed', 'Remise du colis confirmée',
+            "La remise de {$this->reference} au nouveau livreur est confirmée. La livraison peut reprendre.",
+            ['reference' => $this->reference], $this->id);
+        return true;
+    }
 
     protected function casts(): array
     {
         return [
+            'transfer_code' => 'encrypted',
+            'transfer_code_locked_until' => 'datetime',
+            'transfer_confirmed_at' => 'datetime',
             'origin_lat' => 'float',
             'origin_lng' => 'float',
             'distance_km' => 'float',

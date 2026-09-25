@@ -41,7 +41,7 @@ const TIMELINE_STEPS: { key: string; short: string }[] = [
 
 const NEXT_ACTION: Record<
   string,
-  { action: TransitionAction; label: string; needsCode?: 'pickup' | 'delivery' | 'return' }
+  { action: TransitionAction; label: string; needsCode?: 'pickup' | 'delivery' | 'return' | 'transfer' }
 > = {
   assigned:            { action: 'start_to_pickup',   label: 'Je pars chercher le colis' },
   driver_to_pickup:    { action: 'arrived_pickup',    label: 'Je suis sur place' },
@@ -63,7 +63,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
   const [correctNote, setCorrectNote] = useState('')
   const waitingForOps = !!course.holding_for_transfer || (!!course.abandonment_pending && course.status !== 'returning_to_sender' && !course.pickup_from_previous_driver)
   const next: (typeof NEXT_ACTION)[string] | undefined = waitingForOps ? undefined : course.pickup_from_previous_driver
-    ? { action: 'transfer_confirmed', label: 'Colis reçu du précédent livreur' }
+    ? { action: 'transfer_confirmed', label: 'Confirmer la réception avec le code', needsCode: 'transfer' }
     : NEXT_ACTION[course.status]
 
   // Phase = quelle destination on vise en ce moment.
@@ -109,6 +109,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
         pickup_code:   next.needsCode === 'pickup'   ? code.trim() : undefined,
         delivery_code: next.needsCode === 'delivery' ? code.trim() : undefined,
         return_code:   next.needsCode === 'return'   ? code.trim() : undefined,
+        transfer_code: next.needsCode === 'transfer' ? code.trim() : undefined,
       })
     },
     onSuccess: (updatedCourse) => {
@@ -205,6 +206,11 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
   return (
     <View>
       {waitingForOps && <View className="bg-warning-bg rounded-2xl p-4 mb-3">
+        {course.holding_for_transfer && <View className="mb-3">
+          <Text className="text-ink font-bold">Remise à : {course.handover_to?.name ?? `Livreur #${course.handover_to?.id ?? ''}`}</Text>
+          <Text className="text-ink font-mono text-3xl my-2">{course.handover_code ?? 'Code indisponible — contacte les opérations'}</Text>
+          <Text className="text-airmess-red font-bold">Communique ce code uniquement lorsque tu remets physiquement le colis au livreur désigné.</Text>
+        </View>}
         <Text className="text-ink font-extrabold text-lg">{course.holding_for_transfer ? 'Transfert organisé — remise en attente' : 'Abandon signalé — en attente des opérations'}</Text>
         <Text className="text-warm-600 mt-2">{course.holding_for_transfer ? 'Conserve le colis et attends le nouveau livreur sur place. Il confirmera sa réception ; tu seras alors libéré.' : 'Conserve le colis. Les opérations doivent organiser un retour ou un transfert. Tu restes occupé tant que le colis ne leur est pas remis.'}</Text>
       </View>}
@@ -428,7 +434,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
                 ? 'Code marchand'
                 : next.needsCode === 'delivery'
                   ? 'Code livraison'
-                  : 'Code de retour marchand'}
+                  : next.needsCode === 'transfer' ? 'Code fourni par le précédent livreur' : 'Code de retour marchand'}
             </Text>
             <TextInput
               value={code}
@@ -448,7 +454,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
             variant="primary"
             size="xl"
             loading={mutation.isPending}
-            disabled={next.needsCode ? code.length < 4 : false}
+            disabled={next.needsCode ? code.trim().length < (next.needsCode === 'transfer' ? 6 : 4) : false}
             onPress={() => mutation.mutate()}
             rightIcon={<Ionicons name="arrow-forward" size={20} color="#1A1614" />}
           >

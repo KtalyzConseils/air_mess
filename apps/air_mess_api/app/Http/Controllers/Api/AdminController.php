@@ -296,7 +296,12 @@ class AdminController extends Controller
                 'message' => 'Ce livreur n\'est pas disponible (hors-ligne, occupé ou compte inactif). Choisissez un livreur disponible.',
             ], 422);
         }
-        $oldDriver = $course->driver_id ? Driver::find($course->driver_id) : null;
+        $replacedDriverId = $course->pickup_from_previous_driver ? $course->driver_id : null;
+        $custodianId = $course->pickup_from_previous_driver ? $course->previous_driver_id : $course->driver_id;
+        $oldDriver = $custodianId ? Driver::find($custodianId) : null;
+        if ($wantsTransfer && (! $oldDriver || $oldDriver->id === $newDriver->id)) {
+            return response()->json(['message' => 'Le transfert exige deux livreurs distincts et un détenteur identifié.'], 422);
+        }
 
         // Coords de transfert : celles fournies (position au signalement) ou
         // fallback sur la current position du driver initial. Sans coord fiable
@@ -310,7 +315,10 @@ class AdminController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($course, $newDriver, $data, $oldDriver, $request, $wantsTransfer, $transferLat, $transferLng) {
+        DB::transaction(function () use ($course, $newDriver, $data, $oldDriver, $request, $wantsTransfer, $transferLat, $transferLng, $replacedDriverId) {
+            $locked = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
+            abort_if($locked->driver_id !== $course->driver_id || $locked->status !== $course->status
+                || $locked->pickup_from_previous_driver !== $course->pickup_from_previous_driver, 409, 'La course a changé. Actualisez avant de réaffecter.');
             $updates = [
                 'driver_id'   => $newDriver->id,
                 'assigned_at' => now(),
@@ -322,6 +330,11 @@ class AdminController extends Controller
                 // et son écran l'oriente vers transfer_lat/lng.
                 $updates['previous_driver_id']          = $oldDriver?->id;
                 $updates['pickup_from_previous_driver'] = true;
+                do { $transferCode = (string) random_int(100000, 999999); } while ($transferCode === $locked->transfer_code);
+                $updates['transfer_code'] = $transferCode;
+                $updates['transfer_code_attempts'] = 0;
+                $updates['transfer_code_locked_until'] = null;
+                $updates['transfer_confirmed_at'] = null;
                 $updates['transfer_lat']                = $transferLat;
                 $updates['transfer_lng']                = $transferLng;
                 // On ne touche PAS au statut : la course reste picked_up (ou at_dropoff).
@@ -331,6 +344,10 @@ class AdminController extends Controller
             }
 
             $course->update($updates);
+
+            if ($replacedDriverId && $replacedDriverId !== $newDriver->id && ! Course::where('driver_id', $replacedDriverId)->whereNotIn('status', Course::TERMINAL_STATUSES)->exists()) {
+                Driver::whereKey($replacedDriverId)->where('availability_status', 'busy')->update(['availability_status' => 'available']);
+            }
 
             $newDriver->update(['availability_status' => 'busy']);
 
@@ -1989,11 +2006,18 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         return response()->json(['message' => 'Retour organisé. L’incident reste ouvert pour le suivi et la facturation.']);
     }
 
+    public function confirmTransferException(Request $request, Course $course): JsonResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'min:10', 'max:500']]);
+        $course->confirmParcelTransfer($request->user(), null, $data['reason']);
+        return response()->json(['message' => 'Remise confirmée par les opérations. L’incident reste à traiter.', 'course' => $course->fresh()]);
+    }
+
     public function incidents(Request $request): JsonResponse
     {
         $query = CourseIncident::query()
             ->with([
-                'course:id,reference,status',
+                'course:id,reference,status,pickup_from_previous_driver,previous_driver_id,driver_id',
                 'reportedBy:id,name,type',
             ])
             ->latest();
