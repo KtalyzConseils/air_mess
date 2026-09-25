@@ -2575,6 +2575,15 @@
       "next": "Suivant"
     },
     "unassignedCourses": {
+      "people": {
+        "contacted": "Livreurs contactés", "declined": "Refus enregistrés", "unanswered": "Contactés sans refus enregistré",
+        "available": "Disponibles dans les 8 km", "busy": "Occupés dans les 8 km", "nearest": "Disponible le plus proche hors zone",
+        "explanation": "Historique cumulé de la course, toutes diffusions confondues. Une offre enregistrée ne prouve ni la réception du push ni la lecture de l’offre. Disponibilité et distance : dernières données connues ; elles ne garantissent pas l’éligibilité à cette course.",
+        "empty": "Aucun livreur dans cette catégorie.", "unavailable": "Détails indisponibles. Actualisez la liste.", "unknown": "Profil indisponible",
+        "offered_at": "Dernière offre enregistrée", "push_received_at": "Dernier accusé de réception push", "notification_read_at": "Dernière notification marquée lue", "declined_at": "Refus enregistré le", "position_at": "Position mise à jour le",
+        "receiptUnknown": "Réception du push non confirmée.",
+        "reasons": { "too_far": "Trop loin", "wrong_quartier": "Zone non desservie", "no_helmet": "Pas de casque", "vehicle_unfit": "Véhicule inadapté", "personal": "Motif personnel", "other": "Autre motif" }
+      },
       "title": "Courses sans livreur",
       "subtitle": "{{count}} course(s) à prendre en charge",
       "severity": {

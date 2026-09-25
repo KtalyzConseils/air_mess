@@ -2575,6 +2575,15 @@
       "next": "Next"
     },
     "unassignedCourses": {
+      "people": {
+        "contacted": "Contacted drivers", "declined": "Recorded declines", "unanswered": "Contacted without a recorded decline",
+        "available": "Available within 8 km", "busy": "Busy within 8 km", "nearest": "Nearest available driver outside the area",
+        "explanation": "Cumulative course history across all broadcasts. A recorded offer proves neither push receipt nor offer viewing. Availability and distance use the last known data and do not guarantee eligibility for this course.",
+        "empty": "No drivers in this category.", "unavailable": "Details unavailable. Refresh the list.", "unknown": "Profile unavailable",
+        "offered_at": "Last recorded offer", "push_received_at": "Last push receipt", "notification_read_at": "Last notification marked read", "declined_at": "Declined at", "position_at": "Position updated at",
+        "receiptUnknown": "Push receipt not confirmed.",
+        "reasons": { "too_far": "Too far", "wrong_quartier": "Area not served", "no_helmet": "No helmet", "vehicle_unfit": "Unsuitable vehicle", "personal": "Personal reason", "other": "Other reason" }
+      },
       "title": "Courses without a driver",
       "subtitle": "{{count}} course(s) to handle",
       "severity": {

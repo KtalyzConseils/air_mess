@@ -135,15 +135,15 @@ class AdminController extends Controller
             ->where('activation_status', 'active')
             ->whereIn('availability_status', ['available', 'busy'])
             ->whereNotNull('current_lat')->whereNotNull('current_lng')
-            ->get(['id', 'availability_status', 'current_lat', 'current_lng']);
-        $offeredCounts = Notification::query()
+            ->get(['id', 'user_id', 'first_name', 'last_name', 'availability_status', 'current_lat', 'current_lng', 'last_position_at']);
+        $offersByCourse = Notification::query()
             ->whereIn('course_id', $courseIds)->where('type', 'course.offered')
-            ->selectRaw('course_id, COUNT(DISTINCT user_id) AS total')
-            ->groupBy('course_id')->pluck('total', 'course_id');
-        $declineCounts = CourseDeclineRecord::query()
+            ->with(['user:id,name', 'user.driver:id,user_id,first_name,last_name'])
+            ->orderByDesc('created_at')->get()->groupBy('course_id');
+        $declinesByCourse = CourseDeclineRecord::query()
             ->whereIn('course_id', $courseIds)
-            ->selectRaw('course_id, COUNT(DISTINCT driver_id) AS total')
-            ->groupBy('course_id')->pluck('total', 'course_id');
+            ->with('driver:id,user_id,first_name,last_name')
+            ->orderByDesc('created_at')->get()->groupBy('course_id');
 
         $distanceKm = static function (float $latA, float $lngA, float $latB, float $lngB): float {
             $latDelta = deg2rad($latB - $latA);
@@ -154,7 +154,7 @@ class AdminController extends Controller
             return 2 * 6371 * asin(min(1, sqrt($a)));
         };
 
-        $courses->each(function (Course $course) use ($drivers, $offeredCounts, $declineCounts, $distanceKm) {
+        $courses->each(function (Course $course) use ($drivers, $offersByCourse, $declinesByCourse, $distanceKm) {
             $start = $course->offer_broadcasted_at ?? $course->created_at;
             $course->setAttribute('offer_age_seconds', $start->diffInSeconds(now()));
 
@@ -172,10 +172,38 @@ class AdminController extends Controller
             $busyWithin = $busyIds->filter(fn ($id) => $distances[$id] <= 8.0)->count();
             $nearestOutside = $availableIds->map(fn ($id) => $distances[$id])
                 ->filter(fn ($distance) => $distance > 8.0)->min();
-            $offered = (int) ($offeredCounts[$course->id] ?? 0);
-            $declined = (int) ($declineCounts[$course->id] ?? 0);
+            $identity = static fn ($driver) => [
+                'driver_id' => $driver?->id,
+                'name' => $driver ? trim($driver->first_name.' '.$driver->last_name) : null,
+            ];
+            $contacted = ($offersByCourse[$course->id] ?? collect())->groupBy('user_id')->map(function ($notifications) use ($identity) {
+                $latest = $notifications->first();
+                return array_merge($identity($latest->user?->driver), [
+                    'user_id' => $latest->user_id,
+                    'name' => $latest->user?->name,
+                    'offered_at' => $latest->created_at?->toIso8601String(),
+                    'push_received_at' => $notifications->max('push_received_at')?->toIso8601String(),
+                    'notification_read_at' => $notifications->max('read_at')?->toIso8601String(),
+                ]);
+            })->values();
+            $refusals = ($declinesByCourse[$course->id] ?? collect())->unique('driver_id')->map(fn ($record) => array_merge($identity($record->driver), [
+                'driver_id' => $record->driver_id, 'reason' => $record->reason,
+                'custom_reason' => $record->custom_reason, 'declined_at' => $record->created_at?->toIso8601String(),
+            ]))->values();
+            $unanswered = $contacted->filter(fn ($person) => ! $refusals->contains('driver_id', $person['driver_id']))->values();
+            $located = $drivers->map(fn ($driver) => array_merge($identity($driver), [
+                'distance_km' => round($distances[$driver->id], 1),
+                'position_at' => $driver->last_position_at,
+                'availability' => $driver->availability_status,
+            ]));
+            $nearAvailable = $located->filter(fn ($person) => $person['availability'] === 'available' && $distances[$person['driver_id']] <= 8)->values();
+            $nearBusy = $located->filter(fn ($person) => $person['availability'] === 'busy' && $distances[$person['driver_id']] <= 8)->values();
+            $outside = $located->filter(fn ($person) => $person['availability'] === 'available' && $distances[$person['driver_id']] > 8)
+                ->sortBy(fn ($person) => $distances[$person['driver_id']])->take(1)->values();
+            $offered = $contacted->count();
+            $declined = $refusals->count();
 
-            if ($offered > 0 && $declined >= $offered) {
+            if ($offered > 0 && $unanswered->isEmpty()) {
                 $code = 'all_contacted_declined';
                 $warning = 'Tous les livreurs contactés ont refusé';
             } elseif ($availableWithin === 0 && $busyWithin > 0) {
@@ -197,6 +225,10 @@ class AdminController extends Controller
                 'busy_within_radius' => $busyWithin,
                 'contacted_count' => $offered,
                 'declined_count' => $declined,
+                'people' => [
+                    'contacted' => $contacted, 'declined' => $refusals, 'unanswered' => $unanswered,
+                    'available' => $nearAvailable, 'busy' => $nearBusy, 'nearest' => $outside,
+                ],
             ]);
         });
 

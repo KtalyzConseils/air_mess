@@ -411,6 +411,20 @@ export interface OfferAdminAction {
   admin_user?: { id: number; name: string } | null
 }
 
+export interface AssignmentPerson {
+  driver_id: number | null
+  name: string | null
+  user_id?: number
+  offered_at?: string | null
+  push_received_at?: string | null
+  notification_read_at?: string | null
+  declined_at?: string | null
+  reason?: string
+  custom_reason?: string | null
+  distance_km?: number
+  position_at?: string | null
+}
+
 export interface UnassignedCourse extends Course {
   offer_age_seconds: number
   offer_broadcasted_at?: string | null
@@ -423,6 +437,7 @@ export interface UnassignedCourse extends Course {
     busy_within_radius: number
     contacted_count: number
     declined_count: number
+    people?: Record<'contacted' | 'declined' | 'unanswered' | 'available' | 'busy' | 'nearest', AssignmentPerson[]>
   }
 }
 

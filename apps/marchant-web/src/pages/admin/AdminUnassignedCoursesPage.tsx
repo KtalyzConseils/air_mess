@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminModal from '../../components/admin/AdminModal'
 import { AdminButton } from '../../components/admin/AdminToolbar'
 import { fetchAdminDrivers, fetchUnassignedCourses, markOfferViewed, rebroadcastCourse, reassignCourse, type UnassignedCourse } from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
@@ -13,6 +14,7 @@ import { cancelCourseAsSupport } from '../../api/support'
 
 type Severity = 'new' | 'watch' | 'urgent' | 'critical'
 type QueueFilter = 'all' | 'none_available_nearby' | 'all_nearby_busy' | 'broadcast_no_response' | 'all_contacted_declined'
+type PeopleGroup = 'contacted' | 'declined' | 'unanswered' | 'available' | 'busy' | 'nearest'
 
 const severityMeta: Record<Severity, { accent: string; badge: string }> = {
   new: { accent: 'border-l-warm-300', badge: 'bg-warm-100 text-warm-600' },
@@ -52,6 +54,7 @@ export default function AdminUnassignedCoursesPage() {
   const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'express' | 'standard'>('all')
   const [selected, setSelected] = useState<number[]>([])
   const [bulkResult, setBulkResult] = useState<string | null>(null)
+  const [peoplePanel, setPeoplePanel] = useState<{ courseId: number; group: PeopleGroup } | null>(null)
   const queue = useQuery({ queryKey: ['admin', 'courses-unassigned'], queryFn: fetchUnassignedCourses, refetchInterval: 20_000 })
   const drivers = useQuery({ queryKey: ['admin', 'drivers'], queryFn: fetchAdminDrivers })
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'courses-unassigned'] })
@@ -68,6 +71,8 @@ export default function AdminUnassignedCoursesPage() {
   })
   const available = (drivers.data ?? []).filter((d) => d.availability_status === 'available' && ['active', 'validated'].includes(d.activation_status))
   const allCourses = useMemo(() => queue.data?.courses ?? [], [queue.data])
+  const detailCourse = allCourses.find((course) => course.id === peoplePanel?.courseId)
+  const detailPeople = peoplePanel ? detailCourse?.assignment_diagnostic.people?.[peoplePanel.group] : undefined
   const counts = useMemo(() => allCourses.reduce<Record<Severity, number>>((result, course) => {
     result[severity(course)] += 1
     return result
@@ -108,6 +113,18 @@ export default function AdminUnassignedCoursesPage() {
   })
 
   return <AdminPageShell>
+    <AdminModal open={!!peoplePanel} onClose={() => setPeoplePanel(null)} width="lg"
+      title={`${detailCourse?.reference ?? ''} — ${t(`admin.unassignedCourses.people.${peoplePanel?.group ?? 'contacted'}`)}`}>
+      <p className="mb-4 text-caption text-warm-500">{t('admin.unassignedCourses.people.explanation')}</p>
+      {!detailPeople ? <p>{t('admin.unassignedCourses.people.unavailable')}</p> : detailPeople.length === 0 ? <p>{t('admin.unassignedCourses.people.empty')}</p> :
+        <ul className="space-y-3">{detailPeople.map((person, index) => <li key={person.driver_id ?? person.user_id ?? index} className="rounded-lg border border-warm-200 bg-cream p-3 text-body-s">
+          {person.driver_id ? <Link className="font-bold text-ink underline decoration-airmess-yellow underline-offset-4" to={`/admin/drivers/${person.driver_id}`}>{person.name || `#${person.driver_id}`} · #{person.driver_id}</Link> : <p className="font-bold">{person.name || t('admin.unassignedCourses.people.unknown')}</p>}
+          {(['offered_at', 'push_received_at', 'notification_read_at', 'declined_at', 'position_at'] as const).map((field) => person[field] && <p key={field} className="mt-1 text-caption text-warm-600">{t(`admin.unassignedCourses.people.${field}`)} : {new Date(person[field]!).toLocaleString(locale)}</p>)}
+          {person.offered_at && !person.push_received_at && <p className="mt-1 text-caption text-warm-500">{t('admin.unassignedCourses.people.receiptUnknown')}</p>}
+          {person.reason && <p className="mt-2">{t(`admin.unassignedCourses.people.reasons.${person.reason}`, { defaultValue: person.reason })}{person.custom_reason ? ` — ${person.custom_reason}` : ''}</p>}
+          {person.distance_km != null && <p className="mt-1 font-semibold">{person.distance_km.toLocaleString(locale)} km</p>}
+        </li>)}</ul>}
+    </AdminModal>
     <AdminPageHeader title={t('admin.unassignedCourses.title')} subtitle={t('admin.unassignedCourses.subtitle', { count: queue.data?.count ?? 0 })} />
     <div className="px-4 py-5 md:px-6 lg:px-8">
       <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -173,9 +190,14 @@ export default function AdminUnassignedCoursesPage() {
                 <div className="mt-3 rounded-md border border-warning/25 bg-warning-bg/60 px-3 py-2">
                   <p className="text-body-s font-bold text-ink">⚠ {diagnostic.warning}</p>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-caption text-warm-600">
-                    <span>{t('admin.unassignedCourses.contactedCount', { count: diagnostic.contacted_count })}</span><span>{t('admin.unassignedCourses.declinedCount', { count: diagnostic.declined_count })}</span>
-                    <span>{t('admin.unassignedCourses.availableWithinRadius', { count: diagnostic.available_within_radius })}</span><span>{t('admin.unassignedCourses.busyWithinRadius', { count: diagnostic.busy_within_radius })}</span>
-                    {diagnostic.nearest_available_outside_km !== null && <span>{t('admin.unassignedCourses.nearestOutside', { km: diagnostic.nearest_available_outside_km.toLocaleString(locale) })}</span>}
+                    {([
+                      ['contacted', t('admin.unassignedCourses.contactedCount', { count: diagnostic.contacted_count })],
+                      ['declined', t('admin.unassignedCourses.declinedCount', { count: diagnostic.declined_count })],
+                      ['unanswered', `${t('admin.unassignedCourses.people.unanswered')} : ${diagnostic.people?.unanswered.length ?? '—'}`],
+                      ['available', t('admin.unassignedCourses.availableWithinRadius', { count: diagnostic.available_within_radius })],
+                      ['busy', t('admin.unassignedCourses.busyWithinRadius', { count: diagnostic.busy_within_radius })],
+                      ...(diagnostic.nearest_available_outside_km !== null ? [['nearest', t('admin.unassignedCourses.nearestOutside', { km: diagnostic.nearest_available_outside_km.toLocaleString(locale) })]] : []),
+                    ] as [PeopleGroup, string][]).map(([group, label]) => <button key={group} type="button" className="rounded px-1 py-1 underline decoration-dotted underline-offset-4 hover:bg-airmess-yellow/20 focus-visible:outline-2 focus-visible:outline-ink" onClick={() => setPeoplePanel({ courseId: course.id, group })}>{label}</button>)}
                   </div>
                 </div>
                 {course.offer_admin_actions?.length ? <p className="mt-2 text-caption text-warm-500">{t('admin.unassignedCourses.lastAction', { action: course.offer_admin_actions[0].action, admin: course.offer_admin_actions[0].admin_user?.name ?? t('admin.unassignedCourses.anAdmin') })}</p> : null}

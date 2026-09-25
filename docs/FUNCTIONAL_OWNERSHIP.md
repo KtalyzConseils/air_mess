@@ -34,6 +34,13 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 - Le mode démonstration de la landing doit rester explicitement activé et ne doit jamais être la valeur par défaut en production.
 - Restitution administrative : `Résultats des formulaires`, onglet livreurs, avec les réponses brutes conservées dans `survey_payload` et `account_payload`.
 
+## Diagnostic des courses sans livreur
+
+- Source unique : `AdminController::unassignedCourses`, accessible aux rôles super, ops et support. Les compteurs et listes `assignment_diagnostic.people` sont calculés ensemble.
+- Offres et refus : historique cumulé de la course, dédupliqué par utilisateur/livreur, toutes diffusions confondues. « Contactés sans refus enregistré » ne prouve pas l'absence de toute réponse passée.
+- `push_received_at` est un accusé de réception et `read_at` concerne la notification, pas une preuve de lecture de l'offre. Une notification enregistrée ne garantit pas l'envoi ou la réception du push.
+- Disponibilités et distances : dernières positions connues, même rayon de 8 km que les compteurs existants ; ne constituent pas un contrôle complet d'éligibilité à une course.
+
 ## Désactivation d'un livreur connecté
 
 - Source serveur : `AdminController::toggleDriverActive`, qui suspend le compte, le passe hors ligne et révoque ses tokens. Une course en cours, un retour ou un colis encore détenu pour transfert interdit cette désactivation.
