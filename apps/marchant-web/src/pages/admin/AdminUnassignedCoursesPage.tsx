@@ -120,7 +120,6 @@ export default function AdminUnassignedCoursesPage() {
         <ul className="space-y-3">{detailPeople.map((person, index) => <li key={person.driver_id ?? person.user_id ?? index} className="rounded-lg border border-warm-200 bg-cream p-3 text-body-s">
           {person.driver_id ? <Link className="font-bold text-ink underline decoration-airmess-yellow underline-offset-4" to={`/admin/drivers/${person.driver_id}`}>{person.name || `#${person.driver_id}`} · #{person.driver_id}</Link> : <p className="font-bold">{person.name || t('admin.unassignedCourses.people.unknown')}</p>}
           {(['offered_at', 'push_received_at', 'notification_read_at', 'declined_at', 'position_at'] as const).map((field) => person[field] && <p key={field} className="mt-1 text-caption text-warm-600">{t(`admin.unassignedCourses.people.${field}`)} : {new Date(person[field]!).toLocaleString(locale)}</p>)}
-          {person.offered_at && !person.push_received_at && <p className="mt-1 text-caption text-warm-500">{t('admin.unassignedCourses.people.receiptUnknown')}</p>}
           {person.reason && <p className="mt-2">{t(`admin.unassignedCourses.people.reasons.${person.reason}`, { defaultValue: person.reason })}{person.custom_reason ? ` — ${person.custom_reason}` : ''}</p>}
           {person.distance_km != null && <p className="mt-1 font-semibold">{person.distance_km.toLocaleString(locale)} km</p>}
         </li>)}</ul>}
