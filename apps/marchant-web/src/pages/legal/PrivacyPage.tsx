@@ -64,7 +64,7 @@ export default function PrivacyPage() {
           <LegalSection title="1. Responsable du traitement">
             <p>
               Le responsable du traitement des donnees personnelles collectees via
-              AirMess est <strong>KTALYZ CONSEILS</strong>, a Cotonou, Republique
+              AirMess est <strong>KTALYZ</strong>, a Cotonou, Republique
               du Benin.
             </p>
             <p>

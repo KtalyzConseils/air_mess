@@ -64,7 +64,7 @@ export default function TermsPage() {
 
           <LegalSection title="1. Editeur et objet">
             <p>
-              AirMess est exploite par <strong>KTALYZ CONSEILS</strong>, a Cotonou,
+              AirMess est exploite par <strong>KTALYZ</strong>, a Cotonou,
               Republique du Benin. Les presentes conditions generales encadrent
               l'acces et l'utilisation de la plateforme AirMess, incluant le site
               web marchand et administrateur, l'application mobile marchand
