@@ -822,6 +822,67 @@ class AdminController extends Controller
         ], 201);
     }
 
+    public function updateMarchant(Request $request, Marchant $marchant): JsonResponse
+    {
+        $request->merge([
+            'phone' => $request->filled('phone')
+                ? \App\Support\Phone::normalize((string) $request->input('phone'))
+                : $request->input('phone'),
+        ]);
+
+        $data = $request->validate([
+            'name'             => ['required', 'string', 'max:255'],
+            'email'            => ['required', 'email', Rule::unique('users', 'email')->ignore($marchant->user_id)],
+            'phone'            => ['required', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($marchant->user_id)],
+            'raison_sociale'   => ['required', 'string', 'max:255'],
+            'ifu_rccm'         => ['nullable', 'string', 'max:50'],
+            'secteur_activite' => ['required', Rule::in([
+                'supermarche', 'restaurant', 'boutique', 'pharmacie', 'ecommerce', 'autre',
+            ])],
+        ]);
+
+        $before = [
+            'user' => $marchant->user->only(['name', 'email', 'phone']),
+            'marchant' => $marchant->only(['raison_sociale', 'ifu_rccm', 'secteur_activite']),
+        ];
+
+        DB::transaction(function () use ($request, $marchant, $data, $before) {
+            $marchant->user->update([
+                'name'  => $data['name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+            ]);
+
+            $marchant->update([
+                'raison_sociale'   => $data['raison_sociale'],
+                'ifu_rccm'         => $data['ifu_rccm'] ?? null,
+                'secteur_activite' => $data['secteur_activite'],
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'marchant.updated',
+                "Marchand {$marchant->raison_sociale} modifie.",
+                [
+                    'marchant_id' => $marchant->id,
+                    'user_id' => $marchant->user_id,
+                    'before' => $before,
+                    'after' => [
+                        'user' => $marchant->user->fresh()->only(['name', 'email', 'phone']),
+                        'marchant' => $marchant->fresh()->only(['raison_sociale', 'ifu_rccm', 'secteur_activite']),
+                    ],
+                ],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Marchand mis a jour.',
+            'marchant' => $marchant->fresh()->load(['user', 'user.wallet']),
+        ]);
+    }
+
     // ===== 5ter. FICHE DÃ‰TAILLÃ‰E D'UN MARCHAND =====
     // ===== 5quinquies. LISTE D'ATTENTE LIVREURS (etude de marche) =====
     public function driverWaitlists(Request $request): JsonResponse
@@ -1217,6 +1278,87 @@ class AdminController extends Controller
             'message' => 'Livreur cree.',
             'driver' => $driver->fresh()->load(['user', 'wallet']),
         ], 201);
+    }
+
+    public function updateDriver(Request $request, Driver $driver): JsonResponse
+    {
+        $request->merge([
+            'phone' => $request->filled('phone')
+                ? \App\Support\Phone::normalize((string) $request->input('phone'))
+                : $request->input('phone'),
+        ]);
+
+        $data = $request->validate([
+            'first_name'               => ['required', 'string', 'max:100'],
+            'last_name'                => ['required', 'string', 'max:100'],
+            'email'                    => ['required', 'email', Rule::unique('users', 'email')->ignore($driver->user_id)],
+            'phone'                    => ['required', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($driver->user_id)],
+            'gender'                   => ['nullable', Rule::in(['M', 'F', 'autre'])],
+            'birth_date'               => ['nullable', 'date', 'before:-16 years'],
+            'vehicle_type'             => ['required', Rule::in(['scooter', 'moto', 'voiture', 'velo'])],
+            'vehicle_plate'            => ['nullable', 'string', 'max:20'],
+            'vehicle_brand'            => ['nullable', 'string', 'max:50'],
+            'emergency_contact_name'   => ['nullable', 'string', 'max:120'],
+            'emergency_contact_phone'  => ['nullable', 'string', 'max:20'],
+            'emergency_contact2_name'  => ['nullable', 'string', 'max:120'],
+            'emergency_contact2_phone' => ['nullable', 'string', 'max:20'],
+            'preferred_response_channel' => ['nullable', Rule::in(['email', 'sms', 'whatsapp'])],
+        ]);
+
+        $before = [
+            'user' => $driver->user->only(['name', 'email', 'phone']),
+            'driver' => $driver->only([
+                'first_name', 'last_name', 'gender', 'birth_date', 'vehicle_type',
+                'vehicle_plate', 'vehicle_brand', 'emergency_contact_name',
+                'emergency_contact_phone', 'emergency_contact2_name',
+                'emergency_contact2_phone', 'preferred_response_channel',
+            ]),
+        ];
+
+        DB::transaction(function () use ($request, $driver, $data, $before) {
+            $driver->user->update([
+                'name'  => $data['first_name'] . ' ' . $data['last_name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+            ]);
+
+            $driver->update([
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'],
+                'gender' => $data['gender'] ?? null,
+                'birth_date' => $data['birth_date'] ?? null,
+                'vehicle_type' => $data['vehicle_type'],
+                'vehicle_plate' => $data['vehicle_plate'] ?? null,
+                'vehicle_brand' => $data['vehicle_brand'] ?? null,
+                'emergency_contact_name' => $data['emergency_contact_name'] ?? null,
+                'emergency_contact_phone' => $data['emergency_contact_phone'] ?? null,
+                'emergency_contact2_name' => $data['emergency_contact2_name'] ?? null,
+                'emergency_contact2_phone' => $data['emergency_contact2_phone'] ?? null,
+                'preferred_response_channel' => $data['preferred_response_channel'] ?? null,
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'driver.updated',
+                "Livreur {$driver->first_name} {$driver->last_name} modifie.",
+                [
+                    'driver_id' => $driver->id,
+                    'user_id' => $driver->user_id,
+                    'before' => $before,
+                    'after' => [
+                        'user' => $driver->user->fresh()->only(['name', 'email', 'phone']),
+                        'driver' => $driver->fresh()->only(array_keys($before['driver'])),
+                    ],
+                ],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Livreur mis a jour.',
+            'driver' => $driver->fresh()->load(['user', 'wallet']),
+        ]);
     }
 
     public function drivers(Request $request): JsonResponse
@@ -2871,6 +3013,64 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             'message' => 'Particulier cree.',
             'individual' => $individual->fresh()->load('user'),
         ], 201);
+    }
+
+    public function updateIndividual(Request $request, Individual $individual): JsonResponse
+    {
+        $request->merge([
+            'phone' => $request->filled('phone')
+                ? \App\Support\Phone::normalize((string) $request->input('phone'))
+                : $request->input('phone'),
+        ]);
+
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name'  => ['required', 'string', 'max:100'],
+            'email'      => ['required', 'email', Rule::unique('users', 'email')->ignore($individual->user_id)],
+            'phone'      => ['required', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($individual->user_id)],
+            'gender'     => ['nullable', Rule::in(['M', 'F', 'autre'])],
+        ]);
+
+        $before = [
+            'user' => $individual->user->only(['name', 'email', 'phone']),
+            'individual' => $individual->only(['first_name', 'last_name', 'gender']),
+        ];
+
+        DB::transaction(function () use ($request, $individual, $data, $before) {
+            $individual->user->update([
+                'name'  => $data['first_name'] . ' ' . $data['last_name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+            ]);
+
+            $individual->update([
+                'first_name' => $data['first_name'],
+                'last_name'  => $data['last_name'],
+                'gender'     => $data['gender'] ?? null,
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'individual.updated',
+                "Particulier {$individual->first_name} {$individual->last_name} modifie.",
+                [
+                    'individual_id' => $individual->id,
+                    'user_id' => $individual->user_id,
+                    'before' => $before,
+                    'after' => [
+                        'user' => $individual->user->fresh()->only(['name', 'email', 'phone']),
+                        'individual' => $individual->fresh()->only(['first_name', 'last_name', 'gender']),
+                    ],
+                ],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Particulier mis a jour.',
+            'individual' => $individual->fresh()->load(['user', 'user.wallet']),
+        ]);
     }
 
     public function showIndividual(Individual $individual): JsonResponse

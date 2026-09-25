@@ -11,7 +11,13 @@ import { ArrowLeftIcon, SettingsIcon, AlertTriangleIcon } from '../../components
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
 import ResetWalletButton from '../../components/ResetWalletButton'
 import SupportNotesPanel from '../../components/SupportNotesPanel'
-import { fetchIndividual, suspendIndividual, reactivateIndividual } from '../../api/admin'
+import {
+  fetchIndividual,
+  suspendIndividual,
+  reactivateIndividual,
+  updateIndividual,
+  type UpdateIndividualPayload,
+} from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 
@@ -93,6 +99,8 @@ export default function AdminIndividualDetailPage() {
   const [showSuspendModal, setShowSuspendModal] = useState(false)
   const [suspendReason, setSuspendReason] = useState('')
   const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState<UpdateIndividualPayload | null>(null)
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
   const canManageIndividual = hasAdminRole(currentUser, 'commercial')
@@ -128,6 +136,28 @@ export default function AdminIndividualDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'individuals'] })
     },
   })
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: UpdateIndividualPayload) => updateIndividual(Number(id), payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'individual', id] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'individuals'] })
+      setEditOpen(false)
+      setEditForm(null)
+    },
+  })
+
+  function openEditModal() {
+    if (!data) return
+    setEditForm({
+      first_name: data.individual.first_name,
+      last_name: data.individual.last_name,
+      email: data.individual.user.email,
+      phone: data.individual.user.phone ?? '',
+      gender: data.individual.gender ?? undefined,
+    })
+    setEditOpen(true)
+  }
 
   const lastError = suspendMutation.error ?? reactivateMutation.error
   const actionError: string | null =
@@ -213,7 +243,16 @@ export default function AdminIndividualDetailPage() {
         {data && (
           <>
             <div className="grid gap-4 md:grid-cols-2">
-              <Section title={t('admin.marchants.detail.identityContact')}>
+              <Section
+                title={t('admin.marchants.detail.identityContact')}
+                action={
+                  canManageIndividual ? (
+                    <AdminButton variant="ghost" size="sm" onClick={openEditModal}>
+                      Modifier
+                    </AdminButton>
+                  ) : null
+                }
+              >
                 <Row label={t('admin.marchants.detail.email')}>{data.individual.user.email}</Row>
                 <Row label={t('admin.marchants.detail.phone')}>{data.individual.user.phone ?? '—'}</Row>
                 <Row label={t('admin.marchants.detail.accountActive')}>{data.individual.user.is_active ? t('admin.common.yes') : t('admin.common.no')}</Row>
@@ -407,6 +446,74 @@ export default function AdminIndividualDetailPage() {
           className="w-full px-3 py-2 bg-off-white border border-warm-300 rounded-md text-body-s text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow transition-all"
         />
       </AdminModal>
+
+      {editForm && (
+        <AdminModal
+          open={editOpen}
+          onClose={() => !updateMutation.isPending && setEditOpen(false)}
+          title="Modifier le particulier"
+          subtitle="Mets a jour les informations principales du compte."
+          width="lg"
+          footer={
+            <>
+              <AdminButton variant="secondary" onClick={() => setEditOpen(false)} disabled={updateMutation.isPending}>
+                {t('admin.common.cancel')}
+              </AdminButton>
+              <AdminButton
+                variant="primary"
+                onClick={() => updateMutation.mutate(editForm)}
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? t('common.loading') : t('common.save')}
+              </AdminButton>
+            </>
+          }
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Prenom" value={editForm.first_name} onChange={(value) => setEditForm({ ...editForm, first_name: value })} />
+            <Field label="Nom" value={editForm.last_name} onChange={(value) => setEditForm({ ...editForm, last_name: value })} />
+            <Field label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm({ ...editForm, email: value })} />
+            <Field label="Telephone" value={editForm.phone} onChange={(value) => setEditForm({ ...editForm, phone: value })} />
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">Genre</label>
+              <select
+                value={editForm.gender ?? ''}
+                onChange={(e) => setEditForm({ ...editForm, gender: e.target.value as UpdateIndividualPayload['gender'] })}
+                className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+              >
+                <option value="">Non renseigne</option>
+                <option value="M">Homme</option>
+                <option value="F">Femme</option>
+                <option value="autre">Autre</option>
+              </select>
+            </div>
+          </div>
+        </AdminModal>
+      )}
     </AdminPageShell>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  type?: string
+}) {
+  return (
+    <div>
+      <label className="text-caption font-bold text-ink block mb-1">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+      />
+    </div>
   )
 }

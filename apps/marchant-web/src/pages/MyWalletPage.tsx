@@ -86,6 +86,7 @@ export default function MyWalletPage() {
       setWithdrawAmount('')
       setWithdrawAccount('')
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
+      queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] })
     },
     onError: (err) => {
       const msg =
@@ -98,7 +99,10 @@ export default function MyWalletPage() {
 
   const cancelWithdrawMutation = useMutation({
     mutationFn: (id: number) => cancelWithdraw(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['wallet'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet'] })
+      queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] })
+    },
     onError: (err) => {
       const msg =
         err instanceof AxiosError

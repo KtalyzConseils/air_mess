@@ -335,6 +335,8 @@ export default function NewCoursePage() {
     onSuccess: (result) => {
       if (result.course) {
         queryClient.invalidateQueries({ queryKey: ['courses'] })
+        queryClient.invalidateQueries({ queryKey: ['wallet'] })
+        queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] })
         navigate('/dashboard')
         return
       }

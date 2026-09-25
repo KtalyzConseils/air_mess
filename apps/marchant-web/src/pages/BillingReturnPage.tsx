@@ -41,6 +41,7 @@ export default function BillingReturnPage() {
       await fetchMe()
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['wallet'] }),
+        queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] }),
         queryClient.invalidateQueries({ queryKey: ['courses'] }),
         queryClient.invalidateQueries({ queryKey: ['notifications'] }),
       ])

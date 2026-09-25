@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { AxiosError } from 'axios'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminModal from '../../components/admin/AdminModal'
 import { AdminButton } from '../../components/admin/AdminToolbar'
 import { ArrowLeftIcon, SettingsIcon } from '../../components/ui/icons'
 import MarchantStatusBadge from '../../components/MarchantStatusBadge'
@@ -19,6 +20,8 @@ import {
   reactivateMarchant,
   rejectMarchant,
   deleteMarchant,
+  updateMarchant,
+  type UpdateMarchantPayload,
 } from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
@@ -85,6 +88,8 @@ export default function MarchantDetailPage() {
   const queryClient = useQueryClient()
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
   const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState<UpdateMarchantPayload | null>(null)
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
   const canManageMarchant = hasAdminRole(currentUser, 'commercial')
@@ -185,6 +190,33 @@ export default function MarchantDetailPage() {
     },
     onError: (err) => showApiError(err, t('admin.marchants.detail.deletionError')),
   })
+  const updateMut = useMutation({
+    mutationFn: (payload: UpdateMarchantPayload) => updateMarchant(Number(id), payload),
+    onSuccess: () => {
+      invalidate()
+      setEditOpen(false)
+      setEditForm(null)
+    },
+    onError: (err) => showApiError(err, 'Impossible de modifier le marchand.'),
+  })
+
+  function openEditModal() {
+    if (!data) return
+    setEditForm({
+      name: data.marchant.user.name,
+      email: data.marchant.user.email,
+      phone: data.marchant.user.phone ?? '',
+      raison_sociale: data.marchant.raison_sociale,
+      ifu_rccm: data.marchant.ifu_rccm ?? '',
+      secteur_activite: data.marchant.secteur_activite,
+    })
+    setEditOpen(true)
+  }
+
+  function submitEdit() {
+    if (!editForm) return
+    updateMut.mutate(editForm)
+  }
 
   function handleConfirm(reason: string) {
     switch (confirmAction) {
@@ -280,8 +312,13 @@ export default function MarchantDetailPage() {
             <div className="grid gap-4 md:grid-cols-2">
               {/* Identité & contact */}
               <section className="bg-off-white border border-warm-200 rounded-lg">
-                <div className="px-5 py-2.5 border-b border-warm-200">
+                <div className="px-5 py-2.5 border-b border-warm-200 flex items-center justify-between gap-3">
                   <h2 className="text-body-s font-bold text-ink">{t('admin.marchants.detail.identityContact')}</h2>
+                  {canManageMarchant && (
+                    <AdminButton variant="ghost" size="sm" onClick={openEditModal}>
+                      Modifier
+                    </AdminButton>
+                  )}
                 </div>
                 <div className="px-5 py-3">
                   <Row label={t('admin.marchants.detail.sector')}>{SECTEUR_LABEL[data.marchant.secteur_activite] ?? data.marchant.secteur_activite}</Row>
@@ -408,6 +445,70 @@ export default function MarchantDetailPage() {
           onClose={() => !isPending && setConfirmAction(null)}
         />
       )}
+
+      {editForm && (
+        <AdminModal
+          open={editOpen}
+          onClose={() => !updateMut.isPending && setEditOpen(false)}
+          title="Modifier le marchand"
+          subtitle="Mets a jour uniquement les informations utiles du compte."
+          width="lg"
+          footer={
+            <>
+              <AdminButton variant="secondary" onClick={() => setEditOpen(false)} disabled={updateMut.isPending}>
+                {t('admin.common.cancel')}
+              </AdminButton>
+              <AdminButton variant="primary" onClick={submitEdit} disabled={updateMut.isPending}>
+                {updateMut.isPending ? t('common.loading') : t('common.save')}
+              </AdminButton>
+            </>
+          }
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Responsable" value={editForm.name} onChange={(value) => setEditForm({ ...editForm, name: value })} />
+            <Field label="Telephone" value={editForm.phone} onChange={(value) => setEditForm({ ...editForm, phone: value })} />
+            <Field label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm({ ...editForm, email: value })} />
+            <Field label="Raison sociale" value={editForm.raison_sociale} onChange={(value) => setEditForm({ ...editForm, raison_sociale: value })} />
+            <Field label="IFU / RCCM" value={editForm.ifu_rccm ?? ''} onChange={(value) => setEditForm({ ...editForm, ifu_rccm: value })} />
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">Secteur</label>
+              <select
+                value={editForm.secteur_activite}
+                onChange={(e) => setEditForm({ ...editForm, secteur_activite: e.target.value as UpdateMarchantPayload['secteur_activite'] })}
+                className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+              >
+                {Object.entries(SECTEUR_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </AdminModal>
+      )}
     </AdminPageShell>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  type?: string
+}) {
+  return (
+    <div>
+      <label className="text-caption font-bold text-ink block mb-1">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+      />
+    </div>
   )
 }

@@ -685,6 +685,16 @@ export async function createMarchant(payload: CreateMarchantPayload): Promise<{ 
   return data
 }
 
+export type UpdateMarchantPayload = Omit<CreateMarchantPayload, 'password' | 'validate_now'>
+
+export async function updateMarchant(
+  id: number,
+  payload: UpdateMarchantPayload,
+): Promise<{ marchant: MarchantWithUser; message: string }> {
+  const { data } = await api.patch(`/admin/marchants/${id}`, payload)
+  return data
+}
+
 export interface MarchantStats {
   courses_total: number
   courses_delivered: number
@@ -726,6 +736,31 @@ export interface CreateDriverPayload {
 
 export async function createDriver(payload: CreateDriverPayload): Promise<{ driver: DriverFull; message: string }> {
   const { data } = await api.post('/admin/drivers', payload)
+  return data
+}
+
+export interface UpdateDriverPayload {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  gender?: 'M' | 'F' | 'autre' | ''
+  birth_date?: string
+  vehicle_type: 'scooter' | 'moto' | 'voiture' | 'velo'
+  vehicle_plate?: string
+  vehicle_brand?: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+  emergency_contact2_name?: string
+  emergency_contact2_phone?: string
+  preferred_response_channel?: 'email' | 'sms' | 'whatsapp' | ''
+}
+
+export async function updateDriver(
+  id: number,
+  payload: UpdateDriverPayload,
+): Promise<{ driver: DriverDetail; message: string }> {
+  const { data } = await api.patch(`/admin/drivers/${id}`, payload)
   return data
 }
 
@@ -907,6 +942,16 @@ export async function createIndividual(
   payload: CreateIndividualPayload,
 ): Promise<{ individual: IndividualWithUser; message: string }> {
   const { data } = await api.post('/admin/individuals', payload)
+  return data
+}
+
+export type UpdateIndividualPayload = Omit<CreateIndividualPayload, 'password'>
+
+export async function updateIndividual(
+  id: number,
+  payload: UpdateIndividualPayload,
+): Promise<{ individual: IndividualWithUser; message: string }> {
+  const { data } = await api.patch(`/admin/individuals/${id}`, payload)
   return data
 }
 

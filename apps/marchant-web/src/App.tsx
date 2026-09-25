@@ -59,9 +59,72 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     },
   },
+})
+
+// L'espace admin doit rester frais sans forcer l'utilisateur a recharger la page.
+// Seules les requetes actives dont la cle commence par ['admin'] sont rafraichies.
+queryClient.setQueryDefaults(['admin'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 15_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['notifications'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 30_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['courses'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 15_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['course'], {
+  staleTime: 3_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 10_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['wallet'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 20_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['me', 'wallet'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 20_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['addresses'], {
+  staleTime: 10_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+})
+
+queryClient.setQueryDefaults(['auth', 'me'], {
+  staleTime: 10_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
 })
 
 function AuthProfileRefresher() {

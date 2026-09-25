@@ -356,6 +356,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // === ÉCRITURE COMMERCIALE (validation/suspension marchands & particuliers) ===
     Route::middleware('admin:commercial')->group(function () {
         Route::post('/marchants', [AdminController::class, 'createMarchant']);
+        Route::patch('/marchants/{marchant}', [AdminController::class, 'updateMarchant']);
         Route::post('/marchants/{marchant}/validate',   [AdminController::class, 'validateMarchant']);
         Route::post('/marchants/{marchant}/suspend',    [AdminController::class, 'suspendMarchant']);
         Route::post('/marchants/{marchant}/reactivate', [AdminController::class, 'reactivateMarchant']);
@@ -363,6 +364,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::delete('/marchants/{marchant}',          [AdminController::class, 'destroyMarchant']);
 
         Route::post('/individuals', [AdminController::class, 'createIndividual']);
+        Route::patch('/individuals/{individual}', [AdminController::class, 'updateIndividual']);
         Route::post('/individuals/{individual}/suspend',    [AdminController::class, 'suspendIndividual']);
         Route::post('/individuals/{individual}/reactivate', [AdminController::class, 'reactivateIndividual']);
 
@@ -378,6 +380,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/courses/{course}/rebroadcast',   [AdminController::class, 'rebroadcastCourse']);
         Route::post('/courses/{course}/dispute',       [AdminController::class, 'disputeCourse']);
         Route::post('/drivers',                        [AdminController::class, 'createDriver']);
+        Route::patch('/drivers/{driver}',              [AdminController::class, 'updateDriver']);
         Route::post('/drivers/{driver}/validate',      [AdminController::class, 'validateDriver']);
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
         Route::post('/incidents/{incident}/resolve',   [AdminController::class, 'resolveIncident']);
