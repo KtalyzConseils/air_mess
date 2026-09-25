@@ -34,6 +34,13 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 - Le mode démonstration de la landing doit rester explicitement activé et ne doit jamais être la valeur par défaut en production.
 - Restitution administrative : `Résultats des formulaires`, onglet livreurs, avec les réponses brutes conservées dans `survey_payload` et `account_payload`.
 
+## Désactivation d'un livreur connecté
+
+- Source serveur : `AdminController::toggleDriverActive`, qui suspend le compte, le passe hors ligne et révoque ses tokens. Une course en cours, un retour ou un colis encore détenu pour transfert interdit cette désactivation.
+- Source mobile : l'intercepteur 401 de `driver-app/src/api/client.ts` et `authStore.expireSession`. Seule la session du token concerné est invalidée ; une panne réseau ou un refus 403 ne déconnecte pas.
+- Le layout actualise la query existante `['me']` au retour au premier plan et toutes les 15 secondes lorsque l'app est active, sur tous les écrans. Ne pas ajouter un second polling dans l'accueil.
+- Une réponse 401 ne distingue pas expiration et désactivation : le message ne doit pas inventer un motif précis. Le login conserve le diagnostic serveur du compte.
+
 ## Règle d'évolution
 
 Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `FirstCourseDiscountService`, `FIRST_COURSE_500`, `waitlisted_at`, `MerchantWaitlist`, `DriverWaitlist`, les routes admin correspondantes et leurs tests.

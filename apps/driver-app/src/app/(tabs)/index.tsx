@@ -39,7 +39,7 @@ export default function DriverDashboard() {
       const { data } = await api.get('/auth/me')
       return data as { user: any; terms?: { needs_acceptance: boolean } }
     },
-    refetchInterval: 15_000,
+    // Le layout actualise cette même query toutes les 15 s sur tous les écrans.
   })
 
   const me = meQuery.data?.user ?? user

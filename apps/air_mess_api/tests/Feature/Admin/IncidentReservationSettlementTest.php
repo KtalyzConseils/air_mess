@@ -11,6 +11,34 @@ class IncidentReservationSettlementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_driver_with_returning_parcel_cannot_be_deactivated(): void
+    {
+        $driver = \App\Models\Driver::factory()->create(['activation_status' => 'active']);
+        Course::factory()->create([
+            'reference' => 'DEACT-'.bin2hex(random_bytes(7)),
+            'driver_id' => $driver->id, 'status' => Course::STATUS_RETURNING_TO_SENDER,
+        ]);
+        $token = $driver->user->createToken('test')->accessToken;
+        Sanctum::actingAs(Admin::factory()->create(['sub_role' => 'super'])->user);
+        $this->postJson("/api/admin/drivers/{$driver->id}/toggle-active")->assertStatus(422);
+        $this->assertSame('active', $driver->fresh()->activation_status);
+        $this->assertDatabaseHas('personal_access_tokens', ['id' => $token->id]);
+    }
+
+    public function test_previous_driver_holding_parcel_cannot_be_deactivated(): void
+    {
+        $previous = \App\Models\Driver::factory()->create(['activation_status' => 'active']);
+        $next = \App\Models\Driver::factory()->create();
+        Course::factory()->create([
+            'reference' => 'DEACT-'.bin2hex(random_bytes(7)),
+            'driver_id' => $next->id, 'previous_driver_id' => $previous->id,
+            'pickup_from_previous_driver' => true, 'status' => Course::STATUS_PICKED_UP,
+        ]);
+        Sanctum::actingAs(Admin::factory()->create(['sub_role' => 'super'])->user);
+        $this->postJson("/api/admin/drivers/{$previous->id}/toggle-active")->assertStatus(422);
+        $this->assertSame('active', $previous->fresh()->activation_status);
+    }
+
     private function scenario(int $otherHold = 0): array
     {
         $user = User::factory()->create(['type' => 'individual']);

@@ -1400,13 +1400,20 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         // Garde-fou : on ne désactive pas un livreur qui a une course en cours.
         if (! $activate) {
-            $onCourse = Course::where('driver_id', $driver->id)
+            $onCourse = Course::where(function ($query) use ($driver) {
+                    $query->where('driver_id', $driver->id)
+                        ->orWhere(function ($transfer) use ($driver) {
+                            $transfer->where('previous_driver_id', $driver->id)
+                                ->where('pickup_from_previous_driver', true);
+                        });
+                })
                 ->whereIn('status', [
                     Course::STATUS_ASSIGNED,
                     Course::STATUS_TO_PICKUP,
                     Course::STATUS_AT_PICKUP,
                     Course::STATUS_PICKED_UP,
                     Course::STATUS_AT_DROPOFF,
+                    Course::STATUS_RETURNING_TO_SENDER,
                 ])
                 ->exists();
 

@@ -15,6 +15,7 @@ import {
   setActiveIncomingCourse,
   getActiveIncomingCourse,
   dismissUnavailableCourse,
+  clearRingQueue,
 } from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
@@ -23,6 +24,7 @@ import { fetchOfferedCourses, type DriverCourseSummary } from '../api/driver'
 import { useIosVoipCall } from '../hooks/useIosVoipCall'
 import BrandSplash from '../components/BrandSplash'
 import BackgroundLocationDisclosure from '../components/BackgroundLocationDisclosure'
+import api from '../api/client'
 import {
   useFonts,
   PlusJakartaSans_400Regular,
@@ -82,6 +84,39 @@ export default function RootLayout() {
 
   usePushTokenRegistration()
   useIosVoipCall()
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('airmess-session-invalid', ({ token }) => {
+      const auth = useAuthStore.getState()
+      if (!token || auth.token !== token) return
+      void auth.expireSession(token)
+      setPendingCourseId(null)
+      void queryClient.cancelQueries().then(() => queryClient.clear())
+      void clearRingQueue().catch(() => {})
+    })
+    return () => sub.remove()
+  }, [])
+
+  // Même hors de l'accueil : vérifier la session au premier plan, sans push requis.
+  useEffect(() => {
+    if (!hydrated || !user) return
+    const token = useAuthStore.getState().token
+    const refresh = async () => {
+      if (AppState.currentState !== 'active') return
+      try {
+        const data = await queryClient.fetchQuery({
+          queryKey: ['me'],
+          queryFn: async () => (await api.get('/auth/me')).data,
+          staleTime: 0, retry: false,
+        })
+        if (useAuthStore.getState().token === token) useAuthStore.getState().setUser(data.user)
+      } catch { /* Le client traite les 401 ; une panne réseau ne déconnecte pas. */ }
+    }
+    void refresh()
+    const timer = setInterval(() => void refresh(), 15_000)
+    const sub = AppState.addEventListener('change', (state) => { if (state === 'active') void refresh() })
+    return () => { clearInterval(timer); sub.remove() }
+  }, [hydrated, user?.id])
 
   useEffect(() => {
     if (IS_EXPO_GO || !hydrated || !user) return
