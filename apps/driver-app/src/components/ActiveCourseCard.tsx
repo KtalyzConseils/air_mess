@@ -203,16 +203,64 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
     ? TIMELINE_STEPS.length
     : TIMELINE_STEPS.findIndex((s) => s.key === course.status)
 
+  // Rendu exclusif : le détenteur attend la remise, sans actions de livraison.
+  if (course.holding_for_transfer) {
+    return (
+      <View className="rounded-3xl overflow-hidden border border-warm-200 bg-off-white">
+        <View className="bg-airmess-dark p-5">
+          <Text className="text-warm-400 text-xs font-mono mb-4">{course.reference}</Text>
+          <Ionicons name="swap-horizontal" size={28} color="#FFCC00" />
+          <Text className="text-white text-2xl font-extrabold mt-3">En attente de remise du colis</Text>
+          <Text className="text-warm-300 text-sm mt-2 leading-5">Conserve le colis et attends le livreur désigné sur place.</Text>
+        </View>
+        <View className="p-5">
+          <View className="flex-row items-center mb-5">
+            <View className="w-12 h-12 rounded-full bg-warm-100 items-center justify-center mr-3">
+              <Ionicons name="person-outline" size={24} color="#1A1614" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-warm-500 text-xs">Livreur attendu</Text>
+              <Text className="text-ink text-lg font-bold mt-1">
+                {course.handover_to?.name || (course.handover_to?.id ? `Livreur #${course.handover_to.id}` : 'Identité indisponible — contacte les opérations')}
+              </Text>
+            </View>
+          </View>
+          <View className="bg-airmess-yellow rounded-2xl p-4 items-center">
+            <Text className="text-ink text-xs font-bold uppercase tracking-widest">Code de remise</Text>
+            {course.handover_code ? (
+              <Text
+                className="text-ink text-4xl font-mono font-bold my-3"
+                style={{ letterSpacing: 6 }}
+                accessibilityLabel={`Code de remise : ${course.handover_code.split('').join(' ')}`}
+              >
+                {course.handover_code}
+              </Text>
+            ) : (
+              <Text className="text-ink text-base font-bold text-center my-3">Code indisponible — contacte les opérations.</Text>
+            )}
+            <View className="flex-row items-center">
+              <Ionicons name="lock-closed-outline" size={14} color="#1A1614" />
+              <Text className="text-ink text-xs ml-1.5">Visible uniquement par toi</Text>
+            </View>
+          </View>
+          <View className="flex-row mt-4">
+            <Ionicons name="shield-checkmark-outline" size={20} color="#D40511" />
+            <Text className="flex-1 text-ink text-sm font-semibold ml-2 leading-5">Communique ce code uniquement au moment de remettre physiquement le colis au livreur désigné.</Text>
+          </View>
+          <View className="border-t border-warm-200 mt-5 pt-4 flex-row">
+            <Ionicons name="time-outline" size={20} color="#78716C" />
+            <Text className="flex-1 text-warm-500 text-sm ml-2 leading-5">Il saisira le code pour confirmer la réception. Tu seras alors libéré de cette course. Cet écran s’actualise automatiquement.</Text>
+          </View>
+        </View>
+      </View>
+    )
+  }
+
   return (
     <View>
       {waitingForOps && <View className="bg-warning-bg rounded-2xl p-4 mb-3">
-        {course.holding_for_transfer && <View className="mb-3">
-          <Text className="text-ink font-bold">Remise à : {course.handover_to?.name ?? `Livreur #${course.handover_to?.id ?? ''}`}</Text>
-          <Text className="text-ink font-mono text-3xl my-2">{course.handover_code ?? 'Code indisponible — contacte les opérations'}</Text>
-          <Text className="text-airmess-red font-bold">Communique ce code uniquement lorsque tu remets physiquement le colis au livreur désigné.</Text>
-        </View>}
-        <Text className="text-ink font-extrabold text-lg">{course.holding_for_transfer ? 'Transfert organisé — remise en attente' : 'Abandon signalé — en attente des opérations'}</Text>
-        <Text className="text-warm-600 mt-2">{course.holding_for_transfer ? 'Conserve le colis et attends le nouveau livreur sur place. Il confirmera sa réception ; tu seras alors libéré.' : 'Conserve le colis. Les opérations doivent organiser un retour ou un transfert. Tu restes occupé tant que le colis ne leur est pas remis.'}</Text>
+        <Text className="text-ink font-extrabold text-lg">Abandon signalé — en attente des opérations</Text>
+        <Text className="text-warm-600 mt-2">Conserve le colis. Les opérations doivent organiser un retour ou un transfert. Tu restes occupé tant que le colis ne leur est pas remis.</Text>
       </View>}
       {/* ============ HEADER PHASE ============ */}
       {!waitingForOps && <Card variant="dark" padding="md" className="rounded-b-none">
@@ -301,7 +349,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
       </Card>}
 
       {/* ============ ACTIONS CONTEXTUELLES ============ */}
-      <Card variant="default" padding="md" className="rounded-t-none border-t-0">
+      {!waitingForOps && <Card variant="default" padding="md" className="rounded-t-none border-t-0">
         {!waitingForOps && <>
         {/* Carte du trajet — A retrait, B livraison, ma position live.
             La navigation routière reste déléguée au bouton "Naviguer" (Google Maps). */}
@@ -497,7 +545,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
             <Text className="text-airmess-red text-xs font-bold ml-1.5">Abandonner</Text>
           </Pressable>
         </View>
-      </Card>
+      </Card>}
 
       <IncidentModal
         courseId={course.id}

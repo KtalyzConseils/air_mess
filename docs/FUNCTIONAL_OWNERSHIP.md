@@ -53,6 +53,8 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 
 ## Désactivation d'un livreur connecté
 
+- Isolation mobile des comptes : le `QueryClient` du layout est propre à chaque session ; le provider est remonté et l'ancien cache supprimé au changement de token. Ne pas réintroduire un cache global entre deux connexions : les codes de remise et autres données privées ne doivent jamais apparaître pour le compte suivant.
+
 - Source serveur : `AdminController::toggleDriverActive`, qui suspend le compte, le passe hors ligne et révoque ses tokens. Une course en cours, un retour ou un colis encore détenu pour transfert interdit cette désactivation.
 - Source mobile : l'intercepteur 401 de `driver-app/src/api/client.ts` et `authStore.expireSession`. Seule la session du token concerné est invalidée ; une panne réseau ou un refus 403 ne déconnecte pas.
 - Le layout actualise la query existante `['me']` au retour au premier plan et toutes les 15 secondes lorsque l'app est active, sur tous les écrans. Ne pas ajouter un second polling dans l'accueil.

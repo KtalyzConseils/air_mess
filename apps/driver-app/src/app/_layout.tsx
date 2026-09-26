@@ -1,5 +1,5 @@
 import '../global.css'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
@@ -34,8 +34,6 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans'
 
-const queryClient = new QueryClient()
-
 /**
  * Durée minimum d'affichage du BrandSplash — assure que la marque a le temps
  * d'être vue même si l'hydratation du store est instantanée (cas fréquent).
@@ -43,7 +41,11 @@ const queryClient = new QueryClient()
 const MIN_SPLASH_MS = 1200
 
 export default function RootLayout() {
-  const { user, hydrated, hydrate } = useAuthStore()
+  const { user, token, hydrated, hydrate } = useAuthStore()
+  // Isoler les données dès le premier rendu d'une nouvelle session, même si
+  // une ancienne requête termine après le changement de compte.
+  const queryClient = useMemo(() => new QueryClient(), [token])
+  useEffect(() => () => queryClient.clear(), [queryClient])
   const router = useRouter()
   const segments = useSegments()
   const [minElapsed, setMinElapsed] = useState(false)
@@ -95,7 +97,7 @@ export default function RootLayout() {
       void clearRingQueue().catch(() => {})
     })
     return () => sub.remove()
-  }, [])
+  }, [queryClient])
 
   // Même hors de l'accueil : vérifier la session au premier plan, sans push requis.
   useEffect(() => {
@@ -116,7 +118,7 @@ export default function RootLayout() {
     const timer = setInterval(() => void refresh(), 15_000)
     const sub = AppState.addEventListener('change', (state) => { if (state === 'active') void refresh() })
     return () => { clearInterval(timer); sub.remove() }
-  }, [hydrated, user?.id])
+  }, [hydrated, user?.id, queryClient])
 
   useEffect(() => {
     if (IS_EXPO_GO || !hydrated || !user) return
@@ -157,7 +159,7 @@ export default function RootLayout() {
       if (action === 'accept') router.dismissTo('/(tabs)')
     })
     return () => sub.remove()
-  }, [router, segments])
+  }, [router, segments, queryClient])
 
   // ── Course entrante : détection de l'événement qui doit ouvrir l'écran d'appel ──
 
@@ -247,7 +249,7 @@ export default function RootLayout() {
       })
     })
     return () => sub?.remove()
-  }, [])
+  }, [queryClient])
 
   // Ouvre l'écran d'appel dès que le store est hydraté et qu'un livreur est connecté.
   useEffect(() => {
@@ -300,7 +302,7 @@ export default function RootLayout() {
 
   return (
     <KeyboardProvider>
-      <QueryClientProvider client={queryClient}>
+      <QueryClientProvider key={token ?? 'anonymous'} client={queryClient}>
         <BackgroundLocationDisclosure />
         <Stack screenOptions={{ headerShown: false }} />
       </QueryClientProvider>

@@ -27,6 +27,8 @@ export default function Timeline({ items }: Props) {
           <p className={isAbandonment(item) ? 'font-bold text-airmess-red' : 'font-medium text-airmess-dark'}>
             {isAbandonment(item)
               ? (i18n.language === 'en' ? 'Driver abandonment reported' : 'Abandon signalé')
+              : item.metadata?.pickup_from_previous_driver === true
+                ? (i18n.language === 'en' ? 'Parcel transferred to the new driver' : 'Colis transféré au nouveau livreur')
               : t(`courseStatus.${item.to_status}`, item.to_status)}
           </p>
           <p className="text-xs text-gray-500 mt-1">
