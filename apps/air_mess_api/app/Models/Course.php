@@ -13,6 +13,20 @@ class Course extends Model
 {
     use HasFactory;
 
+    /** Contexte éphémère de la prochaine écriture de statut (jamais persisté). */
+    public array $statusHistoryContext = [];
+
+    public function updateWithStatusHistory(array $attributes, array $context = []): bool
+    {
+        $previousContext = $this->statusHistoryContext;
+        $this->statusHistoryContext = $context;
+        try {
+            return $this->update($attributes);
+        } finally {
+            $this->statusHistoryContext = $previousContext;
+        }
+    }
+
     // Statuts (constantes pour éviter les chaînes magiques)
     public const STATUS_PENDING_PREP   = 'pending_preparation';
     public const STATUS_AWAITING       = 'awaiting_assignment';

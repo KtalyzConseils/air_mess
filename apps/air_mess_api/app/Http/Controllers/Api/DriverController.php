@@ -267,22 +267,17 @@ class DriverController extends Controller
             $lockedDriver = Driver::whereKey($driver->id)->lockForUpdate()->firstOrFail();
             if ($lockedDriver->availability_status !== 'available') abort(403, 'Vous n’êtes pas disponible.');
             $course->setRawAttributes($locked->getAttributes(), true);
-            $course->update([
+            $course->updateWithStatusHistory([
                 'driver_id'   => $driver->id,
                 'status'      => Course::STATUS_ASSIGNED,
                 'assigned_at' => now(),
-            ]);
-
-            $driver->update(['availability_status' => 'busy']);
-
-            CourseStatusHistory::create([
-                'course_id'       => $course->id,
-                'from_status'     => Course::STATUS_AWAITING,
-                'to_status'       => Course::STATUS_ASSIGNED,
+            ], [
                 'changed_by_id'   => $driver->user_id,
                 'changed_by_type' => 'user',
                 'reason'          => 'Course acceptée par le livreur',
             ]);
+
+            $driver->update(['availability_status' => 'busy']);
         });
 
         // Recalcule l'acceptance_rate sur la fenêtre rolling 30j (cf. project_wallet_driver_todo #7)
@@ -572,7 +567,15 @@ class DriverController extends Controller
                     $updates[$timestampField] = now();
                 }
 
-                $course->update($updates);
+                $course->updateWithStatusHistory($updates, [
+                    'changed_by_id'   => $driver->user_id,
+                    'changed_by_type' => 'user',
+                    'reason'          => $data['reason'] ?? null,
+                    'metadata'        => array_filter([
+                        'pickup_code'   => $data['pickup_code'] ?? null,
+                        'delivery_code' => $data['delivery_code'] ?? null,
+                    ]),
+                ]);
 
                 // Libérer le livreur si terminal
                 if (in_array($nextStatus, Course::TERMINAL_STATUSES, true)) {
@@ -696,18 +699,6 @@ class DriverController extends Controller
                     // chargePartial() qui capture X et release le reste.
                 }
 
-                CourseStatusHistory::create([
-                    'course_id'       => $course->id,
-                    'from_status'     => $previousStatus,
-                    'to_status'       => $nextStatus,
-                    'changed_by_id'   => $driver->user_id,
-                    'changed_by_type' => 'user',
-                    'reason'          => $data['reason'] ?? null,
-                    'metadata'        => array_filter([
-                        'pickup_code'   => $data['pickup_code']   ?? null,
-                        'delivery_code' => $data['delivery_code'] ?? null,
-                    ]),
-                ]);
             });
         } catch (\DomainException $e) {
             // Règle métier violée par le service wallet (caution insuffisante, etc.)
@@ -1362,13 +1353,11 @@ class DriverController extends Controller
                 throw ValidationException::withMessages(['course' => 'Abandon impossible depuis ce statut.']);
             }
             \App\Models\CourseDeclineRecord::firstOrCreate(['driver_id' => $driver->id, 'course_id' => $locked->id], ['reason' => 'personal']);
-            $locked->update([
+            $locked->updateWithStatusHistory([
                 'driver_id' => null, 'status' => Course::STATUS_AWAITING, 'assigned_at' => null,
                 'offer_broadcasted_at' => now(), 'offer_alerts_sent' => [],
                 'pickup_from_previous_driver' => false, 'previous_driver_id' => null, 'transfer_lat' => null, 'transfer_lng' => null,
-            ]);
-            CourseStatusHistory::create([
-                'course_id' => $locked->id, 'from_status' => $previousStatus, 'to_status' => Course::STATUS_AWAITING,
+            ], [
                 'changed_by_id' => $driver->user_id, 'changed_by_type' => 'user',
                 'reason' => 'Abandon avant récupération : '.$reason, 'metadata' => ['event' => 'driver_abandoned', 'abandoned_by_driver_id' => $driver->id],
             ]);

@@ -36,6 +36,8 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 
 ## Remise de colis entre livreurs
 
+- Historique des étapes normales livreur (acceptation et transitions) : `CourseObserver::updated` écrit une seule ligne. `Course::updateWithStatusHistory` lui transmet le motif et l'acteur, avec un contexte limité à cet appel. Ne pas réajouter une écriture manuelle après cette méthode. Les événements métier sans changement de statut (abandon après récupération, réaffectation/transfert) restent distincts. Aucun nettoyage rétroactif des doublons de production n'est effectué.
+
 - Source unique de confirmation : `Course::confirmParcelTransfer`, utilisée par la transition livreur et l'exception ops. Aucun mouvement financier n'y est ajouté.
 - `AdminController::reassignCourse` renouvelle le code à chaque désignation et conserve le détenteur réel si le second livreur est remplacé avant remise.
 - Code à six chiffres chiffré en base et masqué par défaut. Seule la liste des courses du détenteur courant expose `handover_code` ; ne jamais l'ajouter aux notifications, historiques ou réponses destinées au second livreur/client.

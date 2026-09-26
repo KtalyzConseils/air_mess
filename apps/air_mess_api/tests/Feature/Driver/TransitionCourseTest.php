@@ -45,6 +45,29 @@ class TransitionCourseTest extends TestCase
         $this->assertEquals(Course::STATUS_TO_PICKUP, $course->fresh()->status);
     }
 
+    public function test_normal_journey_records_exactly_one_history_per_transition(): void
+    {
+        [$user, , $course] = $this->setupDriverWithCourse(Course::STATUS_ASSIGNED);
+        Sanctum::actingAs($user);
+        $steps = [
+            ['start_to_pickup', Course::STATUS_TO_PICKUP, []],
+            ['arrived_pickup', Course::STATUS_AT_PICKUP, []],
+            ['pickup_confirmed', Course::STATUS_PICKED_UP, ['pickup_code' => $course->pickup_code]],
+            ['arrived_dropoff', Course::STATUS_AT_DROPOFF, []],
+            ['delivered', Course::STATUS_DELIVERED, ['delivery_code' => $course->delivery_code]],
+        ];
+        $from = Course::STATUS_ASSIGNED;
+        foreach ($steps as [$action, $to, $codes]) {
+            $before = $course->statusHistory()->count();
+            $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => $action] + $codes)->assertOk();
+            $this->assertSame($before + 1, $course->statusHistory()->count());
+            $history = $course->statusHistory()->where('from_status', $from)->where('to_status', $to)->get();
+            $this->assertCount(1, $history);
+            $this->assertSame($user->id, $history->first()->changed_by_id);
+            $from = $to;
+        }
+    }
+
     public function test_ops_can_organize_return_after_abandonment(): void
     {
         [$user, $driver, $course] = $this->setupDriverWithCourse(Course::STATUS_PICKED_UP);
@@ -196,6 +219,9 @@ class TransitionCourseTest extends TestCase
             ->assertOk()->assertJsonPath('course.status', Course::STATUS_AWAITING);
         $this->assertNull($course->fresh()->driver_id);
         $this->assertNotNull($course->fresh()->offer_broadcasted_at);
+        $history = $course->statusHistory()->where('to_status', Course::STATUS_AWAITING)->get();
+        $this->assertCount(1, $history);
+        $this->assertSame('driver_abandoned', $history->first()->metadata['event']);
         $this->assertSame('available', $driver->fresh()->availability_status);
         $this->assertDatabaseHas('course_decline_records', ['course_id' => $course->id, 'driver_id' => $driver->id]);
         $this->assertDatabaseHas('notifications', ['user_id' => $course->sender_id, 'course_id' => $course->id, 'type' => 'course.driver_abandoned']);
