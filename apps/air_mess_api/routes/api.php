@@ -299,11 +299,13 @@ Route::middleware([
     'auth:sanctum',
     'ability:integration:create-course,api:create-course',
     'throttle:60,1',
-    'api.quota',
 ])
     ->prefix('integration')
     ->group(function () {
-        Route::post('/courses', [IntegrationCourseController::class, 'store']);
+        Route::post('/courses', [IntegrationCourseController::class, 'store'])->middleware('api.quota');
+        Route::get('/wallet', [IntegrationCourseController::class, 'wallet']);
+        Route::get('/courses/{reference}', [IntegrationCourseController::class, 'show']);
+        Route::post('/courses/{reference}/cancel', [IntegrationCourseController::class, 'cancel']);
     });
 
 

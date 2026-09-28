@@ -58,6 +58,81 @@ tags:
     description: Ancien flux de clés réservé aux marchands (ability `integration:create-course`).
 
 paths:
+  /integration/wallet:
+    get:
+      tags: [Courses]
+      summary: Read the owner's wallet balance
+      description: Uses the integration key. No creation quota consumed. Returns only balances in XOF, not transaction history.
+      security:
+        - integrationKey: []
+      responses:
+        '200':
+          description: Wallet balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance: { type: integer }
+                  pending_reserved: { type: integer }
+                  available: { type: integer }
+                  currency: { type: string, example: XOF }
+        '401': { description: Unauthenticated }
+        '403': { description: Invalid permissions or disabled account/application }
+  /integration/courses/{reference}:
+    get:
+      tags: [Courses]
+      summary: Read an integration course
+      description: App keys access only their own app's courses. Legacy merchant keys access the owner's courses without an app. Pickup, delivery and transfer codes are never returned.
+      security:
+        - integrationKey: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema: { type: string, example: AM-2026-00159 }
+      responses:
+        '200':
+          description: Course state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reference: { type: string }
+                  status: { type: string }
+                  tracking_url: { type: string }
+                  delivery_fee: { type: integer }
+                  message: { type: string }
+        '401': { description: Unauthenticated }
+        '403': { description: Disabled account/application or missing ability }
+        '404': { description: Course not found or outside key scope }
+  /integration/courses/{reference}/cancel:
+    post:
+      tags: [Courses]
+      summary: Cancel an integration course
+      description: Reuses sender cancellation rules. Before pickup releases the wallet hold; after pickup requires explicit confirmation and starts a return, not an immediate refund. An already cancelled course returns 200 without further effects. Creation quota is not consumed or required.
+      security:
+        - integrationKey: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+                confirm_post_pickup: { type: boolean }
+      responses:
+        '200': { description: Current course state (reference/status/tracking_url/delivery_fee/message). May be returning_to_sender after pickup. }
+        '401': { description: Unauthenticated }
+        '403': { description: Disabled account/application or missing ability }
+        '404': { description: Course not found or outside key scope }
+        '422': { description: 'Invalid input, closed course, transfer/return in progress or post-pickup confirmation required' }
   /integration/courses:
     post:
       tags: [Courses]

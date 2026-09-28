@@ -13,6 +13,7 @@ use App\Services\CourseCreationService;
 use App\Services\GeocodingService;
 use App\Services\UserWalletService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -30,6 +31,64 @@ use Illuminate\Support\Facades\DB;
  */
 class IntegrationCourseController extends Controller
 {
+    private function payer(Request $request): User
+    {
+        $payer = StoreIntegrationCourseRequest::resolvePayer($request->user());
+        abort_unless($payer, 403, 'Accès intégration désactivé.');
+        return $payer;
+    }
+
+    private function ownedCourses(Request $request, User $payer): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = Course::where('sender_id', $payer->id);
+        if ($request->user() instanceof ApiApplication) {
+            $query->where('api_application_id', $request->user()->id);
+        } else {
+            $query->whereNull('api_application_id');
+        }
+        return $query;
+    }
+
+    public function show(Request $request, string $reference): JsonResponse
+    {
+        $course = $this->ownedCourses($request, $this->payer($request))->where('reference', $reference)->firstOrFail();
+        return $this->payload($course, 200, 'État de la course.');
+    }
+
+    public function wallet(Request $request): JsonResponse
+    {
+        $wallet = UserWallet::where('user_id', $this->payer($request)->id)->first();
+        return response()->json([
+            'balance' => (int) ($wallet?->balance ?? 0),
+            'pending_reserved' => (int) ($wallet?->pending_reserved ?? 0),
+            'available' => $wallet ? $wallet->available() : 0,
+            'currency' => 'XOF',
+        ]);
+    }
+
+    public function cancel(Request $request, string $reference): JsonResponse
+    {
+        $payer = $this->payer($request);
+        return DB::transaction(function () use ($request, $reference, $payer) {
+            $course = $this->ownedCourses($request, $payer)->where('reference', $reference)->lockForUpdate()->firstOrFail();
+            if ($course->status === Course::STATUS_CANCELLED) {
+                return $this->payload($course, 200, 'Course déjà annulée.');
+            }
+            // Ne pas interrompre un retour de colis déjà organisé.
+            abort_if($course->status === Course::STATUS_RETURNING_TO_SENDER, 422, 'Un retour de colis est déjà en cours. Contactez les opérations.');
+            abort_if($course->pickup_from_previous_driver, 422, 'Une remise entre livreurs est en cours. Contactez les opérations.');
+            // Adaptateur local : conserver l'authentification de la clé et les contrôles
+            // d'app ci-dessus, déléguer les règles métier au parcours payeur existant.
+            $payerRequest = clone $request;
+            $payerRequest->setUserResolver(fn () => $payer);
+            $response = app(CourseController::class)->cancel(
+                $payerRequest, $course, app(\App\Services\NotificationService::class), app(UserWalletService::class),
+            );
+            if ($response->getStatusCode() >= 400) return $response;
+            return $this->payload($course->fresh(), 200, $response->getData(true)['message'] ?? 'Annulation traitée.');
+        });
+    }
+
     public function store(
         StoreIntegrationCourseRequest $request,
         CourseCreationService $creator,

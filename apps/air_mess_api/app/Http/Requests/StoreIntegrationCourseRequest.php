@@ -22,30 +22,35 @@ class StoreIntegrationCourseRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $authenticatable = $this->user();
+        return self::resolvePayer($this->user()) !== null;
+    }
+
+    /** Autorisation commune à la création et à la gestion des courses intégrées. */
+    public static function resolvePayer(mixed $authenticatable): ?User
+    {
 
         // ─── Nouveau flow : token porté par une ApiApplication (mode dev) ───
         // Le middleware `api.quota` a déjà vérifié activation + quota.
         // On revalide juste que le user propriétaire est actif.
         if ($authenticatable instanceof ApiApplication) {
-            return $authenticatable->isActive()
+            return ($authenticatable->isActive()
                 && $authenticatable->user
-                && $authenticatable->user->is_active;
+                && $authenticatable->user->is_active) ? $authenticatable->user : null;
         }
 
         // ─── Ancien flow : token porté directement par un User marchand ───
         // (clés Gbandjo/Systige générées via IntegrationKeyController).
         if ($authenticatable instanceof User) {
             if (! $authenticatable->is_active || ! $authenticatable->isMarchant()) {
-                return false;
+                return null;
             }
             $marchant = $authenticatable->marchant;
-            return $marchant
+            return ($marchant
                 && $marchant->validated_at
-                && $marchant->hasApiAccess();
+                && $marchant->hasApiAccess()) ? $authenticatable : null;
         }
 
-        return false;
+        return null;
     }
 
     public function rules(): array

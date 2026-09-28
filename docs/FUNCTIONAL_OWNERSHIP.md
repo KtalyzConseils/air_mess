@@ -66,6 +66,13 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 
 Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `FirstCourseDiscountService`, `FIRST_COURSE_500`, `waitlisted_at`, `MerchantWaitlist`, `DriverWaitlist`, les routes admin correspondantes et leurs tests.
 
+## API d'intégration : lecture et annulation
+
+- `IntegrationCourseController` gère les routes `/integration/courses/{reference}`, `/integration/wallet` et `/integration/courses/{reference}/cancel`. Autorisation commune avec la création : `StoreIntegrationCourseRequest::resolvePayer`.
+- Les clés existantes sont compatibles. Les clés d'app sont limitées aux courses du couple propriétaire/application ; les clés historiques aux courses du propriétaire sans app. Aucun code secret de course n'est renvoyé.
+- L'annulation verrouille la course et délègue au traitement payeur de `CourseController::cancel` / `UserWalletService`. Ne pas créer une seconde logique de remboursement. Une course déjà annulée ne produit pas d'effet supplémentaire.
+- Le quota reste réservé à la création. Lecture sans écriture de wallet ; compte/app désactivé interdit. `/me/wallet` refuse explicitement les clés d'app.
+
 ## Réconciliation financière et fonds sandbox
 
 - Source de vérité administrative : `GET /api/admin/reconciliation` et sa section `sandbox_audit`.

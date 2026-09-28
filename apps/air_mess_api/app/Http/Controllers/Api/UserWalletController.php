@@ -34,6 +34,10 @@ class UserWalletController extends Controller
     {
         $user = $request->user();
 
+        if ($user instanceof \App\Models\ApiApplication) {
+            return response()->json(['message' => 'Utilisez /api/integration/wallet avec une clé d’application.'], 403);
+        }
+
         if (! $user->isMarchant() && ! $user->isIndividual()) {
             return response()->json(['message' => 'Ce wallet est réservé aux marchands et particuliers.'], 403);
         }

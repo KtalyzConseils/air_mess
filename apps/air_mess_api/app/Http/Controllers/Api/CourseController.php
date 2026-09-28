@@ -504,18 +504,21 @@ class CourseController extends Controller
             return $this->initiateMarchandCancelReturn($course, $request, $notifier);
         }
 
-        $previousStatus = $course->status;
         // Le livreur assigné (s'il y en a un) doit être libéré, sinon il reste bloqué en "busy".
         $driver = $course->driver_id ? Driver::find($course->driver_id) : null;
         $directRefund = null;
         $walletReleased = false;
 
-        DB::transaction(function () use ($course, $request, $previousStatus, $driver, $walletService, &$directRefund, &$walletReleased) {
-            $course->update([
+        DB::transaction(function () use ($course, $request, $driver, $walletService, &$directRefund, &$walletReleased) {
+            $course->updateWithStatusHistory([
                 'status'              => Course::STATUS_CANCELLED,
                 'cancelled_at'        => now(),
                 'cancellation_reason' => $request->input('reason'),
                 'cancelled_by'        => $request->user()->id,
+            ], [
+                'changed_by_id' => $request->user()->id,
+                'changed_by_type' => 'user',
+                'reason' => $request->input('reason'),
             ]);
 
             // Libérer le livreur : il redevient disponible pour de nouvelles courses.
@@ -540,14 +543,6 @@ class CourseController extends Controller
                 );
             }
 
-            \App\Models\CourseStatusHistory::create([
-                'course_id'       => $course->id,
-                'from_status'     => $previousStatus,
-                'to_status'       => Course::STATUS_CANCELLED,
-                'changed_by_id'   => $request->user()->id,
-                'changed_by_type' => 'user',
-                'reason'          => $request->input('reason'),
-            ]);
         });
 
         if ($directRefund && ! \App\Models\Notification::where('user_id', $course->sender_id)
@@ -619,19 +614,16 @@ class CourseController extends Controller
         \Illuminate\Http\Request $request,
         NotificationService $notifier,
     ): JsonResponse {
-        $previousStatus = $course->status;
         $driver         = $course->driver_id ? Driver::find($course->driver_id) : null;
         $reason         = $request->input('reason');
         $user           = $request->user();
 
-        $incident = DB::transaction(function () use ($course, $previousStatus, $reason, $user) {
+        $incident = DB::transaction(function () use ($course, $reason, $user) {
             $course->status              = Course::STATUS_RETURNING_TO_SENDER;
             $course->is_return_trip      = true;
             $course->return_code         = Course::generateCode();
             $course->cancellation_reason = $reason;
             $course->cancelled_by        = $user->id;
-            $course->save();
-
             $incident = \App\Models\CourseIncident::create([
                 'course_id'     => $course->id,
                 'reported_by'   => $user->id,
@@ -641,10 +633,7 @@ class CourseController extends Controller
                 'status'        => 'open',
             ]);
 
-            \App\Models\CourseStatusHistory::create([
-                'course_id'       => $course->id,
-                'from_status'     => $previousStatus,
-                'to_status'       => Course::STATUS_RETURNING_TO_SENDER,
+            $course->updateWithStatusHistory([], [
                 'changed_by_id'   => $user->id,
                 'changed_by_type' => 'user',
                 'reason'          => 'marchand_cancel_return: ' . ($reason ?: 'sans motif'),

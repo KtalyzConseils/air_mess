@@ -79,6 +79,20 @@ Exemple de génération (réponse `201`) :
 
 ## 4. Créer une course
 
+### Consultation et annulation avec la même clé
+
+- `GET /integration/courses/{reference}` : état de la course, référence AirMess (ex. `AM-2026-00159`), tarif et lien de suivi. Aucun code de retrait, livraison ou transfert n'est exposé.
+- `GET /integration/wallet` : `balance`, `pending_reserved`, `available` et `currency: XOF` du propriétaire. Aucun historique financier ni création de wallet à la lecture.
+- `POST /integration/courses/{reference}/cancel` : corps facultatif `{"reason":"Commande annulée"}`. Avant récupération, annule et libère la réservation, sans recréditer artificiellement le solde. Une répétition sur une course annulée renvoie 200 sans second mouvement financier.
+
+Ces routes utilisent les abilities existantes (`api:create-course` ou `integration:create-course`) : pas de nouvelle clé obligatoire. Une clé d'app ne voit que les courses de cette app et de son propriétaire ; une clé marchand historique voit les courses de son propriétaire sans rattachement à une app. Une course hors périmètre renvoie 404. App suspendue, compte désactivé ou clé sans ability : 403 ; clé absente/invalide : 401.
+
+La consultation et l'annulation ne consomment pas le quota de création et restent possibles quand ce quota est épuisé. Un statut terminal autre que `cancelled` refuse l'annulation (422). Après récupération : 422 avec `requires_post_pickup_confirm`, puis `{"confirm_post_pickup":true,"reason":"..."}` déclenche un retour, pas un remboursement immédiat. Un retour déjà en cours reste géré par les opérations (422). Vérifier le `status` renvoyé plutôt que supposer une annulation immédiate.
+
+`/me/wallet` reste réservé au compte connecté : une clé d'app reçoit 403 avec l'indication d'utiliser `/integration/wallet`.
+
+Une remise entre deux livreurs encore en cours interdit également l'annulation via l'intégration (422) : les opérations doivent d'abord sécuriser la garde du colis.
+
 ### `POST /integration/courses`
 
 Crée une course de livraison. **Idempotent** sur `external_reference` (voir §6).
