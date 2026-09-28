@@ -82,14 +82,20 @@ class Course extends Model
             }
             $previous = $course->previous_driver_id;
             $status = $course->status;
-            $course->update(['pickup_from_previous_driver' => false, 'status' => self::STATUS_PICKED_UP,
-                'transfer_code' => null, 'transfer_code_attempts' => 0, 'transfer_code_locked_until' => null, 'transfer_confirmed_at' => now()]);
-            CourseStatusHistory::create([
-                'course_id' => $course->id, 'from_status' => $status, 'to_status' => self::STATUS_PICKED_UP,
+            $historyContext = [
                 'changed_by_id' => $actor->id, 'changed_by_type' => 'user',
                 'reason' => $override ? 'Remise confirmée exceptionnellement par les opérations : '.trim($overrideReason) : 'Remise physique confirmée avec le code du précédent livreur',
                 'metadata' => ['previous_driver_id' => $previous, 'new_driver_id' => $course->driver_id, 'transfer_confirmed' => true, 'ops_override' => $override],
-            ]);
+            ];
+            $course->updateWithStatusHistory(['pickup_from_previous_driver' => false, 'status' => self::STATUS_PICKED_UP,
+                'transfer_code' => null, 'transfer_code_attempts' => 0, 'transfer_code_locked_until' => null, 'transfer_confirmed_at' => now()], $historyContext);
+            // Sans changement de statut, l'observer n'écrit rien : la remise reste
+            // néanmoins un événement distinct de la récupération chez l'expéditeur.
+            if ($status === self::STATUS_PICKED_UP) {
+                CourseStatusHistory::create(array_merge([
+                    'course_id' => $course->id, 'from_status' => $status, 'to_status' => self::STATUS_PICKED_UP,
+                ], $historyContext));
+            }
             $stillHolding = self::whereNotIn('status', self::TERMINAL_STATUSES)->where(function ($q) use ($previous) {
                 $q->where('driver_id', $previous)->orWhere(fn ($q) => $q->where('previous_driver_id', $previous)->where('pickup_from_previous_driver', true));
             })->exists();

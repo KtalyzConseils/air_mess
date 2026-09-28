@@ -308,4 +308,36 @@ class TransitionCourseTest extends TestCase
         $history = \App\Models\CourseStatusHistory::where('course_id', $course->id)->latest('id')->first();
         $this->assertTrue($history->metadata['ops_override']);
     }
+
+    public function test_transfer_records_one_detailed_event_with_or_without_status_change(): void
+    {
+        foreach ([Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF] as $status) {
+            foreach ([false, true] as $override) {
+                [$user, $driver, $course] = $this->setupDriverWithCourse($status);
+                $previous = Driver::factory()->create(['availability_status' => 'busy']);
+                $course->update(['pickup_from_previous_driver' => true, 'previous_driver_id' => $previous->id, 'transfer_code' => '123456']);
+                $actor = $override ? \App\Models\Admin::factory()->create(['sub_role' => 'ops'])->user : $user;
+                Sanctum::actingAs($actor);
+                $before = $course->statusHistory()->count();
+                $lastId = $course->statusHistory()->max('id');
+                $reason = $override ? 'Remise vérifiée avec les deux livreurs' : null;
+                $this->assertTrue($course->confirmParcelTransfer($actor, '123456', $reason));
+                $this->assertFalse($course->confirmParcelTransfer($actor, '123456', $reason));
+                $this->assertSame($before + 1, $course->statusHistory()->count());
+                $events = $course->statusHistory()->where('id', '>', $lastId)->get();
+                $this->assertCount(1, $events);
+                $event = $events->first();
+                $this->assertSame($status, $event->from_status);
+                $this->assertSame(Course::STATUS_PICKED_UP, $event->to_status);
+                $this->assertSame($actor->id, $event->changed_by_id);
+                $this->assertNotEmpty($event->reason);
+                $this->assertTrue($event->metadata['transfer_confirmed']);
+                $this->assertSame($override, $event->metadata['ops_override']);
+                $this->assertSame($previous->id, $event->metadata['previous_driver_id']);
+                $this->assertSame($driver->id, $event->metadata['new_driver_id']);
+                $this->assertSame(1, \App\Models\Notification::where('course_id', $course->id)->where('user_id', $course->sender_id)->where('type', 'course.transfer_confirmed')->count());
+                $this->assertNull($course->fresh()->transfer_code);
+            }
+        }
+    }
 }
