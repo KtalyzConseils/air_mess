@@ -63,6 +63,22 @@ export default function BackgroundLocationDisclosure() {
               </Text>
             </View>
           </View>
+
+          <View className="bg-airmess-yellow/15 border border-airmess-yellow/35 rounded-2xl p-4 mt-3">
+            <View className="flex-row items-start">
+              <View className="w-9 h-9 rounded-full bg-airmess-yellow items-center justify-center mr-3">
+                <Ionicons name="wallet" size={18} color="#1A1614" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-airmess-yellow text-xs font-jk-extrabold uppercase tracking-widest">
+                  Wallet livreur
+                </Text>
+                <Text className="text-white text-sm leading-5 font-jk-semibold mt-1">
+                  Recharge ta caution wallet pour recevoir et accepter des courses Air Mess.
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         <View className="pb-4">

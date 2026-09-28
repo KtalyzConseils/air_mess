@@ -43,7 +43,7 @@ interface Position {
 
 /** Rayon adapté au nombre d'items — laisse quelques px d'air entre chaque cercle. */
 function radiusForItems(n: number): number {
-  return Math.max(118, Math.min(200, Math.round(65 + n * 14)))
+  return Math.max(130, Math.min(280, Math.round(70 + n * 18)))
 }
 
 function loadPosition(key: string): Position | null {
@@ -182,6 +182,12 @@ export default function QuickNav({ items, positionKey }: QuickNavProps) {
     }
   }
 
+  function activateItem(item: QuickNavItem) {
+    if (item.onClick) item.onClick()
+    else navigate(item.to)
+    setIsOpen(false)
+  }
+
   if (items.length === 0) return null
 
   return (
@@ -211,11 +217,7 @@ export default function QuickNav({ items, positionKey }: QuickNavProps) {
           return (
             <button
               key={item.to}
-              onClick={() => {
-                if (item.onClick) item.onClick()
-                else navigate(item.to)
-                setIsOpen(false)
-              }}
+              onClick={() => activateItem(item)}
               aria-label={item.label}
               tabIndex={isOpen ? 0 : -1}
               className={[

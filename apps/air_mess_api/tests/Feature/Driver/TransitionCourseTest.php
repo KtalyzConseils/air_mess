@@ -250,6 +250,13 @@ class TransitionCourseTest extends TestCase
         [$user, , $course] = $this->setupDriverWithCourse(Course::STATUS_PICKED_UP);
         $previous = Driver::factory()->create(['availability_status' => 'busy']);
         $course->update(['pickup_from_previous_driver' => true, 'previous_driver_id' => $previous->id, 'transfer_code' => '123456']);
+        Sanctum::actingAs(\App\Models\Admin::factory()->create(['sub_role' => 'ops'])->user);
+        $this->getJson("/api/courses/{$course->id}")
+            ->assertOk()
+            ->assertJsonPath('course.handover_code', '123456')
+            ->assertJsonPath('course.handover_from.id', $previous->id)
+            ->assertJsonPath('course.handover_to.id', $course->driver_id)
+            ->assertJsonMissingPath('course.transfer_code');
         Sanctum::actingAs($previous->user);
         $this->getJson('/api/courses?status=picked_up')->assertOk()->assertJsonPath('data.0.holding_for_transfer', true)
             ->assertJsonPath('data.0.handover_code', '123456')->assertJsonMissingPath('data.0.transfer_code');

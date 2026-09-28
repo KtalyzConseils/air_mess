@@ -151,6 +151,16 @@ export function PackageIcon(props: IconProps) {
   )
 }
 
+export function ArchiveIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect x="3" y="4" width="18" height="4" rx="1.5" />
+      <path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+      <path d="M9 12h6" />
+    </svg>
+  )
+}
+
 export function BikeIcon(props: IconProps) {
   return (
     <svg {...baseProps(props)}>
@@ -186,6 +196,17 @@ export function BankIcon(props: IconProps) {
   )
 }
 
+export function WalletIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M4 7.5h14a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h12" />
+      <path d="M4 7.5A3 3 0 0 0 5 13h15" />
+      <path d="M16 13v4h4v-4" />
+      <circle cx="18" cy="15" r=".5" />
+    </svg>
+  )
+}
+
 export function BarChartIcon(props: IconProps) {
   return (
     <svg {...baseProps(props)}>
@@ -193,6 +214,29 @@ export function BarChartIcon(props: IconProps) {
       <line x1="10" y1="20" x2="10" y2="4" />
       <line x1="16" y1="20" x2="16" y2="14" />
       <line x1="2" y1="20" x2="22" y2="20" />
+    </svg>
+  )
+}
+
+export function ReceiptIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" />
+      <path d="M9 8h6" />
+      <path d="M9 12h6" />
+      <path d="M9 16h3" />
+    </svg>
+  )
+}
+
+export function ScaleIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M12 3v18" />
+      <path d="M5 7h14" />
+      <path d="m6 7-3 6h6L6 7Z" />
+      <path d="m18 7-3 6h6l-3-6Z" />
+      <path d="M8 21h8" />
     </svg>
   )
 }
@@ -449,6 +493,18 @@ export function FileTextIcon(props: IconProps) {
       <path d="M14 2v6h6" />
       <line x1="9" y1="13" x2="15" y2="13" />
       <line x1="9" y1="17" x2="13" y2="17" />
+    </svg>
+  )
+}
+
+export function ClipboardListIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect x="5" y="4" width="14" height="18" rx="2" />
+      <path d="M9 4.5A3 3 0 0 1 12 2a3 3 0 0 1 3 2.5" />
+      <path d="M9 9h6" />
+      <path d="M9 13h6" />
+      <path d="M9 17h3" />
     </svg>
   )
 }

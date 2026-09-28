@@ -184,10 +184,11 @@ export default function NewCoursePage() {
     }
   }, [isPendingMarchant, navigate])
 
-  const { data: categories = [] } = useQuery({
+  const categoriesQuery = useQuery({
     queryKey: ['package-categories'],
     queryFn: fetchPackageCategories,
   })
+  const categories = categoriesQuery.data ?? []
 
   const isPayerUser = user?.type === 'marchant' || user?.type === 'individual'
   const { data: wallet } = useQuery({
@@ -266,6 +267,7 @@ export default function NewCoursePage() {
   const [collectionDecided, setCollectionDecided] = useState(false)
   const [pendingValues, setPendingValues] = useState<FormValues | null>(null)
   const [quotaError, setQuotaError] = useState<string | null>(null)
+  const [quotaErrorAction, setQuotaErrorAction] = useState<'refreshCategories' | null>(null)
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'success' | 'denied'>('idle')
 
   const [showWeight, setShowWeight] = useState(false)
@@ -348,6 +350,7 @@ export default function NewCoursePage() {
         return
       }
       if (result.quota_reached) {
+        setQuotaErrorAction(null)
         setQuotaError(
           t('courses.new.quotaMonthlyReached', { used: result.used, limit: result.limit }),
         )
@@ -513,10 +516,12 @@ export default function NewCoursePage() {
       categories[0]
 
     if (!category) {
-      setQuotaError('Les categories de colis ne sont pas encore chargees.')
+      setQuotaErrorAction('refreshCategories')
+      setQuotaError(t('courses.new.categoriesNotLoaded'))
       return
     }
 
+    setQuotaErrorAction(null)
     setQuotaError(null)
     setSelectedPresetId(preset.id)
     setValue('package_category_id', category.id, { shouldDirty: true, shouldValidate: true })
@@ -620,6 +625,7 @@ export default function NewCoursePage() {
   ])
 
   function performCreate(values: FormValues) {
+    setQuotaErrorAction(null)
     setQuotaError(null)
 
     const oLat = Number(values.origin_lat)
@@ -886,11 +892,26 @@ export default function NewCoursePage() {
               </span>
               <p className="text-body-s text-warning">{quotaError}</p>
             </div>
-            <Link to="/wallet">
-              <Button variant="primary" size="sm" pill>
-                {t('courses.new.topUpCta')}
+            {quotaErrorAction === 'refreshCategories' && (
+              <Button
+                variant="primary"
+                size="sm"
+                pill
+                type="button"
+                onClick={async () => {
+                  const result = await categoriesQuery.refetch()
+                  if ((result.data ?? []).length > 0) {
+                    setQuotaErrorAction(null)
+                    setQuotaError(null)
+                  }
+                }}
+                disabled={categoriesQuery.isFetching}
+              >
+                {categoriesQuery.isFetching
+                  ? t('courses.new.refreshingCategoriesCta')
+                  : t('courses.new.refreshCategoriesCta')}
               </Button>
-            </Link>
+            )}
           </Card>
         )}
 

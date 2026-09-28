@@ -329,6 +329,24 @@ class CourseController extends Controller
             'incidents.reportedBy:id,name,type',
         ]);
 
+        if ($request->user()->isAdmin() && $course->pickup_from_previous_driver && ! $course->isTerminal()) {
+            $previousDriver = $course->previous_driver_id
+                ? Driver::with('user:id,name,phone')->find($course->previous_driver_id)
+                : null;
+
+            $course->setAttribute('handover_code', $course->transfer_code);
+            $course->setAttribute('handover_from', $previousDriver ? [
+                'id' => $previousDriver->id,
+                'name' => $previousDriver->user?->name,
+                'phone' => $previousDriver->user?->phone,
+            ] : null);
+            $course->setAttribute('handover_to', $course->driver ? [
+                'id' => $course->driver->id,
+                'name' => $course->driver->user?->name,
+                'phone' => $course->driver->user?->phone,
+            ] : null);
+        }
+
         return response()->json(['course' => $course]);
     }
 
