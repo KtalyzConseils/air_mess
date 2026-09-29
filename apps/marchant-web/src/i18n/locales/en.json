@@ -102,7 +102,6 @@
   },
   "legal": {
     "eyebrow": "Legal documents",
-    "placeholderNotice": "This document describes AirMess rules and practices. It must remain consistent with the actual service and be reviewed by legal counsel before final publication.",
     "readTermsInstead": "Read the terms of service instead",
     "readPrivacyInstead": "Read the privacy policy instead",
     "footerLinkTerms": "Terms",

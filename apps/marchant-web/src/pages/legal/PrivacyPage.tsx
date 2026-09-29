@@ -57,10 +57,6 @@ export default function PrivacyPage() {
         <p className="text-body-l text-warm-500 mb-8">{t('legal.privacy.subtitle')}</p>
 
         <Card variant="default" padding="lg" className="prose prose-warm max-w-none">
-          <p className="text-caption text-warm-500 italic mb-6">
-            {t('legal.placeholderNotice')}
-          </p>
-
           <LegalSection title="1. Responsable du traitement">
             <p>
               Le responsable du traitement des donnees personnelles collectees via
