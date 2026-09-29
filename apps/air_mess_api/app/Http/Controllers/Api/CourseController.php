@@ -347,6 +347,10 @@ class CourseController extends Controller
             ] : null);
         }
 
+        if ($request->user()->isAdmin()) {
+            $course->setAttribute('arbitration_drivers', $course->arbitrationDrivers());
+        }
+
         return response()->json(['course' => $course]);
     }
 

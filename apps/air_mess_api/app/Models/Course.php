@@ -16,6 +16,35 @@ class Course extends Model
     /** Contexte éphémère de la prochaine écriture de statut (jamais persisté). */
     public array $statusHistoryContext = [];
 
+    /** Participants éligibles à un ajustement, sans présumer de leur responsabilité. */
+    public function arbitrationDrivers(): \Illuminate\Support\Collection
+    {
+        $ids = collect([$this->driver_id, $this->previous_driver_id]);
+        $actorIds = collect();
+        foreach ($this->statusHistory()->get() as $entry) {
+            foreach (['driver_id', 'old_driver_id', 'previous_driver_id', 'new_driver_id', 'abandoned_by_driver_id'] as $key) {
+                $ids->push($entry->metadata[$key] ?? null);
+            }
+            if (in_array($entry->changed_by_type, ['driver', 'user'], true)) {
+                $actorIds->push($entry->changed_by_id);
+            }
+        }
+        $reporterIds = $this->incidents()->where('reporter_type', 'driver')->pluck('reported_by');
+        $actorIds = $actorIds->merge($reporterIds)->filter()->unique();
+
+        return Driver::with('user:id,name')->where(function ($query) use ($ids, $actorIds) {
+            $query->whereIn('id', $ids->filter()->unique())->orWhereIn('user_id', $actorIds);
+        })->get()->map(fn ($driver) => [
+            'id' => $driver->id,
+            'name' => $driver->user?->name ?? "Livreur #{$driver->id}",
+            'roles' => array_values(array_filter([
+                $driver->id === $this->driver_id ? 'current' : 'historical',
+                $driver->id === $this->previous_driver_id ? 'previous' : null,
+                $reporterIds->contains($driver->user_id) ? 'reporter' : null,
+            ])),
+        ]);
+    }
+
     public function updateWithStatusHistory(array $attributes, array $context = []): bool
     {
         $previousContext = $this->statusHistoryContext;

@@ -74,6 +74,13 @@ Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `Firs
 - L'annulation verrouille la course et délègue au traitement payeur de `CourseController::cancel` / `UserWalletService`. Ne pas créer une seconde logique de remboursement. Une course déjà annulée ne produit pas d'effet supplémentaire.
 - Le quota reste réservé à la création. Lecture sans écriture de wallet ; compte/app désactivé interdit. `/me/wallet` refuse explicitement les clés d'app.
 
+## Arbitrage d'incident : choix du livreur
+
+- `Course::arbitrationDrivers` reconstruit les participants depuis l'affectation actuelle, le précédent livreur, les historiques et les signalements. Le détail de course expose cette liste uniquement aux admins. Une présence dans la liste ne présume pas de la responsabilité.
+- `AdminController::arbitrateIncident` exige `adjustment_driver_id` pour tout ajustement livreur et vérifie l'appartenance dans la transaction verrouillée. Aucun repli sur le livreur actuellement affecté. Débit/crédit, suspension éventuelle et notification financière ciblent tous le livreur choisi.
+- Le formulaire existant impose un choix explicite et une confirmation nom/rôle/montant. Les écritures `WalletAdjustmentService` restent la source financière ; la note de résolution trace aussi la cible et les montants demandé/appliqué, y compris avec une caution nulle. Un incident déjà résolu ne peut pas être rejoué.
+- Aucun changement aux barèmes des presets ni à la notification existante « votre wallet a été crédité ». Déployer API et web ensemble ; les anciennes interfaces sans sélection sont refusées sans débit. Aucune migration.
+
 ## Réconciliation financière et fonds sandbox
 
 - Source de vérité administrative : `GET /api/admin/reconciliation` et sa section `sandbox_audit`.

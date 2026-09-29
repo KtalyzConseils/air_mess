@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
 import Badge from '../ui/Badge'
+import ConfirmModal from '../ConfirmModal'
 import {
   ADJUSTMENT_REASON_CODES,
   arbitrateIncident,
@@ -43,6 +44,12 @@ export default function IncidentArbitrationPanel({
   const [reasonCodeDriver, setReasonCodeDriver] = useState<AdjustmentReasonCode | ''>('')
   const [amountDriver, setAmountDriver] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
+  const [adjustmentDriverId, setAdjustmentDriverId] = useState('')
+  const [confirmVisible, setConfirmVisible] = useState(false)
+  const candidates = course.arbitration_drivers ?? []
+  const selectedDriver = candidates.find((driver) => String(driver.id) === adjustmentDriverId)
+  const driverLabel = (driver: (typeof candidates)[number]) =>
+    `${driver.name} (#${driver.id}) — ${driver.roles.map((role) => t(`admin.incidentArbitration.driverRoles.${role}`)).join(', ')}`
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -58,15 +65,18 @@ export default function IncidentArbitrationPanel({
         reason_code_marchand: reasonCodeMarchand || null,
         amount_marchand: signedMarchand,
         reason_code_driver: reasonCodeDriver || null,
+        adjustment_driver_id: reasonCodeDriver ? selectedDriver?.id : null,
         amount_driver: signedDriver,
       })
     },
     onSuccess: () => {
+      setConfirmVisible(false)
       queryClient.invalidateQueries({ queryKey: ['admin', 'incidents'] })
       queryClient.invalidateQueries({ queryKey: ['course', course.id] })
       queryClient.invalidateQueries({ queryKey: ['course', String(course.id)] })
     },
     onError: (err) => {
+      setConfirmVisible(false)
       const msg =
         err instanceof AxiosError
           ? err.response?.data?.message ?? t('admin.incidentArbitration.arbitrateError')
@@ -157,6 +167,7 @@ export default function IncidentArbitrationPanel({
   }
 
   function submit() {
+    if (mutation.isPending) return
     setError(null)
     if (resolutionNote.trim().length < 5) {
       setError(t('admin.incidentArbitration.resolutionNoteRequired'))
@@ -170,13 +181,18 @@ export default function IncidentArbitrationPanel({
       }
     }
     if (reasonCodeDriver) {
+      if (!selectedDriver) {
+        setError(t('admin.incidentArbitration.selectDriverRequired'))
+        return
+      }
       const n = parseInt(amountDriver, 10)
       if (!n || n <= 0) {
         setError(t('admin.incidentArbitration.driverAmountPositive'))
         return
       }
     }
-    mutation.mutate()
+    if (reasonCodeDriver) setConfirmVisible(true)
+    else mutation.mutate()
   }
 
   const marchandOptions = Object.entries(ADJUSTMENT_REASON_CODES)
@@ -362,15 +378,31 @@ export default function IncidentArbitrationPanel({
         <p className="text-eyebrow uppercase text-warm-500 font-bold mb-2">
           {t('admin.incidentArbitration.driverAdjustment')}
           <span className="normal-case font-normal text-warm-400 ml-2">
-            ({course.driver?.user.name ?? '—'})
+            ({selectedDriver?.name ?? '—'})
           </span>
         </p>
+        <label className="block text-caption text-warm-500 mb-2">
+          {t('admin.incidentArbitration.selectDriver')}
+          <select
+            value={adjustmentDriverId}
+            onChange={(event) => {
+              setAdjustmentDriverId(event.target.value)
+              if (!event.target.value) setReasonCodeDriver('')
+            }}
+            disabled={mutation.isPending}
+            className="mt-1 w-full bg-off-white border-2 border-warm-200 rounded-md px-3 py-2 text-body-s"
+          >
+            <option value="">{t('admin.incidentArbitration.selectDriverRequired')}</option>
+            {candidates.map((driver) => <option key={driver.id} value={driver.id}>{driverLabel(driver)}</option>)}
+          </select>
+        </label>
+        <p className="text-caption text-warm-500 mb-3">{t('admin.incidentArbitration.driverSelectionHint')}</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <select
             value={reasonCodeDriver}
             onChange={(e) => setReasonCodeDriver(e.target.value as AdjustmentReasonCode | '')}
             className="w-full bg-off-white border-2 border-warm-200 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
-            disabled={!course.driver}
+            disabled={!selectedDriver || mutation.isPending}
           >
             <option value="">{t('admin.incidentArbitration.noDriverAdjustment')}</option>
             {driverOptions.map(([code, meta]) => (
@@ -386,7 +418,7 @@ export default function IncidentArbitrationPanel({
               value={amountDriver}
               onChange={(e) => setAmountDriver(e.target.value)}
               placeholder={t('admin.incidentArbitration.amountPlaceholder')}
-              disabled={!reasonCodeDriver || !course.driver}
+              disabled={!reasonCodeDriver || !selectedDriver || mutation.isPending}
               className="w-full bg-off-white border-2 border-warm-200 rounded-md px-3 py-2 pr-16 text-body-s focus:outline-none focus:border-airmess-yellow disabled:opacity-50"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-caption text-warm-500">
@@ -428,6 +460,19 @@ export default function IncidentArbitrationPanel({
         </div>
       )}
 
+      <ConfirmModal
+        visible={confirmVisible}
+        title={t('admin.incidentArbitration.confirmDriverTitle')}
+        description={selectedDriver && reasonCodeDriver ? t('admin.incidentArbitration.confirmDriverBody', {
+          driver: driverLabel(selectedDriver),
+          amount: `${ADJUSTMENT_REASON_CODES[reasonCodeDriver].sign === 'credit' ? '+' : '−'}${amountDriver} FCFA`,
+          reason: ADJUSTMENT_REASON_CODES[reasonCodeDriver].label,
+          note: resolutionNote.trim(),
+        }) : ''}
+        isPending={mutation.isPending}
+        onClose={() => { if (!mutation.isPending) setConfirmVisible(false) }}
+        onConfirm={() => { if (!mutation.isPending && selectedDriver) mutation.mutate() }}
+      />
       <Button
         variant="primary"
         size="md"

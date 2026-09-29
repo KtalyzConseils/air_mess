@@ -20,6 +20,7 @@ export interface CourseIncident {
 }
 
 export interface Course {
+  arbitration_drivers?: { id: number; name: string; roles: ('current' | 'previous' | 'historical' | 'reporter')[] }[]
   id: number
   reference: string
   status: string

@@ -2674,6 +2674,17 @@
       "applyNoShow": "Appliquer no-show partiel (1 clic)",
       "merchantAdjustment": "🏢 Ajustement marchand",
       "driverAdjustment": "🛵 Ajustement livreur",
+      "selectDriver": "Livreur concerné par l’ajustement",
+      "selectDriverRequired": "Choisissez explicitement un livreur",
+      "driverSelectionHint": "La présence dans cette liste ne présume pas de la responsabilité. Vérifiez le livreur concerné par cet incident, notamment après un transfert.",
+      "confirmDriverTitle": "Confirmer le livreur et l’ajustement",
+      "confirmDriverBody": "Livreur : {{driver}}\nAjustement : {{amount}}\nMotif : {{reason}}\nDécision : {{note}}\n\nCet ajustement vise uniquement le livreur indiqué. Les éventuels ajustements marchand seront également appliqués.",
+      "driverRoles": {
+        "current": "livreur actuellement affecté",
+        "previous": "précédent livreur",
+        "historical": "ancien intervenant",
+        "reporter": "auteur d’un signalement"
+      },
       "noMerchantAdjustment": "— Aucun ajustement marchand —",
       "noDriverAdjustment": "— Aucun ajustement livreur —",
       "amountPlaceholder": "Montant (FCFA)",

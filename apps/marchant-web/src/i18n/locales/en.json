@@ -2674,6 +2674,17 @@
       "applyNoShow": "Apply partial no-show (1 click)",
       "merchantAdjustment": "🏢 Merchant adjustment",
       "driverAdjustment": "🛵 Driver adjustment",
+      "selectDriver": "Driver concerned by the adjustment",
+      "selectDriverRequired": "Explicitly select a driver",
+      "driverSelectionHint": "Being listed does not imply responsibility. Check which driver is concerned by this incident, especially after a handover.",
+      "confirmDriverTitle": "Confirm driver and adjustment",
+      "confirmDriverBody": "Driver: {{driver}}\nAdjustment: {{amount}}\nReason: {{reason}}\nDecision: {{note}}\n\nThis adjustment only targets the identified driver. Any merchant adjustments will also be applied.",
+      "driverRoles": {
+        "current": "currently assigned driver",
+        "previous": "previous driver",
+        "historical": "former participant",
+        "reporter": "incident reporter"
+      },
       "noMerchantAdjustment": "— No merchant adjustment —",
       "noDriverAdjustment": "— No driver adjustment —",
       "amountPlaceholder": "Amount (FCFA)",

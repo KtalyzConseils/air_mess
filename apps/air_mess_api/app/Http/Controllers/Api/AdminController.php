@@ -2123,6 +2123,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             'amount_marchand'        => ['nullable', 'integer'],
             'reason_code_driver'     => ['nullable', 'string', 'max:40'],
             'amount_driver'          => ['nullable', 'integer'],
+            'adjustment_driver_id'   => ['nullable', 'integer', 'required_with:reason_code_driver'],
         ]);
 
         // Cohérence : si un reason_code est fourni, l'amount correspondant doit
@@ -2149,7 +2150,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ];
 
         try {
-            [$marchandAdj, $driverAdj, $cautionShort] = DB::transaction(function () use (
+            [$marchandAdj, $driverAdj, $cautionShort, $adjustmentDriver] = DB::transaction(function () use (
                 $data, $incident, $course, $admin, $adjustments, $cappableReasons
             ) {
                 $marchandAdj  = null;
@@ -2159,6 +2160,16 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 $incident = CourseIncident::whereKey($incident->id)->lockForUpdate()->firstOrFail();
                 if ($incident->status !== 'open') {
                     throw new \DomainException('Cet incident est déjà clôturé.');
+                }
+
+                $course = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
+                $adjustmentDriver = null;
+                if (($data['reason_code_driver'] ?? null) !== null) {
+                    $selectedId = (int) ($data['adjustment_driver_id'] ?? 0);
+                    if (! $course->arbitrationDrivers()->contains('id', $selectedId)) {
+                        throw new \DomainException('Choisissez un livreur ayant participé à cette course.');
+                    }
+                    $adjustmentDriver = Driver::findOrFail($selectedId);
                 }
 
                 // Ajustement marchand (côté user_wallet) — le sender de la course.
@@ -2174,8 +2185,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     );
                 }
 
-                // Ajustement driver (côté wallet caution) — le driver assigné.
-                if (($data['reason_code_driver'] ?? null) !== null && $course->driver) {
+                // Ajustement caution : cible explicite, jamais le remplaçant par défaut.
+                if ($adjustmentDriver) {
                     $requestedAmount = (int) $data['amount_driver'];
                     $isDebit         = $requestedAmount < 0;
                     $isCappable      = in_array($data['reason_code_driver'], $cappableReasons, true);
@@ -2184,7 +2195,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     // au disponible ET on suspend le driver. Le reste des reasons garde
                     // la contrainte stricte (throw si insuffisant).
                     if ($isDebit && $isCappable) {
-                        $wallet = \App\Models\DriverWallet::where('driver_id', $course->driver->id)
+                        $wallet = \App\Models\DriverWallet::where('driver_id', $adjustmentDriver->id)
                             ->lockForUpdate()
                             ->firstOrFail();
 
@@ -2195,7 +2206,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                             // Sinon une relance pourrait créditer à nouveau le marchand.
                             if ($capped !== 0) {
                             $driverAdj = $adjustments->applyToDriver(
-                                driver:     $course->driver,
+                                driver:     $adjustmentDriver,
                                 amount:     $capped,
                                 reasonCode: $data['reason_code_driver'],
                                 course:     $course,
@@ -2204,11 +2215,11 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                                 notes:      "[Caution insuffisante — montant capé sur solde disponible] " . $data['resolution_note'],
                             );
                             }
-                            $course->driver->update(['activation_status' => 'suspended']);
+                            $adjustmentDriver->update(['activation_status' => 'suspended']);
                             $cautionShort = true;
                         } else {
                             $driverAdj = $adjustments->applyToDriver(
-                                driver:     $course->driver,
+                                driver:     $adjustmentDriver,
                                 amount:     $requestedAmount,
                                 reasonCode: $data['reason_code_driver'],
                                 course:     $course,
@@ -2220,7 +2231,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     } else {
                         // Chemin classique : contrainte stricte, throw si insuffisant.
                         $driverAdj = $adjustments->applyToDriver(
-                            driver:     $course->driver,
+                            driver:     $adjustmentDriver,
                             amount:     $requestedAmount,
                             reasonCode: $data['reason_code_driver'],
                             course:     $course,
@@ -2231,15 +2242,21 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     }
                 }
 
+                // Conserver aussi la cible lorsque la caution nulle ne produit aucune écriture.
+                $resolutionNote = $data['resolution_note'];
+                if ($adjustmentDriver) {
+                    $resolutionNote .= "\n[Ajustement livreur #{$adjustmentDriver->id} : demandé {$data['amount_driver']} FCFA, appliqué "
+                        . ($driverAdj?->amount_fcfa ?? 0) . ' FCFA]';
+                }
                 // Résolution de l'incident (dans la même transaction — soit tout passe, soit rien).
                 $incident->update([
                     'status'          => 'resolved',
-                    'resolution_note' => $data['resolution_note'],
+                    'resolution_note' => $resolutionNote,
                     'resolved_by'     => $admin->user_id ?? null,
                     'resolved_at'     => now(),
                 ]);
 
-                return [$marchandAdj, $driverAdj, $cautionShort];
+                return [$marchandAdj, $driverAdj, $cautionShort, $adjustmentDriver];
             });
         } catch (\DomainException $e) {
             // Solde insuffisant côté user (débit qui mangerait les holds courses)
@@ -2265,20 +2282,21 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             $notifiedUserIds[] = $course->sender_id;
         }
 
-        if ($course->driver && $course->driver->user_id && ! in_array($course->driver->user_id, $notifiedUserIds, true)) {
+        $notifiedDriver = $adjustmentDriver ?? $course->driver;
+        if ($notifiedDriver && $notifiedDriver->user_id && ! in_array($notifiedDriver->user_id, $notifiedUserIds, true)) {
             $driverMessage = $this->buildDriverNotification($course, $driverAdj, $data['resolution_note']);
             if ($cautionShort) {
                 $driverMessage .= ' Votre caution est insuffisante pour couvrir le débit — votre compte est temporairement suspendu jusqu\'à rechargement.';
             }
             $notifier->sendToUser(
-                $course->driver->user_id,
+                $notifiedDriver->user_id,
                 'incident.arbitrated',
                 $cautionShort ? '⚠️ Compte suspendu — caution insuffisante' : '⚖️ Incident arbitré',
                 $driverMessage,
                 ['reference' => $course->reference, 'caution_short' => $cautionShort],
                 $course->id,
             );
-            $notifiedUserIds[] = $course->driver->user_id;
+            $notifiedUserIds[] = $notifiedDriver->user_id;
         }
 
         if ($incident->reported_by && ! in_array($incident->reported_by, $notifiedUserIds, true)) {
