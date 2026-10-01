@@ -7,6 +7,9 @@ use App\Models\PackageCategory;
 use App\Models\UserWallet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
+use App\Services\CourseCreationService;
+use App\Services\PriceCalculator;
 use Tests\Feature\ApiApps\Concerns\WithApiApp;
 use Tests\TestCase;
 
@@ -41,8 +44,69 @@ class IntegrationCourseWithApiAppTest extends TestCase
                 'phone'    => '+22997000002',
                 'quartier' => 'Calavi',
                 'city'     => 'Abomey-Calavi',
+                'lat'      => 6.45,
+                'lng'      => 2.35,
             ],
         ];
+    }
+
+    public function test_integration_uses_shared_distance_pricing_and_ignores_legacy_flat_fees(): void
+    {
+        foreach (['price_min_fcfa' => 250, 'price_per_km_fcfa' => 60,
+            'price_detour_factor' => 1.35, 'price_express_multiplier' => 1.5,
+            'price_max_fcfa' => 3000, 'driver_commission_percent' => 87,
+            'standard_delivery_fee_fcfa' => 9900, 'express_delivery_fee_fcfa' => 19900] as $key => $value) {
+            Cache::put('app_setting:'.$key, $value);
+        }
+        foreach (['standard', 'express'] as $urgency) {
+            foreach ([[6.37, 2.41], [6.45, 2.35], [7.0, 2.35]] as [$lat, $lng]) {
+                $expected = app(PriceCalculator::class)->estimate(6.37, 2.41, $lat, $lng, $urgency)['fee'];
+                $actual = app(CourseCreationService::class)->pricing(6.37, 2.41, $lat, $lng, $urgency);
+                $this->assertSame($expected, $actual['delivery_fee']);
+                $this->assertSame((int) round($expected * .87), $actual['driver_earnings']);
+            }
+        }
+
+        Bus::fake();
+        $owner = $this->createMarchantUser();
+        $app = $this->createApiApplication($owner, $this->createApiPlan());
+        $wallet = $this->fundWallet($owner, 10000);
+        PackageCategory::factory()->create(['code' => 'standard', 'is_active' => true]);
+        $this->withToken($app->createToken('test', ['api:create-course'])->plainTextToken);
+        $payload = $this->coursePayload();
+        $payload['urgency'] = 'express';
+        $expected = app(PriceCalculator::class)->estimate(6.37, 2.41, 6.45, 2.35, 'express')['fee'];
+        $this->postJson('/api/integration/courses', $payload)->assertCreated()->assertJsonPath('delivery_fee', $expected);
+        // Un changement de réglage ne recalcule pas une course existante sur retry.
+        Cache::put('app_setting:price_per_km_fcfa', 120);
+        $this->postJson('/api/integration/courses', $payload)->assertOk()->assertJsonPath('delivery_fee', $expected);
+        $this->assertSame(1, Course::count());
+        $this->assertSame($expected, (int) $wallet->fresh()->pending_reserved);
+        $this->assertSame((int) round($expected * .87), (int) Course::first()->driver_earnings);
+        $this->assertSame(1, (int) $app->fresh()->quota_used);
+    }
+
+    public function test_missing_or_invalid_gps_does_not_create_course_reserve_wallet_or_consume_quota(): void
+    {
+        Bus::fake();
+        $owner = $this->createMarchantUser();
+        $app = $this->createApiApplication($owner, $this->createApiPlan());
+        $wallet = $this->fundWallet($owner, 10000);
+        $this->withToken($app->createToken('test', ['api:create-course'])->plainTextToken);
+        foreach (['origin.lat', 'origin.lng', 'destination.lat', 'destination.lng'] as $field) {
+            foreach ([null, 0, 'invalid', 181] as $invalid) {
+                $payload = $this->coursePayload();
+                data_set($payload, $field, $invalid);
+                $this->postJson('/api/integration/courses', $payload)->assertUnprocessable()->assertJsonValidationErrors($field);
+            }
+            $payload = $this->coursePayload();
+            \Illuminate\Support\Arr::forget($payload, $field);
+            $this->postJson('/api/integration/courses', $payload)->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        $this->assertSame(0, Course::count());
+        $this->assertSame(0, (int) $wallet->fresh()->pending_reserved);
+        $this->assertSame(10000, (int) $wallet->fresh()->balance);
+        $this->assertSame(0, (int) $app->fresh()->quota_used);
     }
 
     public function test_manage_course_and_wallet_even_when_creation_quota_exhausted(): void

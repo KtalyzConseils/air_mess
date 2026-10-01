@@ -114,8 +114,8 @@ Crée une course de livraison. **Idempotent** sur `external_reference` (voir §6
     "landmark": "près de la pharmacie",// optionnel
     "quartier": "Gbegamey",            // requis
     "city": "Cotonou",                 // requis
-    "lat": 6.3700,                     // optionnel (voir §5)
-    "lng": 2.4100,                     // optionnel
+    "lat": 6.3700,                     // requis (voir §5)
+    "lng": 2.4100,                     // requis
     "instructions": "Sonner à l'étage" // optionnel
   },
 
@@ -126,8 +126,8 @@ Crée une course de livraison. **Idempotent** sur `external_reference` (voir §6
     "address": "Maison bleue, en face du marché", // optionnel (texte libre)
     "quartier": "Calavi",              // optionnel
     "city": "Abomey-Calavi",           // optionnel
-    "lat": null,                       // optionnel
-    "lng": null,                       // optionnel
+    "lat": 6.4500,                     // requis
+    "lng": 2.3500,                     // requis
     "instructions": "Appeler avant"    // optionnel
   },
 
@@ -144,8 +144,8 @@ Crée une course de livraison. **Idempotent** sur `external_reference` (voir §6
 }
 ```
 
-> **Minimum requis** : `origin.{name,phone,quartier,city}` et
-> `destination.phone`. Tout le reste est optionnel.
+> **Minimum requis** : `origin.{name,phone,quartier,city,lat,lng}` et
+> `destination.{phone,lat,lng}`. Tout le reste est optionnel.
 
 ### Réponse `201 Created`
 
@@ -166,17 +166,22 @@ pour suivre la livraison (page publique).
 
 ## 5. Coordonnées GPS & statut de la course
 
-Le rapprochement avec les livreurs se fait autour du **point de retrait**
-(`origin`). Deux cas :
+Les quatre coordonnées GPS de retrait et de livraison sont obligatoires :
+latitudes entre -90 et 90, longitudes entre -180 et 180. La valeur zéro,
+traitée comme une coordonnée manquante par le calculateur actuel, est refusée.
+Une coordonnée absente, nulle ou invalide renvoie `422`, sans création de course,
+réservation de wallet ni consommation du quota de création.
 
-| `origin.lat` / `origin.lng` | Statut initial | Conséquence |
-|---|---|---|
-| Fournis | `awaiting_assignment` | La course est immédiatement proposée aux livreurs proches. |
-| Absents | `awaiting_geo` | La course est créée mais **en attente** que les coordonnées du retrait soient renseignées (côté AirMess) avant d'être proposée. |
+Le tarif est calculé par le même `PriceCalculator` que l'application : distance
+Haversine corrigée, base et prix/km configurés, multiplicateur express, arrondi
+et plafond. Les anciens forfaits standard/express ne sont plus utilisés ici.
+Les montants des exemples de réponse sont illustratifs, pas des tarifs fixes.
 
-➡️ **Recommandation** : fournissez `origin.lat`/`origin.lng` si vous les avez,
-pour un dispatch immédiat. La destination peut rester sans GPS (le livreur
-contacte le client au numéro fourni).
+La course créée passe en `awaiting_assignment` et est proposée aux livreurs
+proches du retrait. Les anciennes courses `awaiting_geo` sont conservées.
+**Compatibilité :** les intégrateurs doivent ajouter les quatre coordonnées
+avant déploiement, y compris dans les requêtes rejouées. Les courses existantes
+ne sont pas recalculées ; un retry valide conserve le tarif et la réservation.
 
 ---
 
@@ -265,7 +270,7 @@ curl -s https://<api>/api/integration/courses \
                      "lat": 6.37, "lng": 2.41 },
     "destination": { "name": "Koffi", "phone": "+22997000002",
                      "address": "Maison bleue", "quartier": "Calavi",
-                     "city": "Abomey-Calavi" },
+                     "city": "Abomey-Calavi", "lat": 6.45, "lng": 2.35 },
     "package":     { "description": "Commande #10293", "size": "M" }
   }'
 ```

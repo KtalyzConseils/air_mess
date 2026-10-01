@@ -10,9 +10,8 @@ use Illuminate\Validation\Rule;
 /**
  * Validation de la création de course depuis un site externe (Gbandjo/Systige).
  *
- * Plus permissive que CreateCourseRequest : la destination peut être
- * incomplète (le client n'a fourni qu'un contact + parfois une adresse texte
- * sans GPS), et l'origine (vendeur) peut arriver sans coordonnées.
+ * Les coordonnées de retrait et de livraison sont obligatoires pour calculer
+ * le tarif à la distance. Les compléments d'adresse restent facultatifs.
  *
  * L'authentification et l'ability `integration:create-course` sont déjà
  * vérifiées par le middleware de route ; on contrôle ici que le porteur de la
@@ -66,7 +65,7 @@ class StoreIntegrationCourseRequest extends FormRequest
             'package.description' => ['nullable', 'string', 'max:255'],
             'package.size'        => ['nullable', Rule::in(['S', 'M', 'L', 'XL'])],
 
-            // ===== Origine (vendeur / retrait) — coordonnées facultatives =====
+            // ===== Origine (vendeur / retrait) — GPS obligatoire =====
             'origin'          => ['required', 'array'],
             'origin.name'     => ['required', 'string', 'max:150'],
             'origin.phone'    => ['required', 'string', 'max:20'],
@@ -74,8 +73,8 @@ class StoreIntegrationCourseRequest extends FormRequest
             'origin.landmark' => ['nullable', 'string', 'max:255'],
             'origin.quartier' => ['required', 'string', 'max:100'],
             'origin.city'     => ['required', 'string', 'max:100'],
-            'origin.lat'      => ['nullable', 'numeric', 'between:-90,90'],
-            'origin.lng'      => ['nullable', 'numeric', 'between:-180,180'],
+            'origin.lat'      => ['required', 'numeric', 'between:-90,90', 'not_in:0'],
+            'origin.lng'      => ['required', 'numeric', 'between:-180,180', 'not_in:0'],
             'origin.instructions' => ['nullable', 'string'],
 
             // ===== Destination (client) — souvent incomplète à la commande =====
@@ -86,8 +85,8 @@ class StoreIntegrationCourseRequest extends FormRequest
             'destination.landmark' => ['nullable', 'string', 'max:255'],
             'destination.quartier' => ['nullable', 'string', 'max:100'],
             'destination.city'     => ['nullable', 'string', 'max:100'],
-            'destination.lat'      => ['nullable', 'numeric', 'between:-90,90'],
-            'destination.lng'      => ['nullable', 'numeric', 'between:-180,180'],
+            'destination.lat'      => ['required', 'numeric', 'between:-90,90', 'not_in:0'],
+            'destination.lng'      => ['required', 'numeric', 'between:-180,180', 'not_in:0'],
             'destination.instructions' => ['nullable', 'string'],
 
             // ===== Encaissement à la livraison (paiement à la livraison éventuel) =====

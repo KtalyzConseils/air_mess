@@ -10,7 +10,6 @@ use App\Models\PackageCategory;
 use App\Models\User;
 use App\Models\UserWallet;
 use App\Services\CourseCreationService;
-use App\Services\GeocodingService;
 use App\Services\UserWalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,7 +20,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Flux : la commande passée sur le site marchand génère une course AirMess en
  * serveur-à-serveur. L'origine est le vendeur ; la destination est le client,
- * parfois sans GPS. Idempotent sur (marchand, external_reference) pour
+ * avec GPS obligatoire. Idempotent sur (marchand, external_reference) pour
  * absorber les retries du site externe sans créer de doublon.
  *
  * Paiement : comme pour le canal applicatif, le marchand est payeur. La course
@@ -92,7 +91,6 @@ class IntegrationCourseController extends Controller
     public function store(
         StoreIntegrationCourseRequest $request,
         CourseCreationService $creator,
-        GeocodingService $geocoder,
         UserWalletService $walletService,
     ): JsonResponse {
         $data = $request->validated();
@@ -119,8 +117,14 @@ class IntegrationCourseController extends Controller
         }
 
         // ===== Tarif.
+        $origin = $data['origin'];
+        $dest = $data['destination'];
+        $originLat = (float) $origin['lat'];
+        $originLng = (float) $origin['lng'];
         $urgency = $data['urgency'] ?? 'standard';
-        ['delivery_fee' => $deliveryFee, 'driver_earnings' => $driverEarnings] = $creator->pricing($urgency);
+        ['delivery_fee' => $deliveryFee, 'driver_earnings' => $driverEarnings] = $creator->pricing(
+            $originLat, $originLng, (float) $dest['lat'], (float) $dest['lng'], $urgency,
+        );
 
         // ===== Paiement wallet : pré-check du solde disponible.
         // Le user propriétaire (de l'app dev ou de la clé marchand) est payeur.
@@ -136,23 +140,7 @@ class IntegrationCourseController extends Controller
             ], 402);
         }
 
-        // ===== Coordonnées de retrait : fournies, sinon géocodage best-effort.
-        $origin = $data['origin'];
-        $originLat = $origin['lat'] ?? null;
-        $originLng = $origin['lng'] ?? null;
-
-        if ($originLat === null || $originLng === null) {
-            if ($coords = $geocoder->geocode($origin['street'] ?? null, $origin['quartier'], $origin['city'])) {
-                [$originLat, $originLng] = [$coords['lat'], $coords['lng']];
-            }
-        }
-
-        // Sans coordonnées de retrait, on ne peut pas pousser aux livreurs :
-        // la course attend qu'un admin pose le pin (awaiting_geo).
-        $hasOrigin = $originLat !== null && $originLng !== null;
-        $status = $hasOrigin ? Course::STATUS_AWAITING : 'awaiting_geo';
-
-        $dest = $data['destination'];
+        $status = Course::STATUS_AWAITING;
         $package = $data['package'] ?? [];
 
         $attributes = [
@@ -222,14 +210,9 @@ class IntegrationCourseController extends Controller
             ], 402);
         }
 
-        // Push aux livreurs seulement si on a les coordonnées de retrait.
-        if ($hasOrigin) {
-            $creator->dispatchToAvailableDrivers($course);
-        }
+        $creator->dispatchToAvailableDrivers($course);
 
-        return $this->payload($course, 201, $hasOrigin
-            ? 'Course créée. En attente d\'attribution.'
-            : 'Course créée. En attente de géolocalisation du point de retrait.');
+        return $this->payload($course, 201, 'Course créée. En attente d\'attribution.');
     }
 
     private function defaultPackageCategoryId(): int

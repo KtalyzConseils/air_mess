@@ -69,6 +69,8 @@ Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `Firs
 
 ## API d'intégration : lecture et annulation
 
+- Tarification des nouvelles créations : `CourseCreationService::pricing` délègue au `PriceCalculator`, comme le canal applicatif. Aucun forfait alternatif. Les quatre coordonnées GPS sont obligatoires (zéro refusé car sentinelle du calculateur actuel) ; validation avant wallet/quota. Les intégrateurs doivent adapter leurs requêtes avant déploiement. Les anciennes courses ne sont pas recalculées. Tests : `IntegrationCourseWithApiAppTest` (parité standard/express/plafond, GPS invalide, réservation et quota uniques après retry).
+
 - `IntegrationCourseController` gère les routes `/integration/courses/{reference}`, `/integration/wallet` et `/integration/courses/{reference}/cancel`. Autorisation commune avec la création : `StoreIntegrationCourseRequest::resolvePayer`.
 - Les clés existantes sont compatibles. Les clés d'app sont limitées aux courses du couple propriétaire/application ; les clés historiques aux courses du propriétaire sans app. Aucun code secret de course n'est renvoyé.
 - L'annulation verrouille la course et délègue au traitement payeur de `CourseController::cancel` / `UserWalletService`. Ne pas créer une seconde logique de remboursement. Une course déjà annulée ne produit pas d'effet supplémentaire.
