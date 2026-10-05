@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useEffect, useRef, useState } from 'react'
+import { useForm, useWatch } from 'react-hook-form'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
@@ -9,7 +9,6 @@ import Field from '../components/Field'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
-import Highlight from '../components/Highlight'
 import {
   BagIcon, PackageIcon, SnowflakeIcon, IdCardIcon, LockIcon, BikeIcon, AlertTriangleIcon,
   MotorcycleIcon, ScooterIcon, CarIcon, FileTextIcon, ArrowRightIcon, ArrowLeftIcon,
@@ -17,13 +16,13 @@ import {
 import AuthSupportFooter from '../components/AuthSupportFooter'
 import TermsCheckbox from '../components/TermsCheckbox'
 import VehicleTypeCards from '../components/driver/VehicleTypeCards'
-import AppDownloadBanner from '../components/driver/AppDownloadBanner'
 import DocumentCapture from '../components/driver/DocumentCapture'
 import { cn } from '../lib/cn'
 import { VEHICLE_BRANDS } from '../lib/constants'
 import wordmark from '../assets/logo/airmess-wordmark.svg'
-import mark from '../assets/logo/airmess-mark.svg'
+import recruitmentPoster from '../assets/recruitment/affiche-livreur.jpeg'
 import { fetchWaitlistActivation } from '../api/waitlist'
+import './DriverRegisterPage.css'
 
 const selectClass =
   'w-full bg-off-white border border-warm-300 rounded-md px-3 py-2.5 text-body text-ink ' +
@@ -42,7 +41,7 @@ type FormValues = Omit<RegisterDriverPayload, 'photo' | 'cni' | 'cni_back' | 'dr
 const STEP1_FIELDS = [
   'first_name', 'last_name', 'gender', 'birth_date',
   'email', 'phone', 'password', 'password_confirmation',
-  'vehicle_type', 'vehicle_plate',
+  'vehicle_type', 'vehicle_plate', 'vehicle_brand',
 ] as const
 
 export default function DriverRegisterPage() {
@@ -52,6 +51,8 @@ export default function DriverRegisterPage() {
   const registerDriver = useAuthStore((s) => s.registerDriver)
   const referralCode = (searchParams.get('ref') ?? '').trim().toUpperCase()
   const activationToken = searchParams.get('activation') ?? ''
+  const submitLock = useRef(false)
+  const formHeadingRef = useRef<HTMLHeadingElement>(null)
 
   const [photo, setPhoto] = useState<File | null>(null)
   const [cni, setCni] = useState<File | null>(null)
@@ -68,22 +69,20 @@ export default function DriverRegisterPage() {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
+    getValues,
     trigger,
     setValue,
+    getFieldState,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>()
+  } = useForm<FormValues>({ shouldFocusError: false })
 
   // Le permis de conduire n'est demandé que pour une voiture.
-  const isCar = watch('vehicle_type') === 'voiture'
+  const vehicleType = useWatch({ control, name: 'vehicle_type' })
+  const isCar = vehicleType === 'voiture'
   // Type de pièce d'identité : la CNIB a un verso, CIP/passeport une seule face.
-  const cniType = watch('cni_type')
+  const cniType = useWatch({ control, name: 'cni_type' })
   const isCnib = cniType === 'cnib'
-
-  // Si on quitte la CNIB, le verso déjà capturé n'a plus de sens : on le retire.
-  useEffect(() => {
-    if (cniType !== 'cnib') setCniBack(null)
-  }, [cniType])
 
   useEffect(() => {
     if (referralCode) setValue('referral_code', referralCode)
@@ -91,32 +90,47 @@ export default function DriverRegisterPage() {
 
   useEffect(() => {
     if (!activationToken) return
+    let cancelled = false
     void fetchWaitlistActivation(activationToken)
       .then((prefill) => {
+        if (cancelled) return
         if (prefill.kind !== 'driver') throw new Error('wrong_kind')
-        if (prefill.first_name) setValue('first_name', prefill.first_name)
-        if (prefill.last_name) setValue('last_name', prefill.last_name)
-        if (prefill.email) setValue('email', prefill.email)
-        if (prefill.phone) setValue('phone', prefill.phone)
-        if (prefill.vehicle_type) setValue('vehicle_type', prefill.vehicle_type)
+        for (const field of ['first_name', 'last_name', 'email', 'phone', 'vehicle_type'] as const) {
+          if (prefill[field] && !getFieldState(field).isDirty) setValue(field, prefill[field])
+        }
       })
-      .catch(() => setServerError("Ce lien d'activation est invalide, expiré ou déjà utilisé."))
-  }, [activationToken, setValue])
+      .catch(() => { if (!cancelled) setServerError(t('driverRegister.recruitment.activationError')) })
+    return () => { cancelled = true }
+  }, [activationToken, setValue, getFieldState, t])
+
+  function focusForm() {
+    formHeadingRef.current?.focus({ preventScroll: true })
+    formHeadingRef.current?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+      block: 'start',
+    })
+  }
 
   /** Étape 1 → 2 : valide les champs de l'étape. */
   async function goToStep2() {
     const fieldsOk = await trigger([...STEP1_FIELDS])
-    if (!fieldsOk) return
+    if (!fieldsOk) {
+      setServerError(t('driverRegister.recruitment.correctFields'))
+      focusForm()
+      return
+    }
+    setServerError(null)
     setStep(2)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    focusForm()
   }
 
   function backToStep1() {
     setStep(1)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    focusForm()
   }
 
   async function onSubmit(values: FormValues) {
+    if (submitLock.current) return
     setServerError(null)
     setFileError(null)
     setServerFieldErrors({})
@@ -127,18 +141,19 @@ export default function DriverRegisterPage() {
       setFileError(
         cnibSelected && cni && !cniBack
           ? t('driverRegister.cniBackRequired')
-          : t('driverRegister.cniLicenseRequired'),
+          : !cni ? t('driverRegister.recruitment.identityRequired') : t('driverRegister.recruitment.licenseRequired'),
       )
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+      focusForm()
       return
     }
 
     if (!acceptedTerms) {
       setShowTermsError(true)
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+      focusForm()
       return
     }
 
+    submitLock.current = true
     try {
       const { token } = await registerDriver({
         ...values,
@@ -157,21 +172,22 @@ export default function DriverRegisterPage() {
         state: { registrationToken: token, completedPublicApplication: Boolean(activationToken) },
       })
     } catch (err) {
+      submitLock.current = false
       // Messages toujours en FR : cohérence avec les messages Laravel côté API.
       if (err instanceof AxiosError) {
         const data = err.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
-        setServerError(data?.message ?? "Erreur lors de l'inscription.")
+        setServerError(data?.message ?? t('driverRegister.recruitment.retryError'))
         setServerFieldErrors(data?.errors ?? {})
         // Si l'erreur serveur concerne un champ de l'étape 1 (email/téléphone pris…),
         // on y ramène l'utilisateur pour qu'il voie le champ en rouge.
         const errorFields = Object.keys(data?.errors ?? {})
         if (errorFields.some((f) => (STEP1_FIELDS as readonly string[]).includes(f))) {
           setStep(1)
-          window.scrollTo({ top: 0, behavior: 'smooth' })
         }
       } else {
-        setServerError('Erreur inattendue.')
+        setServerError(t('driverRegister.recruitment.retryError'))
       }
+      focusForm()
     }
   }
 
@@ -180,86 +196,93 @@ export default function DriverRegisterPage() {
   }
 
   return (
-    <div className="min-h-screen lg:h-screen flex flex-col lg:flex-row bg-cream overflow-x-hidden lg:overflow-hidden">
-      {/* ============================================================
-          GAUCHE — Panel sombre avec proposition de valeur
-          Sur lg+ : pleine hauteur écran avec son propre scroll si pitch
-          long. Sur mobile : flux normal en haut.
-          overflow-hidden : clip les halos pour qu'ils ne débordent pas.
-          ============================================================ */}
-      <aside className="lg:w-2/5 xl:w-1/3 bg-airmess-dark text-cream p-8 md:p-12 lg:h-screen lg:overflow-y-auto relative overflow-hidden">
-        {/* Halos colorés ambiants */}
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-airmess-yellow/10 blur-3xl pointer-events-none" aria-hidden />
-        <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-airmess-red/15 blur-3xl pointer-events-none" aria-hidden />
+    <div className="driver-recruitment">
+      <header className="recruitment-header">
+        <Link to="/" aria-label="AirMess"><img src={wordmark} alt="AirMess" width="154" height="40" /></Link>
+        <Link to="/login" className="recruitment-login">{t('driverRegister.loginLink')} <ArrowRightIcon size={16} /></Link>
+      </header>
 
-        <div className="relative max-w-md">
-          <Link to="/" className="inline-block mb-12">
-            <img src={wordmark} alt="Air Mess" className="h-8 w-auto" />
-          </Link>
-
-          <h2 className="text-display-2 leading-tight mb-3">
-            {t('driverRegister.sideTaglineLine1')}
-            <br />
-            {t('driverRegister.sideTaglineLine2Prefix')}{' '}
-            <Highlight>{t('driverRegister.sideTaglineLine2Highlight')}</Highlight>.
-          </h2>
-          <p className="text-body-l text-warm-300 mb-10">
-            {t('driverRegister.sideSubtext')}
-          </p>
-
-          {/* 3 bénéfices numérotés — légitime ici, séquence d'arguments */}
-          <div className="space-y-5">
-            <Benefit number={1} title={t('driverRegister.benefit1Title')}>
-              {t('driverRegister.benefit1Body')}
-            </Benefit>
-            <Benefit number={2} title={t('driverRegister.benefit2Title')}>
-              {t('driverRegister.benefit2Body')}
-            </Benefit>
-            <Benefit number={3} title={t('driverRegister.benefit3Title')}>
-              {t('driverRegister.benefit3Body')}
-            </Benefit>
+      <section className="recruitment-hero" aria-labelledby="recruitment-title">
+        <div className="recruitment-hero-inner">
+          <div className="recruitment-pitch">
+            <p className="recruitment-eyebrow">{t('driverRegister.recruitment.eyebrow')}</p>
+            <h1 id="recruitment-title">{t('driverRegister.recruitment.headline1')}<br /><span>{t('driverRegister.recruitment.headline2')}</span></h1>
+            <p className="recruitment-intro">{t('driverRegister.recruitment.intro')}</p>
+            <p className="recruitment-earnings">{t('driverRegister.recruitment.earningsPrefix')} <strong>10 000 F CFA*</strong> <span>{t('driverRegister.recruitment.perDay')}</span></p>
+            <a href="#driver-application" className="recruitment-cta" onClick={(event) => { event.preventDefault(); focusForm() }}>
+              {t('driverRegister.recruitment.start')} <ArrowRightIcon size={20} />
+            </a>
+            <p className="recruitment-disclaimer">{t('driverRegister.recruitment.earningsDisclaimer')}</p>
           </div>
-
-          {/* Petit mark décoratif en bas */}
-          <div className="mt-12 pt-8 border-t border-warm-600/30 flex items-center gap-3 opacity-50">
-            <img src={mark} alt="" aria-hidden className="h-6 w-auto" />
-            <span className="text-caption text-warm-400">{t('driverRegister.sideFooter')}</span>
-          </div>
+          <a className="recruitment-poster" href={recruitmentPoster} target="_blank" rel="noopener noreferrer" aria-label={t('driverRegister.recruitment.posterLink')}>
+            <img src={recruitmentPoster} alt={t('driverRegister.recruitment.posterAlt')} width="1131" height="1600" fetchPriority="high" />
+          </a>
         </div>
-      </aside>
+      </section>
 
-      {/* ============================================================
-          DROITE — Formulaire d'inscription
-          Sur lg+ : zone scrollable autonome (la page ne scrolle pas).
-          ============================================================ */}
-      <div className="flex-1 px-4 md:px-8 lg:px-12 py-8 md:py-12 lg:h-screen lg:overflow-y-auto">
-        <div className="max-w-2xl mx-auto">
-          <h1 className="text-h1 text-ink mb-2">{t('driverRegister.formTitle')}</h1>
-          <p className="text-body-l text-warm-500 mb-8">
-            {t('driverRegister.formSubtitle')}
-          </p>
+      <div className="recruitment-benefits">
+        <p><BikeIcon size={21} /><span>{t('driverRegister.benefit1Title')}</span></p>
+        <p><PackageIcon size={21} /><span>{t('driverRegister.benefit2Title')}</span></p>
+        <p><IdCardIcon size={21} /><span>{t('driverRegister.recruitment.independent')}</span></p>
+      </div>
 
-          {/* Canal privilégié : l'inscription directement dans l'app livreur (étape 1 seulement) */}
-          {step === 1 && <AppDownloadBanner />}
+      <div className="recruitment-layout">
+        <aside className="recruitment-guide" aria-label={t('driverRegister.recruitment.prepareTitle')}>
+          <p className="recruitment-kicker">{t('driverRegister.recruitment.beforeStarting')}</p>
+          <h2>{t('driverRegister.recruitment.prepareTitle')}</h2>
+          <p className="recruitment-guide-intro">{t('driverRegister.recruitment.prepareIntro')}</p>
+          <ul className="recruitment-checklist">
+            <li><IdCardIcon size={20} /><span>{t('driverRegister.recruitment.prepareIdentity')}</span></li>
+            <li><BikeIcon size={20} /><span>{t('driverRegister.recruitment.prepareVehicle')}</span></li>
+            <li><FileTextIcon size={20} /><span>{t('driverRegister.recruitment.prepareContacts')}</span></li>
+          </ul>
+          <details className="recruitment-faq">
+            <summary>{t('driverRegister.recruitment.faqDocuments')}</summary>
+            <p>{t('driverRegister.recruitment.faqDocumentsAnswer')}</p>
+          </details>
+          <details className="recruitment-faq">
+            <summary>{t('driverRegister.recruitment.faqNext')}</summary>
+            <p>{t('driverRegister.recruitment.faqNextAnswer')}</p>
+          </details>
+          <AuthSupportFooter context="DriverRegister" />
+        </aside>
 
-          {/* Indicateur d'étape */}
-          <div className="flex items-center gap-3 mb-6" aria-label={t('driverRegister.steps.aria', { step })}>
+        <main id="driver-application" className="recruitment-form">
+          <p className="recruitment-kicker">{t('driverRegister.recruitment.application')}</p>
+          <h2 ref={formHeadingRef} tabIndex={-1} className="recruitment-form-title">{t('driverRegister.formTitle')}</h2>
+          <p className="text-body text-warm-500 mb-6">{t('driverRegister.formSubtitle')}</p>
+          <ol className="recruitment-steps" aria-label={t('driverRegister.steps.aria', { step })}>
             {([1, 2] as const).map((s) => (
-              <div key={s} className="flex-1">
-                <div
-                  className={cn(
-                    'h-1.5 rounded-full transition-colors duration-300',
-                    s <= step ? 'bg-airmess-yellow' : 'bg-warm-200',
-                  )}
-                />
-                <p className={cn('mt-1.5 text-caption font-medium', s === step ? 'text-ink' : 'text-warm-400')}>
-                  {s}. {s === 1 ? t('driverRegister.steps.step1') : t('driverRegister.steps.step2')}
-                </p>
-              </div>
+              <li key={s} aria-current={s === step ? 'step' : undefined} className={s <= step ? 'is-active' : ''}>
+                <span className="recruitment-step-number">{s}</span>
+                <span>{s === 1 ? t('driverRegister.steps.step1') : t('driverRegister.steps.step2')}</span>
+              </li>
             ))}
-          </div>
+          </ol>
+          <p className="text-body-s text-warm-500 mb-4">{t('driverRegister.recruitment.requiredNote')}</p>
+          {(serverError || fileError || (showTermsError && !acceptedTerms)) && (
+            <div role="alert" className="recruitment-error">
+              <AlertTriangleIcon size={20} />
+              <span>{serverError || fileError || t('legal.checkbox.requiredError')}</span>
+            </div>
+          )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form noValidate aria-busy={isSubmitting} onSubmit={(event) => {
+            if (submitLock.current) {
+              event.preventDefault()
+              return
+            }
+            if (step === 1) {
+              event.preventDefault()
+              void goToStep2()
+              return
+            }
+            void handleSubmit(onSubmit, (invalidFields) => {
+              if (STEP1_FIELDS.some((field) => field in invalidFields)) setStep(1)
+              setServerError(t('driverRegister.recruitment.correctFields'))
+              focusForm()
+            })(event)
+          }} className="space-y-4">
             {referralCode && (
               <input type="hidden" {...register('referral_code')} />
             )}
@@ -268,7 +291,7 @@ export default function DriverRegisterPage() {
               <div className="space-y-4">
             {referralCode && (
               <div className="rounded-md border border-airmess-yellow/40 bg-airmess-yellow/10 px-4 py-3 text-body-s text-ink">
-                Code parrainage appliqué : <strong>{referralCode}</strong>
+                {t('driverRegister.recruitment.referralApplied')} <strong>{referralCode}</strong>
               </div>
             )}
             {/* ====================== IDENTITÉ ====================== */}
@@ -276,16 +299,22 @@ export default function DriverRegisterPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label={t('driverRegister.firstName')}
+                  autoComplete="given-name"
+                  maxLength={100}
                   {...register('first_name', { required: t('driverRegister.firstNameRequired') })}
                   error={errors.first_name?.message ?? serverErr('first_name')}
                 />
                 <Input
                   label={t('driverRegister.lastName')}
+                  autoComplete="family-name"
+                  maxLength={100}
                   {...register('last_name', { required: t('driverRegister.lastNameRequired') })}
                   error={errors.last_name?.message ?? serverErr('last_name')}
                 />
-                <Field label={`${t('driverRegister.gender')} *`} error={errors.gender?.message ?? serverErr('gender')}>
+                <Field htmlFor="driver-gender" label={`${t('driverRegister.gender')} *`} error={errors.gender?.message ?? serverErr('gender')}>
                   <select
+                    id="driver-gender"
+                    aria-invalid={Boolean(errors.gender || serverErr('gender'))}
                     {...register('gender', { required: t('driverRegister.genderRequired') })}
                     className={selectClass}
                     defaultValue=""
@@ -301,7 +330,10 @@ export default function DriverRegisterPage() {
                   label={t('driverRegister.birthDate')}
                   helper={t('driverRegister.birthDateHelper')}
                   max={MAX_BIRTH_DATE}
-                  {...register('birth_date', { required: t('driverRegister.birthDateRequired') })}
+                  {...register('birth_date', {
+                    required: t('driverRegister.birthDateRequired'),
+                    validate: (value) => value < MAX_BIRTH_DATE || t('driverRegister.recruitment.ageError'),
+                  })}
                   error={errors.birth_date?.message ?? serverErr('birth_date')}
                 />
               </div>
@@ -314,13 +346,19 @@ export default function DriverRegisterPage() {
                   type="email"
                   label={t('common.email')}
                   autoComplete="email"
-                  {...register('email', { required: t('driverRegister.emailRequired') })}
+                  {...register('email', {
+                    required: t('driverRegister.emailRequired'),
+                    setValueAs: (value: string) => value.trim(),
+                    pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: t('driverRegister.recruitment.emailInvalid') },
+                  })}
                   error={errors.email?.message ?? serverErr('email')}
                 />
                 <Input
                   type="tel"
                   label={t('driverRegister.phone')}
                   placeholder="+229 01 90 12 34 56"
+                  maxLength={20}
+                  inputMode="tel"
                   {...register('phone', { required: t('driverRegister.phoneRequired') })}
                   error={errors.phone?.message ?? serverErr('phone') ?? undefined}
                   autoComplete="tel"
@@ -340,8 +378,11 @@ export default function DriverRegisterPage() {
                   type="password"
                   label={t('driverRegister.passwordConfirm')}
                   autoComplete="new-password"
-                  {...register('password_confirmation', { required: t('driverRegister.confirmRequired') })}
-                  error={errors.password_confirmation?.message}
+                  {...register('password_confirmation', {
+                    required: t('driverRegister.confirmRequired'),
+                    validate: (value) => value === getValues('password') || t('driverRegister.recruitment.passwordMismatch'),
+                  })}
+                  error={errors.password_confirmation?.message ?? serverErr('password_confirmation')}
                 />
               </div>
             </FormSection>
@@ -363,6 +404,7 @@ export default function DriverRegisterPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <Input
                   label={t('driverRegister.plate')}
+                  maxLength={20}
                   {...register('vehicle_plate', { required: t('driverRegister.plateRequired') })}
                   error={errors.vehicle_plate?.message ?? serverErr('vehicle_plate')}
                 />
@@ -370,6 +412,7 @@ export default function DriverRegisterPage() {
                   {/* Marque : suggestions selon le type (datalist), saisie libre possible */}
                   <Input
                     label={t('driverRegister.vehicleBrand')}
+                    maxLength={50}
                     helper={t('driverRegister.brandHelper')}
                     placeholder={t('driverRegister.brandPlaceholder')}
                     list="vehicle-brand-suggestions"
@@ -378,7 +421,7 @@ export default function DriverRegisterPage() {
                     error={serverErr('vehicle_brand')}
                   />
                   <datalist id="vehicle-brand-suggestions">
-                    {(VEHICLE_BRANDS[watch('vehicle_type') ?? 'moto'] ?? []).map((brand) => (
+                    {(VEHICLE_BRANDS[vehicleType ?? 'moto'] ?? []).map((brand) => (
                       <option key={brand} value={brand} />
                     ))}
                   </datalist>
@@ -386,15 +429,14 @@ export default function DriverRegisterPage() {
               </div>
             </FormSection>
 
-            {/* Bouton Suivant — valide l'étape 1 + exige le numéro vérifié */}
+            {/* Entrée et le bouton suivent la même validation de l'étape. */}
             <Card variant="default" padding="md" className="mt-6">
               <Button
-                type="button"
+                type="submit"
                 variant="primary"
                 size="lg"
                 pill
                 fullWidth
-                onClick={() => void goToStep2()}
                 rightIcon={<ArrowRightIcon size={18} />}
               >
                 {t('driverRegister.steps.next')}
@@ -444,6 +486,8 @@ export default function DriverRegisterPage() {
                   type="tel"
                   label={t('driverRegister.emergencyPhone')}
                   placeholder="+229 01 90 12 34 56"
+                  maxLength={20}
+                  inputMode="tel"
                   {...register('emergency_contact_phone', { required: t('driverRegister.emergencyPhoneRequired') })}
                   error={errors.emergency_contact_phone?.message ?? serverErr('emergency_contact_phone')}
                 />
@@ -462,10 +506,12 @@ export default function DriverRegisterPage() {
                   type="tel"
                   label={t('driverRegister.emergencyPhone')}
                   placeholder="+229 01 90 12 34 56"
+                  maxLength={20}
+                  inputMode="tel"
                   {...register('emergency_contact2_phone', {
                     required: t('driverRegister.emergencyPhoneRequired'),
                     validate: (value) =>
-                      value.replace(/\D/g, '') !== (watch('emergency_contact_phone') ?? '').replace(/\D/g, '') ||
+                      value.replace(/\D/g, '') !== (getValues('emergency_contact_phone') ?? '').replace(/\D/g, '') ||
                       t('driverRegister.emergencyPhonesMustDiffer'),
                   })}
                   error={errors.emergency_contact2_phone?.message ?? serverErr('emergency_contact2_phone')}
@@ -502,13 +548,16 @@ export default function DriverRegisterPage() {
                     ] as const).map((option) => (
                       <label
                         key={option.value}
-                        className="relative flex cursor-pointer flex-col gap-0.5 rounded-md border border-warm-300 bg-off-white px-3 py-2.5 transition-all duration-200 hover:border-warm-400 has-checked:border-airmess-yellow has-checked:bg-airmess-yellow/10"
+                        className="relative flex cursor-pointer flex-col gap-0.5 rounded-md border border-warm-300 bg-off-white px-3 py-2.5 transition-all duration-200 hover:border-warm-400 has-checked:border-airmess-yellow has-checked:bg-airmess-yellow/10 has-focus-visible:outline-2 has-focus-visible:outline-airmess-red"
                       >
                         <input
                           type="radio"
                           value={option.value}
                           className="peer sr-only"
-                          {...register('cni_type', { required: t('driverRegister.cniType.required') })}
+                          {...register('cni_type', {
+                            required: t('driverRegister.cniType.required'),
+                            onChange: () => { setCni(null); setCniBack(null); setFileError(null) },
+                          })}
                         />
                         <span className="text-body-s font-medium text-ink">{option.title}</span>
                         <span className="text-caption text-warm-500">{option.desc}</span>
@@ -570,28 +619,11 @@ export default function DriverRegisterPage() {
                   />
                 )}
               </div>
-              {fileError && (
-                <p className="mt-4 text-body-s text-airmess-red bg-danger-bg border border-airmess-red/30 px-3 py-2 rounded-md inline-flex items-start gap-2">
-                  <AlertTriangleIcon size={16} />
-                  <span>{fileError}</span>
-                </p>
-              )}
             </FormSection>
-
-            {/* ====================== ERREUR GLOBALE ====================== */}
-            {serverError && (
-              <div
-                role="alert"
-                className="bg-danger-bg border border-airmess-red/30 text-airmess-red px-4 py-3 rounded-md text-body-s flex items-start gap-2"
-              >
-                <AlertTriangleIcon size={18} />
-                <span>{serverError}</span>
-              </div>
-            )}
 
             <TermsCheckbox
               checked={acceptedTerms}
-              onChange={setAcceptedTerms}
+              onChange={(accepted) => { setAcceptedTerms(accepted); setShowTermsError(false) }}
               error={showTermsError && !acceptedTerms ? t('legal.checkbox.requiredError') : undefined}
             />
 
@@ -603,6 +635,7 @@ export default function DriverRegisterPage() {
                   variant="secondary"
                   size="lg"
                   onClick={backToStep1}
+                  disabled={isSubmitting}
                   leftIcon={<ArrowLeftIcon size={18} />}
                   className="sm:w-auto"
                 >
@@ -632,31 +665,8 @@ export default function DriverRegisterPage() {
             </div>
           </form>
 
-          <AuthSupportFooter context="DriverRegister" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ============================================================
-   Sous-composant : Benefit (panel sombre gauche)
-   ============================================================ */
-interface BenefitProps {
-  number: number
-  title: string
-  children: React.ReactNode
-}
-
-function Benefit({ number, title, children }: BenefitProps) {
-  return (
-    <div className="flex gap-4">
-      <span className="shrink-0 inline-flex items-center justify-center h-8 w-8 rounded-full bg-airmess-yellow text-ink text-caption font-bold tabular-nums">
-        {String(number).padStart(2, '0')}
-      </span>
-      <div>
-        <h3 className="text-body font-bold text-cream">{title}</h3>
-        <p className="text-body-s text-warm-300 mt-1">{children}</p>
+          <p className="recruitment-privacy"><LockIcon size={16} />{t('driverRegister.recruitment.privacyNote')}</p>
+        </main>
       </div>
     </div>
   )

@@ -42,18 +42,15 @@ export default function DocumentCapture({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [processing, setProcessing] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewRef = useRef<HTMLImageElement>(null)
 
   const isImage = file !== null && file.type.startsWith('image/')
 
   // Aperçu : object URL créé/révoqué au rythme du fichier sélectionné.
   useEffect(() => {
-    if (!file || !file.type.startsWith('image/')) {
-      setPreviewUrl(null)
-      return
-    }
+    if (!file || !file.type.startsWith('image/') || !previewRef.current) return
     const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
+    previewRef.current.src = url
     return () => URL.revokeObjectURL(url)
   }, [file])
 
@@ -63,7 +60,20 @@ export default function DocumentCapture({
 
     // PDF : pas de contrôle de dimensions ni de compression possible côté client.
     if (selected.type === 'application/pdf') {
+      if (!allowPdf) {
+        setLocalError(t('driverRegister.recruitment.fileTypeInvalid'))
+        return
+      }
+      if (selected.size > 5 * 1024 * 1024) {
+        setLocalError(t('driverRegister.recruitment.fileTooLarge', { max: 5 }))
+        return
+      }
       onChange(selected)
+      return
+    }
+
+    if (!selected.type.startsWith('image/')) {
+      setLocalError(t('driverRegister.recruitment.fileTypeInvalid'))
       return
     }
 
@@ -74,7 +84,17 @@ export default function DocumentCapture({
         setLocalError(t('driverRegister.doc.tooSmallError', { min: minDimension }))
         return
       }
-      onChange(await compressImage(selected))
+      const compressed = await compressImage(selected)
+      const maxMb = allowPdf ? 5 : 4
+      if (!['image/jpeg', 'image/png'].includes(compressed.type)) {
+        setLocalError(t('driverRegister.recruitment.fileTypeInvalid'))
+        return
+      }
+      if (compressed.size > maxMb * 1024 * 1024) {
+        setLocalError(t('driverRegister.recruitment.fileTooLarge', { max: maxMb }))
+        return
+      }
+      onChange(compressed)
     } catch {
       setLocalError(t('driverRegister.doc.unreadableError'))
     } finally {
@@ -101,9 +121,9 @@ export default function DocumentCapture({
       >
         {file ? (
           <div className="flex items-center gap-3">
-            {isImage && previewUrl ? (
+            {isImage ? (
               <img
-                src={previewUrl}
+                ref={previewRef}
                 alt={t('driverRegister.doc.previewAlt', { label })}
                 className="h-20 w-20 shrink-0 rounded-md object-cover border border-warm-200"
               />

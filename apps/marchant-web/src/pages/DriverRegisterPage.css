@@ -1,0 +1,81 @@
+.driver-recruitment { background: #faf8f4; color: #201b18; min-height: 100vh; }
+.recruitment-header { max-width: 1200px; margin: auto; min-height: 88px; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.recruitment-header img { width: 154px; height: auto; }
+.recruitment-login { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; }
+.recruitment-login:hover { color: #d40511; }
+.recruitment-hero { background: #d40511; color: white; overflow: hidden; }
+.recruitment-hero-inner { max-width: 1200px; margin: auto; display: grid; grid-template-columns: 1.45fr 1fr; gap: 70px; align-items: center; padding: 56px 48px; }
+.recruitment-eyebrow { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .16em; margin-bottom: 22px; }
+.recruitment-pitch h1 { font-size: clamp(48px, 5.5vw, 76px); font-weight: 800; letter-spacing: -.06em; line-height: 1.03; }
+.recruitment-pitch h1 span { color: #ffcc00; }
+.recruitment-intro { font-size: 18px; line-height: 1.65; margin-top: 23px; max-width: 450px; }
+.recruitment-earnings { margin: 25px 0; font-size: 16px; }
+.recruitment-earnings strong { display: inline-block; font-size: clamp(25px, 3vw, 37px); letter-spacing: -.04em; }
+.recruitment-earnings span { white-space: nowrap; }
+.recruitment-cta { display: inline-flex; align-items: center; justify-content: center; gap: 24px; background: #ffcc00; color: #201b18; padding: 17px 24px; border-radius: 12px; font-weight: 800; box-shadow: 0 5px 0 #a3030d; transition: background .2s; }
+.recruitment-cta:hover { background: #ffdf59; }
+.recruitment-disclaimer { max-width: 470px; font-size: 12px; line-height: 1.65; margin-top: 23px; color: #fff; }
+.recruitment-poster { display: block; width: min(100%, 328px); justify-self: center; transform: rotate(3deg); border: 7px solid white; border-radius: 12px; overflow: hidden; box-shadow: 0 24px 60px #74030b55; }
+.recruitment-poster img { display: block; width: 100%; height: auto; }
+.recruitment-benefits { background: white; border-bottom: 1px solid #e8e4da; display: flex; justify-content: center; gap: 65px; padding: 23px 24px; }
+.recruitment-benefits p { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; }
+.recruitment-benefits svg { color: #d40511; flex-shrink: 0; }
+.recruitment-layout { max-width: 1200px; margin: auto; padding: 64px 32px 80px; display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 70px; align-items: start; }
+.recruitment-guide { position: sticky; top: 28px; }
+.recruitment-kicker { text-transform: uppercase; letter-spacing: .13em; font-size: 11px; color: #a9030d; font-weight: 800; margin-bottom: 13px; }
+.recruitment-guide h2 { font-size: 28px; line-height: 1.2; font-weight: 800; letter-spacing: -.03em; }
+.recruitment-guide-intro { margin-top: 15px; font-size: 14px; color: #6b675e; line-height: 1.7; }
+.recruitment-checklist { list-style: none; padding: 0; margin: 24px 0 30px; display: grid; gap: 18px; }
+.recruitment-checklist li { display: flex; gap: 12px; font-size: 14px; line-height: 1.65; }
+.recruitment-checklist svg { flex-shrink: 0; color: #a9030d; margin-top: 3px; }
+.recruitment-faq { border-top: 1px solid #ded9cf; font-size: 14px; }
+.recruitment-faq summary { cursor: pointer; padding: 17px 0; font-weight: 700; }
+.recruitment-faq p { color: #6b675e; line-height: 1.7; padding-bottom: 18px; }
+.recruitment-form { min-width: 0; scroll-margin-top: 24px; }
+.recruitment-form-title { font-size: 32px; font-weight: 800; letter-spacing: -.04em; margin-bottom: 10px; scroll-margin-top: 30px; }
+.recruitment-form-title:focus { outline: none; }
+.recruitment-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 27px 0 20px; padding: 0; list-style: none; }
+.recruitment-steps li { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; padding-bottom: 18px; border-bottom: 3px solid #ded9cf; color: #6b675e; }
+.recruitment-step-number { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; background: #e8e4da; }
+.recruitment-steps .is-active { color: #201b18; border-color: #d40511; }
+.is-active .recruitment-step-number { color: white; background: #d40511; }
+.recruitment-error { display: flex; align-items: start; gap: 10px; background: #fee2e2; color: #a3030d; border: 1px solid #d4051140; border-radius: 12px; padding: 16px; margin-bottom: 20px; font-size: 14px; }
+.recruitment-error svg { flex-shrink: 0; }
+.recruitment-privacy { display: flex; justify-content: center; gap: 8px; color: #6b675e; font-size: 12px; margin: 24px 0; line-height: 1.6; }
+.recruitment-privacy svg { flex-shrink: 0; margin-top: 2px; }
+.recruitment-form input { min-width: 0; }
+.recruitment-form label:has(input:focus-visible) { outline: 2px solid #a9030d; outline-offset: 3px; }
+.driver-recruitment a:focus-visible, .recruitment-faq summary:focus-visible { outline: 3px solid #201b18; outline-offset: 5px; }
+@media (max-width: 1000px) {
+  .recruitment-hero-inner { gap: 35px; padding: 40px 32px; }
+  .recruitment-layout { grid-template-columns: 240px minmax(0, 1fr); gap: 32px; }
+  .recruitment-benefits { gap: 28px; }
+}
+@media (max-width: 760px) {
+  .recruitment-header { min-height: 72px; padding: 18px 20px; }
+  .recruitment-header img { width: 126px; }
+  .recruitment-hero-inner { display: grid; grid-template-columns: minmax(0, 1fr) 25%; gap: 0 14px; padding: 34px 20px 28px; }
+  .recruitment-pitch { display: contents; }
+  .recruitment-eyebrow { grid-column: 1; font-size: 10px; line-height: 1.6; margin-bottom: 16px; }
+  .recruitment-pitch h1 { grid-column: 1; font-size: clamp(34px, 7.8vw, 58px); }
+  .recruitment-poster { grid-column: 2; grid-row: 1 / span 2; align-self: start; margin-top: 5px; width: 100%; max-width: 145px; border-width: 3px; border-radius: 6px; }
+  .recruitment-intro, .recruitment-earnings, .recruitment-cta, .recruitment-disclaimer { grid-column: 1 / -1; }
+  .recruitment-intro { font-size: 15px; margin-top: 20px; max-width: 100%; }
+  .recruitment-earnings { margin: 17px 0; font-size: 14px; }
+  .recruitment-earnings strong { font-size: 29px; }
+  .recruitment-cta { width: 100%; font-size: 15px; }
+  .recruitment-disclaimer { font-size: 11px; margin-top: 18px; }
+  .recruitment-benefits { justify-content: space-between; gap: 15px; padding: 18px 20px; }
+  .recruitment-benefits p { flex-direction: column; text-align: center; font-size: 11px; flex: 1; gap: 6px; }
+  .recruitment-layout { display: flex; flex-direction: column; gap: 36px; padding: 30px 16px 48px; }
+  .recruitment-guide { position: static; width: 100%; order: 2; padding: 22px 8px 0; border-top: 1px solid #ded9cf; }
+  .recruitment-form { width: 100%; }
+  .recruitment-form-title { font-size: 27px; }
+  .recruitment-steps { gap: 12px; }
+  .recruitment-steps li { font-size: 12px; gap: 7px; }
+  .recruitment-form section { padding: 20px 16px; }
+  .recruitment-form button { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .driver-recruitment *, .driver-recruitment *::before, .driver-recruitment *::after { scroll-behavior: auto !important; transition: none !important; }
+}
