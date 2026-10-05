@@ -47,7 +47,7 @@ class CourseController extends Controller
             ? $firstCourseDiscount->quote($user, $originalDeliveryFee)
             : $this->withoutDiscount($originalDeliveryFee);
         $deliveryFee    = $discountQuote['fee'];
-        $driverPercent  = (int) \App\Models\AppSetting::get('driver_commission_percent', 75);
+        $driverPercent  = (int) \App\Models\AppSetting::get('driver_commission_percent', 87);
         // Le cadeau est financé par Airmess : le gain du livreur reste calculé
         // sur le tarif normal, jamais sur le prix remisé.
         $driverEarnings = (int) round($originalDeliveryFee * $driverPercent / 100);
@@ -226,7 +226,7 @@ class CourseController extends Controller
      * Dry-run — calcule le tarif estimé pour une course sans la créer.
      * Appelé par la page de création marchande pour afficher le prix live
      * quand les 2 pins et l'urgence changent. Renvoie le breakdown complet
-     * (distance, per_km, min, multiplier, capped) pour la transparence UI.
+     * (distance, per_km, min, floor, multiplier, capped) pour la transparence UI.
      */
     public function estimate(
         \Illuminate\Http\Request $request,

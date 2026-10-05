@@ -18,6 +18,7 @@ class PackageCategorySeeder extends Seeder
                 'requires_isothermal_bag' => false,
                 'requires_refrigeration' => false,
                 'max_delivery_minutes' => 30,
+                'is_active' => true,
             ],
             [
                 'code' => 'hot_meal',
@@ -28,6 +29,7 @@ class PackageCategorySeeder extends Seeder
                 'requires_refrigeration' => false,
                 'max_delivery_minutes' => 20,
                 'driver_instructions' => 'Maintenir à plat, ne pas secouer. Sac isotherme obligatoire.',
+                'is_active' => true,
             ],
             [
                 'code' => 'pharmacy',
@@ -38,6 +40,7 @@ class PackageCategorySeeder extends Seeder
                 'requires_refrigeration' => false,
                 'max_delivery_minutes' => 25,
                 'driver_instructions' => 'Remise en main propre obligatoire. Vérifier l\'identité du destinataire.',
+                'is_active' => true,
             ],
             [
                 'code' => 'cold_chain',
@@ -48,6 +51,7 @@ class PackageCategorySeeder extends Seeder
                 'requires_refrigeration' => true,
                 'max_delivery_minutes' => 25,
                 'driver_instructions' => 'Sac réfrigéré obligatoire. Livraison directe.',
+                'is_active' => true,
             ],
             [
                 'code' => 'document',
@@ -58,6 +62,7 @@ class PackageCategorySeeder extends Seeder
                 'requires_refrigeration' => false,
                 'max_delivery_minutes' => 45,
                 'driver_instructions' => 'Remise contre signature ou code de confirmation.',
+                'is_active' => true,
             ],
             [
                 'code' => 'fragile',
@@ -68,6 +73,7 @@ class PackageCategorySeeder extends Seeder
                 'requires_refrigeration' => false,
                 'max_delivery_minutes' => 35,
                 'driver_instructions' => 'Manipulation délicate. Ne pas empiler.',
+                'is_active' => true,
             ],
         ];
 

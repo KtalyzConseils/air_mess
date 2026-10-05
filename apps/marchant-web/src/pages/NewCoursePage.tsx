@@ -1042,7 +1042,7 @@ export default function NewCoursePage() {
                     type="button"
                           onClick={() => {
                             setTripSubStep('origin')
-                            setTripAutoAdvanced(false)
+                            setTripAutoAdvanced(true)
                             setOpenTripPanel((panel) => (panel === 'origin' ? null : 'origin'))
                             setLocationTarget('A')
                           }}
@@ -1250,6 +1250,9 @@ export default function NewCoursePage() {
                     onActivePinChange={(pin) => {
                       setLocationTarget(pin)
                       setTripSubStep(pin === 'A' ? 'origin' : 'destination')
+                      if (pin === 'A') {
+                        setTripAutoAdvanced(true)
+                      }
                       setOpenTripPanel(pin === 'A' ? 'origin' : 'destination')
                     }}
                     height="260px"
@@ -1596,7 +1599,7 @@ export default function NewCoursePage() {
                     onClick={() => {
                       if (currentStep === 2 && tripSubStep === 'destination') {
                         setTripSubStep('origin')
-                        setTripAutoAdvanced(false)
+                        setTripAutoAdvanced(true)
                         setLocationTarget('A')
                       } else {
                         setCurrentStep((step) => Math.max(1, step - 1) as CourseFormStep)

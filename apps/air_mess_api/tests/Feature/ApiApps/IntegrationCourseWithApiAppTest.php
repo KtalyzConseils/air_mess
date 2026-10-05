@@ -54,7 +54,7 @@ class IntegrationCourseWithApiAppTest extends TestCase
     {
         foreach (['price_min_fcfa' => 250, 'price_per_km_fcfa' => 60,
             'price_detour_factor' => 1.35, 'price_express_multiplier' => 1.5,
-            'price_max_fcfa' => 3000, 'driver_commission_percent' => 87,
+            'price_floor_fcfa' => 400, 'price_max_fcfa' => 0, 'driver_commission_percent' => 87,
             'standard_delivery_fee_fcfa' => 9900, 'express_delivery_fee_fcfa' => 19900] as $key => $value) {
             Cache::put('app_setting:'.$key, $value);
         }
