@@ -9,7 +9,8 @@ use App\Models\AppSetting;
  *
  * Cinq réglages admin pilotent la formule (settings de la catégorie "pricing") :
  *   - price_per_km_fcfa       (a)      — coefficient par kilomètre
- *   - price_min_fcfa          (b)      — plancher (aussi prix quand distance = 0)
+ *   - price_min_fcfa          (b)      — base fixe de la formule
+ *   - price_floor_fcfa        — plancher final apres arrondi
  *   - price_max_fcfa          — plafond haut (0 = désactivé)
  *   - price_express_multiplier — × appliqué au fee standard pour urgency=express
  *   - price_detour_factor      — distance réelle ≈ Haversine × ce facteur
@@ -51,7 +52,7 @@ class PriceCalculator
      * @param string $urgency 'standard' ou 'express'
      * @return array<string, mixed> {
      *   distance_km, raw_haversine_km, detour_factor,
-     *   per_km, min, max, multiplier,
+     *   per_km, min, floor, max, multiplier,
      *   fee_before_round, fee, capped
      * }
      */
@@ -63,9 +64,10 @@ class PriceCalculator
         string $urgency = 'standard',
     ): array {
         // Settings — castés en float pour supporter les valeurs non-entières (multiplier=1.5).
-        $perKm      = (float) AppSetting::get('price_per_km_fcfa', 400);
-        $min        = (float) AppSetting::get('price_min_fcfa', 800);
-        $max        = (float) AppSetting::get('price_max_fcfa', 5000);
+        $perKm      = (float) AppSetting::get('price_per_km_fcfa', 20);
+        $min        = (float) AppSetting::get('price_min_fcfa', 250);
+        $floor      = (float) AppSetting::get('price_floor_fcfa', 400);
+        $max        = (float) AppSetting::get('price_max_fcfa', 0);
         $multiplier = (float) AppSetting::get('price_express_multiplier', 1.5);
         $detour     = (float) AppSetting::get('price_detour_factor', 1.35);
 
@@ -86,14 +88,14 @@ class PriceCalculator
         // Arrondi au 100 FCFA supérieur — affichage plus propre côté marchand.
         $rounded = (int) (ceil($rawFee / 100) * 100);
 
-        // Clamp entre min et max (max=0 → pas de plafond).
+        // Clamp entre plancher et plafond (max=0 → pas de plafond).
         $capped = false;
         if ($max > 0 && $rounded > $max) {
             $rounded = (int) $max;
             $capped  = true;
         }
-        if ($rounded < $min) {
-            $rounded = (int) $min;
+        if ($rounded < $floor) {
+            $rounded = (int) $floor;
         }
 
         return [
@@ -102,6 +104,7 @@ class PriceCalculator
             'detour_factor'    => $detour,
             'per_km'           => (int) $perKm,
             'min'              => (int) $min,
+            'floor'            => (int) $floor,
             'max'              => (int) $max,
             'multiplier'       => $urgencyMult,
             'urgency'          => $urgency,

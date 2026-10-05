@@ -13,7 +13,7 @@ class AppSettingSeeder extends Seeder
         $settings = [
             [
                 'key'         => 'driver_commission_percent',
-                'value'       => '75',
+                'value'       => '87',
                 'type'        => 'number',
                 'label'       => 'Part livreur (%)',
                 'description' => 'Pourcentage du delivery_fee reversé au livreur. RMess garde le reste comme commission.',
@@ -51,10 +51,10 @@ class AppSettingSeeder extends Seeder
             //   distance_km = haversine(origine, destination) × price_detour_factor
             //   fee_raw    = price_per_km_fcfa × distance_km + price_min_fcfa
             //   fee_urgent = fee_raw × price_express_multiplier (si urgency=express)
-            //   fee       = round_up(fee_urgent, 100), clamp entre price_min et price_max
+            //   fee       = round_up(fee_urgent, 100), clamp entre price_floor et price_max
             [
                 'key'         => 'price_per_km_fcfa',
-                'value'       => '400',
+                'value'       => '20',
                 'type'        => 'number',
                 'label'       => 'Tarif par km (FCFA)',
                 'description' => 'Coefficient "a" de la formule y = ax + b. Prix appliqué à chaque kilomètre parcouru par le livreur entre origine et destination (distance vol d\'oiseau × facteur détour).',
@@ -62,15 +62,23 @@ class AppSettingSeeder extends Seeder
             ],
             [
                 'key'         => 'price_min_fcfa',
-                'value'       => '800',
+                'value'       => '250',
                 'type'        => 'number',
-                'label'       => 'Prix minimum course (FCFA)',
-                'description' => 'Terme "b" de la formule y = ax + b. Plancher qui protège le livreur sur les micro-trajets (moins de 1 km). C\'est aussi le prix affiché quand la distance vaut 0.',
+                'label'       => 'Base fixe course (FCFA)',
+                'description' => 'Terme "b" de la formule y = ax + b. Le plancher final est configuré séparément via price_floor_fcfa.',
+                'group'       => 'pricing',
+            ],
+            [
+                'key'         => 'price_floor_fcfa',
+                'value'       => '400',
+                'type'        => 'number',
+                'label'       => 'Prix plancher course (FCFA)',
+                'description' => 'Montant minimum final apres calcul et arrondi. Si 20 x distance + 250 donne moins, la course reste a ce plancher.',
                 'group'       => 'pricing',
             ],
             [
                 'key'         => 'price_max_fcfa',
-                'value'       => '5000',
+                'value'       => '0',
                 'type'        => 'number',
                 'label'       => 'Prix maximum course (FCFA)',
                 'description' => 'Plafond haut de la formule. Sur les longs trajets (>10 km), on plafonne pour rester compétitif face au taxi. Passer à 0 pour désactiver le plafond.',

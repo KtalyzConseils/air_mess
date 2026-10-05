@@ -30,7 +30,7 @@ class CourseCreationService
         $deliveryFee = $this->priceCalculator->estimate(
             $originLat, $originLng, $destinationLat, $destinationLng, $urgency,
         )['fee'];
-        $driverPercent = (int) AppSetting::get('driver_commission_percent', 75);
+        $driverPercent = (int) AppSetting::get('driver_commission_percent', 87);
 
         return [
             'delivery_fee'    => $deliveryFee,

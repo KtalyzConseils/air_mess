@@ -100,18 +100,6 @@ export default function MobileCoursePriceBar({
                         </span>
                       </p>
                     )}
-                    <p className="text-caption text-warm-500 tabular-nums">
-                    {estimate.capped
-                      ? t('courses.new.recap.breakdownCapped', {
-                          distance: estimate.distance_km.toFixed(1),
-                          max: estimate.max.toLocaleString('fr-FR'),
-                        })
-                      : t('courses.new.recap.breakdown', {
-                          distance: estimate.distance_km.toFixed(1),
-                          perKm: estimate.per_km.toLocaleString('fr-FR'),
-                          min: estimate.min.toLocaleString('fr-FR'),
-                        })}
-                    </p>
                   </div>
                 )}
                 {!hasFee && (

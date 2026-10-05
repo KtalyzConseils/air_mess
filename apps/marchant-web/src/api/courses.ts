@@ -111,6 +111,7 @@ export interface CourseFeeEstimate {
   detour_factor: number
   per_km: number
   min: number
+  floor: number
   max: number
   multiplier: number
   urgency: 'standard' | 'express'
