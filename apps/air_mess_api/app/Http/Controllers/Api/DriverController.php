@@ -267,22 +267,17 @@ class DriverController extends Controller
             $lockedDriver = Driver::whereKey($driver->id)->lockForUpdate()->firstOrFail();
             if ($lockedDriver->availability_status !== 'available') abort(403, 'Vous n’êtes pas disponible.');
             $course->setRawAttributes($locked->getAttributes(), true);
-            $course->update([
+            $course->updateWithStatusHistory([
                 'driver_id'   => $driver->id,
                 'status'      => Course::STATUS_ASSIGNED,
                 'assigned_at' => now(),
-            ]);
-
-            $driver->update(['availability_status' => 'busy']);
-
-            CourseStatusHistory::create([
-                'course_id'       => $course->id,
-                'from_status'     => Course::STATUS_AWAITING,
-                'to_status'       => Course::STATUS_ASSIGNED,
+            ], [
                 'changed_by_id'   => $driver->user_id,
                 'changed_by_type' => 'user',
                 'reason'          => 'Course acceptée par le livreur',
             ]);
+
+            $driver->update(['availability_status' => 'busy']);
         });
 
         // Recalcule l'acceptance_rate sur la fenêtre rolling 30j (cf. project_wallet_driver_todo #7)
@@ -502,40 +497,16 @@ class DriverController extends Controller
             'pickup_code'    => ['required_if:action,pickup_confirmed', 'nullable', 'string', 'max:10'],
             'delivery_code'  => ['required_if:action,delivered', 'nullable', 'string', 'max:10'],
             'return_code'    => ['required_if:action,return_confirmed', 'nullable', 'string', 'max:10'],
+            'transfer_code'  => ['required_if:action,transfer_confirmed', 'nullable', 'string', 'size:6'],
             'reason'         => ['required_if:action,failed', 'nullable', 'string', 'max:500'],
-        ]);
+        ], ['transfer_code.required_if' => 'Le code de remise est obligatoire. Mettez à jour l’application si le champ n’apparaît pas.',
+            'transfer_code.size' => 'Le code de remise contient 6 chiffres.']);
 
         if ($data['action'] === 'failed') {
             return $this->abandonCourse($course, $driver, $data['reason'], $notifier);
         }
         if ($data['action'] === 'transfer_confirmed') {
-            DB::transaction(function () use ($course, $driver) {
-                $locked = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
-                if ($locked->driver_id !== $driver->id || ! $locked->pickup_from_previous_driver || $locked->isTerminal()) {
-                    throw ValidationException::withMessages(['course' => 'Aucun transfert à confirmer pour cette course.']);
-                }
-                $previous = $locked->previous_driver_id;
-                $previousStatus = $locked->status;
-                $locked->update(['pickup_from_previous_driver' => false, 'status' => Course::STATUS_PICKED_UP]);
-                CourseStatusHistory::create([
-                    'course_id' => $locked->id, 'from_status' => $previousStatus, 'to_status' => Course::STATUS_PICKED_UP,
-                    'changed_by_id' => $driver->user_id, 'changed_by_type' => 'user',
-                    'reason' => 'Remise physique du colis confirmée par le nouveau livreur',
-                    'metadata' => ['previous_driver_id' => $previous, 'transfer_confirmed' => true],
-                ]);
-                if ($previous && ! Course::where('driver_id', $previous)->whereNotIn('status', Course::TERMINAL_STATUSES)->exists()) {
-                    Driver::whereKey($previous)->where('availability_status', 'busy')->update(['availability_status' => 'available']);
-                }
-            });
-            $notifier->sendToUser($course->sender_id, 'course.transfer_confirmed', 'Colis récupéré par le nouveau livreur',
-                "Le nouveau livreur a confirmé la récupération du colis pour {$course->reference}. La livraison peut reprendre.",
-                ['reference' => $course->reference], $course->id);
-            $previousDriver = $course->fresh()->previous_driver_id ? Driver::find($course->fresh()->previous_driver_id) : null;
-            if ($previousDriver) {
-                $notifier->sendToUser($previousDriver->user_id, 'course.transfer_confirmed', 'Remise du colis confirmée',
-                    "Le nouveau livreur a confirmé la réception de {$course->reference}. Tu n’as plus la garde de ce colis.",
-                    ['reference' => $course->reference], $course->id);
-            }
+            $course->confirmParcelTransfer($request->user(), $data['transfer_code']);
             return response()->json(['message' => 'Transfert confirmé.', 'course' => $course->fresh()->makeHidden(['pickup_code', 'delivery_code'])]);
         }
         if ($course->pickup_from_previous_driver && in_array($data['action'], ['arrived_dropoff', 'delivered'], true)) {
@@ -596,7 +567,15 @@ class DriverController extends Controller
                     $updates[$timestampField] = now();
                 }
 
-                $course->update($updates);
+                $course->updateWithStatusHistory($updates, [
+                    'changed_by_id'   => $driver->user_id,
+                    'changed_by_type' => 'user',
+                    'reason'          => $data['reason'] ?? null,
+                    'metadata'        => array_filter([
+                        'pickup_code'   => $data['pickup_code'] ?? null,
+                        'delivery_code' => $data['delivery_code'] ?? null,
+                    ]),
+                ]);
 
                 // Libérer le livreur si terminal
                 if (in_array($nextStatus, Course::TERMINAL_STATUSES, true)) {
@@ -720,18 +699,6 @@ class DriverController extends Controller
                     // chargePartial() qui capture X et release le reste.
                 }
 
-                CourseStatusHistory::create([
-                    'course_id'       => $course->id,
-                    'from_status'     => $previousStatus,
-                    'to_status'       => $nextStatus,
-                    'changed_by_id'   => $driver->user_id,
-                    'changed_by_type' => 'user',
-                    'reason'          => $data['reason'] ?? null,
-                    'metadata'        => array_filter([
-                        'pickup_code'   => $data['pickup_code']   ?? null,
-                        'delivery_code' => $data['delivery_code'] ?? null,
-                    ]),
-                ]);
             });
         } catch (\DomainException $e) {
             // Règle métier violée par le service wallet (caution insuffisante, etc.)
@@ -1386,13 +1353,11 @@ class DriverController extends Controller
                 throw ValidationException::withMessages(['course' => 'Abandon impossible depuis ce statut.']);
             }
             \App\Models\CourseDeclineRecord::firstOrCreate(['driver_id' => $driver->id, 'course_id' => $locked->id], ['reason' => 'personal']);
-            $locked->update([
+            $locked->updateWithStatusHistory([
                 'driver_id' => null, 'status' => Course::STATUS_AWAITING, 'assigned_at' => null,
                 'offer_broadcasted_at' => now(), 'offer_alerts_sent' => [],
                 'pickup_from_previous_driver' => false, 'previous_driver_id' => null, 'transfer_lat' => null, 'transfer_lng' => null,
-            ]);
-            CourseStatusHistory::create([
-                'course_id' => $locked->id, 'from_status' => $previousStatus, 'to_status' => Course::STATUS_AWAITING,
+            ], [
                 'changed_by_id' => $driver->user_id, 'changed_by_type' => 'user',
                 'reason' => 'Abandon avant récupération : '.$reason, 'metadata' => ['event' => 'driver_abandoned', 'abandoned_by_driver_id' => $driver->id],
             ]);

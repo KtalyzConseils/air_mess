@@ -41,12 +41,6 @@ return [
         'sms_fake' => env('BREVO_SMS_FAKE', env('APP_ENV') === 'local'),
     ],
 
-    'zavu' => [
-        'key' => env('ZAVUDEV_API_KEY', env('ZAVU_API_KEY')),
-        'endpoint' => env('ZAVU_API_URL', 'https://api.zavu.dev/v1/messages'),
-        'sender' => env('ZAVU_SENDER'),
-    ],
-
     'firebase' => [
         // Project ID Firebase — sert à valider aud/iss des ID tokens Phone Auth.
         'project_id' => env('FIREBASE_PROJECT_ID'),

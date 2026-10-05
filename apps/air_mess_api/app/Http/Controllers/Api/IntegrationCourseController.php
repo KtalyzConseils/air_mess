@@ -10,9 +10,9 @@ use App\Models\PackageCategory;
 use App\Models\User;
 use App\Models\UserWallet;
 use App\Services\CourseCreationService;
-use App\Services\GeocodingService;
 use App\Services\UserWalletService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Flux : la commande passée sur le site marchand génère une course AirMess en
  * serveur-à-serveur. L'origine est le vendeur ; la destination est le client,
- * parfois sans GPS. Idempotent sur (marchand, external_reference) pour
+ * avec GPS obligatoire. Idempotent sur (marchand, external_reference) pour
  * absorber les retries du site externe sans créer de doublon.
  *
  * Paiement : comme pour le canal applicatif, le marchand est payeur. La course
@@ -30,10 +30,67 @@ use Illuminate\Support\Facades\DB;
  */
 class IntegrationCourseController extends Controller
 {
+    private function payer(Request $request): User
+    {
+        $payer = StoreIntegrationCourseRequest::resolvePayer($request->user());
+        abort_unless($payer, 403, 'Accès intégration désactivé.');
+        return $payer;
+    }
+
+    private function ownedCourses(Request $request, User $payer): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = Course::where('sender_id', $payer->id);
+        if ($request->user() instanceof ApiApplication) {
+            $query->where('api_application_id', $request->user()->id);
+        } else {
+            $query->whereNull('api_application_id');
+        }
+        return $query;
+    }
+
+    public function show(Request $request, string $reference): JsonResponse
+    {
+        $course = $this->ownedCourses($request, $this->payer($request))->where('reference', $reference)->firstOrFail();
+        return $this->payload($course, 200, 'État de la course.');
+    }
+
+    public function wallet(Request $request): JsonResponse
+    {
+        $wallet = UserWallet::where('user_id', $this->payer($request)->id)->first();
+        return response()->json([
+            'balance' => (int) ($wallet?->balance ?? 0),
+            'pending_reserved' => (int) ($wallet?->pending_reserved ?? 0),
+            'available' => $wallet ? $wallet->available() : 0,
+            'currency' => 'XOF',
+        ]);
+    }
+
+    public function cancel(Request $request, string $reference): JsonResponse
+    {
+        $payer = $this->payer($request);
+        return DB::transaction(function () use ($request, $reference, $payer) {
+            $course = $this->ownedCourses($request, $payer)->where('reference', $reference)->lockForUpdate()->firstOrFail();
+            if ($course->status === Course::STATUS_CANCELLED) {
+                return $this->payload($course, 200, 'Course déjà annulée.');
+            }
+            // Ne pas interrompre un retour de colis déjà organisé.
+            abort_if($course->status === Course::STATUS_RETURNING_TO_SENDER, 422, 'Un retour de colis est déjà en cours. Contactez les opérations.');
+            abort_if($course->pickup_from_previous_driver, 422, 'Une remise entre livreurs est en cours. Contactez les opérations.');
+            // Adaptateur local : conserver l'authentification de la clé et les contrôles
+            // d'app ci-dessus, déléguer les règles métier au parcours payeur existant.
+            $payerRequest = clone $request;
+            $payerRequest->setUserResolver(fn () => $payer);
+            $response = app(CourseController::class)->cancel(
+                $payerRequest, $course, app(\App\Services\NotificationService::class), app(UserWalletService::class),
+            );
+            if ($response->getStatusCode() >= 400) return $response;
+            return $this->payload($course->fresh(), 200, $response->getData(true)['message'] ?? 'Annulation traitée.');
+        });
+    }
+
     public function store(
         StoreIntegrationCourseRequest $request,
         CourseCreationService $creator,
-        GeocodingService $geocoder,
         UserWalletService $walletService,
     ): JsonResponse {
         $data = $request->validated();
@@ -60,8 +117,14 @@ class IntegrationCourseController extends Controller
         }
 
         // ===== Tarif.
+        $origin = $data['origin'];
+        $dest = $data['destination'];
+        $originLat = (float) $origin['lat'];
+        $originLng = (float) $origin['lng'];
         $urgency = $data['urgency'] ?? 'standard';
-        ['delivery_fee' => $deliveryFee, 'driver_earnings' => $driverEarnings] = $creator->pricing($urgency);
+        ['delivery_fee' => $deliveryFee, 'driver_earnings' => $driverEarnings] = $creator->pricing(
+            $originLat, $originLng, (float) $dest['lat'], (float) $dest['lng'], $urgency,
+        );
 
         // ===== Paiement wallet : pré-check du solde disponible.
         // Le user propriétaire (de l'app dev ou de la clé marchand) est payeur.
@@ -77,23 +140,7 @@ class IntegrationCourseController extends Controller
             ], 402);
         }
 
-        // ===== Coordonnées de retrait : fournies, sinon géocodage best-effort.
-        $origin = $data['origin'];
-        $originLat = $origin['lat'] ?? null;
-        $originLng = $origin['lng'] ?? null;
-
-        if ($originLat === null || $originLng === null) {
-            if ($coords = $geocoder->geocode($origin['street'] ?? null, $origin['quartier'], $origin['city'])) {
-                [$originLat, $originLng] = [$coords['lat'], $coords['lng']];
-            }
-        }
-
-        // Sans coordonnées de retrait, on ne peut pas pousser aux livreurs :
-        // la course attend qu'un admin pose le pin (awaiting_geo).
-        $hasOrigin = $originLat !== null && $originLng !== null;
-        $status = $hasOrigin ? Course::STATUS_AWAITING : 'awaiting_geo';
-
-        $dest = $data['destination'];
+        $status = Course::STATUS_AWAITING;
         $package = $data['package'] ?? [];
 
         $attributes = [
@@ -163,14 +210,9 @@ class IntegrationCourseController extends Controller
             ], 402);
         }
 
-        // Push aux livreurs seulement si on a les coordonnées de retrait.
-        if ($hasOrigin) {
-            $creator->dispatchToAvailableDrivers($course);
-        }
+        $creator->dispatchToAvailableDrivers($course);
 
-        return $this->payload($course, 201, $hasOrigin
-            ? 'Course créée. En attente d\'attribution.'
-            : 'Course créée. En attente de géolocalisation du point de retrait.');
+        return $this->payload($course, 201, 'Course créée. En attente d\'attribution.');
     }
 
     private function defaultPackageCategoryId(): int

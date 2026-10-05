@@ -1,5 +1,5 @@
 import '../global.css'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
@@ -15,14 +15,16 @@ import {
   setActiveIncomingCourse,
   getActiveIncomingCourse,
   dismissUnavailableCourse,
+  clearRingQueue,
 } from '../lib/registerBackgroundNotifications'
 import { initNotifications, IS_EXPO_GO } from '../lib/notifications'
 import { usePushTokenRegistration } from '../hooks/usePushTokenRegistration'
 import { acknowledgePushReceipt } from '../api/notifications'
-import { fetchOfferedCourses } from '../api/driver'
+import { fetchOfferedCourses, type DriverCourseSummary } from '../api/driver'
 import { useIosVoipCall } from '../hooks/useIosVoipCall'
 import BrandSplash from '../components/BrandSplash'
 import BackgroundLocationDisclosure from '../components/BackgroundLocationDisclosure'
+import api from '../api/client'
 import {
   useFonts,
   PlusJakartaSans_400Regular,
@@ -32,8 +34,6 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans'
 
-const queryClient = new QueryClient()
-
 /**
  * Durée minimum d'affichage du BrandSplash — assure que la marque a le temps
  * d'être vue même si l'hydratation du store est instantanée (cas fréquent).
@@ -41,7 +41,11 @@ const queryClient = new QueryClient()
 const MIN_SPLASH_MS = 1200
 
 export default function RootLayout() {
-  const { user, hydrated, hydrate } = useAuthStore()
+  const { user, token, hydrated, hydrate } = useAuthStore()
+  // Isoler les données dès le premier rendu d'une nouvelle session, même si
+  // une ancienne requête termine après le changement de compte.
+  const queryClient = useMemo(() => new QueryClient(), [token])
+  useEffect(() => () => queryClient.clear(), [queryClient])
   const router = useRouter()
   const segments = useSegments()
   const [minElapsed, setMinElapsed] = useState(false)
@@ -67,10 +71,6 @@ export default function RootLayout() {
     import('expo-notifications').then((Notifications) => {
       sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data as any
-        if (isCallType(data?.type) && AppState.currentState === 'active') {
-          router.push('/(tabs)/notifications')
-          return
-        }
         if (isCallType(data?.type) && data?.course_id != null) {
           if (data.notification_id != null) {
             void acknowledgePushReceipt(data.notification_id).catch(() => {})
@@ -86,6 +86,39 @@ export default function RootLayout() {
 
   usePushTokenRegistration()
   useIosVoipCall()
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('airmess-session-invalid', ({ token }) => {
+      const auth = useAuthStore.getState()
+      if (!token || auth.token !== token) return
+      void auth.expireSession(token)
+      setPendingCourseId(null)
+      void queryClient.cancelQueries().then(() => queryClient.clear())
+      void clearRingQueue().catch(() => {})
+    })
+    return () => sub.remove()
+  }, [queryClient])
+
+  // Même hors de l'accueil : vérifier la session au premier plan, sans push requis.
+  useEffect(() => {
+    if (!hydrated || !user) return
+    const token = useAuthStore.getState().token
+    const refresh = async () => {
+      if (AppState.currentState !== 'active') return
+      try {
+        const data = await queryClient.fetchQuery({
+          queryKey: ['me'],
+          queryFn: async () => (await api.get('/auth/me')).data,
+          staleTime: 0, retry: false,
+        })
+        if (useAuthStore.getState().token === token) useAuthStore.getState().setUser(data.user)
+      } catch { /* Le client traite les 401 ; une panne réseau ne déconnecte pas. */ }
+    }
+    void refresh()
+    const timer = setInterval(() => void refresh(), 15_000)
+    const sub = AppState.addEventListener('change', (state) => { if (state === 'active') void refresh() })
+    return () => { clearInterval(timer); sub.remove() }
+  }, [hydrated, user?.id, queryClient])
 
   useEffect(() => {
     if (IS_EXPO_GO || !hydrated || !user) return
@@ -112,13 +145,21 @@ export default function RootLayout() {
   }, [])
 
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', ({ action }) => {
+    const sub = DeviceEventEmitter.addListener('airmess-course-action-completed', ({ courseId, action }) => {
       setPendingCourseId(null)
+      if (action === 'decline') {
+        // Annuler la lecture en vol avant de retirer la course : elle ne doit pas
+        // réintroduire une réaffectation refusée au retour immédiat sur l'accueil.
+        void queryClient.cancelQueries({ queryKey: ['my-active'] }, { revert: false })
+        queryClient.setQueryData<DriverCourseSummary[]>(
+          ['my-active'], (courses) => courses?.filter((course) => course.id !== courseId),
+        )
+      }
       void queryClient.invalidateQueries()
       if (action === 'accept') router.dismissTo('/(tabs)')
     })
     return () => sub.remove()
-  }, [router, segments])
+  }, [router, segments, queryClient])
 
   // ── Course entrante : détection de l'événement qui doit ouvrir l'écran d'appel ──
 
@@ -140,7 +181,7 @@ export default function RootLayout() {
   // TÊTE de file (course la plus ancienne non traitée). Indépendant des events Notifee
   // (capricieux au réveil). La file est vidée par l'écran d'appel au fil des actions.
   useEffect(() => {
-    if (IS_EXPO_GO) return
+    if (IS_EXPO_GO || !hydrated || !user) return
     async function checkQueue() {
       try {
         const items = await getRingQueue()
@@ -161,7 +202,7 @@ export default function RootLayout() {
       if (s === 'active') checkQueue()
     })
     return () => sub.remove()
-  }, [])
+  }, [hydrated, user?.id])
 
   // 2. App vivante : notif full-screen pressée / délivrée (événement Notifee).
   useEffect(() => {
@@ -179,7 +220,7 @@ export default function RootLayout() {
       const data = detail.notification?.data as any
       if (
         type === EventType.PRESS &&
-        detail.pressAction?.id === 'incoming-course' &&
+        (detail.pressAction?.id === 'incoming-course' || detail.pressAction?.id === 'default') &&
         isCallType(data?.type) &&
         data?.course_id != null
       ) {
@@ -208,7 +249,7 @@ export default function RootLayout() {
       })
     })
     return () => sub?.remove()
-  }, [])
+  }, [queryClient])
 
   // Ouvre l'écran d'appel dès que le store est hydraté et qu'un livreur est connecté.
   useEffect(() => {
@@ -261,7 +302,7 @@ export default function RootLayout() {
 
   return (
     <KeyboardProvider>
-      <QueryClientProvider client={queryClient}>
+      <QueryClientProvider key={token ?? 'anonymous'} client={queryClient}>
         <BackgroundLocationDisclosure />
         <Stack screenOptions={{ headerShown: false }} />
       </QueryClientProvider>

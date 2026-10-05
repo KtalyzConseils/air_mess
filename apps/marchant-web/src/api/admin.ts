@@ -411,6 +411,20 @@ export interface OfferAdminAction {
   admin_user?: { id: number; name: string } | null
 }
 
+export interface AssignmentPerson {
+  driver_id: number | null
+  name: string | null
+  user_id?: number
+  offered_at?: string | null
+  push_received_at?: string | null
+  notification_read_at?: string | null
+  declined_at?: string | null
+  reason?: string
+  custom_reason?: string | null
+  distance_km?: number
+  position_at?: string | null
+}
+
 export interface UnassignedCourse extends Course {
   offer_age_seconds: number
   offer_broadcasted_at?: string | null
@@ -423,6 +437,7 @@ export interface UnassignedCourse extends Course {
     busy_within_radius: number
     contacted_count: number
     declined_count: number
+    people?: Record<'contacted' | 'declined' | 'unanswered' | 'available' | 'busy' | 'nearest', AssignmentPerson[]>
   }
 }
 
@@ -647,7 +662,7 @@ export interface AdminIncident {
   resolution_note: string | null
   resolved_at: string | null
   created_at: string
-  course: { id: number; reference: string; status: string } | null
+  course: { id: number; reference: string; status: string; pickup_from_previous_driver?: boolean; previous_driver_id?: number; driver_id?: number } | null
   reported_by: { id: number; name: string; type: string } | null
 }
 
@@ -656,6 +671,10 @@ export interface IncidentListParams {
   type?: string
   page?: number
   per_page?: number
+}
+
+export async function confirmTransferException(courseId: number, reason: string): Promise<void> {
+  await api.post(`/admin/courses/${courseId}/confirm-transfer-exception`, { reason })
 }
 
 
@@ -682,6 +701,16 @@ export interface CreateMarchantPayload {
 
 export async function createMarchant(payload: CreateMarchantPayload): Promise<{ marchant: MarchantWithUser; message: string }> {
   const { data } = await api.post('/admin/marchants', payload)
+  return data
+}
+
+export type UpdateMarchantPayload = Omit<CreateMarchantPayload, 'password' | 'validate_now'>
+
+export async function updateMarchant(
+  id: number,
+  payload: UpdateMarchantPayload,
+): Promise<{ marchant: MarchantWithUser; message: string }> {
+  const { data } = await api.patch(`/admin/marchants/${id}`, payload)
   return data
 }
 
@@ -726,6 +755,31 @@ export interface CreateDriverPayload {
 
 export async function createDriver(payload: CreateDriverPayload): Promise<{ driver: DriverFull; message: string }> {
   const { data } = await api.post('/admin/drivers', payload)
+  return data
+}
+
+export interface UpdateDriverPayload {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  gender?: 'M' | 'F' | 'autre' | ''
+  birth_date?: string
+  vehicle_type: 'scooter' | 'moto' | 'voiture' | 'velo'
+  vehicle_plate?: string
+  vehicle_brand?: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+  emergency_contact2_name?: string
+  emergency_contact2_phone?: string
+  preferred_response_channel?: 'email' | 'sms' | 'whatsapp' | ''
+}
+
+export async function updateDriver(
+  id: number,
+  payload: UpdateDriverPayload,
+): Promise<{ driver: DriverDetail; message: string }> {
+  const { data } = await api.patch(`/admin/drivers/${id}`, payload)
   return data
 }
 
@@ -907,6 +961,16 @@ export async function createIndividual(
   payload: CreateIndividualPayload,
 ): Promise<{ individual: IndividualWithUser; message: string }> {
   const { data } = await api.post('/admin/individuals', payload)
+  return data
+}
+
+export type UpdateIndividualPayload = Omit<CreateIndividualPayload, 'password'>
+
+export async function updateIndividual(
+  id: number,
+  payload: UpdateIndividualPayload,
+): Promise<{ individual: IndividualWithUser; message: string }> {
+  const { data } = await api.patch(`/admin/individuals/${id}`, payload)
   return data
 }
 
@@ -1163,10 +1227,53 @@ export interface ReconciliationResponse {
     drift_users: Array<{ user_id: number; name: string; balance: number; sum_tx: number; drift: number }>
     has_any: boolean
   }
+  sandbox_audit: {
+    generated_at: string
+    snapshot_token: string
+    correction_ready: boolean
+    payments: { count: number; nominal_total: number; paid_total: number; refunded_total: number; ids: number[] }
+    user_wallets: { sandbox_credit_total: number; residual_upper_bound: number; items: unknown[] }
+    driver_wallets: { exposed_residual_upper_bound: number; items: unknown[] }
+    courses: Array<{ course_id: number; reference: string; status: string; classification: string; delivery_fee: number; driver_earnings: number }>
+    withdrawals_requiring_review: Array<{ withdrawal_id: number; owner_type: string; owner_id: number; amount: number; status: string; paid: boolean; payout_failed: boolean }>
+  }
 }
 
 export async function fetchReconciliation(from?: string, to?: string): Promise<ReconciliationResponse> {
   const { data } = await api.get('/admin/reconciliation', { params: { from, to } })
+  return data
+}
+
+export interface SandboxRepairResult {
+  snapshot_token: string
+  applied: boolean
+  user_adjustments: Array<{ user_id: number; amount_fcfa: number }>
+  driver_adjustments: Array<{ driver_id: number; amount_fcfa: number }>
+  notes: string
+}
+
+export interface SandboxRepairPlan {
+  correction_ready: boolean
+  snapshot_token: string
+  user_adjustments: Array<{ user_id: number; amount_fcfa: number; deferred_reserved_fcfa: number }>
+  driver_adjustments: Array<{ driver_id: number; amount_fcfa: number }>
+}
+
+export async function prepareSandboxRepair(snapshotToken: string): Promise<{
+  message: string
+  confirmation_code: string
+  expires_in_seconds: number
+  plan: SandboxRepairPlan
+}> {
+  const { data } = await api.post('/admin/sandbox/repair/prepare', { snapshot_token: snapshotToken })
+  return data
+}
+
+export async function applySandboxRepair(snapshotToken: string, confirmationCode: string): Promise<{ message: string; result: SandboxRepairResult }> {
+  const { data } = await api.post('/admin/sandbox/repair', {
+    snapshot_token: snapshotToken,
+    confirmation_code: confirmationCode,
+  })
   return data
 }
 

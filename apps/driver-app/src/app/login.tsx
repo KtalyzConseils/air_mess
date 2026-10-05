@@ -35,6 +35,7 @@ export default function LoginScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const login = useAuthStore((s) => s.login)
+  const sessionMessage = useAuthStore((s) => s.sessionMessage)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -169,12 +170,12 @@ export default function LoginScreen() {
               </Text>
             </Pressable>
 
-            {error && (
+            {(error || sessionMessage) && (
               <View className="bg-danger-bg border-2 border-airmess-red/30 rounded-2xl p-3 mb-4 flex-row items-start">
                 <View className="w-6 h-6 rounded-full bg-airmess-red items-center justify-center mr-2 mt-0.5">
                   <Ionicons name="alert" size={12} color="#ffffff" />
                 </View>
-                <Text className="text-airmess-red text-sm flex-1 font-semibold">{error}</Text>
+                <Text className="text-airmess-red text-sm flex-1 font-semibold">{error || sessionMessage}</Text>
               </View>
             )}
 

@@ -36,7 +36,8 @@ class User extends Authenticatable
      * couvrant l'ensemble du produit (drivers, marchands, wallet, caution,
      * incidents, RGPD-BJ). Projet à valider par avocat avant version définitive.
      */
-    public const TERMS_VERSION = 2;
+    // v3 (2026-09-24) : documents alignes sur les flux reels AirMess.
+    public const TERMS_VERSION = 3;
 
     protected $fillable = [
         'name',

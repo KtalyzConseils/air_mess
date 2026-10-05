@@ -5,6 +5,7 @@ import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminModal from '../../components/admin/AdminModal'
 import { AdminButton } from '../../components/admin/AdminToolbar'
 import { ArrowLeftIcon, SettingsIcon, CheckIcon, AlertTriangleIcon, WhatsappIcon } from '../../components/ui/icons'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
@@ -17,11 +18,13 @@ import {
   updateDriverKind,
   updateDriverWithdrawLimits,
   updateDriverKyc,
+  updateDriver,
   type DriverKind,
   type DriverDetail,
   type WithdrawLimitsPayload,
   type KycPayload,
   type KycStatus,
+  type UpdateDriverPayload,
 } from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
@@ -112,6 +115,8 @@ export default function AdminDriverDetailPage() {
   const queryClient = useQueryClient()
   const [docError, setDocError] = useState<string | null>(null)
   const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState<UpdateDriverPayload | null>(null)
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
   const canManageDriver = hasAdminRole(currentUser, 'ops')
@@ -137,6 +142,37 @@ export default function AdminDriverDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] })
     },
   })
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: UpdateDriverPayload) => updateDriver(Number(id), payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'driver', id] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] })
+      setEditOpen(false)
+      setEditForm(null)
+    },
+  })
+
+  function openEditModal() {
+    if (!data) return
+    setEditForm({
+      first_name: data.driver.first_name,
+      last_name: data.driver.last_name,
+      email: data.driver.user.email,
+      phone: data.driver.user.phone ?? '',
+      gender: (data.driver.gender as UpdateDriverPayload['gender']) ?? '',
+      birth_date: data.driver.birth_date ?? '',
+      vehicle_type: data.driver.vehicle_type as UpdateDriverPayload['vehicle_type'],
+      vehicle_plate: data.driver.vehicle_plate ?? '',
+      vehicle_brand: data.driver.vehicle_brand ?? '',
+      emergency_contact_name: data.driver.emergency_contact_name ?? '',
+      emergency_contact_phone: data.driver.emergency_contact_phone ?? '',
+      emergency_contact2_name: data.driver.emergency_contact2_name ?? '',
+      emergency_contact2_phone: data.driver.emergency_contact2_phone ?? '',
+      preferred_response_channel: data.driver.preferred_response_channel ?? '',
+    })
+    setEditOpen(true)
+  }
 
   function handleToggleKind() {
     if (!data?.driver) return
@@ -334,7 +370,16 @@ export default function AdminDriverDetailPage() {
 
             {/* Grille identité / véhicule / urgence / performance */}
             <div className="grid gap-4 md:grid-cols-2">
-              <Section title={t('admin.drivers.sectionIdentity')}>
+              <Section
+                title={t('admin.drivers.sectionIdentity')}
+                action={
+                  canManageDriver ? (
+                    <AdminButton variant="ghost" size="sm" onClick={openEditModal}>
+                      Modifier
+                    </AdminButton>
+                  ) : null
+                }
+              >
                 <Row label={t('admin.drivers.fieldGender')}>{data.driver.gender ?? '—'}</Row>
                 <Row label={t('admin.drivers.fieldBirthDate')}>{formatDate(data.driver.birth_date)}</Row>
                 <Row label={t('admin.drivers.fieldPhone')}>{data.driver.user.phone ?? '—'}</Row>
@@ -568,7 +613,108 @@ export default function AdminDriverDetailPage() {
           </>
         )}
       </div>
+
+      {editForm && (
+        <AdminModal
+          open={editOpen}
+          onClose={() => !updateMutation.isPending && setEditOpen(false)}
+          title="Modifier le livreur"
+          subtitle="Mets a jour les informations principales du compte livreur."
+          width="lg"
+          footer={
+            <>
+              <AdminButton variant="secondary" onClick={() => setEditOpen(false)} disabled={updateMutation.isPending}>
+                {t('admin.common.cancel')}
+              </AdminButton>
+              <AdminButton
+                variant="primary"
+                onClick={() => updateMutation.mutate(editForm)}
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? t('common.loading') : t('common.save')}
+              </AdminButton>
+            </>
+          }
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Prenom" value={editForm.first_name} onChange={(value) => setEditForm({ ...editForm, first_name: value })} />
+            <Field label="Nom" value={editForm.last_name} onChange={(value) => setEditForm({ ...editForm, last_name: value })} />
+            <Field label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm({ ...editForm, email: value })} />
+            <Field label="Telephone" value={editForm.phone} onChange={(value) => setEditForm({ ...editForm, phone: value })} />
+            <Field label="Date de naissance" type="date" value={editForm.birth_date ?? ''} onChange={(value) => setEditForm({ ...editForm, birth_date: value })} />
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">Genre</label>
+              <select
+                value={editForm.gender ?? ''}
+                onChange={(e) => setEditForm({ ...editForm, gender: e.target.value as UpdateDriverPayload['gender'] })}
+                className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+              >
+                <option value="">Non renseigne</option>
+                <option value="M">Homme</option>
+                <option value="F">Femme</option>
+                <option value="autre">Autre</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">Vehicule</label>
+              <select
+                value={editForm.vehicle_type}
+                onChange={(e) => setEditForm({ ...editForm, vehicle_type: e.target.value as UpdateDriverPayload['vehicle_type'] })}
+                className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+              >
+                <option value="scooter">Scooter</option>
+                <option value="moto">Moto</option>
+                <option value="voiture">Voiture</option>
+                <option value="velo">Velo</option>
+              </select>
+            </div>
+            <Field label="Plaque" value={editForm.vehicle_plate ?? ''} onChange={(value) => setEditForm({ ...editForm, vehicle_plate: value })} />
+            <Field label="Marque" value={editForm.vehicle_brand ?? ''} onChange={(value) => setEditForm({ ...editForm, vehicle_brand: value })} />
+            <Field label="Contact urgence 1" value={editForm.emergency_contact_name ?? ''} onChange={(value) => setEditForm({ ...editForm, emergency_contact_name: value })} />
+            <Field label="Telephone urgence 1" value={editForm.emergency_contact_phone ?? ''} onChange={(value) => setEditForm({ ...editForm, emergency_contact_phone: value })} />
+            <Field label="Contact urgence 2" value={editForm.emergency_contact2_name ?? ''} onChange={(value) => setEditForm({ ...editForm, emergency_contact2_name: value })} />
+            <Field label="Telephone urgence 2" value={editForm.emergency_contact2_phone ?? ''} onChange={(value) => setEditForm({ ...editForm, emergency_contact2_phone: value })} />
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">Canal prefere</label>
+              <select
+                value={editForm.preferred_response_channel ?? ''}
+                onChange={(e) => setEditForm({ ...editForm, preferred_response_channel: e.target.value as UpdateDriverPayload['preferred_response_channel'] })}
+                className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+              >
+                <option value="">Non renseigne</option>
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+                <option value="whatsapp">WhatsApp</option>
+              </select>
+            </div>
+          </div>
+        </AdminModal>
+      )}
     </AdminPageShell>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  type?: string
+}) {
+  return (
+    <div>
+      <label className="text-caption font-bold text-ink block mb-1">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+      />
+    </div>
   )
 }
 

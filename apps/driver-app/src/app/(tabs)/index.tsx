@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { View, Text, Pressable, RefreshControl } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useQuery } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '../../stores/authStore'
 import AvailabilityToggle from '../../components/AvailabilityToggle'
@@ -13,6 +13,7 @@ import SupportContactSheet from '../../components/SupportContactSheet'
 import AcceptTermsSheet from '../../components/AcceptTermsSheet'
 import { useDriverLocationTracker } from '../../hooks/useDriverLocationTracker'
 import { fetchOfferedCourses, fetchMyActiveCourses, type Availability } from '../../api/driver'
+import { fetchWallet } from '../../api/wallet'
 import api from '../../api/client'
 import { useNewCourseAlert } from '../../hooks/useNewCourseAlert'
 import TodayKpiBanner from '../../components/TodayKpiBanner'
@@ -27,6 +28,11 @@ export default function DriverDashboard() {
   const { user } = useAuthStore()
   const setUser = useAuthStore((state) => state.setUser)
   const router = useRouter()
+  const [isFocused, setIsFocused] = useState(false)
+  useFocusEffect(useCallback(() => {
+    setIsFocused(true)
+    return () => setIsFocused(false)
+  }, []))
 
   const meQuery = useQuery({
     queryKey: ['me'],
@@ -34,7 +40,7 @@ export default function DriverDashboard() {
       const { data } = await api.get('/auth/me')
       return data as { user: any; terms?: { needs_acceptance: boolean } }
     },
-    refetchInterval: 15_000,
+    // Le layout actualise cette même query toutes les 15 s sur tous les écrans.
   })
 
   const me = meQuery.data?.user ?? user
@@ -68,6 +74,13 @@ export default function DriverDashboard() {
     refetchInterval: 8_000,
   })
 
+  const walletQuery = useQuery({
+    queryKey: ['wallet'],
+    queryFn: fetchWallet,
+    enabled: !pendingValidation && !isBanned,
+    refetchInterval: 15_000,
+  })
+
   useNewCourseAlert(
     availability === 'available' ? (offeredQuery.data ?? []).map((course) => course.id) : [],
   )
@@ -88,6 +101,7 @@ export default function DriverDashboard() {
     meQuery.refetch()
     activeQuery.refetch()
     offeredQuery.refetch()
+    walletQuery.refetch()
   }
 
   useDriverLocationTracker({ availability: pendingValidation ? 'offline' : availability })
@@ -228,6 +242,8 @@ export default function DriverDashboard() {
           <TodayKpiBanner />
         </View>
 
+        {(walletQuery.data?.balance ?? 0) <= 0 && <WalletCautionNotice />}
+
         {/* ============ PROPOSITIONS ============ */}
         {canSeeOffers && (
           <View>
@@ -323,7 +339,7 @@ export default function DriverDashboard() {
       {activeCourse && (
         <ActiveCourseModal
           course={activeCourse}
-          visible={activeModalOpen}
+          visible={activeModalOpen && isFocused}
           onClose={() => setActiveModalOpen(false)}
         />
       )}
@@ -351,6 +367,33 @@ function EmptyStateSearching() {
         <Text className="text-xs text-success font-jk-bold">Recherche active</Text>
       </View>
     </Card>
+  )
+}
+
+function WalletCautionNotice() {
+  const router = useRouter()
+
+  return (
+    <Pressable
+      onPress={() => router.push('/(tabs)/wallet')}
+      className="mb-5 bg-info-bg border border-info/25 rounded-2xl px-4 py-3.5 flex-row items-start"
+      style={({ pressed }) => (pressed ? { opacity: 0.88 } : undefined)}
+      accessibilityRole="button"
+      accessibilityLabel="Recharger le wallet livreur"
+    >
+      <View className="w-10 h-10 rounded-full bg-info/10 items-center justify-center mr-3">
+        <Ionicons name="wallet-outline" size={20} color="#0284C7" />
+      </View>
+      <View className="flex-1">
+        <Text className="text-[10px] uppercase tracking-widest text-info font-jk-extrabold">
+          Wallet livreur
+        </Text>
+        <Text className="text-sm text-ink font-jk-semibold mt-1 leading-5">
+          Recharge ta caution wallet pour recevoir et accepter des courses.
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color="#0284C7" />
+    </Pressable>
   )
 }
 

@@ -20,6 +20,7 @@ export interface CourseIncident {
 }
 
 export interface Course {
+  arbitration_drivers?: { id: number; name: string; roles: ('current' | 'previous' | 'historical' | 'reporter')[] }[]
   id: number
   reference: string
   status: string
@@ -61,6 +62,9 @@ export interface Course {
   is_return_trip?: boolean
   return_code?: string | null
   return_confirmed_at?: string | null
+  handover_code?: string | null
+  handover_from?: { id: number; name: string | null; phone: string | null } | null
+  handover_to?: { id: number; name: string | null; phone: string | null } | null
   // Cas 7 — Vol livreur
   is_fraud?: boolean
   fraud_shortfall_fcfa?: number | null
@@ -126,6 +130,7 @@ export interface EstimateFeeParams {
   destination_lat: number
   destination_lng: number
   urgency?: 'standard' | 'express'
+  delivery_fee_paid_by?: 'sender' | 'recipient'
 }
 
 export async function estimateCourseFee(

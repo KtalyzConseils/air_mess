@@ -7,7 +7,7 @@ import notifee, {
   EventType,
 } from './notifeeSafe'
 import { IS_EXPO_GO } from './notifications'
-import { acceptCourse, declineCourse, declineReassignment, fetchMyActiveCourses } from '../api/driver'
+import { acceptCourse, declineCourse, declineReassignment, fetchMyActiveCourses, transition } from '../api/driver'
 import { acknowledgePushReceipt } from '../api/notifications'
 
 // expo-notifications et expo-task-manager NE DOIVENT PAS être importés en Expo Go :
@@ -33,7 +33,9 @@ import { acknowledgePushReceipt } from '../api/notifications'
  * sinon rien n'est défini quand l'app est tuée (contexte headless).
  */
 export const INCOMING_TASK = 'AIRMESS-INCOMING-COURSE-TASK'
-export const INCOMING_CHANNEL = 'incoming-call' // canal avec la sonnerie longue
+// Migration unique : Android ne modifie pas le son d'un canal existant.
+// Garder cet identifiant stable ; ne pas recréer le canal à chaque réception.
+export const INCOMING_CHANNEL = 'incoming-call-v2'
 export const INCOMING_NOTIF_ID = 'incoming-course-alert'
 export const COURSE_ALERT_STOP = 'airmess-course-alert-stop'
 const actionsInFlight = new Map<number, Promise<void>>()
@@ -41,6 +43,9 @@ const foregroundDeliveries = new Map<number, number>()
 let activeIncomingCourseId: number | null = null
 export function setActiveIncomingCourse(id: number | null): void { activeIncomingCourseId = id }
 export function getActiveIncomingCourse(): number | null { return activeIncomingCourseId }
+export function releaseActiveIncomingCourse(id: number): void {
+  if (activeIncomingCourseId === id) activeIncomingCourseId = null
+}
 
 /** File d'attente des courses entrantes à faire sonner (une à la fois). */
 const RING_QUEUE_KEY = 'airmess_ring_queue'
@@ -156,6 +161,7 @@ export async function dequeueRing(courseId: number): Promise<RingItem | null> {
 
 /** Vide toute la file (ex : une course acceptée → livreur occupé). */
 export async function clearRingQueue(): Promise<void> {
+  await notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
   const items = await readQueueRaw()
   await Promise.all(items.map((item) => notifee.cancelNotification(`incoming-course-${item.course_id}`).catch(() => {})))
   await writeQueue([])
@@ -240,6 +246,7 @@ async function displayRingNotification(item: RingItem, foreground = false): Prom
     data,
     android: {
       channelId: INCOMING_CHANNEL,
+      sound: 'new_course_ring', // Android < 8 ; sur Android >= 8, le canal décide.
       category: AndroidCategory.CALL,
       importance: AndroidImportance.HIGH,
       visibility: AndroidVisibility.PUBLIC,
@@ -324,7 +331,13 @@ export async function ringNextInQueue(): Promise<number | null> {
 export async function dismissUnavailableCourse(courseId: number): Promise<void> {
   if (actionsInFlight.has(courseId)) return
   await dequeueRing(courseId)
+  const ringing = await readRinging()
+  if (ringing?.course_id === courseId) {
+    await notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
+    await clearRinging()
+  }
   await notifee.cancelNotification(`incoming-course-${courseId}`).catch(() => {})
+  DeviceEventEmitter.emit(COURSE_ALERT_STOP, { courseId })
   DeviceEventEmitter.emit('airmess-course-unavailable', { courseId })
 }
 
@@ -336,7 +349,16 @@ export function respondToIncomingCourse(courseId: number, action: 'accept' | 'de
     await notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
     await notifee.cancelNotification(`incoming-course-${courseId}`).catch(() => {})
     if (action === 'accept') {
-      if (!reassigned) {
+      if (reassigned) {
+        // Accepter une réaffectation confirme le départ, sans rappeler /accept.
+        const current = (await fetchMyActiveCourses()).find((course) => course.id === courseId)
+        if (!current || current.pickup_from_previous_driver) {
+          await dequeueRing(courseId)
+          DeviceEventEmitter.emit('airmess-course-unavailable', { courseId })
+          return
+        }
+        if (current.status === 'assigned') await transition(courseId, 'start_to_pickup')
+      } else {
         try { await acceptCourse(courseId) }
         catch (error) {
           const active = await fetchMyActiveCourses().catch(() => [])
@@ -362,6 +384,13 @@ export function respondToIncomingCourse(courseId: number, action: 'accept' | 'de
         return
       }
       await dequeueRing(courseId)
+    }
+    if (action === 'accept') {
+      // Une autre offre peut avoir été acceptée depuis sa notification.
+      if (activeIncomingCourseId !== null) {
+        DeviceEventEmitter.emit(COURSE_ALERT_STOP, { courseId: activeIncomingCourseId })
+      }
+      activeIncomingCourseId = null
     }
     DeviceEventEmitter.emit('airmess-course-action-completed', { courseId, action })
   })().finally(() => actionsInFlight.delete(courseId))

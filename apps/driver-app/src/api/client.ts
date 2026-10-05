@@ -1,5 +1,6 @@
 import axios from 'axios'
 import * as SecureStore from 'expo-secure-store'
+import { DeviceEventEmitter } from 'react-native'
 
 const PROD_API_BASE_URL = 'https://api.airmess-logistics.com/api'
 
@@ -36,6 +37,15 @@ api.interceptors.request.use(async (config) => {
     }
   }
   return config
+})
+
+api.interceptors.response.use((response) => response, (error) => {
+  const authorization = error.config?.headers?.Authorization
+  if (error.response?.status === 401 && typeof authorization === 'string'
+    && !error.config?.url?.startsWith('/auth/login')) {
+    DeviceEventEmitter.emit('airmess-session-invalid', { token: authorization.replace(/^Bearer /, '') })
+  }
+  return Promise.reject(error)
 })
 
 export default api

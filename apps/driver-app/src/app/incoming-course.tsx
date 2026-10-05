@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator, Vibration, Alert, DeviceEventEmitter } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio'
 import notifee from '../lib/notifeeSafe'
@@ -20,6 +20,7 @@ import {
   respondToIncomingCourse,
   COURSE_ALERT_STOP,
   setActiveIncomingCourse,
+  releaseActiveIncomingCourse,
 } from '../lib/registerBackgroundNotifications'
 
 /**
@@ -69,7 +70,7 @@ export default function IncomingCourseScreen() {
   // ── Sonnerie en boucle + vibration ────────────────────────────────
   // Re-déclenchée à chaque course (courseId) : quand on enchaîne sur la suivante,
   // l'écran ne se démonte pas → il faut relancer son/vibration/état.
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     dismissedRef.current = false
     actionLockRef.current = false
     setActiveIncomingCourse(courseId)
@@ -89,6 +90,7 @@ export default function IncomingCourseScreen() {
     // L'écran d'appel prend le relais : on coupe la notif (et sa sonnerie de canal)
     // pour éviter le double son avec la boucle in-app.
     notifee.cancelNotification(INCOMING_NOTIF_ID).catch(() => {})
+    notifee.cancelNotification(`incoming-course-${courseId}`).catch(() => {})
     try {
       const player = createAudioPlayer(require('../../assets/sounds/new_course.wav'))
       player.loop = true
@@ -100,14 +102,14 @@ export default function IncomingCourseScreen() {
     const vib = setInterval(() => Vibration.vibrate(600), 1500)
     vibrationTimerRef.current = vib
     return () => {
-      setActiveIncomingCourse(null)
+      if (courseId !== null) releaseActiveIncomingCourse(courseId)
       clearInterval(vib)
       Vibration.cancel()
       playerRef.current?.pause()
       playerRef.current?.release()
       playerRef.current = null
     }
-  }, [courseId])
+  }, [courseId]))
 
   // ── Course prise par un autre livreur ─────────────────────────────
   // PLUS de compte à rebours : l'appel sonne TANT QUE le livreur n'a pas répondu
@@ -169,7 +171,7 @@ export default function IncomingCourseScreen() {
         params: { course_id: String(nextCourseId) },
       })
     } else {
-      router.replace('/(tabs)')
+      router.dismissTo('/(tabs)')
     }
   }
 
@@ -179,8 +181,7 @@ export default function IncomingCourseScreen() {
     setActing('accept')
     stopAlert()
     try {
-      // Réaffectation : rien à accepter côté serveur, la course lui appartient déjà.
-      // `acceptCourse` exige une course encore offerte et renverrait un 409.
+      // Le coordinateur distingue l'offre normale de la confirmation d'une réaffectation.
       await respondToIncomingCourse(courseId, 'accept', reassigned)
       if (dismissedRef.current) return
       dismissedRef.current = true

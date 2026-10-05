@@ -1,13 +1,17 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminModal from '../../components/admin/AdminModal'
 import { AdminButton } from '../../components/admin/AdminToolbar'
 import { AlertTriangleIcon, CheckIcon } from '../../components/ui/icons'
 import {
   fetchReconciliation,
   downloadReconciliationCsv,
+  prepareSandboxRepair,
+  applySandboxRepair,
   type ReconciliationFlow,
 } from '../../api/admin'
 
@@ -91,6 +95,26 @@ export default function AdminReconciliationPage() {
   const [from, setFrom] = useState<string>(isoDateNDaysAgo(30))
   const [to, setTo] = useState<string>(todayIso())
   const [isDownloading, setIsDownloading] = useState(false)
+  const [isRepairing, setIsRepairing] = useState(false)
+  const [repairMessage, setRepairMessage] = useState<string | null>(null)
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
+  const repairLock = useRef(false)
+  const confirmationResolver = useRef<((code: string | null) => void) | null>(null)
+  const [confirmation, setConfirmation] = useState<{ message: string; code: string } | null>(null)
+  const [enteredCode, setEnteredCode] = useState('')
+  const [codeError, setCodeError] = useState(false)
+  useEffect(() => () => {
+    confirmationResolver.current?.(null)
+    confirmationResolver.current = null
+  }, [])
+
+  function closeConfirmation(code: string | null) {
+    const resolve = confirmationResolver.current
+    confirmationResolver.current = null
+    setConfirmation(null)
+    setEnteredCode('')
+    resolve?.(code)
+  }
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['admin', 'reconciliation', from, to],
@@ -108,6 +132,56 @@ export default function AdminReconciliationPage() {
     }
   }
 
+  async function handleApplySandboxRepair() {
+    if (!data?.sandbox_audit?.snapshot_token || repairLock.current) return
+    repairLock.current = true
+
+    setIsRepairing(true)
+    setRepairMessage(null)
+
+    try {
+      const preparation = await prepareSandboxRepair(data.sandbox_audit.snapshot_token)
+      if (!preparation.plan.correction_ready) {
+        setRepairMessage(t('admin.reconciliation.sandboxNothingToApply'))
+        return
+      }
+      const userTotal = preparation.plan.user_adjustments.reduce((sum, row) => sum + Math.abs(row.amount_fcfa), 0)
+      const driverTotal = preparation.plan.driver_adjustments.reduce((sum, row) => sum + Math.abs(row.amount_fcfa), 0)
+      const userIds = preparation.plan.user_adjustments.map((row) => `#${row.user_id}`).join(', ') || '—'
+      const driverIds = preparation.plan.driver_adjustments.map((row) => `#${row.driver_id}`).join(', ') || '—'
+      const message = t('admin.reconciliation.sandboxCodePrompt', {
+        code: preparation.confirmation_code,
+        userTotal: formatFcfa(userTotal),
+        driverTotal: formatFcfa(driverTotal),
+        userIds,
+        driverIds,
+      })
+      const enteredCode = await new Promise<string | null>((resolve) => {
+        confirmationResolver.current = resolve
+        setEnteredCode('')
+        setCodeError(false)
+        setConfirmation({ message, code: preparation.confirmation_code })
+      })
+      if (enteredCode === null) return
+      if (enteredCode.trim() !== preparation.confirmation_code) {
+        setRepairMessage(t('admin.reconciliation.sandboxCodeMismatch'))
+        return
+      }
+      const response = await applySandboxRepair(preparation.plan.snapshot_token, enteredCode.trim())
+      setRepairMessage(response.message)
+      await refetch()
+    } catch (error: unknown) {
+      const msg = error instanceof AxiosError
+        ? (error.response?.data as { message?: string } | undefined)?.message
+          ?? t('admin.reconciliation.sandboxApplyError')
+        : t('admin.reconciliation.sandboxApplyError')
+      setRepairMessage(msg)
+    } finally {
+      repairLock.current = false
+      setIsRepairing(false)
+    }
+  }
+
   function setPreset(days: number) {
     setFrom(isoDateNDaysAgo(days))
     setTo(todayIso())
@@ -118,6 +192,35 @@ export default function AdminReconciliationPage() {
 
   return (
     <AdminPageShell>
+      <AdminModal open={!!confirmation} onClose={() => closeConfirmation(null)}
+        title={t('admin.reconciliation.sandboxApplyButton')}
+        footer={<>
+          <AdminButton onClick={() => closeConfirmation(null)}>{t('common.cancel')}</AdminButton>
+          <AdminButton variant="primary" type="submit" form="sandbox-confirmation" disabled={!enteredCode.trim()}>{t('admin.reconciliation.sandboxApplyButton')}</AdminButton>
+        </>}>
+        <form id="sandbox-confirmation" className="space-y-4" onSubmit={(event) => {
+          event.preventDefault()
+          if (enteredCode.trim() !== confirmation?.code) { setCodeError(true); return }
+          closeConfirmation(enteredCode.trim())
+        }}>
+          <div className="flex gap-3 rounded-md border border-airmess-yellow/40 bg-airmess-yellow/10 p-3 text-body-s text-ink">
+            <AlertTriangleIcon size={20} className="shrink-0" />
+            <p>{t('admin.reconciliation.sandboxApplyConfirm')}</p>
+          </div>
+          <p id="sandbox-plan" className="whitespace-pre-line break-words rounded-md border border-warm-200 bg-cream p-4 text-body-s text-ink">{confirmation?.message}</p>
+          <label htmlFor="sandbox-code" className="block text-body-s font-bold text-ink">{t('admin.reconciliation.sandboxCodeLabel')}</label>
+          <input id="sandbox-code" autoFocus autoComplete="off" value={enteredCode}
+            onCopy={(event) => event.preventDefault()}
+            onCut={(event) => event.preventDefault()}
+            onPaste={(event) => event.preventDefault()}
+            onDrop={(event) => event.preventDefault()}
+            onDragOver={(event) => event.preventDefault()}
+            onChange={(event) => { setEnteredCode(event.target.value); setCodeError(false) }}
+            aria-describedby={codeError ? 'sandbox-plan sandbox-error' : 'sandbox-plan'} aria-invalid={codeError}
+            className="w-full h-11 px-3 rounded-md border border-warm-300 bg-off-white font-mono text-ink focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow" />
+          {codeError && <p id="sandbox-error" role="alert" className="text-body-s text-airmess-red">{t('admin.reconciliation.sandboxCodeMismatch')}</p>}
+        </form>
+      </AdminModal>
       <AdminPageHeader
         title={t('admin.reconciliation.title')}
         subtitle={t('admin.reconciliation.subtitleFull')}
@@ -232,6 +335,94 @@ export default function AdminReconciliationPage() {
               </div>
             </section>
 
+            <Section title={t('admin.reconciliation.sandboxAuditTitle')}>
+              <div className="bg-warning-bg border border-warning/30 rounded-md p-4 space-y-4">
+                <p className="text-body-s text-ink">{t('admin.reconciliation.sandboxAuditWarning')}</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <MarginTile label={t('admin.reconciliation.sandboxPayments')} value={data.sandbox_audit.payments.count} />
+                  <MarginTile label={t('admin.reconciliation.sandboxPaid')} value={formatFcfa(data.sandbox_audit.payments.paid_total)} compact />
+                  <MarginTile label={t('admin.reconciliation.sandboxUserResidual')} value={formatFcfa(data.sandbox_audit.user_wallets.residual_upper_bound)} tone="warning" compact />
+                  <MarginTile label={t('admin.reconciliation.sandboxDriverExposure')} value={formatFcfa(data.sandbox_audit.driver_wallets.exposed_residual_upper_bound)} tone="warning" compact />
+                </div>
+                <p className="text-caption text-warm-600">
+                  {t('admin.reconciliation.sandboxSnapshot')} <code className="font-mono break-all">{data.sandbox_audit.snapshot_token}</code>
+                </p>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <p className="text-caption font-bold text-airmess-red">{t('admin.reconciliation.sandboxNoCorrection')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <AdminButton variant="secondary" size="sm" onClick={() => setIsGuideOpen(true)}>
+                      {t('admin.reconciliation.sandboxGuideButton')}
+                    </AdminButton>
+                    <AdminButton
+                      variant="primary"
+                      size="sm"
+                      onClick={handleApplySandboxRepair}
+                      disabled={isRepairing || !data.sandbox_audit.snapshot_token}
+                    >
+                      {isRepairing
+                        ? t('admin.reconciliation.sandboxApplying')
+                        : t('admin.reconciliation.sandboxApplyButton')}
+                    </AdminButton>
+                  </div>
+                </div>
+                {repairMessage && (
+                  <p className="text-caption text-airmess-red font-bold break-all">{repairMessage}</p>
+                )}
+              </div>
+            </Section>
+
+
+          {isGuideOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4" role="presentation" onMouseDown={() => setIsGuideOpen(false)}>
+              <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-md bg-white shadow-xl p-5 md:p-6" role="dialog" aria-modal="true" aria-labelledby="sandbox-guide-title" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h2 id="sandbox-guide-title" className="text-h3 text-ink">{t('admin.reconciliation.sandboxGuideTitle')}</h2>
+                    <p className="text-body-s text-warm-700 mt-1">{t('admin.reconciliation.sandboxGuideIntro')}</p>
+                  </div>
+                  <button type="button" className="text-warm-600 hover:text-ink text-xl" aria-label={t('common.close')} onClick={() => setIsGuideOpen(false)}>×</button>
+                </div>
+                <div className="space-y-4 text-body-s text-warm-700">
+                  <section>
+                    <h3 className="font-bold text-ink mb-2">{t('admin.reconciliation.sandboxGuideEffectsTitle')}</h3>
+                    <ul className="list-disc pl-5 space-y-1.5">
+                      <li><strong>{t('admin.reconciliation.sandboxGuideCourseLabel')}</strong> {t('admin.reconciliation.sandboxGuideCourse')}</li>
+                      <li><strong>{t('admin.reconciliation.sandboxGuideClientLabel')}</strong> {t('admin.reconciliation.sandboxGuideClient')}</li>
+                      <li><strong>{t('admin.reconciliation.sandboxGuideDriverLabel')}</strong> {t('admin.reconciliation.sandboxGuideDriver')}</li>
+                      <li><strong>{t('admin.reconciliation.sandboxGuidePlatformLabel')}</strong> {t('admin.reconciliation.sandboxGuidePlatform')}</li>
+                    </ul>
+                  </section>
+                  <section className="rounded-md border border-warm-300 bg-cream p-4">
+                    <h3 className="font-bold text-ink mb-2">{t('admin.reconciliation.sandboxGuideExcludedTitle')}</h3>
+                    <p>{t('admin.reconciliation.sandboxGuideExcludedIntro')}</p>
+                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedCourses')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedPayments')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedReservations')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedWithdrawals')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuideExcludedSpent')}</li>
+                    </ul>
+                    <p className="mt-2 font-semibold text-airmess-red">{t('admin.reconciliation.sandboxGuideManualReview')}</p>
+                  </section>
+                  <section>
+                    <h3 className="font-bold text-ink mb-2">{t('admin.reconciliation.sandboxGuideSecurityTitle')}</h3>
+                    <ol className="list-decimal pl-5 space-y-1.5">
+                      <li>{t('admin.reconciliation.sandboxGuide1')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuide2')}</li>
+                      <li>{t('admin.reconciliation.sandboxGuide3')}</li>
+                    </ol>
+                  </section>
+                </div>
+                <div className="mt-5 rounded-md border border-warm-300 bg-warning-bg p-4">
+                  <p className="text-body-s font-bold text-ink mb-2">{t('admin.reconciliation.sandboxExampleTitle')}</p>
+                  <p className="text-body-s text-warm-700">{t('admin.reconciliation.sandboxExample')}</p>
+                </div>
+                <div className="mt-5 flex justify-end">
+                  <AdminButton variant="secondary" size="sm" onClick={() => setIsGuideOpen(false)}>{t('common.close')}</AdminButton>
+                </div>
+              </div>
+            </div>
+          )}
             {/* Marge brute */}
             <Section title={t('admin.reconciliation.marginTitle')}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">

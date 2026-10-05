@@ -6,6 +6,8 @@ export interface DriverCourseSummary {
   status: string
   abandonment_pending?: boolean
   holding_for_transfer?: boolean
+  handover_code?: string | null
+  handover_to?: { id: number; name: string | null }
   origin_name: string
   origin_quartier: string
   destination_name: string
@@ -126,7 +128,7 @@ export async function declineReassignment(
 export async function transition(
   courseId: number,
   action: TransitionAction,
-  extra: { pickup_code?: string; delivery_code?: string; return_code?: string; reason?: string } = {},
+  extra: { pickup_code?: string; delivery_code?: string; return_code?: string; transfer_code?: string; reason?: string } = {},
 ) {
   const { data } = await api.post(`/driver/courses/${courseId}/transition`, { action, ...extra })
   return data.course

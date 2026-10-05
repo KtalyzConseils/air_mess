@@ -41,7 +41,11 @@ class CourseController extends Controller
             $urgency,
         );
         $originalDeliveryFee = $estimate['fee'];
-        $discountQuote = $firstCourseDiscount->quote($user, $originalDeliveryFee);
+        $paidBy = $data['delivery_fee_paid_by'] ?? Course::PAID_BY_RECIPIENT;
+        $isSenderPaid = $paidBy === Course::PAID_BY_SENDER;
+        $discountQuote = $isSenderPaid
+            ? $firstCourseDiscount->quote($user, $originalDeliveryFee)
+            : $this->withoutDiscount($originalDeliveryFee);
         $deliveryFee    = $discountQuote['fee'];
         $driverPercent  = (int) \App\Models\AppSetting::get('driver_commission_percent', 75);
         // Le cadeau est financé par Airmess : le gain du livreur reste calculé
@@ -56,8 +60,6 @@ class CourseController extends Controller
         // Nouveau : si `delivery_fee_paid_by = recipient`, le marchand ne paie RIEN
         // à la création. Le driver Airmess collectera les frais chez le destinataire
         // à la livraison, et le revenu ira directement dans platform_earnings.
-        $paidBy = $data['delivery_fee_paid_by'] ?? Course::PAID_BY_SENDER;
-        $isSenderPaid = $paidBy === Course::PAID_BY_SENDER;
         $isPayer = ($user->isMarchant() || $user->isIndividual()) && $isSenderPaid;
 
         // Si payeur (mode sender-paid uniquement), on tente d'abord le wallet.
@@ -81,11 +83,13 @@ class CourseController extends Controller
         $isHighValue = $threshold > 0 && $exposure >= $threshold;
 
         try {
-            $course = DB::transaction(function () use ($data, $user, $originalDeliveryFee, $driverEarnings, $isPayer, $walletService, $isHighValue, $firstCourseDiscount) {
+            $course = DB::transaction(function () use ($data, $user, $originalDeliveryFee, $driverEarnings, $isSenderPaid, $isPayer, $walletService, $isHighValue, $firstCourseDiscount) {
                 // Sérialise deux créations simultanées du même compte : une seule
                 // peut constater qu'aucune première course n'existe encore.
                 $lockedUser = \App\Models\User::whereKey($user->id)->lockForUpdate()->firstOrFail();
-                $discountQuote = $firstCourseDiscount->quote($lockedUser, $originalDeliveryFee);
+                $discountQuote = $isSenderPaid
+                    ? $firstCourseDiscount->quote($lockedUser, $originalDeliveryFee)
+                    : $this->withoutDiscount($originalDeliveryFee);
                 $deliveryFee = $discountQuote['fee'];
 
                 $course = Course::create(array_merge($data, [
@@ -103,7 +107,7 @@ class CourseController extends Controller
                     'is_high_value'   => $isHighValue,
                     // Défaut explicite si le front n'envoie rien : marchand paie (comportement historique).
                     // Le pipeline financier reste inchangé en 5b — pas de branchement conditionnel encore.
-                    'delivery_fee_paid_by' => $data['delivery_fee_paid_by'] ?? Course::PAID_BY_SENDER,
+                    'delivery_fee_paid_by' => $data['delivery_fee_paid_by'] ?? Course::PAID_BY_RECIPIENT,
 
                     // Filet de sécurité : on génère reference+token ici même si les events firent
                     'reference'       => $this->generateReference(),
@@ -235,6 +239,7 @@ class CourseController extends Controller
             'destination_lat' => ['required', 'numeric', 'between:-90,90'],
             'destination_lng' => ['required', 'numeric', 'between:-180,180'],
             'urgency'         => ['nullable', Rule::in(['standard', 'express'])],
+            'delivery_fee_paid_by' => ['nullable', Rule::in([Course::PAID_BY_SENDER, Course::PAID_BY_RECIPIENT])],
         ]);
 
         $breakdown = $priceCalculator->estimate(
@@ -245,7 +250,10 @@ class CourseController extends Controller
             $data['urgency'] ?? 'standard',
         );
 
-        $discount = $firstCourseDiscount->quote($request->user(), (int) $breakdown['fee']);
+        $paidBy = $data['delivery_fee_paid_by'] ?? Course::PAID_BY_RECIPIENT;
+        $discount = $paidBy === Course::PAID_BY_SENDER
+            ? $firstCourseDiscount->quote($request->user(), (int) $breakdown['fee'])
+            : $this->withoutDiscount((int) $breakdown['fee']);
 
         return response()->json(array_merge($breakdown, [
             'original_fee' => $discount['original_fee'],
@@ -296,6 +304,10 @@ class CourseController extends Controller
         if ($user->isDriver()) {
             $courses->getCollection()->each(function ($course) use ($user) {
                 $course->setAttribute('holding_for_transfer', $course->previous_driver_id === $user->driver?->id && $course->pickup_from_previous_driver);
+                if ($course->holding_for_transfer && ! $course->isTerminal()) {
+                    $course->setAttribute('handover_code', $course->transfer_code);
+                    $course->setAttribute('handover_to', ['id' => $course->driver_id, 'name' => $course->driver?->user?->name]);
+                }
             });
         }
         return response()->json($courses);
@@ -316,6 +328,28 @@ class CourseController extends Controller
             'incidents' => fn ($q) => $q->orderByDesc('created_at'),
             'incidents.reportedBy:id,name,type',
         ]);
+
+        if ($request->user()->isAdmin() && $course->pickup_from_previous_driver && ! $course->isTerminal()) {
+            $previousDriver = $course->previous_driver_id
+                ? Driver::with('user:id,name,phone')->find($course->previous_driver_id)
+                : null;
+
+            $course->setAttribute('handover_code', $course->transfer_code);
+            $course->setAttribute('handover_from', $previousDriver ? [
+                'id' => $previousDriver->id,
+                'name' => $previousDriver->user?->name,
+                'phone' => $previousDriver->user?->phone,
+            ] : null);
+            $course->setAttribute('handover_to', $course->driver ? [
+                'id' => $course->driver->id,
+                'name' => $course->driver->user?->name,
+                'phone' => $course->driver->user?->phone,
+            ] : null);
+        }
+
+        if ($request->user()->isAdmin()) {
+            $course->setAttribute('arbitration_drivers', $course->arbitrationDrivers());
+        }
 
         return response()->json(['course' => $course]);
     }
@@ -492,18 +526,21 @@ class CourseController extends Controller
             return $this->initiateMarchandCancelReturn($course, $request, $notifier);
         }
 
-        $previousStatus = $course->status;
         // Le livreur assigné (s'il y en a un) doit être libéré, sinon il reste bloqué en "busy".
         $driver = $course->driver_id ? Driver::find($course->driver_id) : null;
         $directRefund = null;
         $walletReleased = false;
 
-        DB::transaction(function () use ($course, $request, $previousStatus, $driver, $walletService, &$directRefund, &$walletReleased) {
-            $course->update([
+        DB::transaction(function () use ($course, $request, $driver, $walletService, &$directRefund, &$walletReleased) {
+            $course->updateWithStatusHistory([
                 'status'              => Course::STATUS_CANCELLED,
                 'cancelled_at'        => now(),
                 'cancellation_reason' => $request->input('reason'),
                 'cancelled_by'        => $request->user()->id,
+            ], [
+                'changed_by_id' => $request->user()->id,
+                'changed_by_type' => 'user',
+                'reason' => $request->input('reason'),
             ]);
 
             // Libérer le livreur : il redevient disponible pour de nouvelles courses.
@@ -528,14 +565,6 @@ class CourseController extends Controller
                 );
             }
 
-            \App\Models\CourseStatusHistory::create([
-                'course_id'       => $course->id,
-                'from_status'     => $previousStatus,
-                'to_status'       => Course::STATUS_CANCELLED,
-                'changed_by_id'   => $request->user()->id,
-                'changed_by_type' => 'user',
-                'reason'          => $request->input('reason'),
-            ]);
         });
 
         if ($directRefund && ! \App\Models\Notification::where('user_id', $course->sender_id)
@@ -607,19 +636,16 @@ class CourseController extends Controller
         \Illuminate\Http\Request $request,
         NotificationService $notifier,
     ): JsonResponse {
-        $previousStatus = $course->status;
         $driver         = $course->driver_id ? Driver::find($course->driver_id) : null;
         $reason         = $request->input('reason');
         $user           = $request->user();
 
-        $incident = DB::transaction(function () use ($course, $previousStatus, $reason, $user) {
+        $incident = DB::transaction(function () use ($course, $reason, $user) {
             $course->status              = Course::STATUS_RETURNING_TO_SENDER;
             $course->is_return_trip      = true;
             $course->return_code         = Course::generateCode();
             $course->cancellation_reason = $reason;
             $course->cancelled_by        = $user->id;
-            $course->save();
-
             $incident = \App\Models\CourseIncident::create([
                 'course_id'     => $course->id,
                 'reported_by'   => $user->id,
@@ -629,10 +655,7 @@ class CourseController extends Controller
                 'status'        => 'open',
             ]);
 
-            \App\Models\CourseStatusHistory::create([
-                'course_id'       => $course->id,
-                'from_status'     => $previousStatus,
-                'to_status'       => Course::STATUS_RETURNING_TO_SENDER,
+            $course->updateWithStatusHistory([], [
                 'changed_by_id'   => $user->id,
                 'changed_by_type' => 'user',
                 'reason'          => 'marchand_cancel_return: ' . ($reason ?: 'sans motif'),
@@ -704,6 +727,19 @@ class CourseController extends Controller
         abort(403, 'Accès refusé à cette course.');
     }
 
+
+    /**
+     * @return array{original_fee:int, discount_amount:int, fee:int, discount_code:?string}
+     */
+    private function withoutDiscount(int $fee): array
+    {
+        return [
+            'original_fee' => $fee,
+            'discount_amount' => 0,
+            'fee' => $fee,
+            'discount_code' => null,
+        ];
+    }
 
     /**
      * Génère une référence unique du type AM-2026-00001.

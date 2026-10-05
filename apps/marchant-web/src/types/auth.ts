@@ -45,6 +45,7 @@ export interface Individual {
   user_id: number
   first_name: string
   last_name: string
+  gender: 'M' | 'F' | 'autre' | null
   monthly_courses_used: number
   monthly_courses_limit: number
   subscription_plan: 'starter' | 'pro' | 'business' | null

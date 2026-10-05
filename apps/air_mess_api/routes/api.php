@@ -299,11 +299,13 @@ Route::middleware([
     'auth:sanctum',
     'ability:integration:create-course,api:create-course',
     'throttle:60,1',
-    'api.quota',
 ])
     ->prefix('integration')
     ->group(function () {
-        Route::post('/courses', [IntegrationCourseController::class, 'store']);
+        Route::post('/courses', [IntegrationCourseController::class, 'store'])->middleware('api.quota');
+        Route::get('/wallet', [IntegrationCourseController::class, 'wallet']);
+        Route::get('/courses/{reference}', [IntegrationCourseController::class, 'show']);
+        Route::post('/courses/{reference}/cancel', [IntegrationCourseController::class, 'cancel']);
     });
 
 
@@ -356,6 +358,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // === ÉCRITURE COMMERCIALE (validation/suspension marchands & particuliers) ===
     Route::middleware('admin:commercial')->group(function () {
         Route::post('/marchants', [AdminController::class, 'createMarchant']);
+        Route::patch('/marchants/{marchant}', [AdminController::class, 'updateMarchant']);
         Route::post('/marchants/{marchant}/validate',   [AdminController::class, 'validateMarchant']);
         Route::post('/marchants/{marchant}/suspend',    [AdminController::class, 'suspendMarchant']);
         Route::post('/marchants/{marchant}/reactivate', [AdminController::class, 'reactivateMarchant']);
@@ -363,6 +366,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::delete('/marchants/{marchant}',          [AdminController::class, 'destroyMarchant']);
 
         Route::post('/individuals', [AdminController::class, 'createIndividual']);
+        Route::patch('/individuals/{individual}', [AdminController::class, 'updateIndividual']);
         Route::post('/individuals/{individual}/suspend',    [AdminController::class, 'suspendIndividual']);
         Route::post('/individuals/{individual}/reactivate', [AdminController::class, 'reactivateIndividual']);
 
@@ -375,9 +379,11 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // Les retraits (argent) restent strictement ops — pas accessibles au support.
     Route::middleware('admin:ops')->group(function () {
         Route::post('/courses/{course}/reassign',      [AdminController::class, 'reassignCourse']);
+        Route::post('/courses/{course}/confirm-transfer-exception', [AdminController::class, 'confirmTransferException']);
         Route::post('/courses/{course}/rebroadcast',   [AdminController::class, 'rebroadcastCourse']);
         Route::post('/courses/{course}/dispute',       [AdminController::class, 'disputeCourse']);
         Route::post('/drivers',                        [AdminController::class, 'createDriver']);
+        Route::patch('/drivers/{driver}',              [AdminController::class, 'updateDriver']);
         Route::post('/drivers/{driver}/validate',      [AdminController::class, 'validateDriver']);
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
         Route::post('/incidents/{incident}/resolve',   [AdminController::class, 'resolveIncident']);
@@ -463,6 +469,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         // Réconciliation comptable : dashboard financier + export CSV
         Route::get('/reconciliation',            [AdminController::class, 'reconciliation']);
         Route::get('/reconciliation/export.csv', [AdminController::class, 'reconciliationExportCsv']);
+        Route::post('/sandbox/repair/prepare', [AdminController::class, 'prepareSandboxRepair']);
+        Route::post('/sandbox/repair', [AdminController::class, 'sandboxRepair']);
     });
 
 

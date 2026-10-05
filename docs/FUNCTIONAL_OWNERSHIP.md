@@ -34,6 +34,60 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 - Le mode démonstration de la landing doit rester explicitement activé et ne doit jamais être la valeur par défaut en production.
 - Restitution administrative : `Résultats des formulaires`, onglet livreurs, avec les réponses brutes conservées dans `survey_payload` et `account_payload`.
 
+## Remise de colis entre livreurs
+
+- Historique des étapes normales livreur (acceptation et transitions) : `CourseObserver::updated` écrit une seule ligne. `Course::updateWithStatusHistory` lui transmet le motif et l'acteur, avec un contexte limité à cet appel. Ne pas réajouter une écriture manuelle après cette méthode. Les événements métier sans changement de statut (abandon après récupération, réaffectation/transfert) restent distincts. Aucun nettoyage rétroactif des doublons de production n'est effectué.
+
+- Source unique de confirmation : `Course::confirmParcelTransfer`, utilisée par la transition livreur et l'exception ops. Aucun mouvement financier n'y est ajouté.
+- Historique de remise : si le statut change (`at_dropoff` → `picked_up`), l'observer écrit l'événement détaillé via `updateWithStatusHistory`. S'il reste `picked_up`, une seule écriture explicite conserve l'événement de remise. Ne jamais cumuler ces deux écritures ; un nouvel appel après confirmation ne doit rien ajouter.
+- `AdminController::reassignCourse` renouvelle le code à chaque désignation et conserve le détenteur réel si le second livreur est remplacé avant remise.
+- Code à six chiffres chiffré en base et masqué par défaut. Seule la liste des courses du détenteur courant expose `handover_code` ; ne jamais l'ajouter aux notifications, historiques ou réponses destinées au second livreur/client.
+- Cinq erreurs entraînent un blocage de quinze minutes. La confirmation est verrouillée en transaction, consomme le code et trace les deux livreurs. Une répétition ne doit pas renotifier ou libérer une seconde fois.
+- Exception : endpoint admin réservé super/ops, motif de vérification obligatoire et événement distinct. Confirmer une remise ne clôture pas automatiquement l'incident.
+- Déploiement : migration `2026_09_25_000001_secure_parcel_transfers` (inclut les transferts en cours), puis API/web et application mobile compatible. Prévenir les opérations avant activation : une ancienne app ne peut plus confirmer sans saisir le code ; utiliser la procédure exceptionnelle seulement après vérification physique.
+- Validation locale encore requise : les tests PostgreSQL ont été bloqués par un disque plein lors de cette implémentation. Ne pas déployer sans relancer les tests de transfert et tester les deux comptes sur appareil.
+
+## Diagnostic des courses sans livreur
+
+- Source unique : `AdminController::unassignedCourses`, accessible aux rôles super, ops et support. Les compteurs et listes `assignment_diagnostic.people` sont calculés ensemble.
+- Offres et refus : historique cumulé de la course, dédupliqué par utilisateur/livreur, toutes diffusions confondues. « Contactés sans refus enregistré » ne prouve pas l'absence de toute réponse passée.
+- `push_received_at` est un accusé de réception et `read_at` concerne la notification, pas une preuve de lecture de l'offre. Une notification enregistrée ne garantit pas l'envoi ou la réception du push.
+- Disponibilités et distances : dernières positions connues, même rayon de 8 km que les compteurs existants ; ne constituent pas un contrôle complet d'éligibilité à une course.
+
+## Désactivation d'un livreur connecté
+
+- Isolation mobile des comptes : le `QueryClient` du layout est propre à chaque session ; le provider est remonté et l'ancien cache supprimé au changement de token. Ne pas réintroduire un cache global entre deux connexions : les codes de remise et autres données privées ne doivent jamais apparaître pour le compte suivant.
+
+- Source serveur : `AdminController::toggleDriverActive`, qui suspend le compte, le passe hors ligne et révoque ses tokens. Une course en cours, un retour ou un colis encore détenu pour transfert interdit cette désactivation.
+- Source mobile : l'intercepteur 401 de `driver-app/src/api/client.ts` et `authStore.expireSession`. Seule la session du token concerné est invalidée ; une panne réseau ou un refus 403 ne déconnecte pas.
+- Le layout actualise la query existante `['me']` au retour au premier plan et toutes les 15 secondes lorsque l'app est active, sur tous les écrans. Ne pas ajouter un second polling dans l'accueil.
+- Une réponse 401 ne distingue pas expiration et désactivation : le message ne doit pas inventer un motif précis. Le login conserve le diagnostic serveur du compte.
+
 ## Règle d'évolution
 
 Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `FirstCourseDiscountService`, `FIRST_COURSE_500`, `waitlisted_at`, `MerchantWaitlist`, `DriverWaitlist`, les routes admin correspondantes et leurs tests.
+
+## API d'intégration : lecture et annulation
+
+- Tarification des nouvelles créations : `CourseCreationService::pricing` délègue au `PriceCalculator`, comme le canal applicatif. Aucun forfait alternatif. Les quatre coordonnées GPS sont obligatoires (zéro refusé car sentinelle du calculateur actuel) ; validation avant wallet/quota. Les intégrateurs doivent adapter leurs requêtes avant déploiement. Les anciennes courses ne sont pas recalculées. Tests : `IntegrationCourseWithApiAppTest` (parité standard/express/plafond, GPS invalide, réservation et quota uniques après retry).
+
+- `IntegrationCourseController` gère les routes `/integration/courses/{reference}`, `/integration/wallet` et `/integration/courses/{reference}/cancel`. Autorisation commune avec la création : `StoreIntegrationCourseRequest::resolvePayer`.
+- Les clés existantes sont compatibles. Les clés d'app sont limitées aux courses du couple propriétaire/application ; les clés historiques aux courses du propriétaire sans app. Aucun code secret de course n'est renvoyé.
+- L'annulation verrouille la course et délègue au traitement payeur de `CourseController::cancel` / `UserWalletService`. Ne pas créer une seconde logique de remboursement. Une course déjà annulée ne produit pas d'effet supplémentaire.
+- Le quota reste réservé à la création. Lecture sans écriture de wallet ; compte/app désactivé interdit. `/me/wallet` refuse explicitement les clés d'app.
+
+## Arbitrage d'incident : choix du livreur
+
+- `Course::arbitrationDrivers` reconstruit les participants depuis l'affectation actuelle, le précédent livreur, les historiques et les signalements. Le détail de course expose cette liste uniquement aux admins. Une présence dans la liste ne présume pas de la responsabilité.
+- `AdminController::arbitrateIncident` exige `adjustment_driver_id` pour tout ajustement livreur et vérifie l'appartenance dans la transaction verrouillée. Aucun repli sur le livreur actuellement affecté. Débit/crédit, suspension éventuelle et notification financière ciblent tous le livreur choisi.
+- Le formulaire existant impose un choix explicite et une confirmation nom/rôle/montant. Les écritures `WalletAdjustmentService` restent la source financière ; la note de résolution trace aussi la cible et les montants demandé/appliqué, y compris avec une caution nulle. Un incident déjà résolu ne peut pas être rejoué.
+- Aucun changement aux barèmes des presets ni à la notification existante « votre wallet a été crédité ». Déployer API et web ensemble ; les anciennes interfaces sans sélection sont refusées sans débit. Aucune migration.
+
+## Réconciliation financière et fonds sandbox
+
+- Source de vérité administrative : `GET /api/admin/reconciliation` et sa section `sandbox_audit`.
+- Analyse en lecture seule : `SandboxFinancialAuditService` ; elle doit être étendue plutôt que dupliquée.
+- Le `snapshot_token` représente l'état financier courant. Un plan préparé sur un dump ou avec un ancien jeton est obsolète.
+- Les boutons de remise à zéro d'un wallet ne constituent pas un outil d'assainissement global.
+- Toute correction future doit conserver les historiques, utiliser des écritures compensatoires et revérifier le jeton dans la transaction d'application.
+- L'application exige une préparation serveur et un code temporaire à usage unique lié au super-admin, au snapshot et au hash du plan. Une simple confirmation navigateur ne suffit pas.

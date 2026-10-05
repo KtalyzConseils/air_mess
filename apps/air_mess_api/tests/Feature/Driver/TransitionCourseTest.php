@@ -45,6 +45,29 @@ class TransitionCourseTest extends TestCase
         $this->assertEquals(Course::STATUS_TO_PICKUP, $course->fresh()->status);
     }
 
+    public function test_normal_journey_records_exactly_one_history_per_transition(): void
+    {
+        [$user, , $course] = $this->setupDriverWithCourse(Course::STATUS_ASSIGNED);
+        Sanctum::actingAs($user);
+        $steps = [
+            ['start_to_pickup', Course::STATUS_TO_PICKUP, []],
+            ['arrived_pickup', Course::STATUS_AT_PICKUP, []],
+            ['pickup_confirmed', Course::STATUS_PICKED_UP, ['pickup_code' => $course->pickup_code]],
+            ['arrived_dropoff', Course::STATUS_AT_DROPOFF, []],
+            ['delivered', Course::STATUS_DELIVERED, ['delivery_code' => $course->delivery_code]],
+        ];
+        $from = Course::STATUS_ASSIGNED;
+        foreach ($steps as [$action, $to, $codes]) {
+            $before = $course->statusHistory()->count();
+            $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => $action] + $codes)->assertOk();
+            $this->assertSame($before + 1, $course->statusHistory()->count());
+            $history = $course->statusHistory()->where('from_status', $from)->where('to_status', $to)->get();
+            $this->assertCount(1, $history);
+            $this->assertSame($user->id, $history->first()->changed_by_id);
+            $from = $to;
+        }
+    }
+
     public function test_ops_can_organize_return_after_abandonment(): void
     {
         [$user, $driver, $course] = $this->setupDriverWithCourse(Course::STATUS_PICKED_UP);
@@ -196,6 +219,9 @@ class TransitionCourseTest extends TestCase
             ->assertOk()->assertJsonPath('course.status', Course::STATUS_AWAITING);
         $this->assertNull($course->fresh()->driver_id);
         $this->assertNotNull($course->fresh()->offer_broadcasted_at);
+        $history = $course->statusHistory()->where('to_status', Course::STATUS_AWAITING)->get();
+        $this->assertCount(1, $history);
+        $this->assertSame('driver_abandoned', $history->first()->metadata['event']);
         $this->assertSame('available', $driver->fresh()->availability_status);
         $this->assertDatabaseHas('course_decline_records', ['course_id' => $course->id, 'driver_id' => $driver->id]);
         $this->assertDatabaseHas('notifications', ['user_id' => $course->sender_id, 'course_id' => $course->id, 'type' => 'course.driver_abandoned']);
@@ -223,12 +249,28 @@ class TransitionCourseTest extends TestCase
     {
         [$user, , $course] = $this->setupDriverWithCourse(Course::STATUS_PICKED_UP);
         $previous = Driver::factory()->create(['availability_status' => 'busy']);
-        $course->update(['pickup_from_previous_driver' => true, 'previous_driver_id' => $previous->id]);
+        $course->update(['pickup_from_previous_driver' => true, 'previous_driver_id' => $previous->id, 'transfer_code' => '123456']);
+        Sanctum::actingAs(\App\Models\Admin::factory()->create(['sub_role' => 'ops'])->user);
+        $this->getJson("/api/courses/{$course->id}")
+            ->assertOk()
+            ->assertJsonPath('course.handover_code', '123456')
+            ->assertJsonPath('course.handover_from.id', $previous->id)
+            ->assertJsonPath('course.handover_to.id', $course->driver_id)
+            ->assertJsonMissingPath('course.transfer_code');
         Sanctum::actingAs($previous->user);
-        $this->getJson('/api/courses?status=picked_up')->assertOk()->assertJsonPath('data.0.holding_for_transfer', true);
+        $this->getJson('/api/courses?status=picked_up')->assertOk()->assertJsonPath('data.0.holding_for_transfer', true)
+            ->assertJsonPath('data.0.handover_code', '123456')->assertJsonMissingPath('data.0.transfer_code');
         Sanctum::actingAs($user);
         $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'arrived_dropoff'])->assertUnprocessable();
-        $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'transfer_confirmed'])->assertOk();
+        $this->getJson('/api/courses?status=picked_up')->assertOk()->assertJsonMissingPath('data.0.transfer_code')->assertJsonMissingPath('data.0.handover_code');
+        $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'transfer_confirmed'])->assertUnprocessable();
+        $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'transfer_confirmed', 'transfer_code' => '000000'])->assertUnprocessable();
+        $this->assertTrue($course->fresh()->pickup_from_previous_driver);
+        $this->assertSame('busy', $previous->fresh()->availability_status);
+        $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'transfer_confirmed', 'transfer_code' => '123456'])->assertOk();
+        $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'transfer_confirmed', 'transfer_code' => '123456'])->assertOk();
+        $this->assertNull($course->fresh()->transfer_code);
+        $this->assertSame(1, \App\Models\Notification::where('course_id', $course->id)->where('user_id', $course->sender_id)->where('type', 'course.transfer_confirmed')->count());
         $this->assertFalse($course->fresh()->pickup_from_previous_driver);
         $this->assertSame('available', $previous->fresh()->availability_status);
         Sanctum::actingAs($previous->user);
@@ -240,5 +282,62 @@ class TransitionCourseTest extends TestCase
         $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'delivered', 'delivery_code' => $wrongCode])->assertUnprocessable()->assertJsonValidationErrors('delivery_code');
         $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'delivered', 'delivery_code' => $course->delivery_code])->assertOk();
         $this->assertSame(Course::STATUS_DELIVERED, $course->fresh()->status);
+    }
+
+    public function test_transfer_code_is_limited_and_ops_exception_requires_authorization_and_reason(): void
+    {
+        [$user, , $course] = $this->setupDriverWithCourse(Course::STATUS_PICKED_UP);
+        $previous = Driver::factory()->create(['availability_status' => 'busy']);
+        $course->update(['pickup_from_previous_driver' => true, 'previous_driver_id' => $previous->id, 'transfer_code' => '123456']);
+        $this->assertNotSame('123456', $course->getRawOriginal('transfer_code'));
+        Sanctum::actingAs($previous->user);
+        $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'transfer_confirmed', 'transfer_code' => '123456'])->assertForbidden();
+        Sanctum::actingAs($user);
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'transfer_confirmed', 'transfer_code' => '000000'])->assertUnprocessable();
+        }
+        $this->postJson("/api/driver/courses/{$course->id}/transition", ['action' => 'transfer_confirmed', 'transfer_code' => '123456'])->assertStatus(429);
+        $this->assertTrue($course->fresh()->pickup_from_previous_driver);
+        $endpoint = "/api/admin/courses/{$course->id}/confirm-transfer-exception";
+        Sanctum::actingAs(\App\Models\Admin::factory()->create(['sub_role' => 'support'])->user);
+        $this->postJson($endpoint, ['reason' => 'Remise vérifiée auprès des deux livreurs'])->assertForbidden();
+        Sanctum::actingAs(\App\Models\Admin::factory()->create(['sub_role' => 'ops'])->user);
+        $this->postJson($endpoint)->assertUnprocessable();
+        $this->postJson($endpoint, ['reason' => 'Remise vérifiée auprès des deux livreurs'])->assertOk();
+        $this->assertFalse($course->fresh()->pickup_from_previous_driver);
+        $history = \App\Models\CourseStatusHistory::where('course_id', $course->id)->latest('id')->first();
+        $this->assertTrue($history->metadata['ops_override']);
+    }
+
+    public function test_transfer_records_one_detailed_event_with_or_without_status_change(): void
+    {
+        foreach ([Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF] as $status) {
+            foreach ([false, true] as $override) {
+                [$user, $driver, $course] = $this->setupDriverWithCourse($status);
+                $previous = Driver::factory()->create(['availability_status' => 'busy']);
+                $course->update(['pickup_from_previous_driver' => true, 'previous_driver_id' => $previous->id, 'transfer_code' => '123456']);
+                $actor = $override ? \App\Models\Admin::factory()->create(['sub_role' => 'ops'])->user : $user;
+                Sanctum::actingAs($actor);
+                $before = $course->statusHistory()->count();
+                $lastId = $course->statusHistory()->max('id');
+                $reason = $override ? 'Remise vérifiée avec les deux livreurs' : null;
+                $this->assertTrue($course->confirmParcelTransfer($actor, '123456', $reason));
+                $this->assertFalse($course->confirmParcelTransfer($actor, '123456', $reason));
+                $this->assertSame($before + 1, $course->statusHistory()->count());
+                $events = $course->statusHistory()->where('id', '>', $lastId)->get();
+                $this->assertCount(1, $events);
+                $event = $events->first();
+                $this->assertSame($status, $event->from_status);
+                $this->assertSame(Course::STATUS_PICKED_UP, $event->to_status);
+                $this->assertSame($actor->id, $event->changed_by_id);
+                $this->assertNotEmpty($event->reason);
+                $this->assertTrue($event->metadata['transfer_confirmed']);
+                $this->assertSame($override, $event->metadata['ops_override']);
+                $this->assertSame($previous->id, $event->metadata['previous_driver_id']);
+                $this->assertSame($driver->id, $event->metadata['new_driver_id']);
+                $this->assertSame(1, \App\Models\Notification::where('course_id', $course->id)->where('user_id', $course->sender_id)->where('type', 'course.transfer_confirmed')->count());
+                $this->assertNull($course->fresh()->transfer_code);
+            }
+        }
     }
 }

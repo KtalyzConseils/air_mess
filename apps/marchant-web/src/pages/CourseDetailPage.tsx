@@ -352,6 +352,41 @@ export default function CourseDetailPage() {
               </div>
             </div>
 
+            {course.handover_code && (
+              <div className="mt-4 pt-4 border-t border-info/20">
+                <div className="rounded-lg border border-warning/30 bg-warning-bg px-4 py-3">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-caption text-warning uppercase font-bold">
+                        {t('courses.detail.handoverCodeLabel')}
+                      </p>
+                      <p className="font-mono font-bold text-ink tracking-[0.35em] text-h2 mt-1">
+                        {course.handover_code}
+                      </p>
+                    </div>
+                    <Button variant="dark" size="sm" pill onClick={() => copy(course.handover_code!, 'handover')}>
+                      {copiedKey === 'handover' ? `✓ ${t('common.copied')}` : `📋 ${t('common.copy')}`}
+                    </Button>
+                  </div>
+                  <p className="text-caption text-warm-600 mt-3">
+                    {t('courses.detail.handoverCodeHelp')}
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 text-caption">
+                    <div>
+                      <p className="text-warm-500">{t('courses.detail.handoverFromLabel')}</p>
+                      <p className="font-semibold text-ink">{course.handover_from?.name ?? '—'}</p>
+                      <p className="text-warm-500">{course.handover_from?.phone ?? ''}</p>
+                    </div>
+                    <div>
+                      <p className="text-warm-500">{t('courses.detail.handoverToLabel')}</p>
+                      <p className="font-semibold text-ink">{course.handover_to?.name ?? course.driver?.user.name ?? '—'}</p>
+                      <p className="text-warm-500">{course.handover_to?.phone ?? course.driver?.user.phone ?? ''}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-body-s mt-4 pt-4 border-t border-info/20">
               <div>
                 <p className="text-caption text-warm-500">{t('courses.detail.createdLabel')}</p>

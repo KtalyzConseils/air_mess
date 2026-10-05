@@ -66,7 +66,9 @@ class CourseObserver
             'course_id'   => $course->id,
             'from_status' => $course->getOriginal('status'),
             'to_status'   => $course->status,
-        ], $this->resolveChangedBy()));
+        ], $this->resolveChangedBy(), array_intersect_key($course->statusHistoryContext, array_flip([
+            'reason', 'metadata', 'changed_by_id', 'changed_by_type',
+        ]))));
 
         $eventType = self::STATUS_TO_EVENT[$course->status] ?? null;
         if ($eventType) {
