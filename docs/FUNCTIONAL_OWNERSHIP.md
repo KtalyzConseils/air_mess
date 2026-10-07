@@ -33,6 +33,7 @@ Ces populations ne doivent pas être fusionnées implicitement dans le code ou l
 - Les coordonnées d'ouverture de compte ne sont acceptées qu'avec un jeton de vérification correspondant au numéro normalisé.
 - Le mode démonstration de la landing doit rester explicitement activé et ne doit jamais être la valeur par défaut en production.
 - Restitution administrative : `Résultats des formulaires`, onglet livreurs, avec les réponses brutes conservées dans `survey_payload` et `account_payload`.
+- Deux parcours livreur coexistent volontairement : l'enquête versionnée (`POST /api/waitlist/drivers`, écrite dans `driver_waitlists`) et l'inscription directe sur la plateforme (`/register/driver`, `DriverRegisterPage`). Les liens sortants de la landing proviennent uniquement de `apps/landing/src/config.ts` (`links.*`) ; ne pas recoder d'URL en dur dans les pages.
 
 ## Remise de colis entre livreurs
 
