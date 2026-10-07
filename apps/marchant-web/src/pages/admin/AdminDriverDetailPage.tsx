@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
@@ -14,6 +14,7 @@ import SupportNotesPanel from '../../components/SupportNotesPanel'
 import {
   fetchDriver,
   validateDriver,
+  rejectDriver,
   openDriverDocument,
   updateDriverKind,
   updateDriverWithdrawLimits,
@@ -112,11 +113,14 @@ function KpiBox({ label, value, tone = 'default' }: KpiBoxProps) {
 export default function AdminDriverDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [docError, setDocError] = useState<string | null>(null)
   const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<UpdateDriverPayload | null>(null)
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
   const canManageDriver = hasAdminRole(currentUser, 'ops')
@@ -132,6 +136,17 @@ export default function AdminDriverDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'driver', id] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] })
+    },
+  })
+
+  const rejectMutation = useMutation({
+    mutationFn: () => rejectDriver(Number(id), rejectReason.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'waitlist'] })
+      setRejectOpen(false)
+      setRejectReason('')
+      navigate('/admin/drivers')
     },
   })
 
@@ -211,6 +226,12 @@ export default function AdminDriverDetailPage() {
         t('admin.drivers.validationError')
       : null
 
+  const rejectError =
+    rejectMutation.error instanceof AxiosError
+      ? (rejectMutation.error.response?.data as { message?: string })?.message ??
+        'Impossible de rejeter la candidature.'
+      : null
+
   function availabilityLabel(value: string): string {
     return t(`admin.drivers.availability.${value}`, { defaultValue: value })
   }
@@ -288,12 +309,20 @@ export default function AdminDriverDetailPage() {
                   <AdminButton
                     variant="primary"
                     onClick={() => validateMutation.mutate()}
-                    disabled={validateMutation.isPending}
+                    disabled={validateMutation.isPending || rejectMutation.isPending}
                     leftIcon={<CheckIcon size={14} />}
                   >
                     {validateMutation.isPending
                       ? t('admin.drivers.validating')
                       : t('admin.drivers.validateDriver')}
+                  </AdminButton>
+                  <AdminButton
+                    variant="danger"
+                    onClick={() => setRejectOpen(true)}
+                    disabled={validateMutation.isPending || rejectMutation.isPending}
+                    leftIcon={<AlertTriangleIcon size={14} />}
+                  >
+                    Rejeter la candidature
                   </AdminButton>
                   {/* Canal préféré = WhatsApp : la réponse se fait manuellement via wa.me */}
                   {data.driver.preferred_response_channel === 'whatsapp' && data.driver.user.phone && (
@@ -310,6 +339,11 @@ export default function AdminDriverDetailPage() {
                 {validateError && (
                   <p className="text-body-s text-airmess-red mt-2 flex items-center gap-1.5">
                     <AlertTriangleIcon size={14} /> {validateError}
+                  </p>
+                )}
+                {rejectError && (
+                  <p className="text-body-s text-airmess-red mt-2 flex items-center gap-1.5">
+                    <AlertTriangleIcon size={14} /> {rejectError}
                   </p>
                 )}
               </section>
@@ -690,6 +724,40 @@ export default function AdminDriverDetailPage() {
           </div>
         </AdminModal>
       )}
+
+      <AdminModal
+        open={rejectOpen}
+        onClose={() => !rejectMutation.isPending && setRejectOpen(false)}
+        title="Rejeter la candidature"
+        subtitle="Le compte sera supprime pour permettre au livreur de recommencer avec le meme email."
+        width="md"
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={() => setRejectOpen(false)} disabled={rejectMutation.isPending}>
+              {t('admin.common.cancel')}
+            </AdminButton>
+            <AdminButton
+              variant="danger"
+              onClick={() => rejectMutation.mutate()}
+              disabled={rejectMutation.isPending || rejectReason.trim().length < 5}
+            >
+              {rejectMutation.isPending ? t('common.loading') : 'Confirmer le rejet'}
+            </AdminButton>
+          </>
+        }
+      >
+        <label className="text-caption font-bold text-ink block mb-1">Cause du rejet</label>
+        <textarea
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          rows={5}
+          className="w-full px-3 py-2 border border-warm-300 rounded-md text-body-s bg-cream text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow"
+          placeholder="Ex : document illisible, informations incoherentes, permis manquant..."
+        />
+        <p className="mt-2 text-caption text-warm-500">
+          Cette cause sera envoyee au livreur avant suppression de son dossier.
+        </p>
+      </AdminModal>
     </AdminPageShell>
   )
 }

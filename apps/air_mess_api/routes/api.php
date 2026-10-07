@@ -385,6 +385,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/drivers',                        [AdminController::class, 'createDriver']);
         Route::patch('/drivers/{driver}',              [AdminController::class, 'updateDriver']);
         Route::post('/drivers/{driver}/validate',      [AdminController::class, 'validateDriver']);
+        Route::post('/drivers/{driver}/reject',        [AdminController::class, 'rejectDriver']);
         Route::post('/drivers/{driver}/toggle-active', [AdminController::class, 'toggleDriverActive']);
         Route::post('/incidents/{incident}/resolve',   [AdminController::class, 'resolveIncident']);
         Route::post('/incidents/{incident}/arbitrate', [AdminController::class, 'arbitrateIncident']);

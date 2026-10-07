@@ -1887,7 +1887,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      * d'un driver fraîchement inscrit, après vérification de ses documents par l'admin.
      * Envoie un email "Compte activé" au driver.
      */
-    public function validateDriver(Request $request, Driver $driver, \App\Services\BrevoSmsService $sms): JsonResponse
+    public function validateDriver(Request $request, Driver $driver): JsonResponse
     {
         if ($driver->activation_status !== 'pending') {
             return response()->json([
@@ -1921,7 +1921,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         // reste prêt pour l'activation. 'whatsapp' = contact manuel par l'ops
         // (lien wa.me affiché sur la fiche driver admin). Si un flux "refus de
         // candidature" est créé plus tard, réutiliser la même logique.
-        if ($driver->preferred_response_channel === 'sms' && $driver->user->phone) {
+        // SMS candidature en pause : l'email reste le canal fiable pour l'instant.
+        if (false && $driver->preferred_response_channel === 'sms' && $driver->user->phone) {
             $sms->send(
                 \App\Support\Phone::normalize($driver->user->phone),
                 'Air Mess : votre compte livreur est activé ! Connectez-vous sur l\'app Air Mess Livreur.',
@@ -1950,6 +1951,91 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      *
      * @param  string  $type  photo | cni | driving_license
      */
+    // Rejette une candidature pending, previent le candidat, puis libere son email.
+    public function rejectDriver(Request $request, Driver $driver): JsonResponse
+    {
+        if ($driver->activation_status !== 'pending') {
+            return response()->json([
+                'message' => 'Seule une candidature livreur en attente peut etre rejetee.',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ]);
+
+        $driver->load('user');
+        $user = $driver->user;
+        $driverId = $driver->id;
+        $userId = $user->id;
+        $driverName = trim("{$driver->first_name} {$driver->last_name}") ?: $user->name;
+        $email = $user->email;
+        $preferredChannel = $driver->preferred_response_channel ?: 'email';
+        $documentDir = null;
+
+        foreach ([$driver->cni_url, $driver->cni_back_url, $driver->driving_license_url, $driver->photo_url] as $path) {
+            if ($path) {
+                $documentDir = dirname($path);
+                break;
+            }
+        }
+
+        try {
+            if ($email) {
+                \Illuminate\Support\Facades\Mail::to($email)
+                    ->send(new \App\Mail\DriverRejectedMail($user, $driverName, $data['reason']));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('DriverRejectedMail failed', [
+                'err' => $e->getMessage(),
+                'driver_id' => $driverId,
+            ]);
+        }
+
+        // SMS candidature en pause : le motif de rejet est envoye par email.
+        if (false && $preferredChannel === 'sms') {
+            try {
+                $sms->send(
+                    \App\Support\Phone::normalize($phone),
+                    'Air Mess : votre candidature livreur est rejetee. Motif : ' . $data['reason'] . ' Vous pouvez reprendre l\'inscription avec le meme email.',
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Driver rejection SMS failed', [
+                    'err' => $e->getMessage(),
+                    'driver_id' => $driverId,
+                ]);
+            }
+        }
+
+        DB::transaction(function () use ($user) {
+            $user->tokens()->delete();
+            $user->delete();
+        });
+
+        if ($documentDir) {
+            \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory($documentDir);
+        }
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.rejected',
+            "Candidature livreur {$driverName} rejetee et supprimee.",
+            [
+                'driver_id' => $driverId,
+                'user_id' => $userId,
+                'email' => $email,
+                'preferred_channel' => $preferredChannel,
+                'reason' => $data['reason'],
+            ],
+        );
+
+        return response()->json([
+            'message' => 'Candidature rejetee. Le compte a ete supprime pour permettre une nouvelle inscription.',
+        ]);
+    }
+
     public function driverDocument(Driver $driver, string $type)
     {
         $column = match ($type) {
@@ -4330,7 +4416,12 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             });
 
         if (($data['status'] ?? 'waiting') === 'waiting') {
-            $query->whereNull('waitlist_notified_at');
+            $query->where(function ($pending) {
+                $pending->where(fn ($merchant) => $merchant->where('type', User::TYPE_MARCHANT)
+                    ->whereHas('marchant', fn ($profile) => $profile->whereNull('validated_at')))
+                    ->orWhere(fn ($driver) => $driver->where('type', User::TYPE_DRIVER)
+                        ->whereHas('driver', fn ($profile) => $profile->where('activation_status', 'pending')));
+            });
         } elseif (($data['status'] ?? null) === 'notified') {
             $query->whereNotNull('waitlist_notified_at');
         }
