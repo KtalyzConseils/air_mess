@@ -24,6 +24,7 @@ import {
   type DriverSurveyPayload,
   type DriverSurveyResponse,
 } from '../api/driverSurvey'
+import { links } from '../config'
 import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
 
 type SurveyForm = {
@@ -345,7 +346,7 @@ function Header() {
           <img src={wordmarkWhite} alt="Airmess" className="h-8 w-auto" />
         </a>
         <a
-          href="https://app.airmess-logistics.com/login"
+          href={links.login}
           className="text-caption font-bold text-cream/80 transition-colors hover:text-cream"
         >
           Espace commerçant
@@ -404,6 +405,23 @@ function Hero({ onStart }: { onStart: () => void }) {
         <p className="mt-5 text-caption text-warm-500">
           Vos réponses sont analysées sans votre nom et enregistrées à part de votre compte.
         </p>
+
+        <div className="mt-6 rounded-xl border border-warm-200 bg-off-white p-4">
+          <p className="text-body-s font-bold text-ink">
+            Vous ne souhaitez pas répondre à l’enquête ?
+          </p>
+          <p className="mt-1 text-body-s text-warm-600">
+            Créez directement votre compte livreur sur la plateforme : l’enquête n’est pas
+            obligatoire.
+          </p>
+          <a
+            href={links.registerDriver}
+            className="mt-3 inline-flex items-center gap-2 text-body-s font-bold text-airmess-red hover:underline"
+          >
+            M’inscrire directement comme livreur
+            <ArrowRightIcon size={16} />
+          </a>
+        </div>
       </div>
 
       <div className="relative">
@@ -540,7 +558,14 @@ function Activation() {
 }
 
 function Faq() {
-  const items = [
+  const items: { question: string; answer: string; href?: string; hrefLabel?: string }[] = [
+    {
+      question: 'Puis-je créer mon compte livreur sans répondre à l’enquête ?',
+      answer:
+        'Oui. L’enquête sert à préparer la liste d’attente et les invitations. Si vous préférez vous inscrire directement, créez votre compte livreur sur la plateforme : votre pièce d’identité et votre véhicule y sont vérifiés.',
+      href: links.registerDriver,
+      hrefLabel: 'Créer directement mon compte livreur',
+    },
     {
       question: 'Quand mon compte sera-t-il activé ?',
       answer:
@@ -576,6 +601,15 @@ function Faq() {
           <Card key={item.question} padding="md">
             <h3 className="text-body-l font-bold text-ink">{item.question}</h3>
             <p className="mt-2 text-body-s text-warm-500">{item.answer}</p>
+            {item.href && (
+              <a
+                href={item.href}
+                className="mt-2 inline-flex items-center gap-1.5 text-body-s font-bold text-airmess-red hover:underline"
+              >
+                {item.hrefLabel}
+                <ArrowRightIcon size={16} />
+              </a>
+            )}
           </Card>
         ))}
       </div>
@@ -633,9 +667,22 @@ function EarlyStopPanel({ onReset }: { onReset: () => void }) {
             Merci pour votre participation. Les conditions de l’enquête ne permettent pas
             d’ouvrir un compte dans votre situation.
           </p>
-          <Button type="button" variant="secondary" className="mt-7" onClick={onReset}>
-            Recommencer
-          </Button>
+          <p className="mx-auto mt-4 max-w-xl text-body-s text-warm-600">
+            Vous pouvez toutefois créer votre compte livreur directement sur la plateforme,
+            sans repasser par l’enquête.
+          </p>
+          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <a
+              href={links.registerDriver}
+              className="inline-flex items-center justify-center gap-2.5 rounded-md bg-airmess-dark px-5 py-2.5 text-body font-medium text-cream shadow-sm transition-all duration-200 hover:bg-ink hover:shadow-md"
+            >
+              Créer directement mon compte livreur
+              <ArrowRightIcon size={18} />
+            </a>
+            <Button type="button" variant="secondary" onClick={onReset}>
+              Recommencer
+            </Button>
+          </div>
         </div>
       </Card>
     </section>
@@ -1170,6 +1217,16 @@ export default function LandingDriversPage() {
                   <p className="mt-2 max-w-2xl text-body-s text-cream/70">
                     Répondez aux questions, confirmez votre numéro par SMS et votre compte est
                     ouvert en liste d’attente.
+                  </p>
+                  <p className="mt-3 text-caption text-cream/60">
+                    Vous préférez aller plus vite ?{' '}
+                    <a
+                      href={links.registerDriver}
+                      className="font-bold text-airmess-yellow hover:underline"
+                    >
+                      Créez directement votre compte livreur
+                    </a>
+                    .
                   </p>
                 </div>
                 <span className="inline-flex w-fit items-center gap-2 rounded-full bg-airmess-yellow px-4 py-2 text-caption font-bold text-ink">
