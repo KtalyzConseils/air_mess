@@ -860,6 +860,10 @@ export async function validateDriver(id: number): Promise<void> {
   await api.post(`/admin/drivers/${id}/validate`)
 }
 
+export async function rejectDriver(id: number, reason: string): Promise<void> {
+  await api.post(`/admin/drivers/${id}/reject`, { reason })
+}
+
 /**
  * Récupère un document privé d'un livreur (photo/CNI/permis) en blob et l'ouvre dans un nouvel onglet.
  * Le token Sanctum est ajouté automatiquement par l'intercepteur axios.
