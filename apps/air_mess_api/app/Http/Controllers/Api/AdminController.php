@@ -4416,7 +4416,12 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             });
 
         if (($data['status'] ?? 'waiting') === 'waiting') {
-            $query->whereNull('waitlist_notified_at');
+            $query->where(function ($pending) {
+                $pending->where(fn ($merchant) => $merchant->where('type', User::TYPE_MARCHANT)
+                    ->whereHas('marchant', fn ($profile) => $profile->whereNull('validated_at')))
+                    ->orWhere(fn ($driver) => $driver->where('type', User::TYPE_DRIVER)
+                        ->whereHas('driver', fn ($profile) => $profile->where('activation_status', 'pending')));
+            });
         } elseif (($data['status'] ?? null) === 'notified') {
             $query->whereNotNull('waitlist_notified_at');
         }

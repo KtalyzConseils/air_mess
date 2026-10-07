@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
@@ -16,6 +17,7 @@ export default function AdminWaitlistPage() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<'waiting' | 'notified' | 'all'>('waiting')
   const [type, setType] = useState<'' | 'marchant' | 'driver'>('')
@@ -32,9 +34,16 @@ export default function AdminWaitlistPage() {
     queryKey: ['admin', 'waitlist', params],
     queryFn: () => fetchWaitlist(params),
     placeholderData: keepPreviousData,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always',
   })
   const users = query.data?.data ?? []
-  const waitingIds = users.filter((user) => !user.waitlist_notified_at).map((user) => user.id)
+  const isPending = (user: (typeof users)[number]) => user.type === 'marchant'
+    ? Boolean(user.marchant && !user.marchant.validated_at)
+    : user.driver?.activation_status === 'pending'
+  const waitingIds = users.filter(isPending).map((user) => user.id)
+  const selectedIds = selected.filter((id) => waitingIds.includes(id))
 
   const refresh = async () => {
     setSelected([])
@@ -58,10 +67,10 @@ export default function AdminWaitlistPage() {
         actions={
           <AdminButton
             variant="primary"
-            disabled={selected.length === 0 || busy}
-            onClick={() => bulkMutation.mutate(selected)}
+            disabled={selectedIds.length === 0 || busy || query.isPlaceholderData}
+            onClick={() => bulkMutation.mutate(selectedIds)}
           >
-            {t('admin.waitlist.validateSelection', { count: selected.length })}
+            {t('admin.waitlist.validateSelection', { count: selectedIds.length })}
           </AdminButton>
         }
         toolbar={
@@ -119,32 +128,41 @@ export default function AdminWaitlistPage() {
                 <tbody className="divide-y divide-warm-200">
                   {users.map((user) => {
                     const notified = Boolean(user.waitlist_notified_at)
+                    const pending = isPending(user)
+                    const href = user.type === 'marchant'
+                      ? user.marchant && `/admin/marchants/${user.marchant.id}`
+                      : user.driver && `/admin/drivers/${user.driver.id}`
                     return (
-                      <tr key={user.id} className="hover:bg-cream/40">
+                      <tr key={user.id} className={`hover:bg-cream/40 ${href ? 'cursor-pointer' : ''}`}
+                        onClick={(event) => {
+                          if (href && !(event.target as HTMLElement).closest('a, button, input, label')) navigate(href)
+                        }}>
                         <td className="px-4 py-3">
                           <input
                             type="checkbox"
-                            disabled={notified}
-                            checked={selected.includes(user.id)}
+                            disabled={!pending || query.isPlaceholderData}
+                            checked={selectedIds.includes(user.id)}
                             onChange={(event) => setSelected((current) => event.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id))}
                             aria-label={t('admin.waitlist.selectUser', { name: user.name })}
                           />
                         </td>
                         <td className="px-4 py-3">
-                          <p className="font-semibold text-ink">{user.marchant?.raison_sociale ?? user.name}</p>
+                          <p className="font-semibold text-ink">{href
+                            ? <Link to={href} className="hover:underline focus:underline">{user.marchant?.raison_sociale ?? user.name}</Link>
+                            : user.name}</p>
                           <p className="text-caption text-warm-500">{user.type === 'marchant' ? t('admin.waitlist.merchant') : t('admin.waitlist.driver')} · {user.name}</p>
                         </td>
                         <td className="px-4 py-3"><p>{user.email}</p><p className="text-caption text-warm-500">{user.phone ?? '—'}</p></td>
                         <td className="px-4 py-3 text-warm-600">{user.waitlisted_at ? new Date(user.waitlisted_at).toLocaleString(locale) : t('admin.waitlist.earlierSignup')}</td>
                         <td className="px-4 py-3">
-                          <span className={`rounded-full px-2.5 py-1 text-caption font-semibold ${notified ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
-                            {notified ? t('admin.waitlist.validatedAndNotified') : t('admin.waitlist.waiting')}
+                          <span className={`rounded-full px-2.5 py-1 text-caption font-semibold ${pending ? 'bg-warning-bg text-warning' : 'bg-success-bg text-success'}`}>
+                            {pending ? t('admin.waitlist.waiting') : t('admin.waitlist.alreadyValidated')}
                           </span>
                           {notified && <p className="mt-1 text-caption text-warm-500">{t('admin.waitlist.by')} {user.waitlist_notifier?.user?.name ?? t('admin.waitlist.anAdmin')}</p>}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <AdminButton variant="primary" size="sm" disabled={notified || busy} onClick={() => singleMutation.mutate(user.id)}>
-                            {notified ? t('admin.waitlist.alreadyValidated') : t('admin.waitlist.validateAndNotify')}
+                          <AdminButton variant="primary" size="sm" disabled={!pending || busy || query.isPlaceholderData} onClick={() => singleMutation.mutate(user.id)}>
+                            {!pending ? t('admin.waitlist.alreadyValidated') : t('admin.waitlist.validateAndNotify')}
                           </AdminButton>
                         </td>
                       </tr>

@@ -11,8 +11,8 @@ export interface WaitlistUser {
   is_active: boolean
   waitlisted_at: string | null
   waitlist_notified_at: string | null
-  marchant?: { raison_sociale: string } | null
-  driver?: { first_name: string; last_name: string; activation_status: string } | null
+  marchant?: { id: number; raison_sociale: string; validated_at: string | null } | null
+  driver?: { id: number; first_name: string; last_name: string; activation_status: string } | null
   waitlist_notifier?: { user?: { name: string } | null } | null
 }
 
