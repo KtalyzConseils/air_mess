@@ -12,7 +12,7 @@ import markWhite from '../assets/logo/airmess-mark-white.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 import { useUiPrefsStore } from '../stores/uiPrefsStore'
 import { useOnboardingStore } from '../stores/onboardingStore'
-import { HelpCircleIcon, SparklesIcon, MapPinIcon, PhoneIcon } from './ui/icons'
+import { HelpCircleIcon, SparklesIcon, MapPinIcon, PhoneIcon, BellIcon, WalletIcon, UserIcon } from './ui/icons'
 
 /**
  * Header global de l'app marchand/particulier.
@@ -48,9 +48,15 @@ export default function AppHeader() {
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [helpMenuOpen])
 
-  useEffect(() => {
+  // Fermeture du menu "Aide" à chaque changement de route. On utilise le pattern
+  // React « ajuster l'état pendant le rendu » plutôt qu'un `useEffect` : un setState
+  // synchrone dans un effet provoque des rendus en cascade (règle eslint
+  // react-hooks/set-state-in-effect).
+  const [lastPath, setLastPath] = useState(location.pathname)
+  if (lastPath !== location.pathname) {
+    setLastPath(location.pathname)
     setHelpMenuOpen(false)
-  }, [location.pathname])
+  }
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -196,7 +202,7 @@ export default function AppHeader() {
           }
           title={t('header.notificationsTitle')}
         >
-          <span className="text-lg leading-none" aria-hidden>🔔</span>
+          <BellIcon size={20} />
           {unreadCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-airmess-red text-cream text-[10px] font-bold flex items-center justify-center tabular-nums">
               {unreadCount > 99 ? '99+' : unreadCount}
@@ -240,13 +246,19 @@ export default function AppHeader() {
                 {t('nav.addressBook')}
               </NavLink>
               <NavLink to="/wallet" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
-                💰 {t('userMenu.myWallet')}
+                <span className="inline-flex items-center gap-2">
+                  <WalletIcon size={18} />
+                  {t('userMenu.myWallet')}
+                </span>
               </NavLink>
               <NavLink to="/dev" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
                 {t('nav.devMode')}
               </NavLink>
               <NavLink to="/profile" className={mobileLinkClass} onClick={() => setMobileOpen(false)}>
-                👤 {t('nav.profile')}
+                <span className="inline-flex items-center gap-2">
+                  <UserIcon size={18} />
+                  {t('nav.profile')}
+                </span>
               </NavLink>
             </nav>
             <div className="mt-4 pt-4 border-t border-warm-600/20 space-y-1">

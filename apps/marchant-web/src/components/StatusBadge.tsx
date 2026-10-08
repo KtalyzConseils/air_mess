@@ -1,30 +1,45 @@
 import { useTranslation } from 'react-i18next'
+import Badge from './ui/Badge'
 
 interface Props {
   status: string
 }
 
-const STATUS_CLASSES: Record<string, string> = {
-  pending_preparation: 'bg-amber-100 text-amber-800',
-  awaiting_assignment: 'bg-blue-100 text-blue-800',
-  assigned: 'bg-indigo-100 text-indigo-800',
-  driver_to_pickup: 'bg-purple-100 text-purple-800',
-  at_pickup: 'bg-purple-100 text-purple-800',
-  picked_up: 'bg-cyan-100 text-cyan-800',
-  at_dropoff: 'bg-cyan-100 text-cyan-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-gray-200 text-gray-700',
-  failed: 'bg-red-100 text-red-800',
-  disputed: 'bg-red-200 text-red-900',
+type StatusVariant = 'live' | 'success' | 'warning' | 'info' | 'danger' | 'neutral' | 'brand'
+
+/**
+ * Source de vérité unique de l'affichage d'un statut de course.
+ *
+ * Le style est entièrement délégué à `ui/Badge` (variants sémantiques du design
+ * system) : ne jamais restyler un statut ailleurs (tableau, carte, admin).
+ *
+ * Conventions :
+ * - `live` (pastille qui pulse) est réservé aux courses physiquement en cours ;
+ * - le variant n'est jamais le seul porteur d'information, le libellé est
+ *   toujours affiché à côté (règle « color-not-only »).
+ */
+const STATUS_VARIANTS: Record<string, StatusVariant> = {
+  pending_preparation: 'warning',
+  awaiting_assignment: 'info',
+  assigned: 'brand',
+  driver_to_pickup: 'live',
+  at_pickup: 'live',
+  picked_up: 'live',
+  at_dropoff: 'live',
+  delivered: 'success',
+  cancelled: 'neutral',
+  failed: 'danger',
+  disputed: 'danger',
 }
 
 export default function StatusBadge({ status }: Props) {
   const { t } = useTranslation()
-  const classes = STATUS_CLASSES[status] ?? 'bg-gray-100 text-gray-700'
+  const variant = STATUS_VARIANTS[status] ?? 'neutral'
   const label = t(`courseStatusBadge.${status}`, status)
+
   return (
-    <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${classes}`}>
+    <Badge variant={variant} size="md" dot={variant === 'live'} uppercase={false}>
       {label}
-    </span>
+    </Badge>
   )
 }

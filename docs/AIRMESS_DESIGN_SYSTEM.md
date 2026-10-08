@@ -44,6 +44,12 @@
 | `info` | `#0369A1` | `#DBEAFE` |
 | `danger` | `#D40511` (= `airmess-red`) | `#FEE2E2` |
 
+**Complément `warning-strong` `#9A3412`** (texte uniquement) : `warning` `#EA580C` posé sur
+`warning-bg` `#FFEDD5` ne tient que **3.1:1**, sous le seuil AA de 4.5:1 pour du texte courant. Tout
+**texte** sur fond `warning-bg` (ou sur fond clair) doit utiliser `warning-strong` (6.4:1) ; `warning`
+reste réservé aux bordures, points et icônes (seuil 3:1). Présent dans `marchant-web/index.css`
+(`--color-warning-strong`) et dans `driver-app/tailwind.config.js` (`warning-strong`).
+
 ## 3. Typographie
 
 ### 3.1 Décision (à valider) — `Plus Jakarta Sans`
@@ -141,3 +147,15 @@ Dans `apps/landing/src/index.css`, retirer/remplacer :
 - [ ] Adopter `Plus Jakarta Sans` partout (vs conserver Manrope web). Décision §3.1.
 - [ ] Conserver le token `#E6B800` (jaune profond) ou le supprimer.
 - [ ] Acter la source de vérité des neutres/sémantiques = `marchant-web/index.css`.
+
+## 8. Déclinaisons par surface
+
+Ce document reste la **source de vérité des tokens de marque** (couleurs, police, rayons, ombres,
+motion). Les règles de composition propres à une surface vivent à côté, sans les redéfinir :
+
+| Surface | Fichier | Portée |
+|---|---|---|
+| Espace marchand (`apps/marchant-web`) | `design-system/airmess-commercants/MASTER.md` | Densité, grille, composants, sémantique des statuts, règles « temps réel », accessibilité |
+| Application livreur (`apps/driver-app`, React Native + NativeWind) | `design-system/airmess-livreurs/MASTER.md` | Contraintes terrain (soleil, une main, data/batterie), tokens NativeWind, couleurs programmatiques, fraîcheur du scan, accessibilité tactile |
+
+En cas de divergence sur un token de marque, c'est le présent document qui gagne.

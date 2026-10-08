@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { type DriverCourseSummary } from '../api/driver'
 import CourseDetailModal from './CourseDetailModal'
 import DeclineCourseModal from './DeclineCourseModal'
+import { BrandColors } from '../constants/theme'
 
 /**
  * Carte compacte d'une course proposée.
@@ -50,7 +51,7 @@ export default function OfferedCourseItem({
           <View className="flex-1 flex-row flex-wrap items-center pr-2" style={{ gap: 6 }}>
             {isExpress && (
               <View className="flex-row items-center bg-airmess-red px-2 py-1 rounded-md">
-                <Ionicons name="flash" size={10} color="#ffffff" />
+                <Ionicons name="flash" size={10} color={BrandColors.white} />
                 <Text className="text-white text-[10px] font-jk-extrabold ml-1">Express</Text>
               </View>
             )}
@@ -61,7 +62,7 @@ export default function OfferedCourseItem({
             )}
             {course.delivery_fee_paid_by === 'recipient' && (
               <View className="flex-row items-center bg-info-bg border border-info/30 px-2 py-1 rounded-md">
-                <Ionicons name="wallet-outline" size={11} color="#0284C7" />
+                <Ionicons name="wallet-outline" size={11} color={BrandColors.info} />
                 <Text className="text-info text-[10px] font-jk-extrabold ml-1">
                   Client paie livraison
                 </Text>
@@ -80,7 +81,7 @@ export default function OfferedCourseItem({
             en a besoin pour vérifier la somme à collecter chez le destinataire). */}
         {course.has_collection && (
           <View className="self-start flex-row items-center bg-airmess-yellow/20 px-2 py-1 rounded-md mt-2">
-            <Ionicons name="cash-outline" size={11} color="#1A1614" />
+            <Ionicons name="cash-outline" size={11} color={BrandColors.ink} />
             <Text className="text-ink text-[10px] font-jk-extrabold ml-1">
               Encaissement{course.collection_amount ? ` · ${course.collection_amount.toLocaleString('fr-FR')} F` : ''}
             </Text>
@@ -91,13 +92,13 @@ export default function OfferedCourseItem({
         <View className="flex-row items-start justify-between mt-3">
           <View className="flex-1 pr-2">
             <TripLine
-              dotColor="#FFCC00"
+              dotColor={BrandColors.yellow}
               label="Retrait"
               text={`${course.origin_name} — ${course.origin_quartier}`}
             />
             <View className="mt-2">
               <TripLine
-                dotColor="#D40511"
+                dotColor={BrandColors.red}
                 label="Livraison"
                 text={`${course.destination_quartier} — ${course.destination_city}`}
               />
@@ -107,7 +108,7 @@ export default function OfferedCourseItem({
             <View className="items-end" style={{ minWidth: 64 }}>
               {course.distance_km != null && (
                 <View className="flex-row items-center">
-                  <Ionicons name="navigate-outline" size={12} color="#8A7E68" />
+                  <Ionicons name="navigate-outline" size={12} color={BrandColors.warm500} />
                   <Text className="text-warm-600 text-xs font-jk-bold ml-1">
                     {course.distance_km.toFixed(1)} km
                   </Text>
@@ -115,7 +116,7 @@ export default function OfferedCourseItem({
               )}
               {eta != null && (
                 <View className="flex-row items-center mt-1.5">
-                  <Ionicons name="time-outline" size={12} color="#8A7E68" />
+                  <Ionicons name="time-outline" size={12} color={BrandColors.warm500} />
                   <Text className="text-warm-600 text-xs font-jk-bold ml-1">{eta} min</Text>
                 </View>
               )}

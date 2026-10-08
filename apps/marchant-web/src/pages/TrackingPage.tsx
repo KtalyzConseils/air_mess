@@ -88,14 +88,27 @@ export default function TrackingPage() {
     )
   }
 
+  // `Number.isFinite(x)` ne rétrécit pas le type de `x` (et un accès `data.driver?.lat`
+  // n'est pas rétréci non plus) : on passe par des locales `number | null` pour que
+  // TypeScript sache qu'on construit bien un couple de nombres finis.
+  const driverLat = data.driver?.current_lat ?? null
+  const driverLng = data.driver?.current_lng ?? null
   const driverPosition: [number, number] | null =
-    Number.isFinite(data.driver?.current_lat) && Number.isFinite(data.driver?.current_lng)
-      ? [data.driver.current_lat, data.driver.current_lng]
+    typeof driverLat === 'number' &&
+    typeof driverLng === 'number' &&
+    Number.isFinite(driverLat) &&
+    Number.isFinite(driverLng)
+      ? [driverLat, driverLng]
       : null
 
+  const destLat = data.destination.lat
+  const destLng = data.destination.lng
   const destPosition: [number, number] | null =
-    Number.isFinite(data.destination.lat) && Number.isFinite(data.destination.lng)
-      ? [data.destination.lat, data.destination.lng]
+    typeof destLat === 'number' &&
+    typeof destLng === 'number' &&
+    Number.isFinite(destLat) &&
+    Number.isFinite(destLng)
+      ? [destLat, destLng]
       : null
   const mapCenter: [number, number] | null = driverPosition ?? destPosition
   const positionAgeMs = data.driver?.last_position_at

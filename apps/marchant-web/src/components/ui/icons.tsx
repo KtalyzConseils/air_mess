@@ -586,3 +586,32 @@ export function ShareIcon(props: IconProps) {
     </svg>
   )
 }
+
+// Pause — suspendre l'actualisation automatique d'un écran
+export function PauseIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect x="7" y="5" width="3.5" height="14" rx="1" />
+      <rect x="13.5" y="5" width="3.5" height="14" rx="1" />
+    </svg>
+  )
+}
+
+// Lecture — reprendre une actualisation mise en pause
+export function PlayIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M7 4.5v15l12-7.5-12-7.5Z" />
+    </svg>
+  )
+}
+
+// Flèche circulaire — actualiser maintenant
+export function RefreshIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+      <polyline points="21 3 21 8 16 8" />
+    </svg>
+  )
+}

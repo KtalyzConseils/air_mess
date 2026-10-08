@@ -18,6 +18,22 @@ import api from '../../api/client'
 import { useNewCourseAlert } from '../../hooks/useNewCourseAlert'
 import TodayKpiBanner from '../../components/TodayKpiBanner'
 import Card from '../../components/ui/Card'
+import { BrandColors, StatusToneOnDark } from '../../constants/theme'
+
+/**
+ * Au-delà de ce délai, le flux de propositions n'est plus présenté comme un scan
+ * actif : la pastille passe en ton « alerte » et le libellé devient explicite.
+ * (Le polling reste à 8 s — cf. design-system/airmess-livreurs/MASTER.md §5.)
+ */
+const OFFER_SCAN_STALE_MS = 30_000
+
+/** « Scan à l'instant » / « Scan il y a 12 s » / « Scan il y a 2 min ». */
+function scanLabel(ageMs: number): string {
+  const seconds = Math.max(0, Math.round(ageMs / 1000))
+  if (seconds < 10) return "Scan à l'instant"
+  if (seconds < 60) return `Scan il y a ${seconds} s`
+  return `Scan il y a ${Math.floor(seconds / 60)} min`
+}
 
 function initials(first?: string, last?: string, fallback?: string): string {
   const res = `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase()
@@ -74,6 +90,17 @@ export default function DriverDashboard() {
     refetchInterval: 8_000,
   })
 
+  // Horloge locale : sert uniquement à qualifier la fraîcheur du dernier scan.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const scanAgeMs = offeredQuery.dataUpdatedAt ? now - offeredQuery.dataUpdatedAt : 0
+  const scanIsStale = !!offeredQuery.dataUpdatedAt && scanAgeMs > OFFER_SCAN_STALE_MS
+  const scanIsLive = canSeeOffers && !!offeredQuery.dataUpdatedAt && !scanIsStale
+
   const walletQuery = useQuery({
     queryKey: ['wallet'],
     queryFn: fetchWallet,
@@ -114,7 +141,7 @@ export default function DriverDashboard() {
       <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right', 'bottom']}>
         <View className="flex-1 items-center justify-center px-6">
           <View className="w-20 h-20 rounded-full bg-airmess-yellow/25 items-center justify-center mb-5">
-            <Ionicons name="checkmark-circle" size={44} color="#1A1614" />
+            <Ionicons name="checkmark-circle" size={44} color={BrandColors.ink} />
           </View>
           <Text className="text-xs font-jk-bold uppercase tracking-widest text-airmess-red text-center">
             Inscription confirmée
@@ -130,7 +157,7 @@ export default function DriverDashboard() {
             className="h-12 w-full mt-7 rounded-2xl border-2 border-warm-300 items-center justify-center flex-row"
             style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
           >
-            <Ionicons name="log-out-outline" size={18} color="#6E6558" />
+            <Ionicons name="log-out-outline" size={18} color={BrandColors.warm600} />
             <Text className="text-warm-600 font-jk-bold ml-2">Se déconnecter</Text>
           </Pressable>
         </View>
@@ -144,7 +171,7 @@ export default function DriverDashboard() {
       <SafeAreaView className="flex-1 bg-cream" edges={['top', 'left', 'right', 'bottom']}>
         <View className="flex-1 items-center justify-center px-6">
           <View className="w-20 h-20 rounded-full bg-airmess-red/10 items-center justify-center mb-5">
-            <Ionicons name="alert-circle" size={44} color="#D40511" />
+            <Ionicons name="alert-circle" size={44} color={BrandColors.red} />
           </View>
           <Text className="text-2xl font-jk-extrabold text-ink text-center">Compte banni</Text>
           <Text className="text-sm text-warm-600 text-center mt-3 leading-5 font-jk">
@@ -157,7 +184,7 @@ export default function DriverDashboard() {
               className="h-12 rounded-2xl bg-airmess-yellow items-center justify-center flex-row"
               style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
             >
-              <Ionicons name="help-circle" size={18} color="#1A1614" />
+              <Ionicons name="help-circle" size={18} color={BrandColors.ink} />
               <Text className="text-ink font-jk-extrabold ml-2">Contacter le support</Text>
             </Pressable>
             <Pressable
@@ -165,7 +192,7 @@ export default function DriverDashboard() {
               className="h-12 rounded-2xl border-2 border-warm-300 items-center justify-center flex-row"
               style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
             >
-              <Ionicons name="log-out-outline" size={18} color="#6E6558" />
+              <Ionicons name="log-out-outline" size={18} color={BrandColors.warm600} />
               <Text className="text-warm-600 font-jk-bold ml-2">Se déconnecter</Text>
             </Pressable>
           </View>
@@ -202,7 +229,7 @@ export default function DriverDashboard() {
           <RefreshControl
             refreshing={meQuery.isRefetching || activeQuery.isRefetching}
             onRefresh={refreshAll}
-            tintColor="#1A1614"
+            tintColor={BrandColors.ink}
           />
         }
       >
@@ -211,13 +238,15 @@ export default function DriverDashboard() {
           <Pressable
             onPress={() => router.push('/(tabs)/profile')}
             className="flex-row items-center flex-1"
+            accessibilityRole="button"
+            accessibilityLabel={`Profil de ${firstName}`}
             style={({ pressed }) => (pressed ? { opacity: 0.8 } : undefined)}
           >
             <View className="w-11 h-11 rounded-full bg-airmess-yellow items-center justify-center">
               <Text className="text-ink font-jk-extrabold text-[15px]">{avatar}</Text>
             </View>
             <View className="ml-3 flex-1">
-              <Text className="text-xs text-warm-500 font-jk-medium">Salut 👋</Text>
+              <Text className="text-xs text-warm-500 font-jk-medium">Salut</Text>
               <Text className="text-xl font-jk-extrabold text-ink" numberOfLines={1}>
                 {firstName}
               </Text>
@@ -226,9 +255,12 @@ export default function DriverDashboard() {
           <Pressable
             onPress={() => router.push('/(tabs)/notifications')}
             className="w-11 h-11 rounded-full bg-airmess-dark items-center justify-center ml-2"
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            hitSlop={8}
             style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
           >
-            <Ionicons name="paper-plane" size={18} color="#FFCC00" />
+            <Ionicons name="paper-plane" size={18} color={BrandColors.yellow} />
           </Pressable>
         </View>
 
@@ -250,14 +282,21 @@ export default function DriverDashboard() {
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-base font-jk-extrabold text-ink">Courses proposées</Text>
               <View className="flex-row items-center">
-                <View className="w-1.5 h-1.5 rounded-full bg-success mr-1.5" />
-                <Text className="text-warm-500 text-xs font-jk-medium">Scan zone · 8 s</Text>
+                <View
+                  className="w-1.5 h-1.5 rounded-full mr-1.5"
+                  style={{
+                    backgroundColor: scanIsLive ? BrandColors.success : StatusToneOnDark.warning,
+                  }}
+                />
+                <Text className="text-warm-500 text-xs font-jk-medium">
+                  {scanIsLive ? scanLabel(scanAgeMs) : 'Scan en attente'}
+                </Text>
               </View>
             </View>
 
             {acceptBlocked && (
               <View className="mb-3 bg-airmess-yellow/25 border border-airmess-yellow/60 rounded-2xl px-3 py-2.5 flex-row items-center">
-                <Ionicons name="bicycle" size={16} color="#1A1614" />
+                <Ionicons name="bicycle" size={16} color={BrandColors.ink} />
                 <Text className="text-ink text-xs font-jk-medium ml-2 flex-1">
                   Course en cours — tu peux consulter les propositions, mais pas en accepter une
                   autre pour l’instant.
@@ -277,7 +316,7 @@ export default function DriverDashboard() {
               <View className="mb-2">
                 <View className="flex-row items-center mb-2">
                   <View className="flex-row items-center bg-airmess-red/10 px-2 py-1 rounded-md">
-                    <Ionicons name="flash" size={11} color="#D40511" />
+                    <Ionicons name="flash" size={11} color={BrandColors.red} />
                     <Text className="text-airmess-red text-[11px] font-jk-extrabold ml-1">
                       Express
                     </Text>
@@ -323,7 +362,7 @@ export default function DriverDashboard() {
             style={({ pressed }) => (pressed ? { opacity: 0.9 } : undefined)}
           >
             <View className="w-9 h-9 rounded-full bg-airmess-yellow items-center justify-center">
-              <Ionicons name="navigate" size={18} color="#1A1614" />
+              <Ionicons name="navigate" size={18} color={BrandColors.ink} />
             </View>
             <View className="ml-3 flex-1">
               <Text className="text-white font-jk-extrabold text-sm">Course active</Text>
@@ -331,7 +370,7 @@ export default function DriverDashboard() {
                 {activeCourse.reference} · Reprendre
               </Text>
             </View>
-            <Ionicons name="chevron-up" size={20} color="#FFCC00" />
+            <Ionicons name="chevron-up" size={20} color={BrandColors.yellow} />
           </Pressable>
         </View>
       )}
@@ -356,7 +395,7 @@ function EmptyStateSearching() {
   return (
     <Card variant="default" padding="lg" className="items-center">
       <View className="w-16 h-16 rounded-full bg-warm-100 items-center justify-center mb-3">
-        <Ionicons name="bicycle-outline" size={32} color="#8A7E68" />
+        <Ionicons name="bicycle-outline" size={32} color={BrandColors.warm500} />
       </View>
       <Text className="text-base font-jk-bold text-ink text-center">Aucune proposition</Text>
       <Text className="text-sm text-warm-500 text-center mt-1.5 leading-relaxed font-jk">
@@ -382,7 +421,7 @@ function WalletCautionNotice() {
       accessibilityLabel="Recharger le wallet livreur"
     >
       <View className="w-10 h-10 rounded-full bg-info/10 items-center justify-center mr-3">
-        <Ionicons name="wallet-outline" size={20} color="#0284C7" />
+        <Ionicons name="wallet-outline" size={20} color={BrandColors.info} />
       </View>
       <View className="flex-1">
         <Text className="text-[10px] uppercase tracking-widest text-info font-jk-extrabold">
@@ -392,7 +431,7 @@ function WalletCautionNotice() {
           Recharge ta caution wallet pour recevoir et accepter des courses.
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#0284C7" />
+      <Ionicons name="chevron-forward" size={18} color={BrandColors.info} />
     </Pressable>
   )
 }
@@ -402,7 +441,7 @@ function EmptyStateOffline({ availability }: { availability: string }) {
   return (
     <Card variant="default" padding="lg" className="items-center">
       <View className="w-16 h-16 rounded-full bg-warm-100 items-center justify-center mb-3">
-        <Ionicons name={isPause ? 'cafe-outline' : 'moon-outline'} size={32} color="#8A7E68" />
+        <Ionicons name={isPause ? 'cafe-outline' : 'moon-outline'} size={32} color={BrandColors.warm500} />
       </View>
       <Text className="text-base font-jk-bold text-ink text-center">
         {isPause ? 'Tu es en pause' : 'Tu es hors service'}

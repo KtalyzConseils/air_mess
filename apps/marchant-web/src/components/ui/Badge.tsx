@@ -9,6 +9,12 @@ interface Props extends HTMLAttributes<HTMLSpanElement> {
   size?: Size
   /** Affiche un point coloré devant le texte (pulse si variant=live) */
   dot?: boolean
+  /**
+   * Rend le libellé en majuscules. Par défaut `true` (pastilles courtes type
+   * "LIVE", "OK"). Passer `false` pour un libellé de statut en casse normale
+   * (ex: "Attribué au livreur"), plus lisible quand le texte est long.
+   */
+  uppercase?: boolean
   children: ReactNode
 }
 
@@ -66,6 +72,7 @@ export default function Badge({
   variant = 'neutral',
   size = 'md',
   dot = false,
+  uppercase = true,
   className,
   children,
   ...rest
@@ -75,7 +82,8 @@ export default function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-sm font-medium tracking-wide uppercase',
+        'inline-flex items-center rounded-sm font-medium',
+        uppercase ? 'tracking-wide uppercase' : 'normal-case',
         v.text,
         v.bg,
         SIZE_CLASSES[size],
@@ -89,7 +97,9 @@ export default function Badge({
           {v.dotPulse && (
             <span
               className={cn(
-                'absolute inset-0 h-1.5 w-1.5 rounded-full animate-ping',
+                // `motion-safe` : sous prefers-reduced-motion, la pastille reste
+                // un point fixe (l'information n'est jamais portée par l'animation).
+                'absolute inset-0 h-1.5 w-1.5 rounded-full motion-safe:animate-ping',
                 v.dot,
               )}
               aria-hidden="true"

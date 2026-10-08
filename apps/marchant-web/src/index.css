@@ -39,6 +39,8 @@
   --color-success-bg: #DCFCE7;
   --color-warning: #EA580C;
   --color-warning-bg: #FFEDD5;
+  /* Variante TEXTE du warning : `warning` seul ne tient pas 4.5:1 sur warning-bg. */
+  --color-warning-strong: #9A3412;
   --color-info: #0369A1;
   --color-info-bg: #DBEAFE;
   --color-danger: #D40511;

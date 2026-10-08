@@ -26,6 +26,69 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+/**
+ * Couleurs programmatiques de l'app livreur.
+ *
+ * NativeWind gère les classes (`text-warm-500`, `bg-airmess-yellow`), mais
+ * certaines API React Native n'acceptent qu'une valeur brute : la prop `color`
+ * d'Ionicons, `placeholderTextColor`, `tintColor` d'un `RefreshControl`, styles
+ * inline. Ces props doivent lire ICI au lieu d'écrire un hex en dur : un hex
+ * isolé dans un écran ne suit aucune évolution et dérive du design system.
+ *
+ * ⚠️ À garder synchronisé avec `tailwind.config.js` (source des classes NativeWind)
+ * et avec la colonne « canonique » de `docs/AIRMESS_DESIGN_SYSTEM.md` §5.3.
+ */
+export const BrandColors = {
+  /** Blanc pur : surfaces inversées (texte/icône sur rouge brand). */
+  white: '#FFFFFF',
+  yellow: '#FFCC00',
+  yellowHi: '#FFD633',
+  red: '#D40511',
+  dark: '#1A1614',
+  ink: '#0A0908',
+  cream: '#FAF7F0',
+  offWhite: '#FDFCF9',
+  warm100: '#F2EFE8',
+  warm200: '#E8E4DA',
+  warm300: '#D4CFC2',
+  warm400: '#9B968A',
+  warm500: '#6B675E',
+  warm600: '#4A463E',
+  success: '#15803D',
+  successBg: '#DCFCE7',
+  warning: '#EA580C',
+  /** Variante texte du warning : seule lisible sur `warningBg` / fonds clairs. */
+  warningStrong: '#9A3412',
+  warningBg: '#FFEDD5',
+  info: '#0369A1',
+  infoBg: '#DBEAFE',
+} as const;
+
+/**
+ * Teintes d'état sur surfaces claires (pastilles, callouts).
+ * `warning.text` pointe volontairement sur `warningStrong` : `warning` seul ne
+ * tient pas le contraste 4.5:1 sur `warningBg`.
+ */
+export const StatusTone = {
+  success: { text: BrandColors.success },
+  warning: { text: BrandColors.warningStrong },
+  danger: { text: BrandColors.red },
+  info: { text: BrandColors.info },
+  neutral: { text: BrandColors.warm600 },
+} as const;
+
+/**
+ * Teintes d'état sur surfaces sombres (`airmess-dark`).
+ * Sur fond sombre il faut des teintes plus claires : la version canonique est
+ * calibrée pour du texte sur fond clair et tomberait sous 4.5:1 ici.
+ */
+export const StatusToneOnDark = {
+  success: '#4ADE80',
+  warning: '#FBBF24',
+  neutral: '#9B968A',
+  highlight: BrandColors.yellow,
+} as const;
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */

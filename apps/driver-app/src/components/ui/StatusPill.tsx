@@ -10,6 +10,9 @@ import { View, Text } from 'react-native'
  *   info    : neutre informatif
  *   neutral : off/hors-ligne/statut faible
  *
+ * Le texte `warning` utilise `text-warning-strong` : `warning` seul (orange vif)
+ * ne tient pas 4.5:1 sur `warning-bg`. Ne pas revenir à `text-warning` ici.
+ *
  * `size='lg'` sert au badge géant "En course" affiché plein cadre sur la home.
  */
 
@@ -26,7 +29,7 @@ interface Props {
 
 const TONE: Record<Tone, { bg: string; text: string; dot: string }> = {
   success: { bg: 'bg-success-bg', text: 'text-success', dot: 'bg-success' },
-  warning: { bg: 'bg-warning-bg', text: 'text-warning', dot: 'bg-warning' },
+  warning: { bg: 'bg-warning-bg', text: 'text-warning-strong', dot: 'bg-warning' },
   danger:  { bg: 'bg-danger-bg',  text: 'text-airmess-red', dot: 'bg-airmess-red' },
   info:    { bg: 'bg-info-bg',    text: 'text-info',    dot: 'bg-info' },
   neutral: { bg: 'bg-warm-200',   text: 'text-warm-600', dot: 'bg-warm-500' },
