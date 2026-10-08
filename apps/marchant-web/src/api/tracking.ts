@@ -13,8 +13,8 @@ export interface TrackingPayload {
     name: string
     quartier: string
     city: string
-    lat: number
-    lng: number
+    lat: number | null
+    lng: number | null
   }
   package: { description: string; category: string | null }
   /**

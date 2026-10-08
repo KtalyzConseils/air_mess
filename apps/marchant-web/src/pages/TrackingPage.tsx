@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
 import { useTranslation } from 'react-i18next'
 import StatusBadge from '../components/StatusBadge'
 import Card from '../components/ui/Card'
@@ -19,6 +20,30 @@ import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
 // bouton "Ce n'est pas moi qui ai reçu". Le back reste seul juge en cas de
 // désaccord (renvoie 422 si dépassé).
 const DISPUTE_WINDOW_DAYS = 7
+const POSITION_STALE_AFTER_MS = 90_000
+
+const destinationIcon = L.divIcon({
+  className: 'tracking-map-pin tracking-map-pin-destination',
+  html: '<span aria-hidden="true"></span>',
+  iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -34],
+})
+const driverIcon = L.divIcon({
+  className: 'tracking-map-pin tracking-map-pin-driver',
+  html: '<span aria-hidden="true"></span>',
+  iconSize: [34, 34], iconAnchor: [17, 17], popupAnchor: [0, -18],
+})
+
+function TrackingMapViewport({ driverPosition, destinationPosition }: {
+  driverPosition: [number, number] | null
+  destinationPosition: [number, number] | null
+}) {
+  const map = useMap()
+  useEffect(() => {
+    const target = driverPosition ?? destinationPosition
+    if (target) map.panTo(target, { animate: true, duration: 0.6 })
+  }, [driverPosition?.[0], driverPosition?.[1], destinationPosition?.[0], destinationPosition?.[1], map])
+  return null
+}
 
 export default function TrackingPage() {
   const { t } = useTranslation()
@@ -64,12 +89,24 @@ export default function TrackingPage() {
   }
 
   const driverPosition: [number, number] | null =
-    data.driver?.current_lat && data.driver?.current_lng
+    Number.isFinite(data.driver?.current_lat) && Number.isFinite(data.driver?.current_lng)
       ? [data.driver.current_lat, data.driver.current_lng]
       : null
 
-  const destPosition: [number, number] = [data.destination.lat, data.destination.lng]
-  const mapCenter: [number, number] = driverPosition ?? destPosition
+  const destPosition: [number, number] | null =
+    Number.isFinite(data.destination.lat) && Number.isFinite(data.destination.lng)
+      ? [data.destination.lat, data.destination.lng]
+      : null
+  const mapCenter: [number, number] | null = driverPosition ?? destPosition
+  const positionAgeMs = data.driver?.last_position_at
+    ? Math.max(0, Date.now() - new Date(data.driver.last_position_at).getTime())
+    : null
+  const positionIsStale = positionAgeMs == null || positionAgeMs > POSITION_STALE_AFTER_MS
+  const positionHint = positionIsStale
+    ? data.driver?.last_position_at
+      ? t('tracking.mapLastPosition', { time: new Date(data.driver.last_position_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) })
+      : t('tracking.mapPositionUnavailable')
+    : t('tracking.mapLivePosition')
 
   return (
     <div className="min-h-screen bg-cream">
@@ -173,21 +210,25 @@ export default function TrackingPage() {
         {/* ============================================================
             Carte
             ============================================================ */}
-        <Card variant="default" padding="none" className="overflow-hidden mb-4" style={{ height: '350px' }}>
-          <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
+        <Card variant="default" padding="none" className="overflow-hidden mb-4 relative" style={{ height: '350px' }}>
+          {mapCenter ? <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
+            <TrackingMapViewport driverPosition={driverPosition} destinationPosition={destPosition} />
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution="&copy; OpenStreetMap"
             />
-            <Marker position={destPosition}>
+            {destPosition && <Marker position={destPosition} icon={destinationIcon}>
               <Popup>{t('tracking.mapYourAddress')}</Popup>
-            </Marker>
+            </Marker>}
             {driverPosition && (
-              <Marker position={driverPosition}>
+              <Marker position={driverPosition} icon={driverIcon}>
                 <Popup>{t('tracking.mapYourDriver')}</Popup>
               </Marker>
             )}
-          </MapContainer>
+          </MapContainer> : <div className="h-full flex items-center justify-center bg-warm-100 text-body-s text-warm-500 px-6 text-center">{t('tracking.mapPositionUnavailable')}</div>}
+          <div className={`absolute bottom-3 left-3 z-[1000] rounded-full px-3 py-1.5 text-caption font-semibold shadow-sm ${positionIsStale ? 'bg-cream/95 text-warm-600' : 'bg-success-bg/95 text-success'}`}>
+            {positionHint}
+          </div>
         </Card>
 
         {/* ============================================================

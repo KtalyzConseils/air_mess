@@ -2,6 +2,13 @@
 @import "leaflet/dist/leaflet.css";
 @import "tailwindcss";
 
+.tracking-map-pin { background: transparent; border: 0; }
+.tracking-map-pin span { display: block; width: 100%; height: 100%; box-sizing: border-box; filter: drop-shadow(0 2px 2px rgb(0 0 0 / 28%)); }
+.tracking-map-pin-destination span { width: 24px; height: 30px; margin: 2px; border: 3px solid #fff; border-radius: 50% 50% 50% 0; background: #d40511; transform: rotate(-45deg); }
+.tracking-map-pin-destination span::after { content: ''; display: block; width: 8px; height: 8px; margin: 6px auto; border-radius: 50%; background: #fff; }
+.tracking-map-pin-driver span { width: 28px; height: 28px; margin: 3px; border: 3px solid #1a1614; border-radius: 50%; background: #ffcc00; }
+.tracking-map-pin-driver span::after { content: '↗'; display: block; color: #1a1614; font-size: 17px; font-weight: 800; line-height: 22px; text-align: center; transform: rotate(-45deg); }
+
 @theme {
   /* ============================================================
      BRAND COLORS — source de vérité = logo SVG officiel
