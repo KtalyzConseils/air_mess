@@ -48,6 +48,10 @@ const TYPE_I18N_KEY: Record<string, string> = {
   course_charge: 'admin.reconciliation.flowTypeCourseCharge',
 }
 
+// L'audit sandbox reste disponible côté API pour la traçabilité, mais n'est
+// plus présenté dans l'interface admin courante.
+const SHOW_SANDBOX_AUDIT = false
+
 function FlowRow({ flow }: { flow: ReconciliationFlow }) {
   const { t } = useTranslation()
   const label = TYPE_I18N_KEY[flow.type] ? t(TYPE_I18N_KEY[flow.type]) : flow.type
@@ -192,7 +196,7 @@ export default function AdminReconciliationPage() {
 
   return (
     <AdminPageShell>
-      <AdminModal open={!!confirmation} onClose={() => closeConfirmation(null)}
+      {SHOW_SANDBOX_AUDIT && <AdminModal open={!!confirmation} onClose={() => closeConfirmation(null)}
         title={t('admin.reconciliation.sandboxApplyButton')}
         footer={<>
           <AdminButton onClick={() => closeConfirmation(null)}>{t('common.cancel')}</AdminButton>
@@ -220,7 +224,7 @@ export default function AdminReconciliationPage() {
             className="w-full h-11 px-3 rounded-md border border-warm-300 bg-off-white font-mono text-ink focus:outline-none focus:border-airmess-yellow focus:shadow-glow-yellow" />
           {codeError && <p id="sandbox-error" role="alert" className="text-body-s text-airmess-red">{t('admin.reconciliation.sandboxCodeMismatch')}</p>}
         </form>
-      </AdminModal>
+      </AdminModal>}
       <AdminPageHeader
         title={t('admin.reconciliation.title')}
         subtitle={t('admin.reconciliation.subtitleFull')}
@@ -335,7 +339,7 @@ export default function AdminReconciliationPage() {
               </div>
             </section>
 
-            <Section title={t('admin.reconciliation.sandboxAuditTitle')}>
+            {SHOW_SANDBOX_AUDIT && <Section title={t('admin.reconciliation.sandboxAuditTitle')}>
               <div className="bg-warning-bg border border-warning/30 rounded-md p-4 space-y-4">
                 <p className="text-body-s text-ink">{t('admin.reconciliation.sandboxAuditWarning')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -369,10 +373,10 @@ export default function AdminReconciliationPage() {
                   <p className="text-caption text-airmess-red font-bold break-all">{repairMessage}</p>
                 )}
               </div>
-            </Section>
+            </Section>}
 
 
-          {isGuideOpen && (
+          {SHOW_SANDBOX_AUDIT && isGuideOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4" role="presentation" onMouseDown={() => setIsGuideOpen(false)}>
               <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-md bg-white shadow-xl p-5 md:p-6" role="dialog" aria-modal="true" aria-labelledby="sandbox-guide-title" onMouseDown={(event) => event.stopPropagation()}>
                 <div className="flex items-start justify-between gap-4 mb-4">
