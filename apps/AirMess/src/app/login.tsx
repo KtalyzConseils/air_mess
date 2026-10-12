@@ -8,7 +8,7 @@ import {
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
-import { Link, Redirect } from 'expo-router'
+import { Link, Redirect, useRouter } from 'expo-router'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Button from '../components/ui/Button'
@@ -24,6 +24,7 @@ const LOGIN_COPY = {
     email: 'Email',
     emailPlaceholder: 'commercant@example.com',
     password: 'Mot de passe',
+    forgotPassword: 'Mot de passe oublie ?',
     showPassword: 'Afficher le mot de passe',
     hidePassword: 'Masquer le mot de passe',
     login: 'Se connecter',
@@ -37,6 +38,7 @@ const LOGIN_COPY = {
     email: 'Email',
     emailPlaceholder: 'merchant@example.com',
     password: 'Password',
+    forgotPassword: 'Forgot your password?',
     showPassword: 'Show password',
     hidePassword: 'Hide password',
     login: 'Log in',
@@ -46,6 +48,7 @@ const LOGIN_COPY = {
 } as const
 
 export default function LoginScreen() {
+  const router = useRouter()
   const insets = useSafeAreaInsets()
   const language = useLanguageStore((state) => state.language)
   const copy = LOGIN_COPY[language]
@@ -147,6 +150,17 @@ export default function LoginScreen() {
               />
             </Pressable>
           </View>
+
+          <Pressable
+            onPress={() => router.push('/forgot-password')}
+            className="-mt-2 mb-4 self-end"
+            hitSlop={8}
+            accessibilityRole="link"
+          >
+            <Text className="text-sm font-semibold text-warm-600 underline">
+              {copy.forgotPassword}
+            </Text>
+          </Pressable>
 
           {error ? (
             <View className="mb-4 flex-row items-start rounded-2xl border-2 border-airmess-red/30 bg-danger-bg p-3">

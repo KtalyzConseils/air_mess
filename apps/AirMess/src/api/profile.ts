@@ -49,6 +49,19 @@ export async function changePassword(payload: ChangePasswordPayload): Promise<vo
   await api.post('/auth/password/change', payload)
 }
 
+/**
+ * Demande de reinitialisation du mot de passe (ecran "Mot de passe oublie").
+ *
+ * L'API repond toujours la meme chose, qu'un compte existe ou non : le message
+ * affiche ne doit donc jamais laisser croire que l'adresse est inconnue.
+ * Pour un marchand ou un particulier, le lien recu par email ouvre la page web
+ * de reinitialisation.
+ */
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  const { data } = await api.post<{ message: string }>('/auth/password/forgot', { email })
+  return data
+}
+
 export async function deleteAccount(): Promise<void> {
   await api.delete('/auth/me')
 }
