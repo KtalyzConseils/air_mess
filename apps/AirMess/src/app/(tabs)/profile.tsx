@@ -21,7 +21,6 @@ import BottomSheet from '../../components/ui/BottomSheet'
 import SupportContactSheet from '../../components/SupportContactSheet'
 import {
   deleteAccount,
-  setWebAccess,
   updateIndividualProfile,
   updateMarchantProfile,
   type UpdateMarchantProfilePayload,
@@ -86,7 +85,7 @@ const PROFILE_COPY = {
     becomeDriverApply: 'Envoyer ma candidature',
     becomeDriverDownload: "Telecharger l'app livreur",
     security: 'Securite',
-    securitySubtitle: 'Compte et sessions',
+    securitySubtitle: 'Modifier mon mot de passe',
     information: 'Informations',
     informationSubtitle: 'A propos de AirMess',
     informationTitle: 'AirMess Marchand',
@@ -118,16 +117,6 @@ const PROFILE_COPY = {
     cancel: 'Annuler',
     save: 'Enregistrer',
     updateFailed: 'Impossible de mettre a jour.',
-    webAccessTitle: 'Acces au site web',
-    webAccessSubtitleMissing: 'Ajoute un email et un mot de passe pour te connecter aussi depuis un ordinateur.',
-    webAccessSubtitleDone: 'Tu peux te connecter sur le site web avec cet email et ce mot de passe.',
-    webAccessActivate: 'Activer',
-    webAccessEmail: 'Email',
-    webAccessPassword: 'Mot de passe',
-    webAccessPasswordConfirm: 'Confirmer le mot de passe',
-    webAccessSubmit: "Activer l'acces web",
-    webAccessUpdate: 'Enregistrer',
-    webAccessSuccess: 'Acces web active.',
   },
   en: {
     profileFallback: 'Profile',
@@ -172,7 +161,7 @@ const PROFILE_COPY = {
     becomeDriverApply: 'Send my application',
     becomeDriverDownload: 'Download driver app',
     security: 'Security',
-    securitySubtitle: 'Account and sessions',
+    securitySubtitle: 'Change my password',
     information: 'Information',
     informationSubtitle: 'About AirMess',
     informationTitle: 'AirMess Merchant',
@@ -204,16 +193,6 @@ const PROFILE_COPY = {
     cancel: 'Cancel',
     save: 'Save',
     updateFailed: 'Unable to update.',
-    webAccessTitle: 'Web access',
-    webAccessSubtitleMissing: 'Add an email and a password to also sign in from a computer.',
-    webAccessSubtitleDone: 'You can sign in on the website with this email and password.',
-    webAccessActivate: 'Activate',
-    webAccessEmail: 'Email',
-    webAccessPassword: 'Password',
-    webAccessPasswordConfirm: 'Confirm password',
-    webAccessSubmit: 'Activate web access',
-    webAccessUpdate: 'Save',
-    webAccessSuccess: 'Web access activated.',
   },
 } as const
 
@@ -244,11 +223,6 @@ export default function ProfileScreen() {
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null)
   const [supportOpen, setSupportOpen] = useState(false)
-  const [webAccessOpen, setWebAccessOpen] = useState(false)
-  const [webAccessForm, setWebAccessForm] = useState({ email: '', password: '', password_confirmation: '' })
-  const [isSavingWebAccess, setIsSavingWebAccess] = useState(false)
-  const [webAccessError, setWebAccessError] = useState<string | null>(null)
-
   const fillFormFromUser = () => {
     if (!user) return
 
@@ -342,25 +316,6 @@ export default function ProfileScreen() {
     setEditing(false)
   }
 
-  const hasWebAccess = !!user?.password_set_at
-  const canSaveWebAccess =
-    webAccessForm.email.trim().includes('@') &&
-    webAccessForm.password.length >= 8 &&
-    webAccessForm.password === webAccessForm.password_confirmation &&
-    !isSavingWebAccess
-
-  const openWebAccessModal = () => {
-    setWebAccessForm({ email: user?.email ?? '', password: '', password_confirmation: '' })
-    setWebAccessError(null)
-    setWebAccessOpen(true)
-  }
-
-  const closeWebAccessModal = () => {
-    if (isSavingWebAccess) return
-    setWebAccessError(null)
-    setWebAccessOpen(false)
-  }
-
   const openSupport = (context: string) => {
     setSupportContext(context)
     setSupportOpen(true)
@@ -389,27 +344,6 @@ export default function ProfileScreen() {
       Alert.alert(copy.deleteAccountFailed, getApiErrorMessage(error))
     } finally {
       setIsDeletingAccount(false)
-    }
-  }
-
-  const handleSaveWebAccess = async () => {
-    if (!canSaveWebAccess) return
-
-    setIsSavingWebAccess(true)
-    setWebAccessError(null)
-
-    try {
-      const updatedUser = await setWebAccess({
-        email: webAccessForm.email.trim(),
-        password: webAccessForm.password,
-        password_confirmation: webAccessForm.password_confirmation,
-      })
-      setUser(updatedUser)
-      setWebAccessOpen(false)
-    } catch (error) {
-      setWebAccessError(getApiErrorMessage(error))
-    } finally {
-      setIsSavingWebAccess(false)
     }
   }
 
@@ -582,8 +516,8 @@ export default function ProfileScreen() {
         <MenuRow
           icon="shield-checkmark"
           title={copy.security}
-          subtitle={hasWebAccess ? copy.webAccessSubtitleDone : copy.webAccessSubtitleMissing}
-          onPress={openWebAccessModal}
+          subtitle={copy.securitySubtitle}
+          href="/security"
         />
         <Divider />
         <MenuRow
@@ -735,101 +669,6 @@ export default function ProfileScreen() {
                   rightIcon={<Ionicons name="checkmark" size={20} color="#1A1614" />}
                 >
                   {copy.save}
-                </Button>
-              </View>
-            </View>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-    <Modal
-      visible={webAccessOpen}
-      transparent
-      animationType="slide"
-      onRequestClose={closeWebAccessModal}
-      statusBarTranslucent
-    >
-      <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end bg-black/40">
-        <Pressable className="flex-1" onPress={closeWebAccessModal} />
-        <View className="max-h-[100%] rounded-t-[28px] bg-cream px-5 pb-6 pt-4 dark:bg-[#0F1115]">
-          <View className="mb-4 flex-row items-center justify-between">
-            <View className="flex-row items-center">
-              <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
-                <Ionicons name="desktop-outline" size={22} color="#1A1614" />
-              </View>
-              <Text className="text-xl font-extrabold text-ink dark:text-white">{copy.webAccessTitle}</Text>
-            </View>
-            <Pressable
-              onPress={closeWebAccessModal}
-              className="h-10 w-10 items-center justify-center rounded-full bg-off-white dark:bg-[#181B24]"
-              accessibilityRole="button"
-              accessibilityLabel={language === 'fr' ? 'Fermer' : 'Close'}
-            >
-              <Ionicons name="close" size={22} color={iconColor} />
-            </Pressable>
-          </View>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 28 }}
-          >
-            <FieldLabel>{copy.webAccessEmail}</FieldLabel>
-            <TextInput
-              value={webAccessForm.email}
-              onChangeText={(value) => setWebAccessForm((current) => ({ ...current, email: value }))}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              placeholder="email@example.com"
-              placeholderTextColor="#A89F95"
-              className="h-14 rounded-2xl border border-warm-200 bg-white px-4 text-base font-semibold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
-            />
-
-            <FieldLabel>{copy.webAccessPassword}</FieldLabel>
-            <TextInput
-              value={webAccessForm.password}
-              onChangeText={(value) => setWebAccessForm((current) => ({ ...current, password: value }))}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="newPassword"
-              placeholder="********"
-              placeholderTextColor="#A89F95"
-              className="h-14 rounded-2xl border border-warm-200 bg-white px-4 text-base font-semibold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
-            />
-
-            <FieldLabel>{copy.webAccessPasswordConfirm}</FieldLabel>
-            <TextInput
-              value={webAccessForm.password_confirmation}
-              onChangeText={(value) => setWebAccessForm((current) => ({ ...current, password_confirmation: value }))}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="newPassword"
-              placeholder="********"
-              placeholderTextColor="#A89F95"
-              className="h-14 rounded-2xl border border-warm-200 bg-white px-4 text-base font-semibold text-ink dark:border-[#343A46] dark:bg-[#181B24] dark:text-white"
-            />
-
-            {webAccessError && (
-              <Text className="mt-3 text-sm font-bold text-airmess-red">{webAccessError}</Text>
-            )}
-
-            <View className="mt-5 flex-row gap-3">
-              <View className="flex-1">
-                <Button variant="outline" onPress={closeWebAccessModal} disabled={isSavingWebAccess}>
-                  {copy.cancel}
-                </Button>
-              </View>
-              <View className="flex-1">
-                <Button
-                  onPress={handleSaveWebAccess}
-                  loading={isSavingWebAccess}
-                  disabled={!canSaveWebAccess}
-                  rightIcon={<Ionicons name="checkmark" size={20} color="#1A1614" />}
-                >
-                  {hasWebAccess ? copy.webAccessUpdate : copy.webAccessSubmit}
                 </Button>
               </View>
             </View>
@@ -1004,7 +843,7 @@ function MenuRow({
   icon: keyof typeof Ionicons.glyphMap
   title: string
   subtitle: string
-  href?: '/(tabs)/wallet'
+  href?: '/(tabs)/wallet' | '/security'
   onPress?: () => void
 }) {
   const theme = useThemeStore((state) => state.theme)

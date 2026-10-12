@@ -102,3 +102,10 @@ Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `Firs
 - Connexion : `POST /api/auth/login` par email + mot de passe, partagée avec l'app livreur. L'app marchand n'expose plus le login par SMS.
 - Suite d'inscription inchangée : le marchand reste `waitlisted_at` avec `marchants.validated_at` nul, donc sans accès à la création de course avant validation par un admin.
 - Ne pas réintroduire un second mécanisme de code (table, service ou endpoint dédié) : la mécanique de cache existante doit être étendue.
+
+## Changement de mot de passe (écran Sécurité)
+
+- Source de vérité : `AuthController::changePassword`, exposé par `POST /api/auth/password/change`, réservé à l'utilisateur connecté.
+- Le mot de passe actuel est exigé : un jeton volé ne suffit pas à changer le mot de passe. Les comptes qui ne connaissent plus leur mot de passe passent par `POST /api/auth/password/forgot` puis `/password/reset` (lien email).
+- Le changement ferme les autres sessions et laisse ouverte celle qui l'a effectué. Le limiteur `auth-password-change` plafonne à dix tentatives par heure et par utilisateur.
+- Côté app marchand, l'entrée « Sécurité » du profil ouvre l'écran `/security`, dédié uniquement à cela. L'ancienne modale « Accès au site web » (`POST /api/profile/web-access`) n'est plus appelée par l'app mais reste servie pour les builds déjà installés.

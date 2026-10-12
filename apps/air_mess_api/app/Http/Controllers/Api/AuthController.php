@@ -1077,6 +1077,48 @@ class AuthController extends Controller
     /**
      * Supprime définitivement le compte de l'utilisateur connecté.
      */
+    /**
+     * Changement de mot de passe d'un utilisateur connecte.
+     *
+     * Le mot de passe actuel est exige : un token vole ne suffit pas a changer
+     * le mot de passe. Les autres sessions sont fermees, celle qui effectue le
+     * changement reste ouverte.
+     */
+    public function changePassword(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password'         => ['required', 'string', 'min:8', 'confirmed', 'different:current_password'],
+        ], [
+            'current_password.required' => 'Renseigne ton mot de passe actuel.',
+            'password.required'         => 'Renseigne ton nouveau mot de passe.',
+            'password.min'              => 'Le nouveau mot de passe doit contenir au moins 8 caracteres.',
+            'password.confirmed'        => 'Les deux mots de passe ne sont pas identiques.',
+            'password.different'        => "Le nouveau mot de passe doit etre different de l'actuel.",
+        ]);
+
+        if (! Hash::check($data['current_password'], (string) $user->password)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'current_password' => ['Mot de passe actuel incorrect.'],
+            ]);
+        }
+
+        $user->update([
+            'password'        => $data['password'], // hashe via le cast 'hashed'
+            'password_set_at' => now(),
+        ]);
+
+        // Securite : on ferme les autres sessions, celle du changement reste ouverte.
+        $currentTokenId = $user->currentAccessToken()?->getKey();
+        $user->tokens()
+            ->when($currentTokenId, fn ($query) => $query->whereKeyNot($currentTokenId))
+            ->delete();
+
+        return response()->json(['message' => 'Mot de passe modifie.']);
+    }
+
     public function deleteAccount(Request $request): JsonResponse
     {
         $user = $request->user();

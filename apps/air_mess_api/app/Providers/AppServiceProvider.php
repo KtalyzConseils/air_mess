@@ -132,6 +132,13 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perHour(3)->by($email . '|' . $request->ip());
         });
 
+        // Changement de mot de passe : 10 / heure par utilisateur connecte.
+        // Laisse un utilisateur se tromper, bloque le balayage du mot de passe
+        // actuel depuis un token vole.
+        RateLimiter::for('auth-password-change', function (Request $request) {
+            return Limit::perHour(10)->by('password-change|' . ($request->user()?->id ?? $request->ip()));
+        });
+
         // Wallet top-up : 5 / heure par user. Évite la pollution du dashboard
         // Fedapay avec des checkouts non payés.
         RateLimiter::for('wallet-topup', function (Request $request) {

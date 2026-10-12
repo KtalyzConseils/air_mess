@@ -115,6 +115,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/me', [AuthController::class, 'deleteAccount']);
         // Mise à jour du profil du marchand / particulier connecté.
         Route::post('/profile', [AuthController::class, 'updateProfile']);
+        // Changement de mot de passe par un utilisateur connecte (mot de passe
+        // actuel exige). Seul usage de l'ecran "Securite" de l'app marchand.
+        Route::post('/password/change', [AuthController::class, 'changePassword'])->middleware('throttle:auth-password-change');
         // Enregistre l'acceptation des CGU + politique confidentialité par l'utilisateur connecté.
         // Requis pour les utilisateurs pré-existant à la mise en place (accepted_terms_at IS NULL)
         // ET pour tout bump de TERMS_VERSION.

@@ -35,6 +35,20 @@ export async function setWebAccess(payload: SetWebAccessPayload): Promise<User> 
   return data.user
 }
 
+export interface ChangePasswordPayload {
+  current_password: string
+  password: string
+  password_confirmation: string
+}
+
+/**
+ * Change le mot de passe du compte connecte. Le mot de passe actuel est exige
+ * par l'API ; les autres sessions sont fermees au passage.
+ */
+export async function changePassword(payload: ChangePasswordPayload): Promise<void> {
+  await api.post('/auth/password/change', payload)
+}
+
 export async function deleteAccount(): Promise<void> {
   await api.delete('/auth/me')
 }
