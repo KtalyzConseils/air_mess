@@ -25,3 +25,11 @@
 **Rationale :** deux surfaces marchandes redondantes = double maintenance ; la PWA couvre l'usage smartphone sans installation.
 
 **Impact :** ne plus construire/maintenir `apps/AirMess` ; planifier son archivage et la migration éventuelle des données utilisateurs. Le chemin `google-services.json` cassé devient sans objet.
+
+## D-04 — Package Android livreur `com.anonymous.driver` : conservé (12/10/2026)
+
+**Décision :** l'application livreur est publiée sur Google Play sous `com.anonymous.driver` et garde ce package définitivement. Le renommage vers `com.airmess.driver` est abandonné sur cette application.
+
+**Rationale :** un package publié est immuable chez Google. Le renommer exigerait une nouvelle fiche, une réinstallation par tous les livreurs et la perte des jetons push des appareils déjà équipés — exactement le coût identifié dans `docs/PACKAGE_NAME_MIGRATION.md`, désormais sans contrepartie puisqu'il n'y a plus de fenêtre de lancement à préparer.
+
+**Impact :** `docs/PACKAGE_NAME_MIGRATION.md` passe en statut abandonné ; les liens de téléchargement (landing, app marchand, bannière d'inscription livreur de la web) pointent vers la fiche Google Play et non plus vers un APK Expo. Ne plus planifier de renommage du package livreur.

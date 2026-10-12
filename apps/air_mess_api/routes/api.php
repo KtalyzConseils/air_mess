@@ -35,6 +35,9 @@ Route::prefix('auth')->group(function () {
     Route::post('/register/individual',[AuthController::class, 'registerIndividual'])->middleware('throttle:auth-register');
     Route::post('/register/quick/send-code', [AuthController::class, 'sendQuickRegistrationCode'])->middleware('throttle:auth-otp-send');
     Route::post('/register/quick/verify',    [AuthController::class, 'verifyQuickRegistration'])->middleware('throttle:auth-otp-verify');
+    // Confirmation email de l'inscription canonique (marchand / particulier) :
+    // seule voie de confirmation, cote app mobile comme cote web.
+    Route::post('/register/email/send-code', [AuthController::class, 'sendRegistrationEmailCode'])->middleware('throttle:auth-register-email');
     Route::post('/register/driver',    [AuthController::class, 'registerDriver'])->middleware('throttle:auth-register');
     // Vérification du numéro par SMS (OTP) — inscription livreur depuis l'app mobile.
     Route::post('/phone/otp/send',   [\App\Http\Controllers\Api\PhoneOtpController::class, 'send'])->middleware('throttle:auth-otp-send');
@@ -112,6 +115,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/me', [AuthController::class, 'deleteAccount']);
         // Mise à jour du profil du marchand / particulier connecté.
         Route::post('/profile', [AuthController::class, 'updateProfile']);
+        // Changement de mot de passe par un utilisateur connecte (mot de passe
+        // actuel exige). Seul usage de l'ecran "Securite" de l'app marchand.
+        Route::post('/password/change', [AuthController::class, 'changePassword'])->middleware('throttle:auth-password-change');
         // Enregistre l'acceptation des CGU + politique confidentialité par l'utilisateur connecté.
         // Requis pour les utilisateurs pré-existant à la mise en place (accepted_terms_at IS NULL)
         // ET pour tout bump de TERMS_VERSION.

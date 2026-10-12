@@ -104,6 +104,13 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(3)->by($request->ip());
         });
 
+        // Code de confirmation email de l'inscription : 3 / heure par
+        // (email + IP). Protege le cout d'envoi et l'enumeration d'adresses.
+        RateLimiter::for('auth-register-email', function (Request $request) {
+            $email = strtolower((string) $request->input('email', ''));
+            return Limit::perHour(3)->by('register-email|' . $email . '|' . $request->ip());
+        });
+
         // OTP send : 3 / heure par NUMÉRO — protège directement le coût SMS Brevo.
         // Un bot qui balaie 1000 numéros paie 1000 SMS aujourd'hui ; ici il en enverra 3.
         RateLimiter::for('auth-otp-send', function (Request $request) {
@@ -123,6 +130,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('auth-password-forgot', function (Request $request) {
             $email = strtolower((string) $request->input('email', ''));
             return Limit::perHour(3)->by($email . '|' . $request->ip());
+        });
+
+        // Changement de mot de passe : 10 / heure par utilisateur connecte.
+        // Laisse un utilisateur se tromper, bloque le balayage du mot de passe
+        // actuel depuis un token vole.
+        RateLimiter::for('auth-password-change', function (Request $request) {
+            return Limit::perHour(10)->by('password-change|' . ($request->user()?->id ?? $request->ip()));
         });
 
         // Wallet top-up : 5 / heure par user. Évite la pollution du dashboard
