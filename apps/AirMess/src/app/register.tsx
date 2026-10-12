@@ -6,44 +6,54 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Button from '../components/ui/Button'
 import { PRIVACY_URL, TERMS_URL } from '../api/terms'
+import { SECTEURS_ACTIVITE, type RegisterAccountType, type SecteurActivite } from '../api/register'
 import { useAuthStore } from '../stores/authStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { getApiErrorMessage } from '../lib/apiError'
-import type { QuickRegisterAccountType, VerificationChannel } from '../api/register'
 
 const REGISTER_COPY = {
   fr: {
     title: 'Creer ton compte',
-    subtitle: 'Quelques infos, un code de confirmation, puis tu peux lancer tes courses.',
+    subtitle: 'Tes infos, un code recu par email, et ton compte est pret.',
     accountOptions: [
       { value: 'individual' as const, title: 'Particulier', subtitle: 'Pour envoyer quelques colis simplement' },
       { value: 'marchant' as const, title: 'Marchand', subtitle: 'Pour une boutique, un restaurant ou une entreprise' },
-    ],
-    channelOptions: [
-      { value: 'phone' as const, title: 'Telephone', subtitle: 'Recevoir le code par SMS' },
-      { value: 'email' as const, title: 'Email', subtitle: 'Recevoir le code dans ma boite mail' },
     ],
     stepYouAre: 'Tu es...',
     stepYouAreSubtitle: 'Ce choix adapte les prochaines informations.',
     continueLabel: 'Continuer',
     stepInfo: 'Tes informations',
-    stepInfoSubtitle: 'On garde seulement ce qui est utile pour creer une course.',
+    stepInfoSubtitle: "Ces infos servent a creer ton compte et a te contacter au sujet de tes courses.",
     nameLabelMarchant: "Nom de l'entreprise",
-    nameLabelIndividual: 'Nom complet',
     namePlaceholderMarchant: 'Ex: Maison Kossi',
-    namePlaceholderIndividual: 'Ex: Kossi A.',
-    emailLabel: 'Email visible dans le profil',
-    emailPlaceholder: 'optionnel@example.com',
+    firstNameLabel: 'Prenom',
+    firstNamePlaceholder: 'Ex: Kossi',
+    lastNameLabel: 'Nom',
+    lastNamePlaceholder: 'Ex: Dossou',
+    emailLabel: 'Email',
+    emailPlaceholder: 'commercant@example.com',
+    emailHelper: 'Ton email sert a te connecter et a recevoir ton code de confirmation.',
     phoneLabel: 'Telephone WhatsApp',
-    whatsappConfirm: 'Je confirme que ce numero est joignable sur WhatsApp.',
+    phonePlaceholder: '+229...',
+    passwordLabel: 'Mot de passe',
+    passwordPlaceholder: '8 caracteres minimum',
+    passwordConfirmLabel: 'Confirme ton mot de passe',
+    passwordConfirmPlaceholder: 'Retape le meme mot de passe',
+    passwordMismatch: 'Les deux mots de passe ne sont pas identiques.',
+    passwordTooShort: 'Le mot de passe doit contenir au moins 8 caracteres.',
+    secteurLabel: "Secteur d'activite",
+    ifuLabel: 'Numero IFU / RCCM',
+    ifuHelper: 'Optionnel, mais recommande pour la facturation.',
+    ifuPlaceholder: 'Ex: 1234567890123',
     termsConfirm: "J'accepte les conditions generales et la politique de confidentialite.",
     terms: 'Conditions',
     privacy: 'Confidentialite',
-    stepConfirm: 'Confirmation',
-    stepConfirmSubtitle: 'Choisis ou recevoir le code, puis saisis-le ici.',
-    sendCode: 'Envoyer le code',
-    debugCode: 'Code test :',
-    codeLabel: 'Code de confirmation',
+    stepConfirm: 'Confirmation par email',
+    stepConfirmSubtitle: (email: string) => `On envoie un code a ${email} pour confirmer ton adresse.`,
+    sendCode: 'Recevoir le code par email',
+    resendCode: 'Renvoyer un code',
+    codeLabel: 'Code recu par email',
+    codePlaceholder: '123456',
     createAccount: 'Creer mon compte',
     alreadyAccount: 'Deja un compte ? ',
     login: 'Se connecter',
@@ -51,36 +61,46 @@ const REGISTER_COPY = {
   },
   en: {
     title: 'Create your account',
-    subtitle: 'A few details, a confirmation code, then you can start your deliveries.',
+    subtitle: 'Your details, a code sent by email, and your account is ready.',
     accountOptions: [
       { value: 'individual' as const, title: 'Individual', subtitle: 'To send a few parcels simply' },
       { value: 'marchant' as const, title: 'Merchant', subtitle: 'For a shop, restaurant or business' },
-    ],
-    channelOptions: [
-      { value: 'phone' as const, title: 'Phone', subtitle: 'Receive the code by SMS' },
-      { value: 'email' as const, title: 'Email', subtitle: 'Receive the code in my inbox' },
     ],
     stepYouAre: 'You are...',
     stepYouAreSubtitle: 'This choice adapts the next questions.',
     continueLabel: 'Continue',
     stepInfo: 'Your information',
-    stepInfoSubtitle: "We only keep what's useful to create a delivery.",
+    stepInfoSubtitle: 'We use it to create your account and reach you about your deliveries.',
     nameLabelMarchant: 'Business name',
-    nameLabelIndividual: 'Full name',
     namePlaceholderMarchant: 'Ex: Kossi House',
-    namePlaceholderIndividual: 'Ex: Kossi A.',
-    emailLabel: 'Email shown in your profile',
-    emailPlaceholder: 'optional@example.com',
+    firstNameLabel: 'First name',
+    firstNamePlaceholder: 'Ex: Kossi',
+    lastNameLabel: 'Last name',
+    lastNamePlaceholder: 'Ex: Dossou',
+    emailLabel: 'Email',
+    emailPlaceholder: 'merchant@example.com',
+    emailHelper: 'Your email is used to sign in and to receive your confirmation code.',
     phoneLabel: 'WhatsApp phone',
-    whatsappConfirm: 'I confirm this number is reachable on WhatsApp.',
+    phonePlaceholder: '+229...',
+    passwordLabel: 'Password',
+    passwordPlaceholder: '8 characters minimum',
+    passwordConfirmLabel: 'Confirm your password',
+    passwordConfirmPlaceholder: 'Type the same password again',
+    passwordMismatch: 'The two passwords are not identical.',
+    passwordTooShort: 'The password must contain at least 8 characters.',
+    secteurLabel: 'Business sector',
+    ifuLabel: 'IFU / RCCM number',
+    ifuHelper: 'Optional, but recommended for invoicing.',
+    ifuPlaceholder: 'Ex: 1234567890123',
     termsConfirm: 'I accept the terms of service and privacy policy.',
     terms: 'Terms',
     privacy: 'Privacy',
-    stepConfirm: 'Confirmation',
-    stepConfirmSubtitle: 'Choose where to receive the code, then enter it here.',
-    sendCode: 'Send code',
-    debugCode: 'Test code:',
-    codeLabel: 'Confirmation code',
+    stepConfirm: 'Email confirmation',
+    stepConfirmSubtitle: (email: string) => `We send a code to ${email} to confirm your address.`,
+    sendCode: 'Receive the code by email',
+    resendCode: 'Send a new code',
+    codeLabel: 'Code received by email',
+    codePlaceholder: '123456',
     createAccount: 'Create my account',
     alreadyAccount: 'Already have an account? ',
     login: 'Log in',
@@ -88,65 +108,114 @@ const REGISTER_COPY = {
   },
 } as const
 
+const SECTEUR_LABELS: Record<'fr' | 'en', Record<SecteurActivite, string>> = {
+  fr: {
+    supermarche: 'Supermarche',
+    restaurant: 'Restaurant',
+    boutique: 'Boutique',
+    pharmacie: 'Pharmacie',
+    ecommerce: 'E-commerce',
+    autre: 'Autre',
+  },
+  en: {
+    supermarche: 'Supermarket',
+    restaurant: 'Restaurant',
+    boutique: 'Shop',
+    pharmacie: 'Pharmacy',
+    ecommerce: 'E-commerce',
+    autre: 'Other',
+  },
+}
+
 export default function RegisterScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const language = useLanguageStore((state) => state.language)
   const copy = REGISTER_COPY[language]
+  const secteurLabels = SECTEUR_LABELS[language]
   const user = useAuthStore((state) => state.user)
-  const sendCode = useAuthStore((state) => state.sendQuickRegistrationCode)
-  const verifyCode = useAuthStore((state) => state.verifyQuickRegistration)
+  const sendCode = useAuthStore((state) => state.sendRegistrationEmailCode)
+  const registerMarchant = useAuthStore((state) => state.registerMarchant)
+  const registerIndividual = useAuthStore((state) => state.registerIndividual)
+
   const [step, setStep] = useState<1 | 2 | 3>(1)
-  const [accountType, setAccountType] = useState<QuickRegisterAccountType>('individual')
-  const [displayName, setDisplayName] = useState('')
+  const [accountType, setAccountType] = useState<RegisterAccountType>('marchant')
+  const [raisonSociale, setRaisonSociale] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  const [phoneIsWhatsapp, setPhoneIsWhatsapp] = useState(true)
+  const [password, setPassword] = useState('')
+  const [passwordConfirmation, setPasswordConfirmation] = useState('')
+  const [secteur, setSecteur] = useState<SecteurActivite | null>(null)
+  const [ifu, setIfu] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
-  const [channel, setChannel] = useState<VerificationChannel>('phone')
   const [code, setCode] = useState('')
-  const [debugCode, setDebugCode] = useState<string | null>(null)
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const trimmedName = displayName.trim()
+  const trimmedName = raisonSociale.trim()
+  const trimmedFirstName = firstName.trim()
+  const trimmedLastName = lastName.trim()
   const trimmedEmail = email.trim()
   const trimmedPhone = phone.trim()
-  const needsEmail = channel === 'email'
+  const trimmedIfu = ifu.trim()
+  const isMarchant = accountType === 'marchant'
+
+  const displayName = isMarchant ? trimmedName : `${trimmedFirstName} ${trimmedLastName}`.trim()
+  const passwordTooShort = password.length > 0 && password.length < 8
+  const passwordMismatch = passwordConfirmation.length > 0 && password !== passwordConfirmation
+
+  const identityOk = isMarchant
+    ? trimmedName.length >= 2
+    : trimmedFirstName.length >= 2 && trimmedLastName.length >= 2
+  const passwordOk = password.length >= 8 && password === passwordConfirmation
 
   const canContinueInfo =
-    trimmedName.length >= 2 &&
+    identityOk &&
+    trimmedEmail.includes('@') &&
     trimmedPhone.length >= 8 &&
-    phoneIsWhatsapp &&
-    acceptedTerms &&
-    (!trimmedEmail || trimmedEmail.includes('@'))
-  const canSendCode = canContinueInfo && (!needsEmail || trimmedEmail.includes('@'))
-  const canVerify = code.trim().length >= 4
-  const nameLabel = accountType === 'marchant' ? copy.nameLabelMarchant : copy.nameLabelIndividual
-  const namePlaceholder = accountType === 'marchant' ? copy.namePlaceholderMarchant : copy.namePlaceholderIndividual
+    passwordOk &&
+    (!isMarchant || secteur !== null) &&
+    acceptedTerms
+
+  const canSendCode = canContinueInfo && trimmedEmail.includes('@') && !loading
+  const canCreate = code.trim().length === 6 && codeSentTo === trimmedEmail && !loading
+
   const progress = useMemo(() => [1, 2, 3].map((item) => item <= step), [step])
 
   if (user) {
     return <Redirect href="/dashboard" />
   }
 
+  function goBack() {
+    if (step === 1) {
+      router.back()
+      return
+    }
+    setError(null)
+    setStep((current) => (current - 1) as 1 | 2)
+  }
+
+  /** Toute modification de l'email invalide le code deja envoye. */
+  function changeEmail(value: string) {
+    setEmail(value)
+    if (codeSentTo && value.trim() !== codeSentTo) {
+      setCodeSentTo(null)
+      setCode('')
+    }
+  }
+
   async function handleSendCode() {
     if (!canSendCode) return
     setLoading(true)
     setError(null)
-    setDebugCode(null)
 
     try {
-      const response = await sendCode({
-        account_type: accountType,
-        display_name: trimmedName,
-        email: trimmedEmail || null,
-        phone: trimmedPhone,
-        verification_channel: channel,
-        phone_is_whatsapp: phoneIsWhatsapp,
-        accepted_terms: acceptedTerms,
-      })
-      setDebugCode(response.debug_code ?? null)
+      await sendCode(trimmedEmail, displayName)
+      setCodeSentTo(trimmedEmail)
       setStep(3)
     } catch (err) {
       setError(getApiErrorMessage(err, language))
@@ -155,13 +224,37 @@ export default function RegisterScreen() {
     }
   }
 
-  async function handleVerify() {
-    if (!canVerify) return
+  async function handleCreateAccount() {
+    if (!canCreate) return
     setLoading(true)
     setError(null)
 
     try {
-      await verifyCode(trimmedPhone, code.trim())
+      if (isMarchant) {
+        await registerMarchant({
+          name: displayName,
+          email: trimmedEmail,
+          phone: trimmedPhone,
+          password,
+          password_confirmation: passwordConfirmation,
+          raison_sociale: trimmedName,
+          secteur_activite: secteur ?? 'autre',
+          ifu_rccm: trimmedIfu || undefined,
+          email_code: code.trim(),
+          accepted_terms: true,
+        })
+      } else {
+        await registerIndividual({
+          first_name: trimmedFirstName,
+          last_name: trimmedLastName,
+          email: trimmedEmail,
+          phone: trimmedPhone,
+          password,
+          password_confirmation: passwordConfirmation,
+          email_code: code.trim(),
+          accepted_terms: true,
+        })
+      }
       router.replace('/dashboard')
     } catch (err) {
       setError(getApiErrorMessage(err, language))
@@ -180,7 +273,7 @@ export default function RegisterScreen() {
       >
         <View className="px-5 pb-4 pt-4">
           <Pressable
-            onPress={() => (step === 1 ? router.back() : setStep((current) => (current - 1) as 1 | 2 | 3))}
+            onPress={goBack}
             className="h-11 w-11 items-center justify-center rounded-full bg-white/10"
             accessibilityRole="button"
           >
@@ -238,52 +331,120 @@ export default function RegisterScreen() {
                 {copy.stepInfoSubtitle}
               </Text>
 
-              <FieldLabel>{nameLabel}</FieldLabel>
-              <FormInput
-                value={displayName}
-                onChangeText={setDisplayName}
-                placeholder={namePlaceholder}
-                textContentType="name"
-              />
+              {isMarchant ? (
+                <>
+                  <FieldLabel>{copy.nameLabelMarchant}</FieldLabel>
+                  <FormInput
+                    value={raisonSociale}
+                    onChangeText={setRaisonSociale}
+                    placeholder={copy.namePlaceholderMarchant}
+                    textContentType="organizationName"
+                  />
+                </>
+              ) : (
+                <>
+                  <FieldLabel>{copy.firstNameLabel}</FieldLabel>
+                  <FormInput
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    placeholder={copy.firstNamePlaceholder}
+                    textContentType="givenName"
+                  />
+                  <FieldLabel>{copy.lastNameLabel}</FieldLabel>
+                  <FormInput
+                    value={lastName}
+                    onChangeText={setLastName}
+                    placeholder={copy.lastNamePlaceholder}
+                    textContentType="familyName"
+                  />
+                </>
+              )}
 
               <FieldLabel>{copy.emailLabel}</FieldLabel>
               <FormInput
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={changeEmail}
                 placeholder={copy.emailPlaceholder}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 textContentType="emailAddress"
               />
+              <HelperText>{copy.emailHelper}</HelperText>
 
               <FieldLabel>{copy.phoneLabel}</FieldLabel>
               <FormInput
                 value={phone}
                 onChangeText={setPhone}
-                placeholder="+229..."
+                placeholder={copy.phonePlaceholder}
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
               />
 
-              <Pressable
-                onPress={() => setPhoneIsWhatsapp((current) => !current)}
-                className="mt-4 flex-row items-start rounded-2xl bg-white p-3 dark:bg-[#11141B]"
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: phoneIsWhatsapp }}
-              >
-                <Ionicons
-                  name={phoneIsWhatsapp ? 'checkbox' : 'square-outline'}
-                  size={22}
-                  color="#1A1614"
-                />
-                <Text className="ml-3 flex-1 text-sm font-semibold leading-5 text-ink dark:text-white">
-                  {copy.whatsappConfirm}
-                </Text>
-              </Pressable>
+              <FieldLabel>{copy.passwordLabel}</FieldLabel>
+              <PasswordInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder={copy.passwordPlaceholder}
+                visible={showPassword}
+                onToggle={() => setShowPassword((value) => !value)}
+              />
+              <HelperText tone={passwordTooShort ? 'error' : 'muted'}>
+                {passwordTooShort ? copy.passwordTooShort : copy.passwordPlaceholder}
+              </HelperText>
+
+              <FieldLabel>{copy.passwordConfirmLabel}</FieldLabel>
+              <PasswordInput
+                value={passwordConfirmation}
+                onChangeText={setPasswordConfirmation}
+                placeholder={copy.passwordConfirmPlaceholder}
+                visible={showPassword}
+                onToggle={() => setShowPassword((value) => !value)}
+              />
+              <HelperText tone={passwordMismatch ? 'error' : 'muted'}>
+                {passwordMismatch ? copy.passwordMismatch : copy.passwordConfirmPlaceholder}
+              </HelperText>
+
+              {isMarchant && (
+                <>
+                  <FieldLabel>{copy.secteurLabel}</FieldLabel>
+                  <View className="flex-row flex-wrap gap-2">
+                    {SECTEURS_ACTIVITE.map((value) => {
+                      const selected = secteur === value
+                      return (
+                        <Pressable
+                          key={value}
+                          onPress={() => setSecteur(value)}
+                          className={[
+                            'rounded-full border px-4 py-2.5',
+                            selected
+                              ? 'border-airmess-yellow bg-airmess-yellow'
+                              : 'border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#11141B]',
+                          ].join(' ')}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                        >
+                          <Text className="text-sm font-extrabold text-ink dark:text-white">
+                            {secteurLabels[value]}
+                          </Text>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+
+                  <FieldLabel>{copy.ifuLabel}</FieldLabel>
+                  <FormInput
+                    value={ifu}
+                    onChangeText={setIfu}
+                    placeholder={copy.ifuPlaceholder}
+                    keyboardType="number-pad"
+                  />
+                  <HelperText>{copy.ifuHelper}</HelperText>
+                </>
+              )}
 
               <Pressable
                 onPress={() => setAcceptedTerms((current) => !current)}
-                className="mt-3 flex-row items-start rounded-2xl bg-white p-3 dark:bg-[#11141B]"
+                className="mt-4 flex-row items-start rounded-2xl bg-white p-3 dark:bg-[#11141B]"
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: acceptedTerms }}
               >
@@ -304,11 +465,12 @@ export default function RegisterScreen() {
 
               <Button
                 className="mt-6"
-                onPress={() => setStep(3)}
-                disabled={!canContinueInfo}
-                rightIcon={<Ionicons name="arrow-forward" size={18} color="#1A1614" />}
+                onPress={() => void handleSendCode()}
+                loading={loading}
+                disabled={!canSendCode}
+                rightIcon={<Ionicons name="mail-outline" size={18} color="#1A1614" />}
               >
-                {copy.continueLabel}
+                {copy.sendCode}
               </Button>
             </View>
           )}
@@ -317,53 +479,48 @@ export default function RegisterScreen() {
             <View>
               <Text className="text-xl font-extrabold text-ink dark:text-white">{copy.stepConfirm}</Text>
               <Text className="mt-1 text-sm font-semibold leading-5 text-warm-500 dark:text-[#AEB6C5]">
-                {copy.stepConfirmSubtitle}
+                {copy.stepConfirmSubtitle(codeSentTo ?? trimmedEmail)}
               </Text>
 
-              <View className="mt-5 gap-3">
-                {copy.channelOptions.map((option) => (
-                  <ChoiceCard
-                    key={option.value}
-                    title={option.title}
-                    subtitle={option.subtitle}
-                    icon={option.value === 'phone' ? 'chatbubble-ellipses-outline' : 'mail-outline'}
-                    selected={channel === option.value}
-                    disabled={option.value === 'email' && !trimmedEmail}
-                    onPress={() => setChannel(option.value)}
-                  />
-                ))}
+              <View className="mt-4 flex-row items-center rounded-2xl border border-warm-200 bg-white px-4 py-3 dark:border-[#343A46] dark:bg-[#11141B]">
+                <Ionicons name="mail-outline" size={18} color="#8A7E68" />
+                <Text className="ml-2 flex-1 text-sm font-extrabold text-ink dark:text-white">
+                  {codeSentTo ?? trimmedEmail}
+                </Text>
+                <Pressable
+                  onPress={() => setStep(2)}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                >
+                  <Text className="text-xs font-extrabold text-airmess-red">{copy.continueLabel}</Text>
+                </Pressable>
               </View>
 
               <Button
-                className="mt-5"
-                onPress={handleSendCode}
-                loading={loading && !debugCode}
-                disabled={!canSendCode || loading}
+                className="mt-4"
+                variant="outline"
+                onPress={() => void handleSendCode()}
+                loading={loading}
+                disabled={!canSendCode}
                 rightIcon={<Ionicons name="send" size={18} color="#1A1614" />}
               >
-                {copy.sendCode}
+                {copy.resendCode}
               </Button>
-
-              {debugCode && (
-                <Text className="mt-3 rounded-2xl bg-airmess-yellow/20 px-3 py-2 text-center text-sm font-extrabold text-ink">
-                  {copy.debugCode} {debugCode}
-                </Text>
-              )}
 
               <FieldLabel>{copy.codeLabel}</FieldLabel>
               <FormInput
                 value={code}
                 onChangeText={setCode}
-                placeholder="123456"
+                placeholder={copy.codePlaceholder}
                 keyboardType="number-pad"
                 textContentType="oneTimeCode"
               />
 
               <Button
                 className="mt-5"
-                onPress={handleVerify}
-                loading={loading && !!code}
-                disabled={!canVerify || loading}
+                onPress={() => void handleCreateAccount()}
+                loading={loading}
+                disabled={!canCreate}
                 rightIcon={<Ionicons name="checkmark" size={18} color="#1A1614" />}
               >
                 {copy.createAccount}
@@ -439,6 +596,57 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <Text className="mb-2 mt-4 text-xs font-extrabold uppercase text-warm-500 dark:text-[#AEB6C5]">{children}</Text>
 }
 
+function HelperText({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'error' }) {
+  return (
+    <Text
+      className={[
+        'mt-1.5 text-xs font-semibold',
+        tone === 'error' ? 'text-airmess-red' : 'text-warm-500 dark:text-[#AEB6C5]',
+      ].join(' ')}
+    >
+      {children}
+    </Text>
+  )
+}
+
+function PasswordInput({
+  value,
+  onChangeText,
+  placeholder,
+  visible,
+  onToggle,
+}: {
+  value: string
+  onChangeText: (value: string) => void
+  placeholder: string
+  visible: boolean
+  onToggle: () => void
+}) {
+  return (
+    <View>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={!visible}
+        autoCapitalize="none"
+        autoCorrect={false}
+        textContentType="newPassword"
+        placeholder={placeholder}
+        placeholderTextColor="#A89F95"
+        className="h-14 rounded-2xl border border-warm-200 bg-white pl-4 pr-14 text-base font-semibold text-ink dark:border-[#343A46] dark:bg-[#11141B] dark:text-white"
+      />
+      <Pressable
+        onPress={onToggle}
+        className="absolute right-3 top-0 h-14 w-11 items-center justify-center"
+        hitSlop={8}
+        accessibilityRole="button"
+      >
+        <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color="#8A7E68" />
+      </Pressable>
+    </View>
+  )
+}
+
 function SmallLink({ label, url }: { label: string; url: string }) {
   return (
     <Pressable
@@ -463,7 +671,7 @@ function FormInput({
   onChangeText: (value: string) => void
   placeholder: string
   keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'number-pad'
-  textContentType?: 'name' | 'emailAddress' | 'telephoneNumber' | 'oneTimeCode'
+  textContentType?: 'name' | 'givenName' | 'familyName' | 'organizationName' | 'emailAddress' | 'telephoneNumber' | 'oneTimeCode'
   autoCapitalize?: 'none'
 }) {
   return (

@@ -32,6 +32,50 @@ class AuthController extends Controller
     private const LOGIN_OTP_MAX_ATTEMPTS = 5;
     private const LOGIN_OTP_COOLDOWN = 45;
 
+    private const REGISTER_EMAIL_CODE_TTL = 600;
+    private const REGISTER_EMAIL_CODE_MAX_ATTEMPTS = 5;
+    private const REGISTER_EMAIL_CODE_COOLDOWN = 45;
+
+    /**
+     * Etape 1 de l'inscription canonique (marchand / particulier) : envoi du
+     * code de confirmation par EMAIL.
+     *
+     * Meme mecanique que l'inscription rapide (cache + hash + cooldown +
+     * nombre d'essais limite) mais canal email uniquement : c'est le seul
+     * canal de confirmation de l'inscription, cote app comme cote web.
+     */
+    public function sendRegistrationEmailCode(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'email'        => ['required', 'email', 'unique:users,email'],
+            'display_name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $email = $this->normalizeEmail($data['email']);
+        $cooldownKey = $this->registrationEmailCodeKey($email) . ':cooldown';
+
+        if (Cache::has($cooldownKey)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email' => ['Patientez quelques secondes avant de redemander un code.'],
+            ]);
+        }
+
+        $code = (string) random_int(100000, 999999);
+        $this->storeRegistrationEmailCode($email, $code);
+        Cache::put($cooldownKey, true, self::REGISTER_EMAIL_CODE_COOLDOWN);
+
+        Mail::to($email)->send(new QuickRegistrationCodeMail(
+            $code,
+            $data['display_name'] ?? $email,
+            (int) (self::REGISTER_EMAIL_CODE_TTL / 60),
+        ));
+
+        return response()->json([
+            'message'    => 'Code envoye par email.',
+            'expires_in' => self::REGISTER_EMAIL_CODE_TTL,
+        ]);
+    }
+
     public function sendQuickRegistrationCode(
         Request $request,
         \App\Services\BrevoSmsService $sms,
@@ -192,6 +236,61 @@ class AuthController extends Controller
         ], 201);
     }
 
+    /** Cle de cache du code de confirmation email (une entree par adresse). */
+    private function registrationEmailCodeKey(string $email): string
+    {
+        return 'register-email-code:' . sha1($this->normalizeEmail($email));
+    }
+
+    private function normalizeEmail(string $email): string
+    {
+        return mb_strtolower(trim($email));
+    }
+
+    private function storeRegistrationEmailCode(string $email, string $code): void
+    {
+        Cache::put($this->registrationEmailCodeKey($email), [
+            'hash'     => Hash::make($code),
+            'attempts' => 0,
+        ], self::REGISTER_EMAIL_CODE_TTL);
+    }
+
+    /**
+     * Consomme le code de confirmation email.
+     *
+     * Usage unique : l'entree de cache est supprimee des que le code est
+     * accepte, donc le meme code ne peut pas servir a creer un second compte.
+     */
+    private function consumeRegistrationEmailCode(string $email, ?string $code): void
+    {
+        $key = $this->registrationEmailCodeKey($email);
+        $entry = Cache::get($key);
+
+        if (! $entry) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email_code' => ['Code de confirmation expire ou inexistant. Demandez un nouveau code.'],
+            ]);
+        }
+
+        if (($entry['attempts'] ?? 0) >= self::REGISTER_EMAIL_CODE_MAX_ATTEMPTS) {
+            Cache::forget($key);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email_code' => ['Trop de tentatives. Demandez un nouveau code.'],
+            ]);
+        }
+
+        if (empty($code) || ! Hash::check($code, $entry['hash'])) {
+            $entry['attempts'] = ((int) ($entry['attempts'] ?? 0)) + 1;
+            Cache::put($key, $entry, self::REGISTER_EMAIL_CODE_TTL);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email_code' => ['Code de confirmation incorrect.'],
+            ]);
+        }
+
+        Cache::forget($key);
+        Cache::forget($key . ':cooldown');
+    }
+
     private function splitDisplayName(string $name): array
     {
         $parts = preg_split('/\s+/', trim($name)) ?: [];
@@ -218,6 +317,9 @@ class AuthController extends Controller
             'password'         => ['required', 'string', 'min:8', 'confirmed'],
             // Connexion Google (optionnelle)
             'firebase_google_id_token' => ['nullable', 'string'],
+            // Confirmation email : code a 6 chiffres recu par email.
+            // Obligatoire sauf si l'email est deja prouve par Google.
+            'email_code'       => ['nullable', 'string', 'digits:6'],
             'raison_sociale'   => ['required', 'string', 'max:255'],
             'ifu_rccm'         => ['nullable', 'string', 'max:50'],
             'secteur_activite' => ['required', Rule::in([
@@ -246,6 +348,12 @@ class AuthController extends Controller
                     'email' => ['Connexion Google invalide ou email différent. Réessayez.'],
                 ]);
             }
+            $emailVerifiedAt = now();
+        }
+
+        // Sans Google, l'email n'est prouve que par le code recu par email.
+        if ($emailVerifiedAt === null) {
+            $this->consumeRegistrationEmailCode($data['email'], $data['email_code'] ?? null);
             $emailVerifiedAt = now();
         }
 
@@ -308,6 +416,9 @@ class AuthController extends Controller
             'phone'      => ['required', 'string', 'max:20', 'unique:users,phone'],
             'password'   => ['required', 'string', 'min:8', 'confirmed'],
             'gender'     => ['nullable', Rule::in(['M', 'F', 'autre'])],
+            // Confirmation email : code a 6 chiffres recu par email.
+            // Obligatoire sauf si l'email est deja prouve par Google.
+            'email_code' => ['nullable', 'string', 'digits:6'],
             // Connexion Google (optionnelle)
             'firebase_google_id_token' => ['nullable', 'string'],
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
@@ -325,6 +436,12 @@ class AuthController extends Controller
                     'email' => ['Connexion Google invalide ou email différent. Réessayez.'],
                 ]);
             }
+            $emailVerifiedAt = now();
+        }
+
+        // Sans Google, l'email n'est prouve que par le code recu par email.
+        if ($emailVerifiedAt === null) {
+            $this->consumeRegistrationEmailCode($data['email'], $data['email_code'] ?? null);
             $emailVerifiedAt = now();
         }
 

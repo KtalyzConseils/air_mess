@@ -20,16 +20,12 @@ const LOGIN_COPY = {
   fr: {
     tagline: 'Espace marchand',
     welcome: 'Bienvenue',
-    subtitle: 'Connecte-toi avec ton numero de telephone.',
-    codeTitle: 'Verification',
-    codeSubtitle: (phone: string) => `Entre le code envoye au ${phone}.`,
-    phone: 'Telephone',
-    back: 'Retour',
-    edit: 'Modifier',
-    editLabel: 'Modifier le numero',
-    codeLabel: 'Code recu par SMS',
-    debugCode: 'Code test :',
-    sendCode: 'Envoyer le code',
+    subtitle: 'Connecte-toi avec ton email et ton mot de passe.',
+    email: 'Email',
+    emailPlaceholder: 'commercant@example.com',
+    password: 'Mot de passe',
+    showPassword: 'Afficher le mot de passe',
+    hidePassword: 'Masquer le mot de passe',
     login: 'Se connecter',
     noAccount: 'Pas encore de compte ? ',
     createAccount: 'Creer un compte',
@@ -37,16 +33,12 @@ const LOGIN_COPY = {
   en: {
     tagline: 'Merchant space',
     welcome: 'Welcome',
-    subtitle: 'Sign in with your phone number.',
-    codeTitle: 'Verification',
-    codeSubtitle: (phone: string) => `Enter the code sent to ${phone}.`,
-    phone: 'Phone',
-    back: 'Back',
-    edit: 'Edit',
-    editLabel: 'Edit phone number',
-    codeLabel: 'Code received by SMS',
-    debugCode: 'Test code:',
-    sendCode: 'Send code',
+    subtitle: 'Sign in with your email and password.',
+    email: 'Email',
+    emailPlaceholder: 'merchant@example.com',
+    password: 'Password',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
     login: 'Log in',
     noAccount: "Don't have an account yet? ",
     createAccount: 'Create an account',
@@ -58,57 +50,31 @@ export default function LoginScreen() {
   const language = useLanguageStore((state) => state.language)
   const copy = LOGIN_COPY[language]
   const user = useAuthStore((state) => state.user)
-  const sendLoginCode = useAuthStore((state) => state.sendLoginCode)
-  const verifyLoginCode = useAuthStore((state) => state.verifyLoginCode)
-  const [phone, setPhone] = useState('')
-  const [step, setStep] = useState<'phone' | 'code'>('phone')
-  const [code, setCode] = useState('')
-  const [debugCode, setDebugCode] = useState<string | null>(null)
+  const login = useAuthStore((state) => state.login)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const trimmedPhone = phone.trim()
-  const canSendCode = trimmedPhone.length >= 8
-  const canVerifyCode = code.trim().length >= 4
+  const trimmedEmail = email.trim()
+  const canSubmit = trimmedEmail.includes('@') && password.length >= 4
 
   if (user) {
     return <Redirect href="/dashboard" />
   }
 
-  async function handleSendCode() {
-    if (!canSendCode) return
+  async function handleLogin() {
+    if (!canSubmit) return
     setError(null)
-    setDebugCode(null)
     setLoading(true)
     try {
-      const response = await sendLoginCode(trimmedPhone)
-      setDebugCode(response.debug_code ?? null)
-      setStep('code')
+      await login(trimmedEmail, password)
     } catch (err) {
       setError(getApiErrorMessage(err, language))
     } finally {
       setLoading(false)
     }
-  }
-
-  async function handleVerifyCode() {
-    if (!canVerifyCode) return
-    setError(null)
-    setLoading(true)
-    try {
-      await verifyLoginCode(trimmedPhone, code.trim())
-    } catch (err) {
-      setError(getApiErrorMessage(err, language))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  function editPhone() {
-    setStep('phone')
-    setError(null)
-    setDebugCode(null)
-    setCode('')
   }
 
   return (
@@ -132,66 +98,55 @@ export default function LoginScreen() {
         </View>
 
         <View className="mx-5 rounded-3xl bg-cream p-6 shadow-cta-dark dark:bg-[#181B24]">
-          {step === 'phone' ? (
-            <>
-              <Text className="mb-1 text-xl font-extrabold text-ink dark:text-white">{copy.welcome}</Text>
-              <Text className="mb-5 text-sm text-warm-500">{copy.subtitle}</Text>
+          <Text className="mb-1 text-xl font-extrabold text-ink dark:text-white">{copy.welcome}</Text>
+          <Text className="mb-5 text-sm text-warm-500">{copy.subtitle}</Text>
 
-              <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
-                {copy.phone}
-              </Text>
-              <TextInput
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                textContentType="telephoneNumber"
-                placeholder="+229..."
-                placeholderTextColor="#B8AF9F"
-                className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink dark:border-[#343A46] dark:bg-[#11141B] dark:text-white"
+          <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
+            {copy.email}
+          </Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            placeholder={copy.emailPlaceholder}
+            placeholderTextColor="#B8AF9F"
+            className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink dark:border-[#343A46] dark:bg-[#11141B] dark:text-white"
+          />
+
+          <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
+            {copy.password}
+          </Text>
+          <View className="mb-4">
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="password"
+              textContentType="password"
+              placeholder="********"
+              placeholderTextColor="#B8AF9F"
+              className="h-14 rounded-2xl border-2 border-warm-200 bg-off-white pl-4 pr-14 text-base text-ink dark:border-[#343A46] dark:bg-[#11141B] dark:text-white"
+            />
+            <Pressable
+              onPress={() => setShowPassword((value) => !value)}
+              className="absolute right-3 top-0 h-14 w-11 items-center justify-center"
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? copy.hidePassword : copy.showPassword}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color="#8A7E68"
               />
-            </>
-          ) : (
-            <>
-              <Pressable
-                onPress={editPhone}
-                className="mb-4 h-10 flex-row items-center self-start rounded-full bg-off-white px-3 dark:bg-[#11141B]"
-                accessibilityRole="button"
-                accessibilityLabel={copy.editLabel}
-              >
-                <Ionicons name="arrow-back" size={17} color="#1A1614" />
-                <Text className="ml-1.5 text-xs font-extrabold text-ink dark:text-white">{copy.back}</Text>
-              </Pressable>
-
-              <Text className="mb-1 text-xl font-extrabold text-ink dark:text-white">{copy.codeTitle}</Text>
-              <Text className="mb-4 text-sm text-warm-500">{copy.codeSubtitle(trimmedPhone)}</Text>
-
-              <View className="mb-4 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4 py-3 dark:border-[#343A46] dark:bg-[#11141B]">
-                <Ionicons name="call-outline" size={18} color="#8A7E68" />
-                <Text className="ml-2 flex-1 text-sm font-extrabold text-ink dark:text-white">{trimmedPhone}</Text>
-                <Pressable onPress={editPhone} accessibilityRole="button" hitSlop={8}>
-                  <Text className="text-xs font-extrabold text-airmess-red">{copy.edit}</Text>
-                </Pressable>
-              </View>
-
-              {debugCode && (
-                <Text className="mb-3 rounded-2xl bg-airmess-yellow/20 px-3 py-2 text-center text-sm font-extrabold text-ink">
-                  {copy.debugCode} {debugCode}
-                </Text>
-              )}
-              <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
-                {copy.codeLabel}
-              </Text>
-              <TextInput
-                value={code}
-                onChangeText={setCode}
-                keyboardType="number-pad"
-                textContentType="oneTimeCode"
-                placeholder="123456"
-                placeholderTextColor="#B8AF9F"
-                className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink dark:border-[#343A46] dark:bg-[#11141B] dark:text-white"
-              />
-            </>
-          )}
+            </Pressable>
+          </View>
 
           {error ? (
             <View className="mb-4 flex-row items-start rounded-2xl border-2 border-airmess-red/30 bg-danger-bg p-3">
@@ -202,29 +157,16 @@ export default function LoginScreen() {
             </View>
           ) : null}
 
-          {step === 'phone' ? (
-            <Button
-              variant="primary"
-              size="lg"
-              onPress={handleSendCode}
-              loading={loading}
-              disabled={!canSendCode}
-              rightIcon={<Ionicons name="send" size={18} color="#1A1614" />}
-            >
-              {copy.sendCode}
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              size="lg"
-              onPress={handleVerifyCode}
-              loading={loading}
-              disabled={!canVerifyCode}
-              rightIcon={<Ionicons name="checkmark" size={18} color="#1A1614" />}
-            >
-              {copy.login}
-            </Button>
-          )}
+          <Button
+            variant="primary"
+            size="lg"
+            onPress={handleLogin}
+            loading={loading}
+            disabled={!canSubmit || loading}
+            rightIcon={<Ionicons name="arrow-forward" size={18} color="#1A1614" />}
+          >
+            {copy.login}
+          </Button>
 
           <View className="mt-5 flex-row justify-center">
             <Text className="text-sm font-semibold text-warm-500">{copy.noAccount}</Text>

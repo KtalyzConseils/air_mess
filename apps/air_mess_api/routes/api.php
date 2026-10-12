@@ -35,6 +35,9 @@ Route::prefix('auth')->group(function () {
     Route::post('/register/individual',[AuthController::class, 'registerIndividual'])->middleware('throttle:auth-register');
     Route::post('/register/quick/send-code', [AuthController::class, 'sendQuickRegistrationCode'])->middleware('throttle:auth-otp-send');
     Route::post('/register/quick/verify',    [AuthController::class, 'verifyQuickRegistration'])->middleware('throttle:auth-otp-verify');
+    // Confirmation email de l'inscription canonique (marchand / particulier) :
+    // seule voie de confirmation, cote app mobile comme cote web.
+    Route::post('/register/email/send-code', [AuthController::class, 'sendRegistrationEmailCode'])->middleware('throttle:auth-register-email');
     Route::post('/register/driver',    [AuthController::class, 'registerDriver'])->middleware('throttle:auth-register');
     // Vérification du numéro par SMS (OTP) — inscription livreur depuis l'app mobile.
     Route::post('/phone/otp/send',   [\App\Http\Controllers\Api\PhoneOtpController::class, 'send'])->middleware('throttle:auth-otp-send');

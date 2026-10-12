@@ -25,6 +25,7 @@ interface RegisterFormValues {
   phone: string
   password: string
   password_confirmation: string
+  email_code: string
   first_name?: string
   last_name?: string
   gender?: 'M' | 'F' | 'autre' | ''
@@ -45,6 +46,7 @@ export default function RegisterPage() {
   const activationToken = searchParams.get('activation') ?? ''
   const registerIndividual = useAuthStore((s) => s.registerIndividual)
   const registerMarchant = useAuthStore((s) => s.registerMarchant)
+  const sendRegistrationEmailCode = useAuthStore((s) => s.sendRegistrationEmailCode)
 
   const [type, setType] = useState<AccountType>(() =>
     activationToken || searchParams.get('type') === 'marchant' ? 'marchant' : 'individual',
@@ -61,12 +63,17 @@ export default function RegisterPage() {
   const [googleToken, setGoogleToken] = useState<string | null>(null)
   const [googleEmail, setGoogleEmail] = useState<string | null>(null)
   const [googleBusy, setGoogleBusy] = useState(false)
+  // Code de confirmation email : envoye avant la creation du compte.
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null)
+  const [codeBusy, setCodeBusy] = useState(false)
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    getValues,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>()
 
@@ -115,6 +122,35 @@ export default function RegisterPage() {
     setGoogleEmail(null)
   }
 
+  /**
+   * Envoie le code de confirmation a l'email saisi. Seule voie de
+   * confirmation de l'inscription (hors connexion Google, qui prouve deja
+   * l'adresse).
+   */
+  async function handleSendCode() {
+    setError(null)
+
+    const emailIsValid = await trigger('email')
+    const email = (getValues('email') ?? '').trim()
+    if (!emailIsValid || !email) return
+
+    setCodeBusy(true)
+    try {
+      await sendRegistrationEmailCode(email, type === 'marchant' ? getValues('name') : undefined)
+      setCodeSentTo(email)
+    } catch (err) {
+      if (err instanceof AxiosError) {
+        const data = err.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined
+        setError(data?.message ?? t('auth.register.emailCodeError'))
+        setServerFieldErrors(data?.errors ?? {})
+      } else {
+        setError(t('auth.register.emailCodeError'))
+      }
+    } finally {
+      setCodeBusy(false)
+    }
+  }
+
   async function onSubmit(values: RegisterFormValues) {
     setError(null)
     setServerFieldErrors({})
@@ -133,6 +169,7 @@ export default function RegisterPage() {
           phone: values.phone,
           password: values.password,
           password_confirmation: values.password_confirmation,
+          email_code: googleStillValid ? undefined : values.email_code,
           gender: values.gender || undefined,
           firebase_google_id_token: googleStillValid ? googleToken : undefined,
           accepted_terms: true,
@@ -147,6 +184,7 @@ export default function RegisterPage() {
           raison_sociale: values.raison_sociale!,
           secteur_activite: values.secteur_activite!,
           ifu_rccm: values.ifu_rccm || undefined,
+          email_code: googleStillValid ? undefined : values.email_code,
           firebase_google_id_token: googleStillValid ? googleToken : undefined,
           accepted_terms: true,
           activation_token: activationToken || undefined,
@@ -326,9 +364,38 @@ export default function RegisterPage() {
                   >
                     {t('auth.register.googleUnlink')}
                   </button>
-                ) : undefined
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleSendCode()}
+                    disabled={codeBusy}
+                    className="p-2 text-caption font-semibold text-airmess-red hover:text-ink transition-colors disabled:opacity-40"
+                  >
+                    {codeBusy
+                      ? t('auth.register.emailCodeSending')
+                      : codeSentTo
+                        ? t('auth.register.emailCodeResend')
+                        : t('auth.register.emailCodeSend')}
+                  </button>
+                )
               }
             />
+
+            {!googleToken && (
+              <Input
+                label={t('auth.register.emailCode')}
+                placeholder="123456"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                helper={
+                  codeSentTo
+                    ? t('auth.register.emailCodeSentTo', { email: codeSentTo })
+                    : t('auth.register.emailCodeHelper')
+                }
+                {...register('email_code', { required: t('auth.register.emailCodeRequired') })}
+                error={errors.email_code?.message ?? serverErr('email_code')}
+              />
+            )}
             <Input
               type="tel"
               label={t('common.phone')}

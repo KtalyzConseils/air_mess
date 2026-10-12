@@ -1,32 +1,42 @@
 import { create } from 'zustand'
 import api from '../api/client'
 import {
-  sendQuickRegistrationCode,
-  verifyQuickRegistration,
-  type SendQuickRegistrationCodePayload,
-  type SendQuickRegistrationCodeResponse,
+  registerIndividual,
+  registerMarchant,
+  sendRegistrationEmailCode,
+  type RegisterIndividualPayload,
+  type RegisterMarchantPayload,
+  type SendRegistrationCodeResponse,
 } from '../api/register'
-import {
-  sendLoginCode,
-  verifyLoginCode,
-  type SendLoginCodeResponse,
-} from '../api/loginSms'
 import type { User } from '../types/auth'
 import { unregisterPushNotifications } from '../lib/notifications'
 import { deleteAuthToken, getAuthToken, setAuthToken } from '../utils/authStorage'
+
+const NOT_ALLOWED_ACCOUNT = 'Ce compte n est pas un compte marchand ou particulier.'
 
 interface AuthState {
   user: User | null
   token: string | null
   hydrated: boolean
-  sendQuickRegistrationCode: (payload: SendQuickRegistrationCodePayload) => Promise<SendQuickRegistrationCodeResponse>
-  verifyQuickRegistration: (phone: string, code: string) => Promise<void>
-  sendLoginCode: (phone: string) => Promise<SendLoginCodeResponse>
-  verifyLoginCode: (phone: string, code: string) => Promise<void>
+  login: (email: string, password: string) => Promise<void>
+  sendRegistrationEmailCode: (email: string, displayName?: string) => Promise<SendRegistrationCodeResponse>
+  registerMarchant: (payload: RegisterMarchantPayload) => Promise<void>
+  registerIndividual: (payload: RegisterIndividualPayload) => Promise<void>
   logout: () => Promise<void>
   hydrate: () => Promise<void>
   refreshUser: () => Promise<void>
   setUser: (user: User) => void
+}
+
+/**
+ * L'app marchand n'accepte que les comptes `marchant` et `individual` :
+ * livreurs et admins se connectent ailleurs. Un jeton emis pour un autre
+ * type de compte n'est jamais stocke.
+ */
+function assertAllowedAccount(user: User | undefined): void {
+  if (user?.type !== 'marchant' && user?.type !== 'individual') {
+    throw new Error(NOT_ALLOWED_ACCOUNT)
+  }
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -36,42 +46,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setUser: (user) => set({ user }),
 
-  sendQuickRegistrationCode,
+  sendRegistrationEmailCode,
+
+  /**
+   * Connexion par email + mot de passe (meme contrat que l'app livreur :
+   * POST /auth/login). Remplace l'ancienne connexion par telephone + OTP.
+   */
+  login: async (email, password) => {
+    const { data } = await api.post<{ user: User; token: string }>('/auth/login', {
+      email: email.trim(),
+      password,
+    })
+    assertAllowedAccount(data.user)
+    await setAuthToken(data.token)
+    set({ user: data.user, token: data.token })
+  },
+
+  registerMarchant: async (payload) => {
+    const data = await registerMarchant(payload)
+    assertAllowedAccount(data.user)
+    await setAuthToken(data.token)
+    set({ user: data.user, token: data.token })
+  },
+
+  registerIndividual: async (payload) => {
+    const data = await registerIndividual(payload)
+    assertAllowedAccount(data.user)
+    await setAuthToken(data.token)
+    set({ user: data.user, token: data.token })
+  },
 
   refreshUser: async () => {
     const token = get().token ?? (await getAuthToken())
     if (!token) return
 
     const { data } = await api.get<{ user: User }>('/auth/me')
-    if (data.user?.type === 'marchant' || data.user?.type === 'individual') {
-      set({ user: data.user, token })
-      return
-    }
-    throw new Error('Ce compte n est pas un compte marchand ou particulier.')
-  },
-
-  verifyQuickRegistration: async (phone, code) => {
-    const data = await verifyQuickRegistration(phone, code)
-
-    if (data.user?.type !== 'marchant' && data.user?.type !== 'individual') {
-      throw new Error('Ce compte n est pas un compte marchand ou particulier.')
-    }
-
-    await setAuthToken(data.token)
-    set({ user: data.user, token: data.token })
-  },
-
-  sendLoginCode,
-
-  verifyLoginCode: async (phone, code) => {
-    const data = await verifyLoginCode(phone, code)
-
-    if (data.user?.type !== 'marchant' && data.user?.type !== 'individual') {
-      throw new Error('Ce compte n est pas un compte marchand ou particulier.')
-    }
-
-    await setAuthToken(data.token)
-    set({ user: data.user, token: data.token })
+    assertAllowedAccount(data.user)
+    set({ user: data.user, token })
   },
 
   logout: async () => {

@@ -10,6 +10,8 @@ export interface RegisterIndividualPayload {
   phone: string
   password: string
   password_confirmation: string
+  /** Code de confirmation recu par email (obligatoire sauf connexion Google). */
+  email_code?: string
   gender?: 'M' | 'F' | 'autre'
   /** ID token Firebase d'une connexion Google (email vérifié) — optionnel. */
   firebase_google_id_token?: string
@@ -26,6 +28,8 @@ export interface RegisterMarchantPayload {
   raison_sociale: string
   ifu_rccm?: string
   secteur_activite: 'supermarche' | 'restaurant' | 'boutique' | 'pharmacie' | 'ecommerce' | 'autre'
+  /** Code de confirmation recu par email (obligatoire sauf connexion Google). */
+  email_code?: string
   /** ID token Firebase d'une connexion Google (email vérifié) — optionnel. */
   firebase_google_id_token?: string
   /** Consentement CGU + politique confidentialité (checkbox obligatoire). */
@@ -78,6 +82,8 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>
   registerIndividual: (payload: RegisterIndividualPayload) => Promise<void>
   registerMarchant: (payload: RegisterMarchantPayload) => Promise<void>
+  /** Envoie le code de confirmation de l'inscription par email. */
+  sendRegistrationEmailCode: (email: string, displayName?: string) => Promise<void>
   /** Retourne le token Sanctum du compte créé (pour le choix du canal de réponse sur la page succès). */
   registerDriver: (payload: RegisterDriverPayload) => Promise<{ token: string }>
   logout: () => Promise<void>
@@ -113,6 +119,13 @@ export const useAuthStore = create<AuthState>()(
         const { data } = await api.post('/auth/register/marchant', payload)
         localStorage.setItem('airmess_token', data.token)
         set({ user: data.user, token: data.token, isAuthenticated: true })
+      },
+
+      sendRegistrationEmailCode: async (email, displayName) => {
+        await api.post('/auth/register/email/send-code', {
+          email,
+          display_name: displayName || undefined,
+        })
       },
 
       // Inscription driver : POST multipart (3 documents), ne logue PAS le user dans marchant-web.
