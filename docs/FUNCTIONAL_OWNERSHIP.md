@@ -92,3 +92,13 @@ Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `Firs
 - Les boutons de remise à zéro d'un wallet ne constituent pas un outil d'assainissement global.
 - Toute correction future doit conserver les historiques, utiliser des écritures compensatoires et revérifier le jeton dans la transaction d'application.
 - L'application exige une préparation serveur et un code temporaire à usage unique lié au super-admin, au snapshot et au hash du plan. Une simple confirmation navigateur ne suffit pas.
+
+## Confirmation email de l'inscription marchand / particulier
+
+- Source de vérité : `AuthController::sendRegistrationEmailCode` (envoi) et `AuthController::consumeRegistrationEmailCode` (consommation), utilisées par `POST /api/auth/register/email/send-code`, `POST /api/auth/register/marchant` et `POST /api/auth/register/individual`.
+- Un seul canal de confirmation : le code à six chiffres reçu par email. Le choix SMS/email côté utilisateur et le parcours d'inscription rapide (`/api/auth/register/quick/*`) ne sont plus utilisés par l'app marchand ni par la web ; ces routes restent servies pour les builds déjà installés.
+- Code à usage unique : stocké haché en cache dix minutes, cinq tentatives maximum, cooldown de 45 secondes entre deux envois, supprimé dès qu'il est accepté. Un code déjà consommé ne peut pas créer un second compte.
+- Exception unique : une connexion Google (`firebase_google_id_token`) prouve déjà l'email et dispense du code. Ne pas ajouter d'autre exemption.
+- Connexion : `POST /api/auth/login` par email + mot de passe, partagée avec l'app livreur. L'app marchand n'expose plus le login par SMS.
+- Suite d'inscription inchangée : le marchand reste `waitlisted_at` avec `marchants.validated_at` nul, donc sans accès à la création de course avant validation par un admin.
+- Ne pas réintroduire un second mécanisme de code (table, service ou endpoint dédié) : la mécanique de cache existante doit être étendue.
