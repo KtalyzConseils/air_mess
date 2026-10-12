@@ -1,6 +1,11 @@
 # Migration du package Android `com.anonymous.driver`
 
-> Statut : **bloqué sur coordination externe** (Firebase + Google Cloud + décision sur les installations existantes). Ce document est le runbook prêt à exécuter une fois la décision prise.
+> Statut : **abandonné** — l'app livreur est publiée sur Google Play sous `com.anonymous.driver`
+> (fiche officielle : https://play.google.com/store/apps/details?id=com.anonymous.driver).
+> Un package publié est immuable : renommer en `com.airmess.driver` exigerait une nouvelle fiche,
+> une réinstallation par tous les livreurs et la perte des jetons push. Le renommage ne se fera donc
+> pas sur cette application. Le document reste comme référence de ce qu'il faudrait coordonner si le
+> projet repartait un jour sur une fiche Play neuve.
 
 ## 1. Pourquoi ce n'est pas un simple renommage
 

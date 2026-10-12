@@ -15,8 +15,9 @@ export const links = {
   // CTA marchand → inscription envoyeur ; CTA livreur → inscription livreur.
   registerSender: `${APP_URL}/register`,
   registerDriver: `${APP_URL}/register/driver`,
-  // Direct download of the courier (driver) Android app (APK build, Expo).
-  driverApp: 'https://expo.dev/artifacts/eas/oJPb6g6nH13FGy08U2lQ893OL-I52H0yNJ8AQRMIsZs.apk',
+  // Fiche Google Play officielle de l'app livreur (Android) : remplace l'ancien
+  // APK Expo, les mises a jour passent maintenant par le store.
+  driverApp: 'https://play.google.com/store/apps/details?id=com.anonymous.driver&pcampaignid=web_share',
 } as const
 
 export const contact = {

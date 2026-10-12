@@ -28,7 +28,7 @@ import {
 import { useAuthStore } from '../../stores/authStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { useThemeStore } from '../../stores/themeStore'
-import { DRIVER_APK_URL, getDriverRegisterUrl } from '../../lib/webUrl'
+import { DRIVER_APP_URL, getDriverRegisterUrl } from '../../lib/webUrl'
 import { PRIVACY_URL, TERMS_URL } from '../../api/terms'
 import type { Marchant } from '../../types/auth'
 
@@ -695,7 +695,7 @@ export default function ProfileScreen() {
           <Button
             variant="outline"
             onPress={() => {
-              void Linking.openURL(DRIVER_APK_URL)
+              void Linking.openURL(DRIVER_APP_URL)
             }}
             rightIcon={<Ionicons name="download-outline" size={18} color={iconColor} />}
           >
