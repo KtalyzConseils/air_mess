@@ -12,10 +12,17 @@ Le rapprochement entre la candidature et le compte marchand se fait par email. L
 
 ## Deux populations actuellement appelées « liste d'attente »
 
-1. `users.waitlisted_at` : utilisateurs déjà inscrits (marchands/livreurs) dont l'accès attend une validation administrative.
+1. `users.waitlisted_at` : utilisateurs déjà inscrits dont l'accès attend une validation administrative. Depuis le 12/10/2026, cela ne concerne plus que les **livreurs** — les marchands s'inscrivent en libre-service (`validated_at` posé à la création) — et les comptes marchands créés avant cette date, restés en attente.
 2. `merchant_waitlists` et `driver_waitlists` : prospects issus des formulaires publics, sans compte applicatif nécessairement créé.
 
 Ces populations ne doivent pas être fusionnées implicitement dans le code ou l'interface. Avant toute évolution, préciser si elle vise les comptes à valider, les prospects ou les deux.
+
+## Inscription marchand en libre-service
+
+- Source de vérité : `AuthController::registerMarchant`. Le compte est créé avec `users.waitlisted_at` nul et `marchants.validated_at` posé immédiatement : `validated_at` reste le verrou métier, c'est lui que lit `CreateCourseRequest`.
+- Le mail de bienvenue (`WelcomeUserMail`) part à l'inscription, comme pour un particulier ou un livreur ; il n'y a plus d'e-mail d'ouverture envoyé par un admin.
+- Ne pas réintroduire de mise en attente à l'inscription marchand : ni `waitlisted_at`, ni `validated_at` nul. La file admin « marchands en attente » (`AdminController::pendingMarchants`) ne sert plus qu'aux comptes créés avant cette date.
+- Les dossiers marchands déjà en attente en production ne sont pas validés automatiquement par ce changement : ils le restent jusqu'à une action admin explicite.
 
 ## Activation d'une candidature publique
 

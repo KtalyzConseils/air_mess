@@ -3,6 +3,8 @@
 namespace Tests\Feature\Auth;
 
 use App\Mail\QuickRegistrationCodeMail;
+use App\Models\Course;
+use App\Models\PackageCategory;
 use App\Models\User;
 use App\Models\MerchantWaitlist;
 use App\Services\FirebaseTokenVerifier;
@@ -11,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class RegisterMarchantIndividualTest extends TestCase
@@ -131,8 +134,10 @@ class RegisterMarchantIndividualTest extends TestCase
         $this->assertSame('+2290191223344', $user->phone);
         $this->assertNotNull($user->phone_verified_at);
         $this->assertTrue($user->is_active);
-        $this->assertNotNull($user->waitlisted_at);
-        $this->assertNull($user->marchant->validated_at);
+        // Inscription en libre-service : plus de liste d'attente ni de validation
+        // admin, le verrou metier (validated_at) est pose des la creation.
+        $this->assertNull($user->waitlisted_at);
+        $this->assertNotNull($user->marchant->validated_at);
     }
 
     public function test_marchant_register_succeeds_with_google(): void
@@ -278,5 +283,34 @@ class RegisterMarchantIndividualTest extends TestCase
             ->assertJsonValidationErrors(['email_code']);
 
         $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_marchant_registered_via_api_can_create_a_course_immediately(): void
+    {
+        $this->postJson('/api/auth/register/marchant', $this->marchantPayload())->assertCreated();
+
+        $user = User::where('email', 'shop@example.com')->firstOrFail();
+        $category = PackageCategory::factory()->create();
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/courses', [
+            'package_category_id'  => $category->id,
+            'package_size'         => 'M',
+            'origin_name'          => 'Kponou Market',
+            'origin_phone'         => '+2290191223344',
+            'origin_quartier'      => 'Ganhi',
+            'origin_city'          => 'Cotonou',
+            'origin_lat'           => 6.3703,
+            'origin_lng'           => 2.3912,
+            'destination_name'     => 'Yvette',
+            'destination_phone'    => '+22996000000',
+            'destination_quartier' => 'Calavi',
+            'destination_city'     => 'Cotonou',
+            'destination_lat'      => 6.4500,
+            'destination_lng'      => 2.4300,
+            'has_collection'       => false,
+            'delivery_fee_paid_by' => Course::PAID_BY_RECIPIENT,
+        ])->assertCreated();
     }
 }

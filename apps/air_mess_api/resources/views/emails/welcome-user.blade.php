@@ -5,20 +5,20 @@
 
     @if ($isMarchant)
         <p style="margin:0 0 16px 0; line-height:1.6; font-size:15px;">
-            Votre compte <strong>marchand</strong> sur Air Mess a bien été créé.
-            Il est actuellement en cours de validation par notre équipe.
+            Votre compte <strong>marchand</strong> sur Air Mess est actif.
+            Vous pouvez dès maintenant créer vos courses.
         </p>
 
-        <div style="background-color:#fef3c7; border-left:4px solid #f59e0b; padding:12px 16px; border-radius:6px; margin:16px 0;">
-            <p style="margin:0; color:#92400e; font-size:14px;">
-                <strong>⏳ Étape suivante :</strong> nous vérifions vos informations sous 24h.
-                Vous recevrez un email dès que votre compte sera activé.
+        <div style="background-color:#dcfce7; border-left:4px solid #16a34a; padding:12px 16px; border-radius:6px; margin:16px 0;">
+            <p style="margin:0; color:#166534; font-size:14px;">
+                <strong>✅ Compte validé :</strong> aucune attente, votre espace marchand est
+                opérationnel.
             </p>
         </div>
 
         <p style="margin:16px 0; line-height:1.6; font-size:15px;">
-            En attendant, vous pouvez vous connecter pour explorer la plateforme et configurer
-            vos adresses de livraison habituelles.
+            Pensez à enregistrer vos adresses de livraison habituelles : elles accélèrent la
+            création de vos prochaines courses.
         </p>
     @elseif ($isDriver)
         <p style="margin:0 0 16px 0; line-height:1.6; font-size:15px;">

@@ -365,10 +365,10 @@ class AuthController extends Controller
                 'password'               => $data['password'], // hashé via cast 'hashed'
                 'password_set_at'        => now(),
                 'type'                   => User::TYPE_MARCHANT,
-                // Connexion autorisée pendant la validation ; l'accès métier reste
-                // verrouillé par Marchant.validated_at.
+                // Inscription marchand en libre-service : plus de validation par un
+                // admin, l'accès métier est ouvert dès la création du compte.
                 'is_active'              => true,
-                'waitlisted_at'          => now(),
+                'waitlisted_at'          => null,
                 'phone_verified_at'      => now(),
                 'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
@@ -382,6 +382,9 @@ class AuthController extends Controller
                 'secteur_activite'  => $data['secteur_activite'],
                 'subscription_plan' => 'trial',
                 'subscription_status' => 'trial',
+                // validated_at est le verrou métier (création de course) : il est
+                // posé d'emblée, sinon le marchand reste bloqué comme avant.
+                'validated_at'      => now(),
             ]);
 
             $waitlistActivations->consume($waitlistCandidate, $user);
@@ -391,10 +394,15 @@ class AuthController extends Controller
 
         $token = $user->createToken('marchant-' . $user->id)->plainTextToken;
 
-        // L'e-mail d'ouverture sera envoyé par l'admin lors de la validation.
+        // Plus de validation admin : le mail de bienvenue part immédiatement.
+        try {
+            Mail::to($user->email)->send(new \App\Mail\WelcomeUserMail($user));
+        } catch (\Throwable $e) {
+            Log::warning('WelcomeUserMail failed', ['err' => $e->getMessage(), 'user_id' => $user->id]);
+        }
 
         return response()->json([
-            'message' => 'Compte marchand créé. Validation par un administrateur sous 24h.',
+            'message' => 'Compte marchand créé.',
             'user'    => $user->load('marchant'),
             'token'   => $token,
         ], 201);

@@ -33,3 +33,11 @@
 **Rationale :** un package publié est immuable chez Google. Le renommer exigerait une nouvelle fiche, une réinstallation par tous les livreurs et la perte des jetons push des appareils déjà équipés — exactement le coût identifié dans `docs/PACKAGE_NAME_MIGRATION.md`, désormais sans contrepartie puisqu'il n'y a plus de fenêtre de lancement à préparer.
 
 **Impact :** `docs/PACKAGE_NAME_MIGRATION.md` passe en statut abandonné ; les liens de téléchargement (landing, app marchand, bannière d'inscription livreur de la web) pointent vers la fiche Google Play et non plus vers un APK Expo. Ne plus planifier de renommage du package livreur.
+
+## D-05 — Inscription marchand sans validation admin (12/10/2026)
+
+**Décision :** un marchand qui s'inscrit via `POST /api/auth/register/marchant` obtient un compte immédiatement opérationnel : plus de `waitlisted_at`, `marchants.validated_at` posé à la création, mail de bienvenue envoyé à l'inscription. Le parcours est aligné sur celui du particulier et sur celui de l'application mobile.
+
+**Rationale :** l'email est déjà confirmé par code à l'inscription, et l'équipe garde les moyens d'agir après coup (`AdminController::suspendMarchant`, `rejectMarchant`, `reactivateMarchant`). La validation a priori n'apportait donc rien, mais bloquait la première course d'un marchand fraîchement inscrit : `CreateCourseRequest` refusait toute création tant que `validated_at` était nul, web comme application mobile.
+
+**Impact :** `CreateCourseRequest` s'ouvre dès l'inscription ; la file admin `AdminController::pendingMarchants` ne concerne plus que les dossiers antérieurs au 12/10/2026 ; `MarchantValidatedMail` n'est plus envoyé pour les nouvelles inscriptions ; l'override web « dossier en cours de validation » (overlay du dashboard, badge « en attente » du profil) piloté par `validated_at` ne s'affiche plus. Les dossiers marchands déjà en attente en production ne sont pas validés automatiquement : ils demandent une action admin explicite.
