@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
+import { useTranslation } from 'react-i18next'
 
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
 import iconUrl from 'leaflet/dist/images/marker-icon.png'
@@ -45,6 +46,7 @@ function parseMapsUrl(input: string): { lat: number; lng: number } | null {
 }
 
 export default function LocationPicker({ lat, lng, onChange, height = '300px' }: Props) {
+  const { t } = useTranslation()
   const initial: [number, number] = lat && lng ? [lat, lng] : COTONOU_CENTER
   const [linkInput, setLinkInput] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -53,7 +55,7 @@ export default function LocationPicker({ lat, lng, onChange, height = '300px' }:
   function useCurrentPosition() {
     setError(null)
     if (!navigator.geolocation) {
-      setError('Votre navigateur ne supporte pas la géolocalisation.')
+      setError(t('locationPicker.geoUnsupported'))
       return
     }
     setLocating(true)
@@ -66,8 +68,8 @@ export default function LocationPicker({ lat, lng, onChange, height = '300px' }:
         setLocating(false)
         setError(
           err.code === err.PERMISSION_DENIED
-            ? 'Permission refusée. Active la localisation dans ton navigateur.'
-            : 'Impossible de récupérer ta position.',
+            ? t('locationPicker.geoPermissionDenied')
+            : t('locationPicker.geoFailed'),
         )
       },
       { enableHighAccuracy: true, timeout: 10_000 },
@@ -78,7 +80,7 @@ export default function LocationPicker({ lat, lng, onChange, height = '300px' }:
     setError(null)
     const parsed = parseMapsUrl(linkInput)
     if (!parsed) {
-      setError("Lien non reconnu. Copie l'URL complète depuis Google Maps (format @lat,lng).")
+      setError(t('locationPicker.linkNotRecognized'))
       return
     }
     onChange(parsed.lat, parsed.lng)
@@ -95,7 +97,7 @@ export default function LocationPicker({ lat, lng, onChange, height = '300px' }:
           disabled={locating}
           className="flex-1 bg-airmess-dark text-white text-sm font-semibold py-2 px-3 rounded-lg hover:opacity-90 disabled:opacity-50"
         >
-          {locating ? 'Localisation…' : '📍 Ma position actuelle'}
+          {locating ? t('locationPicker.locating') : t('locationPicker.useCurrentPosition')}
         </button>
       </div>
 
@@ -105,7 +107,7 @@ export default function LocationPicker({ lat, lng, onChange, height = '300px' }:
           type="text"
           value={linkInput}
           onChange={(e) => setLinkInput(e.target.value)}
-          placeholder="🔗 Colle un lien Google Maps ici…"
+          placeholder={t('locationPicker.linkPlaceholder')}
           className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-airmess-yellow outline-none"
         />
         <button
@@ -114,7 +116,7 @@ export default function LocationPicker({ lat, lng, onChange, height = '300px' }:
           disabled={!linkInput}
           className="bg-airmess-yellow text-airmess-dark font-bold text-sm px-3 py-2 rounded-lg hover:opacity-90 disabled:opacity-50"
         >
-          Appliquer
+          {t('locationPicker.apply')}
         </button>
       </div>
 
@@ -138,7 +140,7 @@ export default function LocationPicker({ lat, lng, onChange, height = '300px' }:
       </div>
 
       <p className="text-xs text-gray-500">
-        💡 3 façons : ton GPS, un lien Maps, ou un clic sur la carte.
+        {t('locationPicker.hint')}
       </p>
     </div>
   )

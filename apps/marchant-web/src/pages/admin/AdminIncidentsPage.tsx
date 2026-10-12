@@ -8,7 +8,9 @@ import AdminTabs from '../../components/admin/AdminTabs'
 import AdminPagination from '../../components/admin/AdminPagination'
 import AdminModal from '../../components/admin/AdminModal'
 import { AdminButton } from '../../components/admin/AdminToolbar'
-import { fetchIncidents, resolveIncident, INCIDENT_TYPE_LABELS } from '../../api/admin'
+import { fetchIncidents, resolveIncident, startIncidentReturn, confirmTransferException, INCIDENT_TYPE_LABELS } from '../../api/admin'
+import { useAuthStore } from '../../stores/authStore'
+import { hasAdminRole } from '../../lib/permissions'
 
 type StatusFilter = 'open' | 'all' | 'resolved'
 
@@ -30,10 +32,18 @@ function formatDateTime(value: string): string {
 export default function AdminIncidentsPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const user = useAuthStore((state) => state.user)
+  const canOperate = hasAdminRole(user, 'ops')
   const [filterKey, setFilterKey] = useState<StatusFilter>('open')
   const [page, setPage] = useState(1)
   const [resolveTarget, setResolveTarget] = useState<{ id: number; type: string } | null>(null)
   const [resolveNote, setResolveNote] = useState('')
+  const [transferTarget, setTransferTarget] = useState<{ id: number; reference: string; previous_driver_id?: number; driver_id?: number } | null>(null)
+  const [transferReason, setTransferReason] = useState('')
+  const transferMutation = useMutation({
+    mutationFn: () => confirmTransferException(transferTarget!.id, transferReason.trim()),
+    onSuccess: () => { setTransferTarget(null); void queryClient.invalidateQueries({ queryKey: ['admin'] }) },
+  })
 
   const FILTERS: readonly { key: StatusFilter; label: string; status?: string }[] = [
     { key: 'open', label: t('admin.incidents.tabOpen'), status: 'open' },
@@ -55,6 +65,13 @@ export default function AdminIncidentsPage() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'incidents'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'dashboard'] })
       closeResolveModal()
+    },
+  })
+
+  const returnMutation = useMutation({
+    mutationFn: startIncidentReturn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin'] })
     },
   })
 
@@ -84,6 +101,18 @@ export default function AdminIncidentsPage() {
 
   return (
     <AdminPageShell>
+      <AdminModal open={!!transferTarget} onClose={() => { if (!transferMutation.isPending) setTransferTarget(null) }} title="Confirmation exceptionnelle de remise">
+        <p className="text-body-s mb-3">{transferTarget?.reference} · Livreur #{transferTarget?.previous_driver_id} → #{transferTarget?.driver_id}</p>
+        <p className="text-body-s mb-3 text-airmess-red">Vérifiez la remise physique auprès des deux livreurs avant de confirmer. Cette action libère le précédent livreur de la garde du colis.</p>
+        <label className="block text-body-s">Motif et vérifications effectuées (obligatoire)
+          <textarea className="w-full border rounded p-2 mt-2" value={transferReason} maxLength={500} disabled={transferMutation.isPending} onChange={(event) => setTransferReason(event.target.value)} />
+        </label>
+        {transferMutation.isError && <p role="alert" className="text-airmess-red">Confirmation impossible. Actualisez le dossier et vérifiez le statut du transfert.</p>}
+        <div className="flex justify-end gap-2 mt-3">
+          <AdminButton disabled={transferMutation.isPending} onClick={() => setTransferTarget(null)}>Annuler</AdminButton>
+          <AdminButton variant="danger" disabled={transferMutation.isPending || transferReason.trim().length < 10} onClick={() => transferMutation.mutate()}>Confirmer la remise vérifiée</AdminButton>
+        </div>
+      </AdminModal>
       <AdminPageHeader
         title={t('admin.incidents.title')}
         subtitle={t('admin.incidents.subtitleAdmin')}
@@ -100,6 +129,7 @@ export default function AdminIncidentsPage() {
       />
 
       <div className="px-4 md:px-6 lg:px-8 py-5">
+        {returnMutation.isError && <p role="alert" className="mb-4 text-airmess-red">Impossible d’organiser le retour. Vérifiez que le colis est encore détenu par le livreur et qu’aucun transfert n’est en cours.</p>}
         <div className="bg-off-white border border-warm-200 rounded-lg overflow-hidden">
           {isLoading ? (
             <div className="p-10 text-center text-warm-500 text-body-s">{t('common.loading')}</div>
@@ -130,9 +160,12 @@ export default function AdminIncidentsPage() {
                             {INCIDENT_TYPE_LABELS[inc.type] ?? inc.type}
                           </p>
                           {inc.description && (
+                            <>
+                            {inc.description.startsWith('[Abandon après récupération]') && <p className="mt-1 font-bold text-airmess-red">Colis déjà récupéré — organiser un transfert ou un retour</p>}
                             <p className="text-caption text-warm-500 mt-0.5 max-w-xs">
                               {inc.description}
                             </p>
+                            </>
                           )}
                         </td>
                         <td className="px-4 py-2.5">
@@ -167,6 +200,16 @@ export default function AdminIncidentsPage() {
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-right">
+                          {canOperate && inc.status === 'open' && inc.description?.startsWith('[Abandon après récupération]') && (
+                            <div className="mb-2 flex flex-col items-end gap-2">
+                              <Link to="/admin/courses" className="text-caption underline">Organiser un transfert</Link>
+                              {inc.course?.pickup_from_previous_driver && <AdminButton size="sm" variant="danger" onClick={() => { setTransferReason(''); transferMutation.reset(); setTransferTarget(inc.course!) }}>Confirmer une remise sans code</AdminButton>}
+                              {['picked_up', 'at_dropoff'].includes(inc.course?.status ?? '') && <AdminButton size="sm" variant="secondary" disabled={returnMutation.isPending} onClick={() => {
+                                if (window.confirm('Demander au livreur de rapporter le colis au point de départ ?')) returnMutation.mutate(inc.id)
+                              }}>Organiser le retour</AdminButton>}
+                              {inc.course?.status === 'returning_to_sender' && <span className="text-caption">Retour en cours</span>}
+                            </div>
+                          )}
                           {inc.status === 'open' && (
                             <AdminButton
                               variant="primary"

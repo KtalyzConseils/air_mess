@@ -8,17 +8,29 @@ interface AuthState {
   user: User | null
   token: string | null
   hydrated: boolean
+  sessionMessage: string | null
+  expireSession: (token: string) => Promise<void>
 
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   deleteAccount: () => Promise<void>
   hydrate: () => Promise<void>
+  setUser: (user: User) => void
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   hydrated: false,
+  sessionMessage: null,
+
+  expireSession: async (token) => {
+    // Une ancienne requête ne doit jamais déconnecter une nouvelle session.
+    if (!token || get().token !== token) return
+    set({ user: null, token: null, sessionMessage: 'Votre session a été interrompue : elle a expiré ou votre accès a été désactivé. Reconnectez-vous pour connaître la situation de votre compte, ou contactez le support.' })
+    await SecureStore.deleteItemAsync('airmess_token').catch(() => {})
+    try { await stopLocationTracking() } catch { /* ignore */ }
+  },
 
   login: async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password })
@@ -26,7 +38,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error('Compte non-livreur. Utilisez l\'application RMess Marchand.')
     }
     await SecureStore.setItemAsync('airmess_token', data.token)
-    set({ user: data.user, token: data.token })
+    set({ user: data.user, token: data.token, sessionMessage: null })
   },
 
   logout: async () => {
@@ -73,6 +85,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await SecureStore.deleteItemAsync('airmess_push_token').catch(() => {})
     set({ user: null, token: null })
   },
+
+  setUser: (user) => set({ user }),
 
 
   hydrate: async () => {

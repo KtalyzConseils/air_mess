@@ -13,6 +13,9 @@ import { fetchAdminCourses, fetchAdminDrivers, reassignCourse, type DriverFull, 
 import type { Course } from '../../api/courses'
 import { computeEligibility, type EligibilityReason } from '../../lib/reassignEligibility'
 import { CheckIcon, AlertTriangleIcon } from '../../components/ui/icons'
+import { cancelCourseAsSupport } from '../../api/support'
+import { useAuthStore } from '../../stores/authStore'
+import { hasAdminRole } from '../../lib/permissions'
 
 // picked_up et at_dropoff sont désormais réassignables via transfert physique
 // (Cas 5 — panne/accident driver). Le back exige la case cochée dans le modal.
@@ -21,6 +24,8 @@ const REASSIGNABLE_BLOCKED = ['delivered', 'cancelled', 'failed', 'returning_to_
 export default function AdminCoursesPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const user = useAuthStore((state) => state.user)
+  const canArchive = hasAdminRole(user, 'ops', 'support')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(1)
@@ -70,6 +75,28 @@ export default function AdminCoursesPage() {
       window.alert(message)
     },
   })
+
+  const archiveMutation = useMutation({
+    mutationFn: ({ courseId, reason }: { courseId: number; reason: string }) =>
+      cancelCourseAsSupport(courseId, reason),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'courses'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'courses-unassigned'] })
+    },
+    onError: (err) => {
+      const message = err instanceof AxiosError
+        ? err.response?.data?.message ?? 'Annulation impossible.'
+        : 'Annulation impossible.'
+      window.alert(message)
+    },
+  })
+
+  function cancelAndArchive(course: Course) {
+    const reason = window.prompt(`Motif obligatoire pour annuler et archiver ${course.reference} :`)?.trim()
+    if (!reason) return
+    if (!window.confirm(`Confirmer l'annulation et l'archivage de ${course.reference} ? Cette action libérera le montant réservé.`)) return
+    archiveMutation.mutate({ courseId: course.id, reason })
+  }
 
   function closeReassign() {
     setReassignFor(null)
@@ -229,6 +256,7 @@ export default function AdminCoursesPage() {
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
+                        <div className="flex justify-end gap-1.5">
                         {!REASSIGNABLE_BLOCKED.includes(c.status) && (
                           <AdminButton
                             variant="ghost"
@@ -239,6 +267,17 @@ export default function AdminCoursesPage() {
                             {t('admin.courses.reassignAction')}
                           </AdminButton>
                         )}
+                        {canArchive && !c.driver && ['pending_preparation', 'awaiting_assignment'].includes(c.status) && (
+                          <AdminButton
+                            variant="danger"
+                            size="sm"
+                            disabled={archiveMutation.isPending}
+                            onClick={() => cancelAndArchive(c)}
+                          >
+                            Annuler et archiver
+                          </AdminButton>
+                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -297,7 +336,7 @@ export default function AdminCoursesPage() {
                 className="w-full"
               >
                 <option value="">{t('admin.courses.reassignFilterKindAll')}</option>
-                <option value="airmess">{t('admin.courses.reassignKindAirmess')}</option>
+                <option value="airmess">{t('admin.courses.reassignKindAirMess')}</option>
                 <option value="independent">{t('admin.courses.reassignKindIndependent')}</option>
               </AdminSelect>
             </div>
@@ -490,7 +529,7 @@ function DriverEligibilityRow({
   const balance = driver.wallet?.balance ?? 0
   const kindLabel =
     driver.kind === 'airmess'
-      ? t('admin.courses.reassignKindAirmess')
+      ? t('admin.courses.reassignKindAirMess')
       : t('admin.courses.reassignKindIndependent')
 
   return (
@@ -570,9 +609,9 @@ function formatReason(
     case 'not_active':
       return t('admin.courses.reassignReasonNotActive')
     case 'premium_needs_airmess':
-      return t('admin.courses.reassignReasonPremiumAirmess')
-    case 'paid_by_recipient_needs_airmess':
-      return t('admin.courses.reassignReasonRecipientAirmess')
+      return t('admin.courses.reassignReasonPremiumAirMess')
+    case 'recipient_paid_platform_share_exceeds_wallet':
+      return t('admin.courses.reassignReasonRecipientAirMess')
     case 'collection_exceeds_wallet':
       return t('admin.courses.reassignReasonCollectionCaution', {
         amount: Number(reason.context?.amount ?? 0).toLocaleString('fr-FR'),

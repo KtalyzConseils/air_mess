@@ -39,7 +39,7 @@ const SIZE_CLASSES: Record<Size, string> = {
 }
 
 /**
- * Bouton Air Mess — l'atome le plus utilisé de l'app.
+ * Bouton AirMess — l'atome le plus utilisé de l'app.
  *
  * Variants :
  * - `primary` (jaune brand) : LE CTA principal de chaque écran. Max 1 par page.

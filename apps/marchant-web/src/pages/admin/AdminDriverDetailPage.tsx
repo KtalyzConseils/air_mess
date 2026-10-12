@@ -1,26 +1,31 @@
 import { useState, type ReactNode } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import AdminPageShell from '../../components/admin/AdminPageShell'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminModal from '../../components/admin/AdminModal'
 import { AdminButton } from '../../components/admin/AdminToolbar'
 import { ArrowLeftIcon, SettingsIcon, CheckIcon, AlertTriangleIcon, WhatsappIcon } from '../../components/ui/icons'
 import WalletAdjustmentModal from '../../components/WalletAdjustmentModal'
+import ResetWalletButton from '../../components/ResetWalletButton'
 import SupportNotesPanel from '../../components/SupportNotesPanel'
 import {
   fetchDriver,
   validateDriver,
+  rejectDriver,
   openDriverDocument,
   updateDriverKind,
   updateDriverWithdrawLimits,
   updateDriverKyc,
+  updateDriver,
   type DriverKind,
   type DriverDetail,
   type WithdrawLimitsPayload,
   type KycPayload,
   type KycStatus,
+  type UpdateDriverPayload,
 } from '../../api/admin'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
@@ -108,9 +113,14 @@ function KpiBox({ label, value, tone = 'default' }: KpiBoxProps) {
 export default function AdminDriverDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [docError, setDocError] = useState<string | null>(null)
   const [walletAdjustOpen, setWalletAdjustOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState<UpdateDriverPayload | null>(null)
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
   const currentUser = useAuthStore((s) => s.user)
   const isSuperAdmin = hasAdminRole(currentUser, 'super')
   const canManageDriver = hasAdminRole(currentUser, 'ops')
@@ -129,6 +139,17 @@ export default function AdminDriverDetailPage() {
     },
   })
 
+  const rejectMutation = useMutation({
+    mutationFn: () => rejectDriver(Number(id), rejectReason.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'waitlist'] })
+      setRejectOpen(false)
+      setRejectReason('')
+      navigate('/admin/drivers')
+    },
+  })
+
   const kindMutation = useMutation({
     mutationFn: (kind: DriverKind) => updateDriverKind(Number(id), kind),
     onSuccess: () => {
@@ -136,6 +157,37 @@ export default function AdminDriverDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] })
     },
   })
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: UpdateDriverPayload) => updateDriver(Number(id), payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'driver', id] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] })
+      setEditOpen(false)
+      setEditForm(null)
+    },
+  })
+
+  function openEditModal() {
+    if (!data) return
+    setEditForm({
+      first_name: data.driver.first_name,
+      last_name: data.driver.last_name,
+      email: data.driver.user.email,
+      phone: data.driver.user.phone ?? '',
+      gender: (data.driver.gender as UpdateDriverPayload['gender']) ?? '',
+      birth_date: data.driver.birth_date ?? '',
+      vehicle_type: data.driver.vehicle_type as UpdateDriverPayload['vehicle_type'],
+      vehicle_plate: data.driver.vehicle_plate ?? '',
+      vehicle_brand: data.driver.vehicle_brand ?? '',
+      emergency_contact_name: data.driver.emergency_contact_name ?? '',
+      emergency_contact_phone: data.driver.emergency_contact_phone ?? '',
+      emergency_contact2_name: data.driver.emergency_contact2_name ?? '',
+      emergency_contact2_phone: data.driver.emergency_contact2_phone ?? '',
+      preferred_response_channel: data.driver.preferred_response_channel ?? '',
+    })
+    setEditOpen(true)
+  }
 
   function handleToggleKind() {
     if (!data?.driver) return
@@ -172,6 +224,12 @@ export default function AdminDriverDetailPage() {
     validateMutation.error instanceof AxiosError
       ? (validateMutation.error.response?.data as { message?: string })?.message ??
         t('admin.drivers.validationError')
+      : null
+
+  const rejectError =
+    rejectMutation.error instanceof AxiosError
+      ? (rejectMutation.error.response?.data as { message?: string })?.message ??
+        'Impossible de rejeter la candidature.'
       : null
 
   function availabilityLabel(value: string): string {
@@ -215,7 +273,7 @@ export default function AdminDriverDetailPage() {
               />
               {data.driver.kind === 'airmess' && (
                 <Badge
-                  label={t('admin.drivers.kindAirmessBadge')}
+                  label={t('admin.drivers.kindAirMessBadge')}
                   classes="bg-airmess-yellow/20 text-ink border border-airmess-yellow/50"
                 />
               )}
@@ -251,12 +309,20 @@ export default function AdminDriverDetailPage() {
                   <AdminButton
                     variant="primary"
                     onClick={() => validateMutation.mutate()}
-                    disabled={validateMutation.isPending}
+                    disabled={validateMutation.isPending || rejectMutation.isPending}
                     leftIcon={<CheckIcon size={14} />}
                   >
                     {validateMutation.isPending
                       ? t('admin.drivers.validating')
                       : t('admin.drivers.validateDriver')}
+                  </AdminButton>
+                  <AdminButton
+                    variant="danger"
+                    onClick={() => setRejectOpen(true)}
+                    disabled={validateMutation.isPending || rejectMutation.isPending}
+                    leftIcon={<AlertTriangleIcon size={14} />}
+                  >
+                    Rejeter la candidature
                   </AdminButton>
                   {/* Canal préféré = WhatsApp : la réponse se fait manuellement via wa.me */}
                   {data.driver.preferred_response_channel === 'whatsapp' && data.driver.user.phone && (
@@ -275,10 +341,15 @@ export default function AdminDriverDetailPage() {
                     <AlertTriangleIcon size={14} /> {validateError}
                   </p>
                 )}
+                {rejectError && (
+                  <p className="text-body-s text-airmess-red mt-2 flex items-center gap-1.5">
+                    <AlertTriangleIcon size={14} /> {rejectError}
+                  </p>
+                )}
               </section>
             )}
 
-            {/* Section : Type de livreur (indépendant ↔ salarié Airmess) — super-admin only */}
+            {/* Section : Type de livreur (indépendant ↔ salarié AirMess) — super-admin only */}
             <section className="bg-off-white border border-warm-200 rounded-lg px-5 py-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
@@ -287,7 +358,7 @@ export default function AdminDriverDetailPage() {
                   </h2>
                   <p className="text-caption text-warm-600 max-w-lg">
                     {data.driver.kind === 'airmess'
-                      ? t('admin.drivers.kindDescAirmess')
+                      ? t('admin.drivers.kindDescAirMess')
                       : t('admin.drivers.kindDescIndependent')}
                   </p>
                 </div>
@@ -333,7 +404,16 @@ export default function AdminDriverDetailPage() {
 
             {/* Grille identité / véhicule / urgence / performance */}
             <div className="grid gap-4 md:grid-cols-2">
-              <Section title={t('admin.drivers.sectionIdentity')}>
+              <Section
+                title={t('admin.drivers.sectionIdentity')}
+                action={
+                  canManageDriver ? (
+                    <AdminButton variant="ghost" size="sm" onClick={openEditModal}>
+                      Modifier
+                    </AdminButton>
+                  ) : null
+                }
+              >
                 <Row label={t('admin.drivers.fieldGender')}>{data.driver.gender ?? '—'}</Row>
                 <Row label={t('admin.drivers.fieldBirthDate')}>{formatDate(data.driver.birth_date)}</Row>
                 <Row label={t('admin.drivers.fieldPhone')}>{data.driver.user.phone ?? '—'}</Row>
@@ -370,14 +450,23 @@ export default function AdminDriverDetailPage() {
               title={t('admin.drivers.sectionWalletDeposit')}
               action={
                 isSuperAdmin && data.driver.wallet ? (
-                  <AdminButton
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setWalletAdjustOpen(true)}
-                    leftIcon={<SettingsIcon size={14} />}
-                  >
-                    {t('admin.drivers.walletAdjust')}
-                  </AdminButton>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ResetWalletButton
+                      target="driver"
+                      targetId={data.driver.id}
+                      targetName={`${data.driver.first_name} ${data.driver.last_name}`}
+                      currentBalance={data.driver.wallet.balance}
+                      onSuccessInvalidate={[['admin', 'driver', id]]}
+                    />
+                    <AdminButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setWalletAdjustOpen(true)}
+                      leftIcon={<SettingsIcon size={14} />}
+                    >
+                      {t('admin.drivers.walletAdjust')}
+                    </AdminButton>
+                  </div>
                 ) : null
               }
             >
@@ -558,7 +647,142 @@ export default function AdminDriverDetailPage() {
           </>
         )}
       </div>
+
+      {editForm && (
+        <AdminModal
+          open={editOpen}
+          onClose={() => !updateMutation.isPending && setEditOpen(false)}
+          title="Modifier le livreur"
+          subtitle="Mets a jour les informations principales du compte livreur."
+          width="lg"
+          footer={
+            <>
+              <AdminButton variant="secondary" onClick={() => setEditOpen(false)} disabled={updateMutation.isPending}>
+                {t('admin.common.cancel')}
+              </AdminButton>
+              <AdminButton
+                variant="primary"
+                onClick={() => updateMutation.mutate(editForm)}
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? t('common.loading') : t('common.save')}
+              </AdminButton>
+            </>
+          }
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Prenom" value={editForm.first_name} onChange={(value) => setEditForm({ ...editForm, first_name: value })} />
+            <Field label="Nom" value={editForm.last_name} onChange={(value) => setEditForm({ ...editForm, last_name: value })} />
+            <Field label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm({ ...editForm, email: value })} />
+            <Field label="Telephone" value={editForm.phone} onChange={(value) => setEditForm({ ...editForm, phone: value })} />
+            <Field label="Date de naissance" type="date" value={editForm.birth_date ?? ''} onChange={(value) => setEditForm({ ...editForm, birth_date: value })} />
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">Genre</label>
+              <select
+                value={editForm.gender ?? ''}
+                onChange={(e) => setEditForm({ ...editForm, gender: e.target.value as UpdateDriverPayload['gender'] })}
+                className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+              >
+                <option value="">Non renseigne</option>
+                <option value="M">Homme</option>
+                <option value="F">Femme</option>
+                <option value="autre">Autre</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">Vehicule</label>
+              <select
+                value={editForm.vehicle_type}
+                onChange={(e) => setEditForm({ ...editForm, vehicle_type: e.target.value as UpdateDriverPayload['vehicle_type'] })}
+                className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+              >
+                <option value="scooter">Scooter</option>
+                <option value="moto">Moto</option>
+                <option value="voiture">Voiture</option>
+                <option value="velo">Velo</option>
+              </select>
+            </div>
+            <Field label="Plaque" value={editForm.vehicle_plate ?? ''} onChange={(value) => setEditForm({ ...editForm, vehicle_plate: value })} />
+            <Field label="Marque" value={editForm.vehicle_brand ?? ''} onChange={(value) => setEditForm({ ...editForm, vehicle_brand: value })} />
+            <Field label="Contact urgence 1" value={editForm.emergency_contact_name ?? ''} onChange={(value) => setEditForm({ ...editForm, emergency_contact_name: value })} />
+            <Field label="Telephone urgence 1" value={editForm.emergency_contact_phone ?? ''} onChange={(value) => setEditForm({ ...editForm, emergency_contact_phone: value })} />
+            <Field label="Contact urgence 2" value={editForm.emergency_contact2_name ?? ''} onChange={(value) => setEditForm({ ...editForm, emergency_contact2_name: value })} />
+            <Field label="Telephone urgence 2" value={editForm.emergency_contact2_phone ?? ''} onChange={(value) => setEditForm({ ...editForm, emergency_contact2_phone: value })} />
+            <div>
+              <label className="text-caption font-bold text-ink block mb-1">Canal prefere</label>
+              <select
+                value={editForm.preferred_response_channel ?? ''}
+                onChange={(e) => setEditForm({ ...editForm, preferred_response_channel: e.target.value as UpdateDriverPayload['preferred_response_channel'] })}
+                className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+              >
+                <option value="">Non renseigne</option>
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+                <option value="whatsapp">WhatsApp</option>
+              </select>
+            </div>
+          </div>
+        </AdminModal>
+      )}
+
+      <AdminModal
+        open={rejectOpen}
+        onClose={() => !rejectMutation.isPending && setRejectOpen(false)}
+        title="Rejeter la candidature"
+        subtitle="Le compte sera supprime pour permettre au livreur de recommencer avec le meme email."
+        width="md"
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={() => setRejectOpen(false)} disabled={rejectMutation.isPending}>
+              {t('admin.common.cancel')}
+            </AdminButton>
+            <AdminButton
+              variant="danger"
+              onClick={() => rejectMutation.mutate()}
+              disabled={rejectMutation.isPending || rejectReason.trim().length < 5}
+            >
+              {rejectMutation.isPending ? t('common.loading') : 'Confirmer le rejet'}
+            </AdminButton>
+          </>
+        }
+      >
+        <label className="text-caption font-bold text-ink block mb-1">Cause du rejet</label>
+        <textarea
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          rows={5}
+          className="w-full px-3 py-2 border border-warm-300 rounded-md text-body-s bg-cream text-ink placeholder:text-warm-400 focus:outline-none focus:border-airmess-yellow"
+          placeholder="Ex : document illisible, informations incoherentes, permis manquant..."
+        />
+        <p className="mt-2 text-caption text-warm-500">
+          Cette cause sera envoyee au livreur avant suppression de son dossier.
+        </p>
+      </AdminModal>
     </AdminPageShell>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  type?: string
+}) {
+  return (
+    <div>
+      <label className="text-caption font-bold text-ink block mb-1">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-10 px-3 border border-warm-300 rounded-md text-body-s bg-cream text-ink focus:outline-none focus:border-airmess-yellow"
+      />
+    </div>
   )
 }
 

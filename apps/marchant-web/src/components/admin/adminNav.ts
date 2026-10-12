@@ -4,18 +4,26 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 import { fetchUnreadCount } from '../../api/notifications'
+import { fetchUnassignedCourses, fetchWaitlist, fetchIncidents } from '../../api/admin'
 import {
   DashboardIcon,
   StoreIcon,
-  UsersIcon,
+  UserIcon,
   PackageIcon,
+  ArchiveIcon,
   BikeIcon,
   AlertTriangleIcon,
+  RouteIcon,
   BankIcon,
-  BarChartIcon,
+  WalletIcon,
+  ReceiptIcon,
+  ScaleIcon,
+  ClipboardListIcon,
   SettingsIcon,
   BellIcon,
   CodeIcon,
+  ClockIcon,
+  IdCardIcon,
   type IconProps,
 } from '../ui/icons'
 
@@ -45,11 +53,30 @@ export function useAdminNav() {
   const canBrowseEntities = hasAdminRole(user, 'commercial', 'ops', 'support')
   const isSuperAdmin = hasAdminRole(user, 'super')
   const canOps = hasAdminRole(user, 'ops')
+  const canMonitorUnassigned = hasAdminRole(user, 'ops', 'support')
 
   const { data: unread = 0 } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: fetchUnreadCount,
     refetchInterval: 20_000,
+  })
+  const { data: unassigned } = useQuery({
+    queryKey: ['admin', 'courses-unassigned'],
+    queryFn: fetchUnassignedCourses,
+    refetchInterval: 20_000,
+    enabled: canMonitorUnassigned,
+  })
+  const { data: waitlist } = useQuery({
+    queryKey: ['admin', 'waitlist', 'nav-count'],
+    queryFn: () => fetchWaitlist({ status: 'waiting', per_page: 1 }),
+    refetchInterval: 30_000,
+    enabled: canBrowseEntities,
+  })
+  const { data: incidents } = useQuery({
+    queryKey: ['admin', 'incidents', 'nav-count'],
+    queryFn: () => fetchIncidents({ status: 'open', page: 1 }),
+    refetchInterval: 20_000,
+    enabled: canOps,
   })
 
   const sections: AdminNavSection[] = [
@@ -58,14 +85,18 @@ export function useAdminNav() {
       items: filterItems([
         { to: '/admin/dashboard', label: t('admin.nav.overview'), Icon: DashboardIcon, visible: true },
         { to: '/admin/courses', label: t('admin.nav.courses'), Icon: PackageIcon, visible: canBrowseEntities },
-        { to: '/admin/incidents', label: t('admin.nav.incidents'), Icon: AlertTriangleIcon, visible: canOps },
+        { to: '/admin/courses-unassigned', label: t('admin.nav.unassignedCourses'), Icon: RouteIcon, visible: canMonitorUnassigned, badge: unassigned?.count ?? 0 },
+        { to: '/admin/courses-archived', label: t('admin.nav.archivedCourses'), Icon: ArchiveIcon, visible: canMonitorUnassigned },
+        { to: '/admin/incidents', label: t('admin.nav.incidents'), Icon: AlertTriangleIcon, visible: canOps, badge: incidents?.total ?? 0 },
       ]),
     },
     {
       title: t('admin.nav.accounts'),
       items: filterItems([
         { to: '/admin/marchants', label: t('admin.nav.marchants'), Icon: StoreIcon, visible: canBrowseEntities },
-        { to: '/admin/individuals', label: t('admin.nav.individuals'), Icon: UsersIcon, visible: canBrowseEntities },
+        { to: '/admin/form-results', label: t('admin.nav.formResults'), Icon: ClipboardListIcon, visible: canBrowseEntities },
+        { to: '/admin/individuals', label: t('admin.nav.individuals'), Icon: UserIcon, visible: canBrowseEntities },
+        { to: '/admin/waitlist', label: t('admin.nav.waitlist'), Icon: ClockIcon, visible: canBrowseEntities, badge: waitlist?.total ?? 0 },
         { to: '/admin/drivers', label: t('admin.nav.drivers'), Icon: BikeIcon, visible: canBrowseEntities },
         { to: '/admin/api-apps', label: t('admin.nav.apiApps'), Icon: CodeIcon, visible: canBrowseEntities },
       ]),
@@ -74,8 +105,9 @@ export function useAdminNav() {
       title: t('admin.nav.finance'),
       items: filterItems([
         { to: '/admin/withdraw-requests', label: t('admin.nav.withdraws'), Icon: BankIcon, visible: isSuperAdmin },
-        { to: '/admin/reporting/wallets', label: t('admin.nav.walletReporting'), Icon: BarChartIcon, visible: isSuperAdmin },
-        { to: '/admin/reconciliation', label: t('admin.nav.reconciliation'), Icon: BarChartIcon, visible: isSuperAdmin },
+        { to: '/admin/reporting/wallets', label: t('admin.nav.walletReporting'), Icon: WalletIcon, visible: isSuperAdmin },
+        { to: '/admin/reporting/accounting', label: t('admin.nav.accountingLedger'), Icon: ReceiptIcon, visible: canOps },
+        { to: '/admin/reconciliation', label: t('admin.nav.reconciliation'), Icon: ScaleIcon, visible: isSuperAdmin },
       ]),
     },
     {
@@ -88,6 +120,7 @@ export function useAdminNav() {
           visible: true,
           badge: unread,
         },
+        { to: '/admin/admins', label: 'Admins', Icon: IdCardIcon, visible: isSuperAdmin },
         { to: '/admin/settings', label: t('admin.nav.settings'), Icon: SettingsIcon, visible: isSuperAdmin },
       ]),
     },
@@ -111,5 +144,10 @@ interface RawItem extends AdminNavItem {
 function filterItems(items: RawItem[]): AdminNavItem[] {
   return items
     .filter((i) => i.visible)
-    .map(({ visible: _v, ...rest }) => rest)
+    .map((item) => ({
+      to: item.to,
+      label: item.label,
+      Icon: item.Icon,
+      ...(item.badge !== undefined ? { badge: item.badge } : {}),
+    }))
 }

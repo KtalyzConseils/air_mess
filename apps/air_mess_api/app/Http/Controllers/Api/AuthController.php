@@ -9,6 +9,7 @@ use App\Models\Individual;
 use App\Models\Marchant;
 use App\Models\User;
 use App\Mail\QuickRegistrationCodeMail;
+use App\Services\DriverReferralService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -206,6 +207,7 @@ class AuthController extends Controller
     public function registerMarchant(
         Request $request,
         \App\Services\FirebaseTokenVerifier $firebaseVerifier,
+        \App\Services\PublicWaitlistActivationService $waitlistActivations,
     ): JsonResponse {
         $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
 
@@ -224,7 +226,15 @@ class AuthController extends Controller
             ])],
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms'   => ['required', 'accepted'],
+            'defer_login'      => ['nullable', 'boolean'],
+            'activation_token' => ['nullable', 'string', 'size:64'],
         ]);
+
+        $waitlistCandidate = $waitlistActivations->assertForRegistration(
+            $data['activation_token'] ?? null,
+            'merchant',
+            $data['email'],
+        );
 
         // Vérification Google (optionnelle) : si un token Google est fourni, on vérifie
         // que l'email Google correspond à l'email soumis.
@@ -239,7 +249,7 @@ class AuthController extends Controller
             $emailVerifiedAt = now();
         }
 
-        $user = DB::transaction(function () use ($data, $emailVerifiedAt) {
+        $user = DB::transaction(function () use ($data, $emailVerifiedAt, $waitlistCandidate, $waitlistActivations) {
             $user = User::create([
                 'name'                   => $data['name'],
                 'email'                  => $data['email'],
@@ -247,6 +257,10 @@ class AuthController extends Controller
                 'password'               => $data['password'], // hashé via cast 'hashed'
                 'password_set_at'        => now(),
                 'type'                   => User::TYPE_MARCHANT,
+                // Connexion autorisée pendant la validation ; l'accès métier reste
+                // verrouillé par Marchant.validated_at.
+                'is_active'              => true,
+                'waitlisted_at'          => now(),
                 'phone_verified_at'      => now(),
                 'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
@@ -262,18 +276,14 @@ class AuthController extends Controller
                 'subscription_status' => 'trial',
             ]);
 
+            $waitlistActivations->consume($waitlistCandidate, $user);
+
             return $user;
         });
 
         $token = $user->createToken('marchant-' . $user->id)->plainTextToken;
 
-        // Email de bienvenue (best-effort : on n'échoue pas l'inscription si SMTP plante)
-        try {
-            \Illuminate\Support\Facades\Mail::to($user->email)
-                ->send(new \App\Mail\WelcomeUserMail($user));
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('WelcomeUserMail failed', ['err' => $e->getMessage(), 'user_id' => $user->id]);
-        }
+        // L'e-mail d'ouverture sera envoyé par l'admin lors de la validation.
 
         return response()->json([
             'message' => 'Compte marchand créé. Validation par un administrateur sous 24h.',
@@ -302,6 +312,7 @@ class AuthController extends Controller
             'firebase_google_id_token' => ['nullable', 'string'],
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms' => ['required', 'accepted'],
+            'defer_login'    => ['nullable', 'boolean'],
         ]);
 
         // Vérification Google (optionnelle) : si un token Google est fourni, on vérifie
@@ -325,6 +336,9 @@ class AuthController extends Controller
                 'password'               => $data['password'],
                 'password_set_at'        => now(),
                 'type'                   => User::TYPE_INDIVIDUAL,
+                // Les particuliers restent entièrement en libre-service.
+                'is_active'              => true,
+                'waitlisted_at'          => null,
                 'phone_verified_at'      => now(),
                 'email_verified_at'      => $emailVerifiedAt,
                 'accepted_terms_at'      => now(),
@@ -367,6 +381,8 @@ class AuthController extends Controller
     public function registerDriver(
         Request $request,
         NotificationService $notifier,
+        DriverReferralService $referrals,
+        \App\Services\PublicWaitlistActivationService $waitlistActivations,
     ): JsonResponse {
         // Le numéro est normalisé en E.164 AVANT validation pour que l'unicité
         // users.phone porte sur un format canonique (+2290190123456) et que la
@@ -422,7 +438,15 @@ class AuthController extends Controller
 
             // Consentement CGU + politique confidentialité (obligatoire à l'inscription).
             'accepted_terms' => ['required', 'accepted'],
+            'referral_code'  => ['nullable', 'string', 'max:24'],
+            'activation_token' => ['nullable', 'string', 'size:64'],
         ]);
+
+        $waitlistCandidate = $waitlistActivations->assertForRegistration(
+            $data['activation_token'] ?? null,
+            'driver',
+            $data['email'],
+        );
 
         // Stockage des documents AVANT la transaction (les fichiers sont indépendants de la DB).
         // Si la transaction échoue, on supprime le dossier dans le catch ci-dessous pour ne pas
@@ -430,7 +454,7 @@ class AuthController extends Controller
         $paths = $this->storeDriverFiles($request);
 
         try {
-            $driver = DB::transaction(function () use ($data, $paths) {
+            $driver = DB::transaction(function () use ($data, $paths, $referrals, $waitlistCandidate, $waitlistActivations) {
                 $user = User::create([
                     'name'                   => $data['first_name'] . ' ' . $data['last_name'],
                     'email'                  => $data['email'],
@@ -438,6 +462,8 @@ class AuthController extends Controller
                     'password'               => $data['password'], // hashé via cast 'hashed' sur le model
                     'password_set_at'        => now(),
                     'type'                   => User::TYPE_DRIVER,
+                    'is_active'              => true,
+                    'waitlisted_at'          => now(),
                     'phone_verified_at'      => now(),
                     'accepted_terms_at'      => now(),
                     'accepted_terms_version' => User::TERMS_VERSION,
@@ -474,6 +500,10 @@ class AuthController extends Controller
                 \App\Models\DriverWallet::create([
                     'driver_id' => $driver->id,
                 ]);
+
+                $referrals->ensureReferralCode($driver);
+                $referrals->attachReferral($driver, $data['referral_code'] ?? null);
+                $waitlistActivations->consume($waitlistCandidate, $user);
 
                 return $driver;
             });
@@ -601,7 +631,7 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::where('email', $data['email'])->first();
+        $user = User::with(['marchant', 'driver'])->where('email', $data['email'])->first();
 
         if (! $user || ! Hash::check($data['password'], $user->password)) {
             return response()->json([
@@ -609,9 +639,15 @@ class AuthController extends Controller
             ], 401);
         }
 
-        if (! $user->is_active) {
+        $isAwaitingValidation = $user
+            && (($user->isMarchant() && $user->marchant?->validated_at === null)
+                || ($user->isDriver() && $user->driver?->activation_status === 'pending'));
+
+        if (! $user->is_active && ! $isAwaitingValidation) {
             return response()->json([
-                'message' => 'Ce compte est désactivé. Contactez le support.',
+                'message' => $user->waitlisted_at && ! $user->waitlist_notified_at
+                    ? 'Votre compte est sur la liste d’attente. Nous vous informerons par e-mail dès l’ouverture du service.'
+                    : 'Ce compte est désactivé. Contactez le support.',
             ], 403);
         }
 
@@ -731,7 +767,9 @@ class AuthController extends Controller
 
         if (! $user->is_active) {
             return response()->json([
-                'message' => 'Ce compte est désactivé. Contactez le support.',
+                'message' => $user->waitlisted_at && ! $user->waitlist_notified_at
+                    ? 'Votre compte est sur la liste d’attente. Nous vous informerons par e-mail dès l’ouverture du service.'
+                    : 'Ce compte est désactivé. Contactez le support.',
             ], 403);
         }
 

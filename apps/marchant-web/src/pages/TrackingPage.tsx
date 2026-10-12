@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
 import { useTranslation } from 'react-i18next'
 import StatusBadge from '../components/StatusBadge'
 import Card from '../components/ui/Card'
@@ -19,9 +20,34 @@ import wordmarkWhite from '../assets/logo/airmess-wordmark-white.svg'
 // bouton "Ce n'est pas moi qui ai reçu". Le back reste seul juge en cas de
 // désaccord (renvoie 422 si dépassé).
 const DISPUTE_WINDOW_DAYS = 7
+const POSITION_STALE_AFTER_MS = 90_000
+
+const destinationIcon = L.divIcon({
+  className: 'tracking-map-pin tracking-map-pin-destination',
+  html: '<span aria-hidden="true"></span>',
+  iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -34],
+})
+const driverIcon = L.divIcon({
+  className: 'tracking-map-pin tracking-map-pin-driver',
+  html: '<span aria-hidden="true"></span>',
+  iconSize: [34, 34], iconAnchor: [17, 17], popupAnchor: [0, -18],
+})
+
+function TrackingMapViewport({ driverPosition, destinationPosition }: {
+  driverPosition: [number, number] | null
+  destinationPosition: [number, number] | null
+}) {
+  const map = useMap()
+  useEffect(() => {
+    const target = driverPosition ?? destinationPosition
+    if (target) map.panTo(target, { animate: true, duration: 0.6 })
+  }, [driverPosition?.[0], driverPosition?.[1], destinationPosition?.[0], destinationPosition?.[1], map])
+  return null
+}
 
 export default function TrackingPage() {
   const { t } = useTranslation()
+  const locale = t('tracking.locale')
   const { token } = useParams<{ token: string }>()
 
   const { data, isLoading, error } = useQuery({
@@ -62,13 +88,38 @@ export default function TrackingPage() {
     )
   }
 
+  // `Number.isFinite(x)` ne rétrécit pas le type de `x` (et un accès `data.driver?.lat`
+  // n'est pas rétréci non plus) : on passe par des locales `number | null` pour que
+  // TypeScript sache qu'on construit bien un couple de nombres finis.
+  const driverLat = data.driver?.current_lat ?? null
+  const driverLng = data.driver?.current_lng ?? null
   const driverPosition: [number, number] | null =
-    data.driver?.current_lat && data.driver?.current_lng
-      ? [data.driver.current_lat, data.driver.current_lng]
+    typeof driverLat === 'number' &&
+    typeof driverLng === 'number' &&
+    Number.isFinite(driverLat) &&
+    Number.isFinite(driverLng)
+      ? [driverLat, driverLng]
       : null
 
-  const destPosition: [number, number] = [data.destination.lat, data.destination.lng]
-  const mapCenter: [number, number] = driverPosition ?? destPosition
+  const destLat = data.destination.lat
+  const destLng = data.destination.lng
+  const destPosition: [number, number] | null =
+    typeof destLat === 'number' &&
+    typeof destLng === 'number' &&
+    Number.isFinite(destLat) &&
+    Number.isFinite(destLng)
+      ? [destLat, destLng]
+      : null
+  const mapCenter: [number, number] | null = driverPosition ?? destPosition
+  const positionAgeMs = data.driver?.last_position_at
+    ? Math.max(0, Date.now() - new Date(data.driver.last_position_at).getTime())
+    : null
+  const positionIsStale = positionAgeMs == null || positionAgeMs > POSITION_STALE_AFTER_MS
+  const positionHint = positionIsStale
+    ? data.driver?.last_position_at
+      ? t('tracking.mapLastPosition', { time: new Date(data.driver.last_position_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) })
+      : t('tracking.mapPositionUnavailable')
+    : t('tracking.mapLivePosition')
 
   return (
     <div className="min-h-screen bg-cream">
@@ -79,7 +130,7 @@ export default function TrackingPage() {
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <img src={mark} alt="" aria-hidden className="h-9 w-auto md:h-10" />
           <div className="min-w-0">
-            <h1 className="text-body font-bold leading-none">Air Mess</h1>
+            <h1 className="text-body font-bold leading-none">AirMess</h1>
             <p className="text-caption text-warm-400 mt-0.5">{t('tracking.headerSubtitle')}</p>
           </div>
         </div>
@@ -124,14 +175,14 @@ export default function TrackingPage() {
                 {t('tracking.paymentEyebrow')}
               </p>
               <p className="text-h1 text-ink mt-2 font-bold tabular-nums">
-                {data.payment.total_to_pay.toLocaleString('fr-FR')}{' '}
+                {data.payment.total_to_pay.toLocaleString(locale)}{' '}
                 <span className="text-body-l font-bold">FCFA</span>
               </p>
               {data.payment.collection_amount > 0 && (
                 <p className="text-body-s text-ink/80 mt-2 leading-relaxed">
                   {t('tracking.paymentBreakdown', {
-                    product: data.payment.collection_amount.toLocaleString('fr-FR'),
-                    fee: data.payment.delivery_fee.toLocaleString('fr-FR'),
+                    product: data.payment.collection_amount.toLocaleString(locale),
+                    fee: data.payment.delivery_fee.toLocaleString(locale),
                   })}
                 </p>
               )}
@@ -172,21 +223,25 @@ export default function TrackingPage() {
         {/* ============================================================
             Carte
             ============================================================ */}
-        <Card variant="default" padding="none" className="overflow-hidden mb-4" style={{ height: '350px' }}>
-          <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
+        <Card variant="default" padding="none" className="overflow-hidden mb-4 relative" style={{ height: '350px' }}>
+          {mapCenter ? <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
+            <TrackingMapViewport driverPosition={driverPosition} destinationPosition={destPosition} />
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution="&copy; OpenStreetMap"
             />
-            <Marker position={destPosition}>
+            {destPosition && <Marker position={destPosition} icon={destinationIcon}>
               <Popup>{t('tracking.mapYourAddress')}</Popup>
-            </Marker>
+            </Marker>}
             {driverPosition && (
-              <Marker position={driverPosition}>
+              <Marker position={driverPosition} icon={driverIcon}>
                 <Popup>{t('tracking.mapYourDriver')}</Popup>
               </Marker>
             )}
-          </MapContainer>
+          </MapContainer> : <div className="h-full flex items-center justify-center bg-warm-100 text-body-s text-warm-500 px-6 text-center">{t('tracking.mapPositionUnavailable')}</div>}
+          <div className={`absolute bottom-3 left-3 z-[1000] rounded-full px-3 py-1.5 text-caption font-semibold shadow-sm ${positionIsStale ? 'bg-cream/95 text-warm-600' : 'bg-success-bg/95 text-success'}`}>
+            {positionHint}
+          </div>
         </Card>
 
         {/* ============================================================
@@ -222,7 +277,7 @@ export default function TrackingPage() {
                     {statusLabel(tItem.status)}
                   </p>
                   <p className="text-caption text-warm-500">
-                    {new Date(tItem.created_at).toLocaleString('fr-FR', {
+                    {new Date(tItem.created_at).toLocaleString(locale, {
                       day: '2-digit',
                       month: '2-digit',
                       hour: '2-digit',
@@ -295,6 +350,7 @@ function DisputeSection({
   deliveredAt: string
   reference: string
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -318,7 +374,7 @@ function DisputeSection({
 
   const apiError =
     mutation.error instanceof AxiosError
-      ? mutation.error.response?.data?.message ?? 'Erreur inattendue.'
+      ? mutation.error.response?.data?.message ?? t('tracking.dispute.unexpectedError')
       : null
 
   // Une fois soumis avec succès, on remplace la carte par la confirmation
@@ -331,10 +387,10 @@ function DisputeSection({
           </div>
           <div className="min-w-0">
             <p className="text-eyebrow uppercase text-success font-bold mb-1">
-              Contestation enregistrée
+              {t('tracking.dispute.recordedTitle')}
             </p>
             <p className="text-body-s text-warm-700">
-              Merci. L'équipe support va enquêter et vous recontacter au numéro fourni.
+              {t('tracking.dispute.recordedBody')}
             </p>
           </div>
         </div>
@@ -351,15 +407,14 @@ function DisputeSection({
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <p className="text-eyebrow uppercase text-warm-500 font-bold mb-1">
-            Ce colis ne vous a pas été remis&nbsp;?
+            {t('tracking.dispute.prompt')}
           </p>
           <p className="text-body-s text-warm-600">
-            Vous pouvez le signaler pendant {DISPUTE_WINDOW_DAYS} jours après la livraison.
-            Notre équipe enquêtera et reviendra vers vous.
+            {t('tracking.dispute.windowHint', { days: DISPUTE_WINDOW_DAYS })}
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-          Signaler un problème
+          {t('tracking.dispute.reportProblem')}
         </Button>
       </div>
 
@@ -371,27 +426,27 @@ function DisputeSection({
                 <AlertTriangleIcon size={20} />
               </div>
               <div className="min-w-0">
-                <h3 className="text-h3 text-ink font-bold">Contester la livraison</h3>
-                <p className="text-caption text-warm-500 mt-1">Course {reference}</p>
+                <h3 className="text-h3 text-ink font-bold">{t('tracking.dispute.contestTitle')}</h3>
+                <p className="text-caption text-warm-500 mt-1">{t('tracking.dispute.course')} {reference}</p>
               </div>
             </div>
 
             <div className="space-y-3">
               <div>
                 <label className="block text-caption font-medium text-warm-600 mb-1">
-                  Votre nom
+                  {t('tracking.dispute.yourName')}
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Prénom et nom"
+                  placeholder={t('tracking.dispute.yourNamePlaceholder')}
                   className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
                 />
               </div>
               <div>
                 <label className="block text-caption font-medium text-warm-600 mb-1">
-                  Votre téléphone
+                  {t('tracking.dispute.yourPhone')}
                 </label>
                 <input
                   type="tel"
@@ -403,13 +458,13 @@ function DisputeSection({
               </div>
               <div>
                 <label className="block text-caption font-medium text-warm-600 mb-1">
-                  Décrivez ce qui s'est passé (min. 20 caractères)
+                  {t('tracking.dispute.describeWhatHappened')}
                 </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
-                  placeholder="Ex : je n'ai jamais reçu ce colis, personne n'est venu à mon adresse…"
+                  placeholder={t('tracking.dispute.describePlaceholder')}
                   className="w-full bg-off-white border border-warm-300 rounded-md px-3 py-2 text-body-s focus:outline-none focus:border-airmess-yellow"
                 />
               </div>
@@ -421,7 +476,7 @@ function DisputeSection({
 
             <div className="flex justify-end gap-3 mt-4">
               <Button variant="secondary" size="md" onClick={() => setOpen(false)}>
-                Annuler
+                {t('tracking.dispute.cancel')}
               </Button>
               <Button
                 variant="danger"
@@ -435,7 +490,7 @@ function DisputeSection({
                   || description.trim().length < 20
                 }
               >
-                Envoyer la contestation
+                {t('tracking.dispute.submit')}
               </Button>
             </div>
           </Card>

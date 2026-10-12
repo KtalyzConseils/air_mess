@@ -66,7 +66,12 @@ class AcceptCourseTest extends TestCase
         $course = $this->makeAwaitingCourse();
 
         Sanctum::actingAs($user);
-        $this->postJson("/api/driver/courses/{$course->id}/accept");
+        $this->postJson("/api/driver/courses/{$course->id}/accept")->assertOk();
+
+        $history = $course->statusHistory()->where('to_status', Course::STATUS_ASSIGNED)->get();
+        $this->assertCount(1, $history);
+        $this->assertSame('Course acceptée par le livreur', $history->first()->reason);
+        $this->assertSame($user->id, $history->first()->changed_by_id);
 
         $this->assertDatabaseHas('course_status_history', [
             'course_id'   => $course->id,

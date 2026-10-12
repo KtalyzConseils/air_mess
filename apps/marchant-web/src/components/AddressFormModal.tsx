@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import Field from './Field'
 import { createAddress, updateAddress, type Address, type AddressPayload } from '../api/addresses'
 
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function AddressFormModal({ open, onClose, editing }: Props) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { register, handleSubmit, reset, formState: { errors } } = useForm<AddressPayload>()
 
@@ -43,7 +45,7 @@ export default function AddressFormModal({ open, onClose, editing }: Props) {
 
   const apiError =
     mutation.error instanceof AxiosError
-      ? mutation.error.response?.data?.message ?? 'Erreur.'
+      ? mutation.error.response?.data?.message ?? t('addressFormModal.genericError')
       : null
 
   function onSubmit(values: AddressPayload) {
@@ -58,43 +60,43 @@ export default function AddressFormModal({ open, onClose, editing }: Props) {
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit(onSubmit)} className="p-6">
           <h3 className="text-lg font-bold text-airmess-dark mb-4">
-            {editing ? 'Modifier l\'adresse' : 'Nouvelle adresse'}
+            {editing ? t('addressFormModal.editTitle') : t('addressFormModal.newTitle')}
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="Étiquette" className="md:col-span-2">
-              <input {...register('label')} className={inputClass} placeholder="ex: Maison, Bureau" />
+            <Field label={t('addressFormModal.label')} className="md:col-span-2">
+              <input {...register('label')} className={inputClass} placeholder={t('addressFormModal.labelPlaceholder')} />
             </Field>
-            <Field label="Nom destinataire" required error={errors.recipient_name?.message}>
-              <input {...register('recipient_name', { required: 'Obligatoire' })} className={inputClass} />
+            <Field label={t('addressFormModal.recipientName')} required error={errors.recipient_name?.message}>
+              <input {...register('recipient_name', { required: t('addressFormModal.required') })} className={inputClass} />
             </Field>
-            <Field label="Téléphone" required>
-              <input {...register('recipient_phone', { required: 'Obligatoire' })} className={inputClass} />
+            <Field label={t('addressFormModal.phone')} required>
+              <input {...register('recipient_phone', { required: t('addressFormModal.required') })} className={inputClass} />
             </Field>
-            <Field label="Rue / adresse" className="md:col-span-2">
+            <Field label={t('addressFormModal.street')} className="md:col-span-2">
               <input {...register('street')} className={inputClass} />
             </Field>
-            <Field label="Point de repère" className="md:col-span-2">
-              <input {...register('landmark')} className={inputClass} placeholder="ex: Maison à portail bleu" />
+            <Field label={t('addressFormModal.landmark')} className="md:col-span-2">
+              <input {...register('landmark')} className={inputClass} placeholder={t('addressFormModal.landmarkPlaceholder')} />
             </Field>
-            <Field label="Quartier" required>
-              <input {...register('quartier', { required: 'Obligatoire' })} className={inputClass} />
+            <Field label={t('addressFormModal.quartier')} required>
+              <input {...register('quartier', { required: t('addressFormModal.required') })} className={inputClass} />
             </Field>
-            <Field label="Ville" required>
-              <input {...register('city', { required: 'Obligatoire' })} className={inputClass} />
+            <Field label={t('addressFormModal.city')} required>
+              <input {...register('city', { required: t('addressFormModal.required') })} className={inputClass} />
             </Field>
-            <Field label="🔗 Lien Google Maps" className="md:col-span-2">
+            <Field label={t('addressFormModal.mapsLink')} className="md:col-span-2">
               <input
                 {...register('maps_link')}
                 className={inputClass}
-                placeholder="Colle l'URL depuis Google Maps (facultatif)"
+                placeholder={t('addressFormModal.mapsLinkPlaceholder')}
               />
               <p className="text-xs text-gray-500 mt-1">
-                Si renseigné, on extrait automatiquement les coordonnées pour pré-remplir la livraison.
+                {t('addressFormModal.mapsLinkHint')}
               </p>
             </Field>
 
-            <Field label="Instructions livreur" className="md:col-span-2">
+            <Field label={t('addressFormModal.driverInstructions')} className="md:col-span-2">
               <textarea {...register('instructions')} rows={2} className={inputClass} />
             </Field>
           </div>
@@ -107,14 +109,14 @@ export default function AddressFormModal({ open, onClose, editing }: Props) {
 
           <div className="flex justify-end gap-2 mt-5">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50">
-              Annuler
+              {t('addressFormModal.cancel')}
             </button>
             <button
               type="submit"
               disabled={mutation.isPending}
               className="bg-airmess-yellow text-airmess-dark font-bold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50"
             >
-              {mutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
+              {mutation.isPending ? t('addressFormModal.saving') : t('addressFormModal.save')}
             </button>
           </div>
         </form>

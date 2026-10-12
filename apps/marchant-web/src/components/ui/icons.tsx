@@ -151,6 +151,16 @@ export function PackageIcon(props: IconProps) {
   )
 }
 
+export function ArchiveIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect x="3" y="4" width="18" height="4" rx="1.5" />
+      <path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+      <path d="M9 12h6" />
+    </svg>
+  )
+}
+
 export function BikeIcon(props: IconProps) {
   return (
     <svg {...baseProps(props)}>
@@ -186,6 +196,17 @@ export function BankIcon(props: IconProps) {
   )
 }
 
+export function WalletIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M4 7.5h14a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h12" />
+      <path d="M4 7.5A3 3 0 0 0 5 13h15" />
+      <path d="M16 13v4h4v-4" />
+      <circle cx="18" cy="15" r=".5" />
+    </svg>
+  )
+}
+
 export function BarChartIcon(props: IconProps) {
   return (
     <svg {...baseProps(props)}>
@@ -193,6 +214,29 @@ export function BarChartIcon(props: IconProps) {
       <line x1="10" y1="20" x2="10" y2="4" />
       <line x1="16" y1="20" x2="16" y2="14" />
       <line x1="2" y1="20" x2="22" y2="20" />
+    </svg>
+  )
+}
+
+export function ReceiptIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" />
+      <path d="M9 8h6" />
+      <path d="M9 12h6" />
+      <path d="M9 16h3" />
+    </svg>
+  )
+}
+
+export function ScaleIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M12 3v18" />
+      <path d="M5 7h14" />
+      <path d="m6 7-3 6h6L6 7Z" />
+      <path d="m18 7-3 6h6l-3-6Z" />
+      <path d="M8 21h8" />
     </svg>
   )
 }
@@ -453,6 +497,18 @@ export function FileTextIcon(props: IconProps) {
   )
 }
 
+export function ClipboardListIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect x="5" y="4" width="14" height="18" rx="2" />
+      <path d="M9 4.5A3 3 0 0 1 12 2a3 3 0 0 1 3 2.5" />
+      <path d="M9 9h6" />
+      <path d="M9 13h6" />
+      <path d="M9 17h3" />
+    </svg>
+  )
+}
+
 // Smartphone — bannière téléchargement app
 export function SmartphoneIcon(props: IconProps) {
   return (
@@ -515,6 +571,47 @@ export function SnowflakeIcon(props: IconProps) {
       <line x1="19.07" y1="4.93" x2="4.93" y2="19.07" />
       <path d="M12 2 9.5 4.5M12 2l2.5 2.5M12 22l-2.5-2.5M12 22l2.5-2.5" />
       <path d="M2 12l2.5-2.5M2 12l2.5 2.5M22 12l-2.5-2.5M22 12l-2.5 2.5" />
+    </svg>
+  )
+}
+
+export function ShareIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
+  )
+}
+
+// Pause — suspendre l'actualisation automatique d'un écran
+export function PauseIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect x="7" y="5" width="3.5" height="14" rx="1" />
+      <rect x="13.5" y="5" width="3.5" height="14" rx="1" />
+    </svg>
+  )
+}
+
+// Lecture — reprendre une actualisation mise en pause
+export function PlayIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M7 4.5v15l12-7.5-12-7.5Z" />
+    </svg>
+  )
+}
+
+// Flèche circulaire — actualiser maintenant
+export function RefreshIcon(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+      <polyline points="21 3 21 8 16 8" />
     </svg>
   )
 }

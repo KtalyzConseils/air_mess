@@ -2,6 +2,42 @@ import api from './client'
 import type { Course, Paginated } from './courses'
 import type { Marchant, Individual } from '../types/auth'
 
+export interface WaitlistUser {
+  id: number
+  name: string
+  email: string
+  phone: string | null
+  type: 'marchant' | 'driver'
+  is_active: boolean
+  waitlisted_at: string | null
+  waitlist_notified_at: string | null
+  marchant?: { id: number; raison_sociale: string; validated_at: string | null } | null
+  driver?: { id: number; first_name: string; last_name: string; activation_status: string } | null
+  waitlist_notifier?: { user?: { name: string } | null } | null
+}
+
+export interface WaitlistParams {
+  q?: string
+  status?: 'waiting' | 'notified' | 'all'
+  type?: 'marchant' | 'driver'
+  page?: number
+  per_page?: number
+}
+
+export async function fetchWaitlist(params: WaitlistParams = {}): Promise<Paginated<WaitlistUser>> {
+  const { data } = await api.get('/admin/waitlist', { params })
+  return data
+}
+
+export async function notifyWaitlistedUser(userId: number): Promise<void> {
+  await api.post(`/admin/waitlist/${userId}/notify`)
+}
+
+export async function notifyWaitlistedUsers(userIds: number[]): Promise<{ notified_count: number }> {
+  const { data } = await api.post('/admin/waitlist/notify-bulk', { user_ids: userIds })
+  return data
+}
+
 export interface DashboardKpi {
   courses_today: number
   courses_in_progress: number
@@ -197,7 +233,7 @@ export async function fetchDriver(
 }
 
 /**
- * Bascule le type d'un livreur : freelance ↔ salarié Air Mess.
+ * Bascule le type d'un livreur : freelance ↔ salarié AirMess.
  * Réservé au super-admin (403 sinon). Trace automatique dans support_notes.
  */
 export async function updateDriverKind(
@@ -285,6 +321,73 @@ export async function fetchWalletReporting(params: {
   return data
 }
 
+export interface AccountingLine {
+  id: number
+  account_code: string
+  account_name: string
+  direction: 'debit' | 'credit'
+  amount_fcfa: number
+  currency: string
+  holder_type: string | null
+  holder_id: number | null
+  counterparty_type: string | null
+  counterparty_id: number | null
+  created_at: string
+}
+
+export interface AccountingJournal {
+  id: number
+  event_type: string
+  description: string | null
+  course_id: number | null
+  driver_id: number | null
+  user_id: number | null
+  occurred_at: string
+  created_at: string
+  course?: { id: number; reference: string; status: string } | null
+  lines: AccountingLine[]
+}
+
+export interface AccountingLedgerResponse {
+  period: { from: string; to: string }
+  journals: Paginated<AccountingJournal>
+}
+
+export interface DriverCashDueRow {
+  driver_id: number
+  driver_name: string
+  phone: string | null
+  due_fcfa: number
+  movement_count: number
+}
+
+export interface DriverCashDueResponse {
+  period: { from: string; to: string }
+  drivers: DriverCashDueRow[]
+}
+
+export async function fetchAccountingLedger(params: {
+  from?: string
+  to?: string
+  event_type?: string
+  course_id?: number
+  driver_id?: number
+  user_id?: number
+  page?: number
+  per_page?: number
+}): Promise<AccountingLedgerResponse> {
+  const { data } = await api.get('/admin/reporting/accounting', { params })
+  return data
+}
+
+export async function fetchDriverCashDue(params: {
+  from?: string
+  to?: string
+}): Promise<DriverCashDueResponse> {
+  const { data } = await api.get('/admin/reporting/accounting/cash-due', { params })
+  return data
+}
+
 
 export async function fetchAdminDashboard(): Promise<DashboardResponse> {
   const { data } = await api.get('/admin/dashboard')
@@ -301,6 +404,69 @@ export async function fetchAdminCourses(params: {
   return data
 }
 
+export interface OfferAdminAction {
+  id: number
+  action: 'viewed' | 'rebroadcasted' | 'assigned'
+  created_at: string
+  admin_user?: { id: number; name: string } | null
+}
+
+export interface AssignmentPerson {
+  driver_id: number | null
+  name: string | null
+  user_id?: number
+  offered_at?: string | null
+  push_received_at?: string | null
+  notification_read_at?: string | null
+  declined_at?: string | null
+  reason?: string
+  custom_reason?: string | null
+  distance_km?: number
+  position_at?: string | null
+}
+
+export interface UnassignedCourse extends Course {
+  offer_age_seconds: number
+  offer_broadcasted_at?: string | null
+  offer_admin_actions?: OfferAdminAction[]
+  assignment_diagnostic: {
+    code: 'none_available_nearby' | 'all_nearby_busy' | 'broadcast_no_response' | 'all_contacted_declined'
+    warning: string
+    nearest_available_outside_km: number | null
+    available_within_radius: number
+    busy_within_radius: number
+    contacted_count: number
+    declined_count: number
+    people?: Record<'contacted' | 'declined' | 'unanswered' | 'available' | 'busy' | 'nearest', AssignmentPerson[]>
+  }
+}
+
+export async function fetchUnassignedCourses(): Promise<{ count: number; courses: UnassignedCourse[] }> {
+  const { data } = await api.get('/admin/courses-unassigned')
+  return data
+}
+
+export interface ArchivedCourse extends Course {
+  archived_at: string
+  archived_released_amount: number
+  cancellation_reason: string | null
+  sender?: { id: number; name: string; email: string; phone: string | null; type: string }
+  archived_by?: { id: number; name: string; email: string } | null
+}
+
+export async function fetchArchivedCourses(params: { q?: string; page?: number; per_page?: number } = {}): Promise<Paginated<ArchivedCourse>> {
+  const { data } = await api.get('/admin/courses-archived', { params })
+  return data
+}
+
+export async function markOfferViewed(courseId: number): Promise<void> {
+  await api.post(`/admin/courses/${courseId}/offer-viewed`)
+}
+
+export async function rebroadcastCourse(courseId: number): Promise<void> {
+  await api.post(`/admin/courses/${courseId}/rebroadcast`)
+}
+
 export type MarchantWithUser = Marchant & {
   user: { id: number; name: string; email: string; phone: string | null; wallet?: UserWallet | null }
 }
@@ -308,6 +474,160 @@ export type MarchantWithUser = Marchant & {
 export async function fetchPendingMarchants(): Promise<MarchantWithUser[]> {
   const { data } = await api.get('/admin/marchants/pending')
   return data.marchants
+}
+
+export type MerchantWaitlistListItem = {
+  id: number
+  commerce_type: string
+  commerce_type_other: string | null
+  zone: string
+  zone_other: string | null
+  weekly_orders: string
+  source: string | null
+  source_other: string | null
+  delivery_methods: string[]
+  delivery_methods_other: string | null
+  problems: string[]
+  problems_other: string | null
+  worst_experience: string
+  cash_collection_issue: string
+  time_lost_weekly: string
+  orders_lost_weekly: string
+  expected_benefit: string
+  commission_acceptance: string
+  reasonable_fee: string
+  mobile_money_trust: string
+  interest_level: number
+  trial_interest: string
+  shop_name: string | null
+  contact_name: string | null
+  email: string | null
+  whatsapp: string | null
+  status: string
+  bonus_amount: number
+  bonus_code: string | null
+  bonus_redeemed_at: string | null
+  notified_at: string | null
+  created_at: string
+}
+
+export interface MerchantWaitlistListParams {
+  q?: string
+  page?: number
+  per_page?: number
+}
+
+export async function fetchMerchantWaitlists(
+  params: MerchantWaitlistListParams = {},
+): Promise<Paginated<MerchantWaitlistListItem>> {
+  const { data } = await api.get('/admin/waitlists/merchants', { params })
+  return data
+}
+
+export type DriverWaitlistListItem = {
+  id: number
+  survey_response_id: string | null
+  survey_version: string | null
+  survey_mode: string | null
+  survey_payload: {
+    answers?: Record<string, unknown>
+    completed?: boolean
+    stop_reason?: string | null
+    src?: string | null
+  } | null
+  account_payload: {
+    operateur?: string
+    consentements?: Record<string, unknown>
+    profil_operationnel?: Record<string, unknown>
+  } | null
+  survey_started_at: string | null
+  survey_submitted_at: string | null
+  survey_duration_seconds: number | null
+  survey_suspect: boolean
+  full_name: string | null
+  email: string | null
+  whatsapp: string | null
+  vehicle_type: string | null
+  zone: string | null
+  zone_other: string | null
+  experience: string | null
+  availability: string | null
+  source: string | null
+  source_other: string | null
+  platforms_used: string[] | null
+  platforms_used_other: string | null
+  weekly_deliveries: string | null
+  weekly_income: string | null
+  problems: string[] | null
+  problems_other: string | null
+  worst_experience: string | null
+  expected_payment_model: string | null
+  expected_weekly_income: string | null
+  mobile_money_trust: string | null
+  interest_level: number | null
+  launch_availability: string | null
+  status: string
+  notified_at: string | null
+  created_at: string
+}
+
+export interface DriverWaitlistListParams {
+  q?: string
+  page?: number
+  per_page?: number
+}
+
+export async function fetchDriverWaitlists(
+  params: DriverWaitlistListParams = {},
+): Promise<Paginated<DriverWaitlistListItem>> {
+  const { data } = await api.get('/admin/waitlists/drivers', { params })
+  return data
+}
+
+export async function notifyPublicWaitlist(
+  kind: 'merchants' | 'drivers',
+  id: number,
+): Promise<void> {
+  await api.post(`/admin/waitlists/${kind}/${id}/notify`)
+}
+
+export type WaitlistExportFormat = 'csv' | 'txt'
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => window.URL.revokeObjectURL(url), 30_000)
+}
+
+export async function downloadMerchantWaitlistsExport(
+  format: WaitlistExportFormat,
+  params: MerchantWaitlistListParams = {},
+): Promise<void> {
+  const response = await api.get(`/admin/waitlists/merchants/export.${format}`, {
+    params,
+    responseType: 'blob',
+  })
+  const type = format === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8'
+  const blob = new Blob([response.data], { type })
+  downloadBlob(blob, `commercants_formulaires.${format}`)
+}
+
+export async function downloadDriverWaitlistsExport(
+  format: WaitlistExportFormat,
+  params: DriverWaitlistListParams = {},
+): Promise<void> {
+  const response = await api.get(`/admin/waitlists/drivers/export.${format}`, {
+    params,
+    responseType: 'blob',
+  })
+  const type = format === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8'
+  const blob = new Blob([response.data], { type })
+  downloadBlob(blob, `livreurs_formulaires.${format}`)
 }
 
 export interface MarchantListParams {
@@ -342,7 +662,7 @@ export interface AdminIncident {
   resolution_note: string | null
   resolved_at: string | null
   created_at: string
-  course: { id: number; reference: string; status: string } | null
+  course: { id: number; reference: string; status: string; pickup_from_previous_driver?: boolean; previous_driver_id?: number; driver_id?: number } | null
   reported_by: { id: number; name: string; type: string } | null
 }
 
@@ -353,6 +673,10 @@ export interface IncidentListParams {
   per_page?: number
 }
 
+export async function confirmTransferException(courseId: number, reason: string): Promise<void> {
+  await api.post(`/admin/courses/${courseId}/confirm-transfer-exception`, { reason })
+}
+
 
 
 
@@ -361,6 +685,32 @@ export interface IncidentListParams {
 
 export async function fetchMarchants(params: MarchantListParams): Promise<Paginated<MarchantWithUser>> {
   const { data } = await api.get('/admin/marchants', { params })
+  return data
+}
+
+export interface CreateMarchantPayload {
+  name: string
+  email: string
+  phone: string
+  password: string
+  raison_sociale: string
+  ifu_rccm?: string
+  secteur_activite: 'supermarche' | 'restaurant' | 'boutique' | 'pharmacie' | 'ecommerce' | 'autre'
+  validate_now?: boolean
+}
+
+export async function createMarchant(payload: CreateMarchantPayload): Promise<{ marchant: MarchantWithUser; message: string }> {
+  const { data } = await api.post('/admin/marchants', payload)
+  return data
+}
+
+export type UpdateMarchantPayload = Omit<CreateMarchantPayload, 'password' | 'validate_now'>
+
+export async function updateMarchant(
+  id: number,
+  payload: UpdateMarchantPayload,
+): Promise<{ marchant: MarchantWithUser; message: string }> {
+  const { data } = await api.patch(`/admin/marchants/${id}`, payload)
   return data
 }
 
@@ -386,6 +736,51 @@ export async function validateMarchant(id: number): Promise<void> {
 export async function fetchAdminDrivers(): Promise<DriverFull[]> {
   const { data } = await api.get('/admin/drivers')
   return data.drivers
+}
+
+export interface CreateDriverPayload {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  password: string
+  gender?: 'M' | 'F' | 'autre'
+  birth_date?: string
+  vehicle_type: 'scooter' | 'moto' | 'voiture' | 'velo'
+  vehicle_plate?: string
+  vehicle_brand?: string
+  kind?: DriverKind
+  activate_now?: boolean
+}
+
+export async function createDriver(payload: CreateDriverPayload): Promise<{ driver: DriverFull; message: string }> {
+  const { data } = await api.post('/admin/drivers', payload)
+  return data
+}
+
+export interface UpdateDriverPayload {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  gender?: 'M' | 'F' | 'autre' | ''
+  birth_date?: string
+  vehicle_type: 'scooter' | 'moto' | 'voiture' | 'velo'
+  vehicle_plate?: string
+  vehicle_brand?: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+  emergency_contact2_name?: string
+  emergency_contact2_phone?: string
+  preferred_response_channel?: 'email' | 'sms' | 'whatsapp' | ''
+}
+
+export async function updateDriver(
+  id: number,
+  payload: UpdateDriverPayload,
+): Promise<{ driver: DriverDetail; message: string }> {
+  const { data } = await api.patch(`/admin/drivers/${id}`, payload)
+  return data
 }
 
 /**
@@ -465,6 +860,10 @@ export async function validateDriver(id: number): Promise<void> {
   await api.post(`/admin/drivers/${id}/validate`)
 }
 
+export async function rejectDriver(id: number, reason: string): Promise<void> {
+  await api.post(`/admin/drivers/${id}/reject`, { reason })
+}
+
 /**
  * Récupère un document privé d'un livreur (photo/CNI/permis) en blob et l'ouvre dans un nouvel onglet.
  * Le token Sanctum est ajouté automatiquement par l'intercepteur axios.
@@ -498,6 +897,10 @@ export async function fetchIncidents(params: IncidentListParams): Promise<Pagina
 
 export async function resolveIncident(id: number, resolution_note: string): Promise<void> {
   await api.post(`/admin/incidents/${id}/resolve`, { resolution_note })
+}
+
+export async function startIncidentReturn(id: number): Promise<void> {
+  await api.post(`/admin/incidents/${id}/start-return`)
 }
 
 // ============== PARTICULIERS (ADMIN) ==============
@@ -546,6 +949,32 @@ export async function fetchIndividuals(
   params: IndividualListParams,
 ): Promise<Paginated<IndividualWithUser>> {
   const { data } = await api.get('/admin/individuals', { params })
+  return data
+}
+
+export interface CreateIndividualPayload {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  password: string
+  gender?: 'M' | 'F' | 'autre'
+}
+
+export async function createIndividual(
+  payload: CreateIndividualPayload,
+): Promise<{ individual: IndividualWithUser; message: string }> {
+  const { data } = await api.post('/admin/individuals', payload)
+  return data
+}
+
+export type UpdateIndividualPayload = Omit<CreateIndividualPayload, 'password'>
+
+export async function updateIndividual(
+  id: number,
+  payload: UpdateIndividualPayload,
+): Promise<{ individual: IndividualWithUser; message: string }> {
+  const { data } = await api.patch(`/admin/individuals/${id}`, payload)
   return data
 }
 
@@ -754,11 +1183,19 @@ export async function adjustDriverWallet(driverId: number, payload: WalletAdjust
   await api.post(`/admin/drivers/${driverId}/wallet-adjustment`, payload)
 }
 
+export async function resetDriverWallet(driverId: number, reason: string): Promise<void> {
+  await api.post(`/admin/drivers/${driverId}/wallet-reset-zero`, { reason })
+}
+
 /**
  * Ajustement manuel d'un wallet user (marchand ou particulier).
  */
 export async function adjustUserWallet(userId: number, payload: WalletAdjustmentPayload): Promise<void> {
   await api.post(`/admin/users/${userId}/wallet-adjustment`, payload)
+}
+
+export async function resetUserWallet(userId: number, reason: string): Promise<void> {
+  await api.post(`/admin/users/${userId}/wallet-reset-zero`, { reason })
 }
 
 // ============== RÉCONCILIATION COMPTABLE (SUPER-ADMIN) ==============
@@ -794,10 +1231,53 @@ export interface ReconciliationResponse {
     drift_users: Array<{ user_id: number; name: string; balance: number; sum_tx: number; drift: number }>
     has_any: boolean
   }
+  sandbox_audit: {
+    generated_at: string
+    snapshot_token: string
+    correction_ready: boolean
+    payments: { count: number; nominal_total: number; paid_total: number; refunded_total: number; ids: number[] }
+    user_wallets: { sandbox_credit_total: number; residual_upper_bound: number; items: unknown[] }
+    driver_wallets: { exposed_residual_upper_bound: number; items: unknown[] }
+    courses: Array<{ course_id: number; reference: string; status: string; classification: string; delivery_fee: number; driver_earnings: number }>
+    withdrawals_requiring_review: Array<{ withdrawal_id: number; owner_type: string; owner_id: number; amount: number; status: string; paid: boolean; payout_failed: boolean }>
+  }
 }
 
 export async function fetchReconciliation(from?: string, to?: string): Promise<ReconciliationResponse> {
   const { data } = await api.get('/admin/reconciliation', { params: { from, to } })
+  return data
+}
+
+export interface SandboxRepairResult {
+  snapshot_token: string
+  applied: boolean
+  user_adjustments: Array<{ user_id: number; amount_fcfa: number }>
+  driver_adjustments: Array<{ driver_id: number; amount_fcfa: number }>
+  notes: string
+}
+
+export interface SandboxRepairPlan {
+  correction_ready: boolean
+  snapshot_token: string
+  user_adjustments: Array<{ user_id: number; amount_fcfa: number; deferred_reserved_fcfa: number }>
+  driver_adjustments: Array<{ driver_id: number; amount_fcfa: number }>
+}
+
+export async function prepareSandboxRepair(snapshotToken: string): Promise<{
+  message: string
+  confirmation_code: string
+  expires_in_seconds: number
+  plan: SandboxRepairPlan
+}> {
+  const { data } = await api.post('/admin/sandbox/repair/prepare', { snapshot_token: snapshotToken })
+  return data
+}
+
+export async function applySandboxRepair(snapshotToken: string, confirmationCode: string): Promise<{ message: string; result: SandboxRepairResult }> {
+  const { data } = await api.post('/admin/sandbox/repair', {
+    snapshot_token: snapshotToken,
+    confirmation_code: confirmationCode,
+  })
   return data
 }
 

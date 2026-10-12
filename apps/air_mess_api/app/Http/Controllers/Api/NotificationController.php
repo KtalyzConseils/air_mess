@@ -97,6 +97,15 @@ class NotificationController extends Controller
         return response()->json(['notification' => $notification->fresh()]);
     }
 
+    public function markAllRead(Request $request): JsonResponse
+    {
+        $updated = Notification::where('user_id', $request->user()->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['updated' => $updated]);
+    }
+
     public function acknowledgePush(Request $request, Notification $notification): JsonResponse
     {
         if ($notification->user_id !== $request->user()->id) abort(403);

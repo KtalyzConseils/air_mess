@@ -8,8 +8,8 @@ const VIBRATION_PATTERN = Platform.OS === 'android' ? [0, 250, 100, 250] : [0, 2
  * Déclenche un son + vibration quand le nombre de propositions augmente.
  * Pas de bip si la liste se vide (course acceptée) ou reste stable.
  */
-export function useNewCourseAlert(count: number) {
-  const prevCountRef = useRef<number>(count)
+export function useNewCourseAlert(courseIds: number[]) {
+  const prevIdsRef = useRef<Set<number>>(new Set(courseIds))
   const playerRef = useRef<AudioPlayer | null>(null)
 
   // Charge le player une seule fois
@@ -27,8 +27,9 @@ export function useNewCourseAlert(count: number) {
 
   // Détecte une augmentation du nombre de propositions
   useEffect(() => {
-    const prev = prevCountRef.current
-    if (count > prev) {
+    const prevIds = prevIdsRef.current
+    const hasNewCourse = courseIds.some((id) => !prevIds.has(id))
+    if (hasNewCourse) {
       // Vibration
       Vibration.vibrate(VIBRATION_PATTERN)
 
@@ -42,6 +43,6 @@ export function useNewCourseAlert(count: number) {
         console.warn('Échec de lecture du son:', e)
       }
     }
-    prevCountRef.current = count
-  }, [count])
+    prevIdsRef.current = new Set(courseIds)
+  }, [courseIds])
 }

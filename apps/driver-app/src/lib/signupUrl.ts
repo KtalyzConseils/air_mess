@@ -22,7 +22,7 @@ const PROD_WEB_BASE = 'https://app.airmess-logistics.com'
 const DEV_WEB_BASE = 'https://dev.app.airmess-logistics.com'
 
 function getWebBase(): string {
-  const apiUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? ''
+  const apiUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ?? ''
   const isProdApi = /:\/\/api\.airmess-logistics\.com/i.test(apiUrl)
   return isProdApi ? PROD_WEB_BASE : DEV_WEB_BASE
 }

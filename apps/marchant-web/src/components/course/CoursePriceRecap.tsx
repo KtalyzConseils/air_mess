@@ -128,26 +128,18 @@ export default function CoursePriceRecap({
           </button>
 
           {hasFee && estimate && (
-            <p className="px-5 pb-4 text-caption text-warm-500 tabular-nums">
-              {estimate.capped
-                ? t('courses.new.recap.breakdownCapped', {
-                    distance: estimate.distance_km.toFixed(1),
-                    max: estimate.max.toLocaleString('fr-FR'),
-                  })
-                : t('courses.new.recap.breakdown', {
-                    distance: estimate.distance_km.toFixed(1),
-                    perKm: estimate.per_km.toLocaleString('fr-FR'),
-                    min: estimate.min.toLocaleString('fr-FR'),
-                  })}
-              {estimate.urgency === 'express' && estimate.multiplier !== 1 && (
-                <>
-                  {' '}
-                  {t('courses.new.recap.breakdownExpress', {
-                    multiplier: estimate.multiplier,
-                  })}
-                </>
+            <div className="px-5 pb-4">
+              {estimate.discount_amount > 0 && (
+                <p className="mb-1 text-caption font-semibold text-success">
+                  {t('courses.new.recap.firstCourseDiscount', {
+                    amount: estimate.discount_amount.toLocaleString('fr-FR'),
+                  })}{' '}
+                  <span className="font-normal text-warm-500 line-through">
+                    {estimate.original_fee.toLocaleString('fr-FR')} FCFA
+                  </span>
+                </p>
               )}
-            </p>
+            </div>
           )}
           {!hasFee && (
             <p className="px-5 pb-4 text-caption text-warm-500">

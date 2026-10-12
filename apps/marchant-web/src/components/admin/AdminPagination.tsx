@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { ChevronLeftIcon, ChevronRightIcon } from '../ui/icons'
 import { AdminButton } from './AdminToolbar'
 
@@ -19,12 +20,13 @@ export default function AdminPagination({
   onChange,
   isFetching,
 }: AdminPaginationProps) {
+  const { t } = useTranslation()
   if (lastPage <= 1) return null
 
   return (
     <div className="flex items-center justify-between mt-4 text-body-s text-warm-600 flex-wrap gap-2">
       <span className="tabular-nums">
-        Page <span className="font-bold text-ink">{currentPage}</span> / {lastPage} —{' '}
+        {t('admin.pagination.page')} <span className="font-bold text-ink">{currentPage}</span> / {lastPage} —{' '}
         <span className="font-bold text-ink">{total}</span> {itemLabel}
         {total > 1 ? 's' : ''}
         {isFetching && <span className="ml-2 text-warm-400">·  …</span>}
@@ -37,7 +39,7 @@ export default function AdminPagination({
           disabled={currentPage <= 1}
           leftIcon={<ChevronLeftIcon size={14} />}
         >
-          Précédent
+          {t('admin.pagination.previous')}
         </AdminButton>
         <AdminButton
           variant="secondary"
@@ -46,7 +48,7 @@ export default function AdminPagination({
           disabled={currentPage >= lastPage}
           rightIcon={<ChevronRightIcon size={14} />}
         >
-          Suivant
+          {t('admin.pagination.next')}
         </AdminButton>
       </div>
     </div>

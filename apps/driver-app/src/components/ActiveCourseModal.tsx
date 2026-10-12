@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Modal, View, Text, Pressable, ScrollView } from 'react-native'
+import { Modal, View, Text, Pressable } from 'react-native'
+import { KeyboardAwareScrollView, KeyboardProvider } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { type DriverCourseSummary } from '../api/driver'
@@ -28,6 +29,7 @@ export default function ActiveCourseModal({ course, visible, onClose }: Props) {
       onRequestClose={onClose}
       statusBarTranslucent
     >
+      <KeyboardProvider statusBarTranslucent>
       <View className="flex-1 bg-cream" style={{ paddingTop: insets.top }}>
         <View className="flex-row items-center justify-between px-4 py-3 border-b border-warm-200">
           <View className="flex-1 pr-3">
@@ -48,16 +50,20 @@ export default function ActiveCourseModal({ course, visible, onClose }: Props) {
           </Pressable>
         </View>
 
-        <ScrollView
+        <KeyboardAwareScrollView
+          mode="layout"
           className="flex-1"
+          bottomOffset={24}
+          keyboardDismissMode="on-drag"
           contentContainerStyle={{ padding: 16, paddingBottom: Math.max(28, insets.bottom + 16) }}
           showsVerticalScrollIndicator={false}
           scrollEnabled={!mapInteracting}
           keyboardShouldPersistTaps="handled"
         >
           <ActiveCourseCard course={course} onMapInteractionChange={setMapInteracting} />
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </View>
+      </KeyboardProvider>
     </Modal>
   )
 }

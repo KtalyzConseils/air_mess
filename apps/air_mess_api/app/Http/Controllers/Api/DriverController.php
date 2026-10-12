@@ -13,6 +13,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Services\NotificationService;
 use App\Services\DriverWalletService;
+use App\Services\DriverReferralService;
 use App\Models\CourseIncident;
 use App\Models\Admin;
 
@@ -119,10 +120,10 @@ class DriverController extends Controller
         $query->where(function ($q) use ($expressCutoff, $standardCutoff) {
             $q->where(function ($express) use ($expressCutoff) {
                 $express->where('urgency', 'express')
-                    ->where('created_at', '>=', $expressCutoff);
+                    ->whereRaw('COALESCE(offer_broadcasted_at, created_at) >= ?', [$expressCutoff]);
             })->orWhere(function ($standard) use ($standardCutoff) {
                 $standard->where('urgency', 'standard')
-                    ->where('created_at', '>=', $standardCutoff);
+                    ->whereRaw('COALESCE(offer_broadcasted_at, created_at) >= ?', [$standardCutoff]);
             });
         });
 
@@ -135,17 +136,22 @@ class DriverController extends Controller
                 $q->where('is_high_value', false)->orWhereNull('is_high_value');
             });
 
-            // Mode "aux frais du destinataire" : réservé Airmess (le marchand n'a rien payé,
-            // c'est un modèle économique dédié aux salariés Air Mess).
-            $query->where(function ($q) {
-                $q->where('delivery_fee_paid_by', Course::PAID_BY_SENDER)
-                  ->orWhereNull('delivery_fee_paid_by');
+            // Mode "aux frais du destinataire" : le driver encaisse le delivery_fee en
+            // cash/mobile money chez le client, puis se fait débiter la part AirMess
+            // (commission) à la livraison — cf. debitPlatformCommission. On ne montre
+            // l'offre que s'il peut déjà couvrir cette part avec son wallet, sinon le
+            // débit échouerait à la livraison. Le driver Airmess bypass : salarié, pas
+            // de commission perso (tout revient à la plateforme via PlatformEarning).
+            $balance = $driver->wallet?->balance ?? 0;
+            $query->where(function ($q) use ($balance) {
+                $q->where('delivery_fee_paid_by', '!=', Course::PAID_BY_RECIPIENT)
+                  ->orWhereNull('delivery_fee_paid_by')
+                  ->orWhereRaw('(delivery_fee - driver_earnings) <= ?', [$balance]);
             });
 
             // Filtre caution : on cache les courses avec encaissement > balance du wallet.
             // Le driver indépendant ne verra que ce qu'il peut couvrir avec sa caution.
             // Le driver Airmess bypass — Air Mess porte le risque via sa relation salariale.
-            $balance = $driver->wallet?->balance ?? 0;
             $query->where(function ($q) use ($balance) {
                 $q->where('has_collection', false)
                   ->orWhere('collection_amount', '<=', $balance);
@@ -193,6 +199,53 @@ class DriverController extends Controller
         return response()->json(['courses' => $courses]);
     }
 
+    public function showCourse(Request $request, Course $course): JsonResponse
+    {
+        $driver = $this->currentDriver($request, requireActive: true);
+
+        $isAssignedToDriver = $course->driver_id === $driver->id;
+        $isVisibleOffer = $course->status === Course::STATUS_AWAITING
+            && $course->driver_id === null
+            && ! \App\Models\CourseDeclineRecord::where('course_id', $course->id)
+                ->where('driver_id', $driver->id)
+                ->exists();
+
+        if ($isVisibleOffer && ! $driver->isAirmess()) {
+            $isHighValue = (bool) $course->is_high_value;
+            $paidByRecipient = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
+            $balance = (int) ($driver->wallet?->balance ?? 0);
+            // Part AirMess à débiter à la livraison si le driver prend cette course
+            // (cf. debitPlatformCommission) — doit déjà être couverte par le wallet.
+            $platformShare = (int) $course->delivery_fee - (int) $course->driver_earnings;
+            $platformShareCovered = ! $paidByRecipient || $platformShare <= $balance;
+            $collectionCovered = ! $course->has_collection
+                || (int) ($course->collection_amount ?? 0) <= $balance;
+
+            $isVisibleOffer = ! $isHighValue && $platformShareCovered && $collectionCovered;
+        }
+
+        if (! $isAssignedToDriver && ! $isVisibleOffer) {
+            return response()->json(['message' => 'Cette course n\'est plus disponible pour vous.'], 403);
+        }
+
+        $course->load(['sender', 'driver.user', 'packageCategory']);
+
+        // Ajoute `distance_km` (haversine driver → pickup → destination) pour rester
+        // cohérent avec la liste des offres (offeredCourses). Sans ça, l'écran
+        // détail du driver-app affichait des kilométrages faussés / undefined.
+        if ($driver->current_lat !== null && $driver->current_lng !== null) {
+            $row = Course::query()
+                ->selectDistanceFrom((float) $driver->current_lat, (float) $driver->current_lng)
+                ->whereKey($course->id)
+                ->first();
+            if ($row !== null) {
+                $course->setAttribute('distance_km', $row->distance_km);
+            }
+        }
+
+        return response()->json(['course' => $course->makeHidden(['pickup_code', 'delivery_code'])]);
+    }
+
 
     // ===== 4. ACCEPTER UNE COURSE =====
     public function acceptCourse(Request $request, Course $course, NotificationService $notifier): JsonResponse
@@ -209,22 +262,22 @@ class DriverController extends Controller
         }
 
         DB::transaction(function () use ($driver, $course) {
-            $course->update([
+            $locked = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status !== Course::STATUS_AWAITING || $locked->driver_id !== null) abort(409, 'Cette course n’est plus disponible.');
+            $lockedDriver = Driver::whereKey($driver->id)->lockForUpdate()->firstOrFail();
+            if ($lockedDriver->availability_status !== 'available') abort(403, 'Vous n’êtes pas disponible.');
+            $course->setRawAttributes($locked->getAttributes(), true);
+            $course->updateWithStatusHistory([
                 'driver_id'   => $driver->id,
                 'status'      => Course::STATUS_ASSIGNED,
                 'assigned_at' => now(),
-            ]);
-
-            $driver->update(['availability_status' => 'busy']);
-
-            CourseStatusHistory::create([
-                'course_id'       => $course->id,
-                'from_status'     => Course::STATUS_AWAITING,
-                'to_status'       => Course::STATUS_ASSIGNED,
+            ], [
                 'changed_by_id'   => $driver->user_id,
                 'changed_by_type' => 'user',
                 'reason'          => 'Course acceptée par le livreur',
             ]);
+
+            $driver->update(['availability_status' => 'busy']);
         });
 
         // Recalcule l'acceptance_rate sur la fenêtre rolling 30j (cf. project_wallet_driver_todo #7)
@@ -400,9 +453,12 @@ class DriverController extends Controller
             : null;
 
         DB::transaction(function () use ($driver, $course, $data, $customReason) {
-            \App\Models\CourseDeclineRecord::create([
+            $locked = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status !== Course::STATUS_AWAITING || $locked->driver_id !== null) abort(409, 'Cette course n’est plus disponible.');
+            \App\Models\CourseDeclineRecord::firstOrCreate([
                 'driver_id'     => $driver->id,
                 'course_id'     => $course->id,
+            ], [
                 'reason'        => $data['reason'],
                 'custom_reason' => $customReason,
             ]);
@@ -422,7 +478,9 @@ class DriverController extends Controller
         Course $course,
         NotificationService $notifier,
         DriverWalletService $walletService,
+        DriverReferralService $referralService,
         \App\Services\UserWalletService $userWalletService,
+        \App\Services\AccountingLedgerService $accounting,
     ): JsonResponse
     {
         $driver = $this->currentDriver($request, requireActive: true);
@@ -434,13 +492,31 @@ class DriverController extends Controller
         $data = $request->validate([
             'action' => ['required', Rule::in([
                 'start_to_pickup', 'arrived_pickup', 'pickup_confirmed',
-                'arrived_dropoff', 'delivered', 'return_confirmed', 'failed',
+                'arrived_dropoff', 'delivered', 'return_confirmed', 'failed', 'transfer_confirmed',
             ])],
             'pickup_code'    => ['required_if:action,pickup_confirmed', 'nullable', 'string', 'max:10'],
             'delivery_code'  => ['required_if:action,delivered', 'nullable', 'string', 'max:10'],
             'return_code'    => ['required_if:action,return_confirmed', 'nullable', 'string', 'max:10'],
+            'transfer_code'  => ['required_if:action,transfer_confirmed', 'nullable', 'string', 'size:6'],
             'reason'         => ['required_if:action,failed', 'nullable', 'string', 'max:500'],
-        ]);
+        ], ['transfer_code.required_if' => 'Le code de remise est obligatoire. Mettez à jour l’application si le champ n’apparaît pas.',
+            'transfer_code.size' => 'Le code de remise contient 6 chiffres.']);
+
+        if ($data['action'] === 'failed') {
+            return $this->abandonCourse($course, $driver, $data['reason'], $notifier);
+        }
+        if ($data['action'] === 'transfer_confirmed') {
+            $course->confirmParcelTransfer($request->user(), $data['transfer_code']);
+            return response()->json(['message' => 'Transfert confirmé.', 'course' => $course->fresh()->makeHidden(['pickup_code', 'delivery_code'])]);
+        }
+        if ($course->pickup_from_previous_driver && in_array($data['action'], ['arrived_dropoff', 'delivered'], true)) {
+            throw ValidationException::withMessages(['course' => 'Confirmez la récupération auprès du précédent livreur avant de livrer.']);
+        }
+        if ($data['action'] !== 'return_confirmed' && CourseIncident::where('course_id', $course->id)
+            ->where('reported_by', $driver->user_id)->where('status', 'open')
+            ->where('description', 'like', '[Abandon après récupération]%')->exists()) {
+            throw ValidationException::withMessages(['course' => 'Abandon signalé : attendez les instructions des opérations avant de poursuivre.']);
+        }
 
         $transitions = [
             'start_to_pickup'   => [Course::STATUS_ASSIGNED, Course::STATUS_TO_PICKUP, null],
@@ -482,7 +558,7 @@ class DriverController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($course, $driver, $nextStatus, $timestampField, $data, $walletService, $userWalletService) {
+            DB::transaction(function () use ($course, $driver, $nextStatus, $timestampField, $data, $walletService, $userWalletService, $accounting) {
                 // Capture le statut AVANT update pour les hooks wallet
                 $previousStatus = $course->getOriginal('status');
 
@@ -491,7 +567,15 @@ class DriverController extends Controller
                     $updates[$timestampField] = now();
                 }
 
-                $course->update($updates);
+                $course->updateWithStatusHistory($updates, [
+                    'changed_by_id'   => $driver->user_id,
+                    'changed_by_type' => 'user',
+                    'reason'          => $data['reason'] ?? null,
+                    'metadata'        => array_filter([
+                        'pickup_code'   => $data['pickup_code'] ?? null,
+                        'delivery_code' => $data['delivery_code'] ?? null,
+                    ]),
+                ]);
 
                 // Libérer le livreur si terminal
                 if (in_array($nextStatus, Course::TERMINAL_STATUSES, true)) {
@@ -501,6 +585,9 @@ class DriverController extends Controller
                 // Hook wallet DRIVER : pickup confirmé → débit caution si course avec encaissement
                 if ($nextStatus === Course::STATUS_PICKED_UP && $course->has_collection) {
                     $walletService->debitForPickup($driver, $course);
+                }
+                if ($nextStatus === Course::STATUS_PICKED_UP) {
+                    $accounting->recordPackagePickedUp($course, $driver);
                 }
 
                 // Hook wallet DRIVER : failed APRÈS pickup → remboursement caution
@@ -517,16 +604,33 @@ class DriverController extends Controller
                 // Créditer le livreur quand la course est livrée : les gains s'ajoutent
                 // directement à son wallet (cf. project_wallet_driver).
                 //
-                // Cas spécial : un driver Airmess qui livre une course "aux frais du
-                // destinataire" ne reçoit PAS de commission — il est salarié et le
-                // revenu delivery_fee revient à la plateforme via platform_earnings.
-                // Sur une course sender-paid, l'Airmess touche la commission comme
-                // n'importe quel driver (le marchand a payé, l'argent existe déjà).
+                // Cas "aux frais du destinataire" (delivery_fee_paid_by=recipient) :
+                // le livreur encaisse déjà 100% du delivery_fee en cash/mobile money
+                // chez le client — l'argent ne transite jamais par le wallet AirMess.
+                //  - Driver Airmess (salarié) : ne reçoit PAS de commission, tout
+                //    l'argent collecté revient à la plateforme via PlatformEarning
+                //    (restitution physique du cash en fin de shift).
+                //  - Driver indépendant : pas de crédit gains (il tient déjà sa part
+                //    en cash), on débite juste la part AirMess de son wallet — cf.
+                //    debitPlatformCommission. Filtré en amont (offeredCourses/showCourse)
+                //    pour que son wallet puisse toujours couvrir ce débit.
+                // Sur une course sender-paid, tout driver touche sa commission normalement
+                // (le marchand a payé, l'argent existe déjà dans le système).
                 $isRecipientPaid = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
-                $skipEarning = $driver->isAirmess() && $isRecipientPaid;
+                $isAirmessDriver = $driver->isAirmess();
+                $skipEarning = $isAirmessDriver && $isRecipientPaid;
+                $isIndependentRecipientPaid = ! $isAirmessDriver && $isRecipientPaid;
+                $platformShare = (int) $course->delivery_fee - (int) $course->driver_earnings;
 
-                if ($nextStatus === Course::STATUS_DELIVERED && $course->driver_earnings > 0 && ! $skipEarning) {
+                if ($nextStatus === Course::STATUS_DELIVERED && $course->driver_earnings > 0 && ! $skipEarning && ! $isIndependentRecipientPaid) {
                     $walletService->creditEarning($driver, $course, (int) $course->driver_earnings);
+                }
+                if ($nextStatus === Course::STATUS_DELIVERED && $isIndependentRecipientPaid && $platformShare > 0) {
+                    $walletService->debitPlatformCommission($driver, $course, $platformShare);
+                }
+                if ($nextStatus === Course::STATUS_DELIVERED) {
+                    $accounting->recordPackageDelivered($course, $driver);
+                    $accounting->recordRecipientCashCollected($course, $driver);
                 }
 
                 // Hook plateforme : livraison d'une course "aux frais du destinataire"
@@ -534,7 +638,7 @@ class DriverController extends Controller
                 // physique est chez le driver Airmess (il l'a collecté chez le client)
                 // et sera restitué en fin de shift. Idempotent via UNIQUE(course_id, kind).
                 if ($nextStatus === Course::STATUS_DELIVERED && $isRecipientPaid && $course->delivery_fee > 0) {
-                    \App\Models\PlatformEarning::firstOrCreate(
+                    $earning = \App\Models\PlatformEarning::firstOrCreate(
                         [
                             'course_id' => $course->id,
                             'kind'      => \App\Models\PlatformEarning::KIND_DELIVERY_FEE,
@@ -548,6 +652,7 @@ class DriverController extends Controller
                             ],
                         ],
                     );
+                    $accounting->recordRecipientPaidDelivery($course, $driver, $earning);
                 }
 
                 // Hook wallet MARCHAND : livraison + course avec encaissement → on
@@ -594,23 +699,59 @@ class DriverController extends Controller
                     // chargePartial() qui capture X et release le reste.
                 }
 
-                CourseStatusHistory::create([
-                    'course_id'       => $course->id,
-                    'from_status'     => $previousStatus,
-                    'to_status'       => $nextStatus,
-                    'changed_by_id'   => $driver->user_id,
-                    'changed_by_type' => 'user',
-                    'reason'          => $data['reason'] ?? null,
-                    'metadata'        => array_filter([
-                        'pickup_code'   => $data['pickup_code']   ?? null,
-                        'delivery_code' => $data['delivery_code'] ?? null,
-                    ]),
-                ]);
             });
         } catch (\DomainException $e) {
             // Règle métier violée par le service wallet (caution insuffisante, etc.)
             // → 422 propre, course non transitionnée (rollback auto de la transaction)
             return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        if ($nextStatus === Course::STATUS_DELIVERED) {
+            $rewardedReferral = $referralService->evaluateForReferredDriver($driver);
+            if ($rewardedReferral?->sponsor?->user_id) {
+                $amount = (int) $rewardedReferral->reward_amount_fcfa;
+                $notifier->sendToUser(
+                    $rewardedReferral->sponsor->user_id,
+                    'driver.referral_rewarded',
+                    'Prime parrainage créditée',
+                    "Ton parrainage a rapporté {$amount} FCFA dans ton wallet.",
+                    [
+                        'app' => 'driver',
+                        'screen' => 'wallet',
+                        'icon' => 'gift-outline',
+                        'amount_fcfa' => $amount,
+                        'referral_id' => $rewardedReferral->id,
+                    ],
+                );
+            }
+
+            // Explique au driver indépendant pourquoi son wallet vient d'être débité
+            // sur une course "payée à la livraison" — il a le cash en poche, il ne
+            // faut pas qu'il croie à une erreur ou un débit injustifié.
+            $isRecipientPaid = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
+            if ($isRecipientPaid && ! $driver->isAirmess()) {
+                $platformShare = (int) $course->delivery_fee - (int) $course->driver_earnings;
+                if ($platformShare > 0) {
+                    $notifier->sendToUser(
+                        $driver->user_id,
+                        'driver.recipient_paid_commission_debited',
+                        '💰 Course payée à la livraison',
+                        "Tu as encaissé {$course->delivery_fee} FCFA chez le client. "
+                        . "La part AirMess ({$platformShare} FCFA) a été débitée de ton wallet — "
+                        . "il te reste {$course->driver_earnings} FCFA de gains sur cette course.",
+                        [
+                            'app'              => 'driver',
+                            'screen'           => 'wallet',
+                            'icon'             => 'cash-outline',
+                            'reference'        => $course->reference,
+                            'delivery_fee'     => (int) $course->delivery_fee,
+                            'platform_share'   => $platformShare,
+                            'driver_earnings'  => (int) $course->driver_earnings,
+                        ],
+                        $course->id,
+                    );
+                }
+            }
         }
 
         //PUSH au marchand sur les transitions visibles côté client
@@ -652,6 +793,15 @@ class DriverController extends Controller
             'course'  => $course->fresh()->makeHidden(['pickup_code', 'delivery_code']),
         ]);
 
+    }
+
+    public function referral(Request $request, DriverReferralService $referralService): JsonResponse
+    {
+        $driver = $this->currentDriver($request);
+
+        return response()->json([
+            'referral' => $referralService->summary($driver),
+        ]);
     }
 
     // ===== Helper =====
@@ -1170,6 +1320,76 @@ class DriverController extends Controller
     }
 
     // ===== 7. SIGNALER UN INCIDENT =====
+    private function abandonCourse(Course $course, Driver $driver, string $reason, NotificationService $notifier): JsonResponse
+    {
+        $result = DB::transaction(function () use ($course, $driver, $reason) {
+            $locked = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
+            if ($locked->driver_id !== $driver->id || $locked->isTerminal()) {
+                throw ValidationException::withMessages(['course' => 'Cette course ne peut plus être abandonnée par ce livreur.']);
+            }
+            $previousStatus = $locked->status;
+            $postPickup = $locked->picked_up_at !== null || in_array($previousStatus, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF, Course::STATUS_RETURNING_TO_SENDER], true);
+            if ($postPickup) {
+                $incident = CourseIncident::where('course_id', $locked->id)->where('reported_by', $driver->user_id)
+                    ->where('status', 'open')->where('description', 'like', '[Abandon après récupération]%')->first();
+                if ($incident) return ['post_pickup' => true, 'new' => false, 'incident' => $incident];
+                $incident = CourseIncident::create([
+                    'course_id' => $locked->id, 'reported_by' => $driver->user_id, 'reporter_type' => 'driver',
+                    'type' => CourseIncident::TYPE_OTHER, 'status' => 'open',
+                    'description' => '[Abandon après récupération] Colis détenu par le livreur '.$driver->id.'. Motif : '.$reason,
+                    'lat' => $driver->current_lat, 'lng' => $driver->current_lng,
+                ]);
+                $driver->increment('incidents_count');
+                $driver->update(['availability_status' => 'busy']);
+                CourseStatusHistory::create([
+                    'course_id' => $locked->id, 'from_status' => $previousStatus, 'to_status' => $previousStatus,
+                    'changed_by_id' => $driver->user_id, 'changed_by_type' => 'user',
+                    'reason' => 'Abandon après récupération : '.$reason,
+                    'metadata' => ['event' => 'driver_abandoned', 'abandoned_by_driver_id' => $driver->id, 'incident_id' => $incident->id],
+                ]);
+                return ['post_pickup' => true, 'new' => true, 'incident' => $incident];
+            }
+            if (! in_array($previousStatus, [Course::STATUS_ASSIGNED, Course::STATUS_TO_PICKUP, Course::STATUS_AT_PICKUP], true)) {
+                throw ValidationException::withMessages(['course' => 'Abandon impossible depuis ce statut.']);
+            }
+            \App\Models\CourseDeclineRecord::firstOrCreate(['driver_id' => $driver->id, 'course_id' => $locked->id], ['reason' => 'personal']);
+            $locked->updateWithStatusHistory([
+                'driver_id' => null, 'status' => Course::STATUS_AWAITING, 'assigned_at' => null,
+                'offer_broadcasted_at' => now(), 'offer_alerts_sent' => [],
+                'pickup_from_previous_driver' => false, 'previous_driver_id' => null, 'transfer_lat' => null, 'transfer_lng' => null,
+            ], [
+                'changed_by_id' => $driver->user_id, 'changed_by_type' => 'user',
+                'reason' => 'Abandon avant récupération : '.$reason, 'metadata' => ['event' => 'driver_abandoned', 'abandoned_by_driver_id' => $driver->id],
+            ]);
+            if (! Course::where('driver_id', $driver->id)->whereNotIn('status', Course::TERMINAL_STATUSES)->exists()) {
+                $driver->update(['availability_status' => 'available']);
+            }
+            return ['post_pickup' => false, 'new' => true];
+        });
+        if (! $result['post_pickup']) {
+            app(\App\Services\CourseCreationService::class)->dispatchToAvailableDrivers($course->fresh());
+        } elseif ($result['new']) {
+            $ops = Admin::whereIn('sub_role', [Admin::ROLE_OPS, Admin::ROLE_SUPER])->pluck('user_id')->all();
+            $notifier->sendToUsers($ops, 'incident.reported', '🚨 Abandon — colis déjà récupéré',
+                "Course {$course->reference} : le livreur détient encore le colis. Organisez un transfert ou un retour. Motif : {$reason}",
+                ['reference' => $course->reference, 'incident_type' => 'other', 'incident_id' => $result['incident']->id], $course->id);
+        }
+        if ($result['new']) {
+            $notifier->sendToUser($course->sender_id, 'course.driver_abandoned', 'Prise en charge interrompue',
+                $result['post_pickup']
+                    ? "Le livreur de {$course->reference} a signalé une interruption. Notre équipe organise la suite ; le colis reste sous sa garde."
+                    : "Le livreur de {$course->reference} ne peut plus assurer la course. Nous recherchons un autre livreur.",
+                ['reference' => $course->reference, 'post_pickup' => $result['post_pickup']], $course->id);
+        }
+        $updatedCourse = $course->fresh()->makeHidden(['pickup_code', 'delivery_code']);
+        $updatedCourse->setAttribute('abandonment_pending', $result['post_pickup']);
+        return response()->json([
+            'message' => $result['post_pickup'] ? 'Les opérations sont alertées. Conservez le colis et attendez leurs instructions.' : 'Course remise en attente et rediffusée.',
+            'course' => $updatedCourse,
+            'incident' => $result['incident'] ?? null,
+        ]);
+    }
+
     public function reportIncident(Request $request, Course $course, NotificationService $notifier): JsonResponse
     {
         $driver = $this->currentDriver($request, requireActive: true);

@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import LoginPage from './pages/LoginPage'
+import UnauthorizedPage from './pages/UnauthorizedPage'
 import DashboardPage from './pages/DashboardPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import NewCoursePage from './pages/NewCoursePage'
@@ -9,14 +11,19 @@ import CourseDetailPage from './pages/CourseDetailPage'
 import AddressesPage from './pages/AddressesPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminCoursesPage from './pages/admin/AdminCoursesPage'
+import AdminUnassignedCoursesPage from './pages/admin/AdminUnassignedCoursesPage'
+import AdminArchivedCoursesPage from './pages/admin/AdminArchivedCoursesPage'
 import AdminMarchantsPage from './pages/admin/AdminMarchantsPage'
+import AdminFormResultsPage from './pages/admin/AdminFormResultsPage'
 import AdminIndividualsPage from './pages/admin/AdminIndividualsPage'
+import AdminWaitlistPage from './pages/admin/AdminWaitlistPage'
 import AdminIndividualDetailPage from './pages/admin/AdminIndividualDetailPage'
 import TrackingPage from './pages/TrackingPage'
 import NotificationsPage from './pages/NotificationsPage'
 import ProfilePage from './pages/ProfilePage'
 import MarchantDetailPage from './pages/admin/MarchantDetailPage'
 import RegisterPage from './pages/RegisterPage'
+import RegisterSuccessPage from './pages/RegisterSuccessPage'
 import DriverRegisterPage from './pages/DriverRegisterPage'
 import DriverRegisterSuccessPage from './pages/DriverRegisterSuccessPage'
 import MarchantFromDriverPage from './pages/MarchantFromDriverPage'
@@ -29,9 +36,11 @@ import BillingReturnPage from './pages/BillingReturnPage'
 import MyWalletPage from './pages/MyWalletPage'
 import DevPage from './pages/DevPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
+import AdminUsersPage from './pages/admin/AdminUsersPage'
 import AdminWithdrawRequestsPage from './pages/admin/AdminWithdrawRequestsPage'
 import AdminWithdrawRequestDetailPage from './pages/admin/AdminWithdrawRequestDetailPage'
 import AdminWalletReportingPage from './pages/admin/AdminWalletReportingPage'
+import AdminAccountingLedgerPage from './pages/admin/AdminAccountingLedgerPage'
 import AdminReconciliationPage from './pages/admin/AdminReconciliationPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
@@ -39,24 +48,135 @@ import TermsPage from './pages/legal/TermsPage'
 import PrivacyPage from './pages/legal/PrivacyPage'
 import ClientQuickNav from './components/ClientQuickNav'
 import PwaReloadPrompt from './components/PwaReloadPrompt'
+import AnalyticsTracker from './components/AnalyticsTracker'
+import api from './api/client'
+import { useAuthStore } from './stores/authStore'
+import { MARKETING_SITE_URL } from './lib/constants'
 
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     },
   },
 })
+
+// L'espace admin doit rester frais sans forcer l'utilisateur a recharger la page.
+// Seules les requetes actives dont la cle commence par ['admin'] sont rafraichies.
+queryClient.setQueryDefaults(['admin'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 15_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['notifications'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 30_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['courses'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 15_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['course'], {
+  staleTime: 3_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 10_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['wallet'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 20_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['me', 'wallet'], {
+  staleTime: 5_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+  refetchInterval: 20_000,
+  refetchIntervalInBackground: false,
+})
+
+queryClient.setQueryDefaults(['addresses'], {
+  staleTime: 10_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+})
+
+queryClient.setQueryDefaults(['auth', 'me'], {
+  staleTime: 10_000,
+  refetchOnWindowFocus: 'always',
+  refetchOnReconnect: 'always',
+})
+
+function AuthProfileRefresher() {
+  const userId = useAuthStore((state) => state.user?.id)
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const setUser = useAuthStore((state) => state.setUser)
+
+  useEffect(() => {
+    if (!isAuthenticated || !userId) return
+
+    let stopped = false
+    const refresh = async () => {
+      try {
+        const { data } = await api.get('/auth/me')
+        if (!stopped && data.user) setUser(data.user)
+      } catch {
+        // Une panne réseau temporaire ne doit pas déconnecter l'utilisateur.
+      }
+    }
+
+    void refresh()
+    const interval = window.setInterval(refresh, 15_000)
+    const onFocus = () => void refresh()
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      stopped = true
+      window.clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [isAuthenticated, userId, setUser])
+
+  return null
+}
+
+function LandingRedirect({ to }: { to: string }) {
+  useEffect(() => {
+    window.location.replace(to)
+  }, [to])
+  return null
+}
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <AnalyticsTracker />
+        <AuthProfileRefresher />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register/success" element={<RegisterSuccessPage />} />
           <Route path="/register/driver" element={<DriverRegisterPage />} />
           <Route path="/register/driver/success" element={<DriverRegisterSuccessPage />} />
           {/* Ajout d'un profil marchand à un compte existant. Ouverte via deep-link
@@ -67,13 +187,18 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/legal/terms" element={<TermsPage />} />
           <Route path="/legal/privacy" element={<PrivacyPage />} />
+          <Route path="/landing/merchants" element={<LandingRedirect to={`${MARKETING_SITE_URL}/landing/merchants_learn`} />} />
+          <Route path="/landing/merchants_learn" element={<LandingRedirect to={`${MARKETING_SITE_URL}/landing/merchants_learn`} />} />
+          <Route path="/landing/drivers" element={<LandingRedirect to={`${MARKETING_SITE_URL}/landing/drivers_learn`} />} />
+          <Route path="/landing/drivers_learn" element={<LandingRedirect to={`${MARKETING_SITE_URL}/landing/drivers_learn`} />} />
           <Route path="/t/:token" element={<TrackingPage />} />  {/* PUBLIQUE POUR LE TRACKING */}
           <Route path="/billing/return" element={<BillingReturnPage />} />  {/* PUBLIQUE : retour Fedapay, le webhook fait foi */}
 
           {/* Routes protégées */}
-          <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} />}>
-            {/* marchant */}
+          <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} allowPendingMarchant />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedTypes={['marchant', 'individual']} />}>
             <Route path="/courses" element={<MyCoursesPage />} />
             <Route path="/courses/new" element={<NewCoursePage />} />
             <Route path="/addresses" element={<AddressesPage />} />
@@ -98,10 +223,15 @@ function App() {
           {/* admin — paramètres + retraits caution réservés au super-admin */}
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['super']} />}>
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/admins" element={<AdminUsersPage />} />
             <Route path="/admin/withdraw-requests" element={<AdminWithdrawRequestsPage />} />
             <Route path="/admin/withdraw-requests/:id" element={<AdminWithdrawRequestDetailPage />} />
             <Route path="/admin/reporting/wallets" element={<AdminWalletReportingPage />} />
             <Route path="/admin/reconciliation" element={<AdminReconciliationPage />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['ops']} />}>
+            <Route path="/admin/reporting/accounting" element={<AdminAccountingLedgerPage />} />
           </Route>
 
           {/* admin — fiches marchands/particuliers : lecture partagée (commercial+ops+support),
@@ -109,7 +239,11 @@ function App() {
           <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['commercial', 'ops', 'support']} />}>
             <Route path="/admin/marchants" element={<AdminMarchantsPage />} />
             <Route path="/admin/marchants/:id" element={<MarchantDetailPage />} />
+            <Route path="/admin/waitlists/merchants" element={<Navigate to="/admin/form-results?tab=merchants" replace />} />
+            <Route path="/admin/waitlists/drivers" element={<Navigate to="/admin/form-results?tab=drivers" replace />} />
+            <Route path="/admin/form-results" element={<AdminFormResultsPage />} />
             <Route path="/admin/individuals" element={<AdminIndividualsPage />} />
+            <Route path="/admin/waitlist" element={<AdminWaitlistPage />} />
             <Route path="/admin/individuals/:id" element={<AdminIndividualDetailPage />} />
           </Route>
 
@@ -120,6 +254,12 @@ function App() {
             <Route path="/admin/drivers/:id" element={<AdminDriverDetailPage />} />
             <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
             <Route path="/admin/api-apps" element={<AdminApiApplicationsPage />} />
+          </Route>
+
+          {/* File sans livreur : visible uniquement par super, ops et support. */}
+          <Route element={<ProtectedRoute allowedTypes={['admin']} allowedAdminRoles={['ops', 'support']} />}>
+            <Route path="/admin/courses-unassigned" element={<AdminUnassignedCoursesPage />} />
+            <Route path="/admin/courses-archived" element={<AdminArchivedCoursesPage />} />
           </Route>
 
 

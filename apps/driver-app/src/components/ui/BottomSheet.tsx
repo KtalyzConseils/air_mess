@@ -1,7 +1,8 @@
-import { Modal, View, Text, Pressable, ScrollView } from 'react-native'
+import { Modal, View, Text, Pressable } from 'react-native'
 import {
   KeyboardAvoidingView,
   KeyboardProvider,
+  KeyboardAwareScrollView,
 } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -67,7 +68,7 @@ export default function BottomSheet({
             <Pressable
               onPress={() => {}}
               className="bg-cream rounded-t-3xl overflow-hidden"
-              style={{ maxHeight: '92%' }}
+              style={{ height: '85%', flexShrink: 1 }}
             >
               {/* Drag handle */}
               <View className="items-center pt-3 pb-1">
@@ -93,14 +94,18 @@ export default function BottomSheet({
               </View>
 
               {/* Body scrollable */}
-              <ScrollView
+              <KeyboardAwareScrollView
                 className="px-5"
+                style={{ flex: 1 }}
+                mode="layout"
+                bottomOffset={24}
+                keyboardDismissMode="on-drag"
                 contentContainerStyle={{ paddingBottom: footer ? 8 : bottomPad }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
                 {children}
-              </ScrollView>
+              </KeyboardAwareScrollView>
 
               {/* Footer actions — fond off-white + safe-area bas pour dégager la nav bar */}
               {footer && (

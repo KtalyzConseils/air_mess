@@ -36,6 +36,7 @@ export interface ArbitratePayload {
   reason_code_marchand?: AdjustmentReasonCode | null
   amount_marchand?: number | null       // signé
   reason_code_driver?: AdjustmentReasonCode | null
+  adjustment_driver_id?: number | null
   amount_driver?: number | null         // signé
 }
 

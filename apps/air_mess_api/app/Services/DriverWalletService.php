@@ -32,7 +32,7 @@ class DriverWalletService
             throw new \InvalidArgumentException("Deposit amount must be > 0, got {$amount}.");
         }
 
-        return DB::transaction(function () use ($driver, $amount, $payment) {
+        $transaction = DB::transaction(function () use ($driver, $amount, $payment) {
             $wallet = DriverWallet::where('driver_id', $driver->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -49,6 +49,8 @@ class DriverWalletService
                 'payment_id'    => $payment->id,
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -78,7 +80,7 @@ class DriverWalletService
             throw new \DomainException('Retrait impossible : ce livreur a une course en cours.');
         }
 
-        return DB::transaction(function () use ($driver, $amount, $adminId, $reason) {
+        $transaction = DB::transaction(function () use ($driver, $amount, $adminId, $reason) {
             $wallet = DriverWallet::where('driver_id', $driver->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -103,6 +105,8 @@ class DriverWalletService
                 ],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -130,7 +134,7 @@ class DriverWalletService
 
         $amount = (int) $course->collection_amount;
 
-        return DB::transaction(function () use ($driver, $course, $amount) {
+        $transaction = DB::transaction(function () use ($driver, $course, $amount) {
             $wallet = DriverWallet::where('driver_id', $driver->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -156,6 +160,8 @@ class DriverWalletService
                 'course_id'     => $course->id,
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -180,7 +186,7 @@ class DriverWalletService
             return $existing;
         }
 
-        return DB::transaction(function () use ($driver, $course, $amount) {
+        $transaction = DB::transaction(function () use ($driver, $course, $amount) {
             $wallet = DriverWallet::where('driver_id', $driver->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -197,6 +203,65 @@ class DriverWalletService
                 'course_id'     => $course->id,
             ]);
         });
+
+        return $this->recordAccounting($transaction);
+    }
+
+    /**
+     * Débit de la part AirMess (commission) quand un livreur INDÉPENDANT livre une
+     * course "payée à la livraison" (delivery_fee_paid_by=recipient).
+     *
+     * Le livreur a déjà encaissé 100% du delivery_fee en cash/mobile money chez le
+     * destinataire — pas de crédit gains ici (il tient déjà sa part), on débite
+     * uniquement la différence (delivery_fee - driver_earnings) qui revient à
+     * AirMess. Le driver n'est proposé ce type de course que si son wallet peut
+     * déjà couvrir ce montant (cf. filtre offeredCourses/showCourse) : l'échec ici
+     * ne devrait survenir qu'en cas de variation de solde entre l'offre et la
+     * livraison (defense in depth, comme debitForPickup).
+     *
+     * Idempotent : si une transaction platform_commission existe déjà pour cette
+     * course, on la retourne sans rien refaire.
+     *
+     * @throws \InvalidArgumentException si $amount <= 0
+     * @throws \DomainException          si solde insuffisant
+     */
+    public function debitPlatformCommission(Driver $driver, Course $course, int $amount): WalletTransaction
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException("Platform commission amount must be > 0, got {$amount}.");
+        }
+
+        $existing = WalletTransaction::where('course_id', $course->id)
+            ->where('type', WalletTransaction::TYPE_PLATFORM_COMMISSION)
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $transaction = DB::transaction(function () use ($driver, $course, $amount) {
+            $wallet = DriverWallet::where('driver_id', $driver->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($amount > $wallet->balance) {
+                throw new \DomainException(
+                    "Commission plateforme impossible : balance={$wallet->balance}, besoin={$amount}."
+                );
+            }
+
+            $wallet->balance -= $amount;
+            $wallet->save();
+
+            return WalletTransaction::create([
+                'driver_id'     => $driver->id,
+                'type'          => WalletTransaction::TYPE_PLATFORM_COMMISSION,
+                'amount_fcfa'   => -$amount,
+                'balance_after' => $wallet->balance,
+                'course_id'     => $course->id,
+            ]);
+        });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -227,7 +292,7 @@ class DriverWalletService
             return $existing;
         }
 
-        return DB::transaction(function () use ($driver, $course, $amount, $reason) {
+        $transaction = DB::transaction(function () use ($driver, $course, $amount, $reason) {
             $wallet = DriverWallet::where('driver_id', $driver->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -249,6 +314,8 @@ class DriverWalletService
                 ],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -263,7 +330,7 @@ class DriverWalletService
             throw new \InvalidArgumentException("Adjustment credit must be > 0, got {$amount}.");
         }
 
-        return DB::transaction(function () use ($driver, $amount, $adminId, $reason) {
+        $transaction = DB::transaction(function () use ($driver, $amount, $adminId, $reason) {
             $wallet = DriverWallet::where('driver_id', $driver->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -279,6 +346,8 @@ class DriverWalletService
                 'metadata'      => ['admin_id' => $adminId, 'reason' => $reason],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -294,7 +363,7 @@ class DriverWalletService
             throw new \InvalidArgumentException("Adjustment debit must be > 0, got {$amount}.");
         }
 
-        return DB::transaction(function () use ($driver, $amount, $adminId, $reason) {
+        $transaction = DB::transaction(function () use ($driver, $amount, $adminId, $reason) {
             $wallet = DriverWallet::where('driver_id', $driver->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -316,6 +385,8 @@ class DriverWalletService
                 'metadata'      => ['admin_id' => $adminId, 'reason' => $reason],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -345,7 +416,7 @@ class DriverWalletService
             return null;
         }
 
-        return DB::transaction(function () use ($driver, $withdraw, $amount) {
+        $transaction = DB::transaction(function () use ($driver, $withdraw, $amount) {
             $wallet = DriverWallet::where('driver_id', $driver->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -367,6 +438,8 @@ class DriverWalletService
                 ],
             ]);
         });
+
+        return $this->recordAccounting($transaction);
     }
 
     /**
@@ -403,7 +476,7 @@ class DriverWalletService
 
         $amount = (int) $course->collection_amount;
 
-        return DB::transaction(function () use ($driver, $course, $amount) {
+        $transaction = DB::transaction(function () use ($driver, $course, $amount) {
             $wallet = DriverWallet::where('driver_id', $driver->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -419,5 +492,14 @@ class DriverWalletService
                 'course_id'     => $course->id,
             ]);
         });
+
+        return $this->recordAccounting($transaction);
+    }
+
+    private function recordAccounting(WalletTransaction $transaction): WalletTransaction
+    {
+        app(AccountingLedgerService::class)->recordDriverWalletTransaction($transaction);
+
+        return $transaction;
     }
 }

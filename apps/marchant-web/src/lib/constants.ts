@@ -1,9 +1,14 @@
 /**
- * Lien de téléchargement direct de l'app livreur (build Expo EAS).
+ * Fiche Google Play officielle de l'application livreur.
  * Utilisé par la bannière du formulaire d'inscription driver et la page succès.
  */
-export const DRIVER_APK_URL =
-  'https://expo.dev/artifacts/eas/oJPb6g6nH13FGy08U2lQ893OL-I52H0yNJ8AQRMIsZs.apk'
+export const DRIVER_APP_URL =
+  'https://play.google.com/store/apps/details?id=com.anonymous.driver&pcampaignid=web_share'
+/**
+ * Site vitrine AirMess — source de vérité des pages publiques (landing).
+ * Les routes /landing/* de l'app redirigent vers ce domaine.
+ */
+export const MARKETING_SITE_URL = 'https://airmess-logistics.com'
 /**
  * Marques de véhicules les plus courantes au Bénin, par type — suggestions
  * du champ "Marque" (datalist) du formulaire driver. Saisie libre possible :

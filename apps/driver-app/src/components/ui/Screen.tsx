@@ -1,4 +1,5 @@
-import { View, ScrollView, StatusBar, type ViewProps } from 'react-native'
+import { View, StatusBar, type ViewProps } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 /**
@@ -41,11 +42,15 @@ export default function Screen({
   const bg = BG[variant]
   const barStyle = variant === 'dark' ? 'light-content' : 'dark-content'
 
-  const Content = scroll ? ScrollView : View
+  const Content = scroll ? KeyboardAwareScrollView : View
   const contentProps = scroll
     ? {
         contentContainerStyle: { paddingTop: py, paddingBottom: py + 24 },
         showsVerticalScrollIndicator: false,
+        bottomOffset: 24,
+        mode: 'layout' as const,
+        keyboardShouldPersistTaps: 'handled' as const,
+        keyboardDismissMode: 'on-drag' as const,
       }
     : {
         style: { paddingTop: py, paddingBottom: py },

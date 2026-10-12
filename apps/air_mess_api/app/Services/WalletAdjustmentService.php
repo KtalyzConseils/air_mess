@@ -113,6 +113,17 @@ class WalletAdjustmentService
         $this->assertReasonMatchesSign($reasonCode, $amount);
 
         return DB::transaction(function () use ($user, $amount, $reasonCode, $course, $incident, $adminId, $notes) {
+            if ($course && in_array($reasonCode, [WalletAdjustment::REASON_INCIDENT_REFUND, WalletAdjustment::REASON_NO_SHOW_REFUND], true)) {
+                $course = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
+                if ($course->sender_id !== $user->id) {
+                    throw new \DomainException('Le remboursement doit viser le payeur de la course.');
+                }
+                // Un remboursement de frais ne peut pas créditer un hold jamais débité.
+                // Capture puis crédit : audit explicite, solde net et autres holds préservés.
+                if ($course->paid_from_wallet) {
+                    app(UserWalletService::class)->chargePartial($user, $course, (int) $course->delivery_fee);
+                }
+            }
             $wallet = UserWallet::where('user_id', $user->id)
                 ->lockForUpdate()
                 ->firstOrFail();

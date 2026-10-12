@@ -18,21 +18,19 @@ use Illuminate\Support\Str;
  */
 class CourseCreationService
 {
-    public function __construct(private NotificationService $notifier) {}
+    public function __construct(private NotificationService $notifier, private PriceCalculator $priceCalculator) {}
 
     /**
-     * Tarif forfaitaire selon l'urgence + part livreur.
+     * Même tarif à la distance que le canal applicatif, puis part livreur.
      *
      * @return array{delivery_fee:int, driver_earnings:int}
      */
-    public function pricing(string $urgency = 'standard'): array
+    public function pricing(float $originLat, float $originLng, float $destinationLat, float $destinationLng, string $urgency = 'standard'): array
     {
-        $isExpress = $urgency === 'express';
-        $deliveryFee = (int) AppSetting::get(
-            $isExpress ? 'express_delivery_fee_fcfa' : 'standard_delivery_fee_fcfa',
-            $isExpress ? 2500 : 1500,
-        );
-        $driverPercent = (int) AppSetting::get('driver_commission_percent', 75);
+        $deliveryFee = $this->priceCalculator->estimate(
+            $originLat, $originLng, $destinationLat, $destinationLng, $urgency,
+        )['fee'];
+        $driverPercent = (int) AppSetting::get('driver_commission_percent', 87);
 
         return [
             'delivery_fee'    => $deliveryFee,
@@ -72,6 +70,7 @@ class CourseCreationService
         }
 
         $driverUserIds = Driver::availableNear($course->origin_lat, $course->origin_lng, $radiusKm)
+            ->whereNotIn('id', \App\Models\CourseDeclineRecord::where('course_id', $course->id)->select('driver_id'))
             ->pluck('user_id')
             ->toArray();
 

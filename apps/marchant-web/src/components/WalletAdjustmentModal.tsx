@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import {
   adjustDriverWallet,
   adjustUserWallet,
@@ -21,10 +22,6 @@ interface Props {
   onSuccessInvalidate?: ReadonlyArray<readonly unknown[]>
 }
 
-function formatFcfa(n: number): string {
-  return n.toLocaleString('fr-FR') + ' FCFA'
-}
-
 /**
  * Modal d'ajustement manuel d'un wallet (driver OU user marchand/particulier).
  *
@@ -43,11 +40,17 @@ export default function WalletAdjustmentModal({
   currentBalance,
   onSuccessInvalidate,
 }: Props) {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'en' ? 'en-US' : 'fr-FR'
   const queryClient = useQueryClient()
   const [direction, setDirection] = useState<WalletAdjustmentDirection>('credit')
   const [amount, setAmount] = useState<string>('')
   const [reason, setReason] = useState('')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  function formatFcfa(n: number): string {
+    return n.toLocaleString(locale) + ' FCFA'
+  }
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -64,8 +67,8 @@ export default function WalletAdjustmentModal({
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? "Erreur lors de l'ajustement."
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('admin.walletAdjustment.adjustError')
+          : t('admin.walletAdjustment.unexpectedError')
       setErrorMsg(msg)
     },
   })
@@ -82,26 +85,26 @@ export default function WalletAdjustmentModal({
     setErrorMsg(null)
     const n = parseInt(amount, 10)
     if (!n || n <= 0) {
-      setErrorMsg('Le montant doit être un entier positif.')
+      setErrorMsg(t('admin.walletAdjustment.amountMustBePositive'))
       return
     }
     if (reason.trim().length < 10) {
-      setErrorMsg('La raison doit faire au moins 10 caractères.')
+      setErrorMsg(t('admin.walletAdjustment.reasonTooShort'))
       return
     }
 
     // Read-back confirmation
-    const verb = direction === 'credit' ? 'CRÉDITER' : 'DÉBITER'
+    const verb = direction === 'credit' ? t('admin.walletAdjustment.confirmVerbCredit') : t('admin.walletAdjustment.confirmVerbDebit')
     const symbol = direction === 'credit' ? '+' : '-'
     const projected = direction === 'credit' ? currentBalance + n : currentBalance - n
     const ok = window.confirm(
-      `⚠️ CONFIRMATION REQUISE\n\n` +
-      `Tu vas ${verb} ${symbol}${formatFcfa(n)} sur le wallet de :\n` +
+      `${t('admin.walletAdjustment.confirmTitle')}\n\n` +
+      `${t('admin.walletAdjustment.youWill')} ${verb} ${symbol}${formatFcfa(n)} ${t('admin.walletAdjustment.confirmOnWalletOf')} :\n` +
       `   ${targetName}\n\n` +
-      `Balance actuelle : ${formatFcfa(currentBalance)}\n` +
-      `Balance projetée : ${formatFcfa(projected)}\n\n` +
-      `Raison : « ${reason.trim()} »\n\n` +
-      `Cette action est immuable et tracée. Confirmer ?`
+      `${t('admin.walletAdjustment.currentBalance')} : ${formatFcfa(currentBalance)}\n` +
+      `${t('admin.walletAdjustment.projectedBalance')} : ${formatFcfa(projected)}\n\n` +
+      `${t('admin.walletAdjustment.confirmReason')} : « ${reason.trim()} »\n\n` +
+      `${t('admin.walletAdjustment.confirmIrreversible')}`
     )
     if (ok) mutation.mutate()
   }
@@ -115,20 +118,19 @@ export default function WalletAdjustmentModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-6">
-        <h3 className="text-xl font-bold text-airmess-dark mb-1">⚙️ Ajuster le wallet</h3>
+        <h3 className="text-xl font-bold text-airmess-dark mb-1">{t('admin.walletAdjustment.title')}</h3>
         <p className="text-sm text-gray-500 mb-4">
-          Action <strong>super-admin</strong> tracée et immuable. À utiliser pour : rattrapage de bug,
-          top-up MoMo direct, geste commercial, test.
+          {t('admin.walletAdjustment.subtitle')}
         </p>
 
         <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
-          <p><span className="text-gray-500">Destinataire :</span> <strong>{targetName}</strong></p>
-          <p><span className="text-gray-500">Balance actuelle :</span> <strong>{formatFcfa(currentBalance)}</strong></p>
+          <p><span className="text-gray-500">{t('admin.walletAdjustment.recipient')} :</span> <strong>{targetName}</strong></p>
+          <p><span className="text-gray-500">{t('admin.walletAdjustment.currentBalance')} :</span> <strong>{formatFcfa(currentBalance)}</strong></p>
         </div>
 
         {/* Direction */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Type d'ajustement</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t('admin.walletAdjustment.adjustmentType')}</label>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -139,7 +141,7 @@ export default function WalletAdjustmentModal({
                   : 'border-gray-200 text-gray-600 hover:border-gray-300'
               }`}
             >
-              ⬆️ Crédit (+)
+              {t('admin.walletAdjustment.credit')}
             </button>
             <button
               type="button"
@@ -150,13 +152,13 @@ export default function WalletAdjustmentModal({
                   : 'border-gray-200 text-gray-600 hover:border-gray-300'
               }`}
             >
-              ⬇️ Débit (-)
+              {t('admin.walletAdjustment.debit')}
             </button>
           </div>
         </div>
 
         {/* Montant */}
-        <label className="block text-sm font-medium text-gray-700 mb-1">Montant</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.walletAdjustment.amount')}</label>
         <div className="relative mb-1">
           <input
             type="number"
@@ -171,24 +173,24 @@ export default function WalletAdjustmentModal({
         </div>
         {parsedAmount > 0 && (
           <p className={`text-xs mb-3 ${willGoNegative ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
-            Balance projetée : <strong>{formatFcfa(projected)}</strong>
-            {willGoNegative && ' ⚠️ Débit impossible (solde insuffisant)'}
+            {t('admin.walletAdjustment.projectedBalance')} : <strong>{formatFcfa(projected)}</strong>
+            {willGoNegative && ` ${t('admin.walletAdjustment.insufficientBalance')}`}
           </p>
         )}
 
         {/* Raison */}
         <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">
-          Raison <span className="text-red-500">*</span>
+          {t('admin.walletAdjustment.reason')} <span className="text-red-500">*</span>
         </label>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="ex: Top-up MoMo direct 2500 FCFA reçu sur compte X le 24/06"
+          placeholder={t('admin.walletAdjustment.reasonPlaceholder')}
           rows={3}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-airmess-yellow outline-none"
         />
         <p className="text-xs text-gray-500 mt-1">
-          Minimum 10 caractères. Soit explicite — cette raison restera dans le journal à vie.
+          {t('admin.walletAdjustment.reasonHint')}
         </p>
 
         {errorMsg && (
@@ -203,7 +205,7 @@ export default function WalletAdjustmentModal({
             disabled={mutation.isPending}
             className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 font-medium disabled:opacity-50"
           >
-            Annuler
+            {t('admin.walletAdjustment.cancel')}
           </button>
           <button
             onClick={attemptSubmit}
@@ -212,7 +214,7 @@ export default function WalletAdjustmentModal({
               direction === 'credit' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
             }`}
           >
-            {mutation.isPending ? 'Envoi…' : 'Valider →'}
+            {mutation.isPending ? t('admin.walletAdjustment.sending') : t('admin.walletAdjustment.submit')}
           </button>
         </div>
       </div>

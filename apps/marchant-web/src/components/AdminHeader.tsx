@@ -65,7 +65,7 @@ export default function AdminHeader() {
           A
         </div>
         <div className="min-w-0">
-          <h1 className="text-base md:text-lg font-bold leading-none truncate">Air Mess</h1>
+          <h1 className="text-base md:text-lg font-bold leading-none truncate">AirMess</h1>
           <p className="text-xs text-gray-400 truncate">{t('admin.common.administration')}</p>
         </div>
       </Link>

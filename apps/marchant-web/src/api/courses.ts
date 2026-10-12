@@ -1,3 +1,4 @@
+import { AxiosError } from 'axios'
 import api from './client'
 
 export type CourseIncidentStatus = 'open' | 'resolved' | 'cancelled'
@@ -19,6 +20,7 @@ export interface CourseIncident {
 }
 
 export interface Course {
+  arbitration_drivers?: { id: number; name: string; roles: ('current' | 'previous' | 'historical' | 'reporter')[] }[]
   id: number
   reference: string
   status: string
@@ -43,7 +45,7 @@ export interface Course {
   /**
    * Qui paie les frais de livraison :
    *   - 'sender'    : marchand débité via son wallet à la création (défaut, historique)
-   *   - 'recipient' : destinataire paie à la remise, le driver Airmess collecte tout
+   *   - 'recipient' : destinataire paie à la remise, le driver AirMess collecte tout
    */
   delivery_fee_paid_by?: 'sender' | 'recipient'
   status_label?: string
@@ -60,6 +62,9 @@ export interface Course {
   is_return_trip?: boolean
   return_code?: string | null
   return_confirmed_at?: string | null
+  handover_code?: string | null
+  handover_from?: { id: number; name: string | null; phone: string | null } | null
+  handover_to?: { id: number; name: string | null; phone: string | null } | null
   // Cas 7 — Vol livreur
   is_fraud?: boolean
   fraud_shortfall_fcfa?: number | null
@@ -106,10 +111,15 @@ export interface CourseFeeEstimate {
   detour_factor: number
   per_km: number
   min: number
+  floor: number
   max: number
   multiplier: number
   urgency: 'standard' | 'express'
   fee_before_round: number
+  /** Tarif avant application d'une éventuelle offre de bienvenue. */
+  original_fee: number
+  discount_amount: number
+  discount_code: 'FIRST_COURSE_500' | null
   fee: number
   /** Vrai quand le plafond haut a écrasé le fee calculé. */
   capped: boolean
@@ -121,6 +131,7 @@ export interface EstimateFeeParams {
   destination_lat: number
   destination_lng: number
   urgency?: 'standard' | 'express'
+  delivery_fee_paid_by?: 'sender' | 'recipient'
 }
 
 export async function estimateCourseFee(
@@ -159,7 +170,7 @@ export interface CreateCoursePayload {
   collection_method?: 'cash' | 'mobile_money' | 'prepaid'
   /**
    * Qui paie les frais de livraison. Défaut `sender` (marchand paie via wallet).
-   * `recipient` = mode "aux frais du client", exclusif aux drivers Airmess.
+   * `recipient` = mode "aux frais du client", exclusif aux drivers AirMess.
    */
   delivery_fee_paid_by?: 'sender' | 'recipient'
 }
@@ -186,9 +197,9 @@ export async function createCourse(
   try {
     const { data } = await api.post('/courses', payload)
     return data as CreateCourseResult
-  } catch (err: any) {
+  } catch (err: unknown) {
     // 402 Payment Required : on remonte le payload structuré, pas une exception
-    if (err?.response?.status === 402) {
+    if (err instanceof AxiosError && err.response?.status === 402) {
       return err.response.data as CreateCourseResult
     }
     throw err

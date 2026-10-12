@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchNotifications } from '../api/notifications'
 import { useAuthStore } from '../stores/authStore'
+import { listenToForegroundPush, showWebNotification } from '../lib/fcm'
 
 const STORAGE_KEY = 'airmess-last-notif-id'
 
@@ -27,6 +28,22 @@ export function useDesktopNotifications() {
     if (typeof window === 'undefined' || !('Notification' in window)) return
     if (Notification.permission !== 'granted') return
     void import('../lib/fcm').then(({ enableWebPush }) => enableWebPush())
+  }, [user])
+
+  useEffect(() => {
+    if (!user || Notification.permission !== 'granted') return
+    let stopped = false
+    let unsubscribe: (() => void) | null = null
+
+    void listenToForegroundPush().then((listener) => {
+      if (stopped) listener?.()
+      else unsubscribe = listener
+    })
+
+    return () => {
+      stopped = true
+      unsubscribe?.()
+    }
   }, [user])
 
   // Récupère la liste (on partage la queryKey avec NotificationsPage → 1 seul fetch)
@@ -62,21 +79,13 @@ export function useDesktopNotifications() {
       .sort((a, b) => a.id - b.id) // ordre chronologique
 
     newOnes.forEach((n) => {
-      const notif = new Notification(n.title, {
+      void showWebNotification(n.title, {
         body: n.body,
         tag: `airmess-${n.id}`,        // évite les doublons OS-level
-        icon: '/favicon.ico',
-        requireInteraction: false,
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+        data: { url: n.course_id ? `/courses/${n.course_id}` : '/notifications' },
       })
-      notif.onclick = () => {
-        window.focus()
-        if (n.course_id) {
-          window.location.href = `/courses/${n.course_id}`
-        } else {
-          window.location.href = '/notifications'
-        }
-        notif.close()
-      }
     })
 
     if (newOnes.length > 0) {

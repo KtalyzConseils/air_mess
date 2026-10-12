@@ -150,6 +150,21 @@ class OfferedCoursesTest extends TestCase
         $this->assertNotContains($expired->id, $ids);
     }
 
+    public function test_rebroadcast_makes_an_expired_course_visible_again(): void
+    {
+        [$user] = $this->makeAvailableDriverAt(6.3703, 2.3912);
+        $course = $this->makeAwaitingCourseAt(6.3710, 2.3920, 'express');
+        $course->update([
+            'created_at' => now()->subHour(),
+            'offer_broadcasted_at' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+        $ids = collect($this->getJson('/api/driver/offered-courses')->json('courses'))->pluck('id');
+
+        $this->assertContains($course->id, $ids);
+    }
+
     public function test_closer_courses_appear_first_within_same_urgency(): void
     {
         [$user] = $this->makeAvailableDriverAt(6.3703, 2.3912);

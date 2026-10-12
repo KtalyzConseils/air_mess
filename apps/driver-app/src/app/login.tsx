@@ -5,8 +5,6 @@ import {
   TextInput,
   Pressable,
   Image,
-  Linking,
-  Alert,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -17,7 +15,7 @@ import Constants from 'expo-constants'
 import { AxiosError } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
-import { getSignupUrl } from '../lib/signupUrl'
+import SupportContactSheet from '../components/SupportContactSheet'
 
 /**
  * Login driver — continuation directe du splash.
@@ -37,11 +35,13 @@ export default function LoginScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const login = useAuthStore((s) => s.login)
+  const sessionMessage = useAuthStore((s) => s.sessionMessage)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [supportOpen, setSupportOpen] = useState(false)
 
   const version = Constants.expoConfig?.version ?? ''
 
@@ -83,6 +83,9 @@ export default function LoginScreen() {
     <SafeAreaView className="flex-1 bg-airmess-dark" edges={['top', 'left', 'right']}>
       <StatusBar style="light" />
       <KeyboardAwareScrollView
+        mode="layout"
+        style={{ flex: 1 }}
+        keyboardDismissMode="on-drag"
         bottomOffset={24}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
@@ -167,12 +170,12 @@ export default function LoginScreen() {
               </Text>
             </Pressable>
 
-            {error && (
+            {(error || sessionMessage) && (
               <View className="bg-danger-bg border-2 border-airmess-red/30 rounded-2xl p-3 mb-4 flex-row items-start">
                 <View className="w-6 h-6 rounded-full bg-airmess-red items-center justify-center mr-2 mt-0.5">
                   <Ionicons name="alert" size={12} color="#ffffff" />
                 </View>
-                <Text className="text-airmess-red text-sm flex-1 font-semibold">{error}</Text>
+                <Text className="text-airmess-red text-sm flex-1 font-semibold">{error || sessionMessage}</Text>
               </View>
             )}
 
@@ -207,14 +210,27 @@ export default function LoginScreen() {
 
           {/* Footer version + mention équipe */}
           <View className="items-center mt-8">
-            <Text className="text-warm-500 text-xs">
-              Une question ? <Text className="text-airmess-yellow font-bold">Contacte le support</Text>
-            </Text>
+            <Pressable
+              onPress={() => setSupportOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Contacter le support"
+            >
+              <Text className="text-warm-500 text-xs">
+                Une question ?{' '}
+                <Text className="text-airmess-yellow font-bold">Contacte le support</Text>
+              </Text>
+            </Pressable>
             {version ? (
               <Text className="text-warm-600 text-[10px] mt-2 font-mono">v{version}</Text>
             ) : null}
           </View>
       </KeyboardAwareScrollView>
+      <SupportContactSheet
+        visible={supportOpen}
+        onClose={() => setSupportOpen(false)}
+        context="Connexion livreur"
+      />
     </SafeAreaView>
   )
 }

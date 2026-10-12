@@ -1,0 +1,256 @@
+/**
+ * AIRMESS — Génération automatique du formulaire Google "Enquête commerçants :
+ * identifier les problèmes de livraison"
+ *
+ * MODE D'EMPLOI :
+ * 1. Aller sur https://script.google.com → Nouveau projet.
+ * 2. Coller tout ce fichier dans Code.gs (remplacer le contenu existant).
+ * 3. Sélectionner la fonction `creerFormulaireEnquete` dans le menu déroulant en
+ *    haut, puis cliquer sur Exécuter (▶). Autoriser les permissions Google Forms
+ *    demandées au premier lancement.
+ * 4. Ouvrir Affichage → Journaux (ou Ctrl+Entrée) pour récupérer :
+ *    - le lien d'édition du formulaire (pour le retoucher dans l'interface Google Forms)
+ *    - le lien public à partager dans le message d'invitation WhatsApp
+ * 5. Copier l'ID du formulaire (visible dans l'URL d'édition, entre /d/ et /edit)
+ *    et le coller dans la constante `formId` de `genererLiensPreRemplis`, puis
+ *    exécuter cette seconde fonction pour obtenir les 5 liens taggés par canal
+ *    (WhatsApp, Facebook Ads, Google Ads, site web, LinkedIn).
+ *
+ * NOTE SUR LES QUESTIONS OUVERTES (B3, C1) : laissées obligatoires ci-dessous
+ * car ce sont elles qui donnent les verbatims exploitables en campagne — voir
+ * la doc. Si le taux d'abandon s'avère trop élevé une fois en collecte, les
+ * repasser en `.setRequired(false)` est un simple changement d'une ligne.
+ */
+
+function creerFormulaireEnquete() {
+  const form = FormApp.create('Airmess — Enquête commerçants : problèmes de livraison');
+
+  form.setDescription(
+    "Airmess prépare une nouvelle solution pour simplifier la livraison de vos " +
+    "commandes. Avant de la construire, on veut d'abord vous écouter : 5 minutes " +
+    "pour nous dire ce qui vous embête aujourd'hui avec la livraison. Vos réponses " +
+    "restent confidentielles."
+  );
+
+  form.setProgressBar(true);
+  form.setAcceptingResponses(true);
+
+  // Pas de compte Google requis pour répondre. La dédup éventuelle se fait en
+  // aval sur la colonne "Numéro WhatsApp" (D3) de la feuille Sheets liée.
+  form.setCollectEmail(false);
+  form.setLimitOneResponsePerUser(false);
+
+  form.setConfirmationMessage(
+    "Merci pour votre temps 🙏\n\n" +
+    "Vos réponses nous aident à construire un service qui répond vraiment à vos " +
+    "besoins. Si vous avez laissé votre numéro, on vous recontacte pour l'incitatif " +
+    "proposé et pour vous tenir au courant du lancement."
+  );
+
+  // ---------- Section A — Qui répond ----------
+
+  form.addMultipleChoiceItem()
+    .setTitle('Quel type de commerce gérez-vous ?')
+    .setChoiceValues([
+      'Restauration rapide / plats préparés',
+      'Épicerie / supermarché',
+      'Produits frais (fruits, légumes, viande, poisson)',
+      'Autre commerce de détail'
+    ])
+    .showOtherOption(true)
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("Êtes-vous déjà partenaire d'une enseigne NDA (Bénin SuperMarché, Cotonou Pizza, Cotonou Poulet Frit, gbandj00.com, VamiaDoo, etc.) ?")
+    .setChoiceValues(['Oui', 'Non', "Je ne sais pas ce qu'est NDA"])
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle('Dans quelle zone se trouve votre commerce ?')
+    .setChoiceValues(['Cotonou', 'Abomey-Calavi'])
+    .showOtherOption(true)
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle('Combien de commandes traitez-vous en moyenne par semaine ?')
+    .setChoiceValues(['Moins de 10', '10 à 30', '30 à 70', 'Plus de 70'])
+    .setRequired(true);
+
+  // Double usage : segmentation + traceur de canal via lien prérempli.
+  // Volontairement non obligatoire pour ne jamais bloquer une soumission si
+  // le pré-remplissage rate ou si le lien a été transféré par un tiers.
+  form.addMultipleChoiceItem()
+    .setTitle('Comment avez-vous connu ce questionnaire ?')
+    .setChoiceValues([
+      'WhatsApp',
+      'Publicité Facebook',
+      'Publicité Google',
+      'Site web Airmess',
+      'LinkedIn'
+    ])
+    .showOtherOption(true)
+    .setRequired(false);
+
+  // ---------- Section B — Comment ça se passe aujourd'hui ----------
+
+  form.addPageBreakItem().setTitle("Section B — Comment ça se passe aujourd'hui");
+
+  form.addCheckboxItem()
+    .setTitle('Comment livrez-vous actuellement vos commandes ?')
+    .setChoiceValues([
+      'Je ne livre pas, vente sur place uniquement',
+      'Moi-même ou un employé du commerce',
+      'Un ou des zémidjans sollicités au cas par cas',
+      "Un livreur que j'emploie à temps plein",
+      'Une plateforme de livraison existante'
+    ])
+    .showOtherOption(true)
+    .setRequired(true);
+
+  form.addCheckboxItem()
+    .setTitle('Quels sont les principaux problèmes que vous rencontrez avec la livraison de vos commandes ?')
+    .setChoiceValues([
+      'Coût trop élevé',
+      'Livreurs non fiables / en retard',
+      'Pas de livreur disponible aux heures de pointe',
+      'Difficile de trouver un livreur de confiance',
+      "Problèmes avec l'argent collecté par le livreur (retard, montant incorrect, disparition)",
+      'Clients mécontents des délais',
+      'Produits endommagés ou renversés en route',
+      'Communication difficile avec le client pendant la livraison',
+      'Aucun problème particulier'
+    ])
+    .showOtherOption(true)
+    .setRequired(true);
+
+  form.addParagraphTextItem()
+    .setTitle('Racontez, avec vos propres mots, la pire expérience de livraison que vous avez vécue récemment.')
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("Vous est-il déjà arrivé qu'un livreur reparte avec l'argent d'une commande sans vous le remettre, ou avec un montant incorrect ?")
+    .setChoiceValues([
+      'Oui, plusieurs fois',
+      'Oui, une fois',
+      'Non, jamais',
+      "Je ne fais pas encaisser mes livreurs (paiement à l'avance ou sur place)"
+    ])
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle('Combien de temps par semaine estimez-vous perdre à gérer les soucis de livraison (chercher un livreur, suivre une commande, gérer une réclamation client) ?')
+    .setChoiceValues(["Moins d'1 heure", '1 à 3 heures', '3 à 6 heures', 'Plus de 6 heures'])
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle('Combien de commandes perdez-vous ou annulez-vous par semaine à cause d’un problème de livraison (pas de livreur disponible, client qui abandonne, etc.) ?')
+    .setChoiceValues(['Aucune', '1 à 3', '4 à 10', 'Plus de 10'])
+    .setRequired(true);
+
+  // ---------- Section C — Ce qui changerait la donne ----------
+
+  form.addPageBreakItem().setTitle('Section C — Ce qui changerait la donne');
+
+  form.addParagraphTextItem()
+    .setTitle('Qu’est-ce qui vous ferait gagner le plus de temps ou de tranquillité d’esprit dans la gestion de vos livraisons ?')
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle('Accepteriez-vous de payer une commission par livraison pour qu’un tiers gère à votre place tout le processus (recherche du livreur, suivi de la commande, encaissement sécurisé de l’argent client) ?')
+    .setChoiceValues([
+      'Oui, sans hésiter',
+      'Oui, si le prix est raisonnable',
+      'Non, je préfère gérer moi-même',
+      'Je ne sais pas'
+    ])
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle('Quel montant par livraison vous semblerait raisonnable pour un tel service ?')
+    .setChoiceValues([
+      'Moins de 300 FCFA',
+      '300 à 500 FCFA',
+      '500 à 750 FCFA',
+      '750 à 1000 FCFA',
+      'Plus de 1000 FCFA',
+      'Je ne sais pas'
+    ])
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle('Faites-vous confiance au Mobile Money (MTN MoMo / Moov Money) pour recevoir le paiement de vos ventes livrées ?')
+    .setChoiceValues([
+      'Oui, totalement',
+      'Oui, mais avec des réserves',
+      'Non, je préfère le cash',
+      "Je n'utilise pas le Mobile Money"
+    ])
+    .setRequired(true);
+
+  form.addScaleItem()
+    .setTitle('Sur une échelle de 1 à 5, quel est votre niveau d’intérêt pour un service qui recrute des livreurs fiables, suit chaque commande en temps réel, et encaisse l’argent client en toute sécurité pour vous ?')
+    .setBounds(1, 5)
+    .setLabels('Pas du tout intéressé', 'Très intéressé')
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle('Seriez-vous intéressé pour tester ce service gratuitement pendant une période d’essai, dès son lancement ?')
+    .setChoiceValues(['Oui', 'Non', "Peut-être, j'ai besoin d'en savoir plus"])
+    .setRequired(true);
+
+  // ---------- Section D — Pour vous recontacter (facultatif) ----------
+
+  form.addPageBreakItem().setTitle('Section D — Pour vous recontacter (facultatif)');
+
+  form.addTextItem()
+    .setTitle('Nom du commerce')
+    .setRequired(false);
+
+  form.addTextItem()
+    .setTitle('Nom du contact')
+    .setRequired(false);
+
+  const d3 = form.addTextItem()
+    .setTitle('Numéro WhatsApp')
+    .setRequired(false);
+  d3.setValidation(
+    FormApp.createTextValidation()
+      .setHelpText('Format attendu : 8 chiffres, avec ou sans indicatif +229 (ex. 90123456 ou +22990123456)')
+      .requireTextMatchesPattern('^(\\+229)?[0-9]{8}$')
+      .build()
+  );
+
+  Logger.log('Lien d’édition (interface Google Forms) : ' + form.getEditUrl());
+  Logger.log('Lien public à partager : ' + form.getPublishedUrl());
+
+  return form;
+}
+
+/**
+ * Génère les 5 liens pré-remplis pour le suivi par canal (question A5,
+ * "Comment avez-vous connu ce questionnaire ?"). À exécuter APRÈS
+ * creerFormulaireEnquete, une fois l'ID du formulaire connu.
+ */
+function genererLiensPreRemplis() {
+  const formId = 'COLLER_ICI_L_ID_DU_FORMULAIRE'; // depuis l'URL d'édition : .../forms/d/FORM_ID/edit
+  const form = FormApp.openById(formId);
+
+  const canalItem = form.getItems(FormApp.ItemType.MULTIPLE_CHOICE)
+    .find(function (item) {
+      return item.getTitle() === 'Comment avez-vous connu ce questionnaire ?';
+    });
+
+  if (!canalItem) {
+    Logger.log('Question "Comment avez-vous connu ce questionnaire ?" introuvable — vérifier formId.');
+    return;
+  }
+
+  const canalMC = canalItem.asMultipleChoiceItem();
+  const canaux = ['WhatsApp', 'Publicité Facebook', 'Publicité Google', 'Site web Airmess', 'LinkedIn'];
+
+  canaux.forEach(function (canal) {
+    const response = form.createResponse();
+    response.withItemResponse(canalMC.createResponse(canal));
+    Logger.log(canal + ' → ' + response.toPrefilledUrl());
+  });
+}

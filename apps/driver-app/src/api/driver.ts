@@ -4,6 +4,10 @@ export interface DriverCourseSummary {
   id: number
   reference: string
   status: string
+  abandonment_pending?: boolean
+  holding_for_transfer?: boolean
+  handover_code?: string | null
+  handover_to?: { id: number; name: string | null }
   origin_name: string
   origin_quartier: string
   destination_name: string
@@ -58,6 +62,7 @@ export type TransitionAction =
   | 'delivered'
   | 'return_confirmed'
   | 'failed'
+  | 'transfer_confirmed'
 
 export async function updateAvailability(status: Availability) {
   const { data } = await api.post('/driver/availability', { availability_status: status })
@@ -69,12 +74,17 @@ export async function updatePosition(lat: number, lng: number) {
 }
 
 export async function fetchOfferedCourses(): Promise<DriverCourseSummary[]> {
-  const { data } = await api.get('/driver/offered-courses')
+  const { data } = await api.get('/driver/offered-courses', { params: { per_page: 50 } })
   return data.courses
 }
 
 export async function acceptCourse(courseId: number): Promise<DriverCourseSummary> {
   const { data } = await api.post(`/driver/courses/${courseId}/accept`)
+  return data.course
+}
+
+export async function fetchDriverCourse(courseId: number): Promise<DriverCourseSummary> {
+  const { data } = await api.get(`/driver/courses/${courseId}`)
   return data.course
 }
 
@@ -118,7 +128,7 @@ export async function declineReassignment(
 export async function transition(
   courseId: number,
   action: TransitionAction,
-  extra: { pickup_code?: string; delivery_code?: string; return_code?: string; reason?: string } = {},
+  extra: { pickup_code?: string; delivery_code?: string; return_code?: string; transfer_code?: string; reason?: string } = {},
 ) {
   const { data } = await api.post(`/driver/courses/${courseId}/transition`, { action, ...extra })
   return data.course
@@ -126,7 +136,7 @@ export async function transition(
 
 export async function fetchMyActiveCourses(): Promise<DriverCourseSummary[]> {
   // statuts non-terminaux du workflow livreur
-  const statuses = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff'].join(',')
+  const statuses = ['assigned', 'driver_to_pickup', 'at_pickup', 'picked_up', 'at_dropoff', 'returning_to_sender'].join(',')
   const { data } = await api.get('/courses', { params: { status: statuses, per_page: 5 } })
   return data.data
 }
@@ -143,6 +153,23 @@ export type DriverStats = Record<StatPeriod, PeriodStat>
 export async function fetchDriverStats(): Promise<DriverStats> {
   const { data } = await api.get('/driver/stats')
   return data
+}
+
+export interface DriverReferralSummary {
+  enabled: boolean
+  code: string
+  share_url: string
+  share_message: string
+  required_delivered_courses: number
+  reward_amount_fcfa: number
+  sponsored_count: number
+  rewarded_count: number
+  pending_count: number
+}
+
+export async function fetchDriverReferral(): Promise<DriverReferralSummary> {
+  const { data } = await api.get('/driver/referral')
+  return data.referral
 }
 
 // NB : fetchDriverBalance / fetchDriverEarnings / fetchDriverPayouts ont été supprimées

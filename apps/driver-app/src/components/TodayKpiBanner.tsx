@@ -2,6 +2,7 @@ import { View, Text } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import { fetchDriverStats } from '../api/driver'
+import { BrandColors } from '../constants/theme'
 
 /**
  * Carte "Aujourd'hui" (hero sombre) : 3 tuiles — gains du jour, courses livrées,
@@ -91,7 +92,7 @@ function Tile({
   return (
     <View className="flex-1 bg-white/5 rounded-2xl px-3 py-3">
       <View className="flex-row items-center mb-2">
-        <Ionicons name={icon} size={13} color="#FFCC00" />
+        <Ionicons name={icon} size={13} color={BrandColors.yellow} />
         <Text className="text-warm-400 text-[10px] font-jk-bold uppercase tracking-wide ml-1.5">
           {label}
         </Text>

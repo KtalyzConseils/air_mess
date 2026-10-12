@@ -24,7 +24,7 @@ class CreateCourseRequest extends FormRequest
             return false;
         }
 
-        if ($user->isMarchant()) return $user->marchant !== null;
+        if ($user->isMarchant()) return $user->marchant?->validated_at !== null;
         if ($user->isIndividual()) return $user->individual !== null;
 
         return false; // livreurs et admins ne peuvent pas créer de course

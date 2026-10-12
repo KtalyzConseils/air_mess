@@ -26,6 +26,7 @@ class WalletTransaction extends Model
     public const TYPE_EARNING           = 'earning';            // gain de course livrée — crédite directement la caution
     public const TYPE_ADJUSTMENT_CREDIT = 'adjustment_credit';  // crédit manuel super-admin (MoMo direct, geste, correctif)
     public const TYPE_ADJUSTMENT_DEBIT  = 'adjustment_debit';   // débit manuel super-admin (rattrapage bug, erreur comptable)
+    public const TYPE_PLATFORM_COMMISSION = 'platform_commission'; // course "payée à la livraison" — part AirMess débitée au livreur indépendant
 
     // Pas d'updated_at — c'est immutable
     public $timestamps = false;

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { View, Text, Pressable, TextInput, Linking, Modal, Alert } from 'react-native'
-import { KeyboardAvoidingView, KeyboardProvider } from 'react-native-keyboard-controller'
+import { KeyboardAvoidingView, KeyboardAwareScrollView, KeyboardProvider } from 'react-native-keyboard-controller'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import {
@@ -41,7 +41,7 @@ const TIMELINE_STEPS: { key: string; short: string }[] = [
 
 const NEXT_ACTION: Record<
   string,
-  { action: TransitionAction; label: string; needsCode?: 'pickup' | 'delivery' | 'return' }
+  { action: TransitionAction; label: string; needsCode?: 'pickup' | 'delivery' | 'return' | 'transfer' }
 > = {
   assigned:            { action: 'start_to_pickup',   label: 'Je pars chercher le colis' },
   driver_to_pickup:    { action: 'arrived_pickup',    label: 'Je suis sur place' },
@@ -61,7 +61,10 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
   const [correctOpen, setCorrectOpen] = useState(false)
   const [correctValue, setCorrectValue] = useState('')
   const [correctNote, setCorrectNote] = useState('')
-  const next = NEXT_ACTION[course.status]
+  const waitingForOps = !!course.holding_for_transfer || (!!course.abandonment_pending && course.status !== 'returning_to_sender' && !course.pickup_from_previous_driver)
+  const next: (typeof NEXT_ACTION)[string] | undefined = waitingForOps ? undefined : course.pickup_from_previous_driver
+    ? { action: 'transfer_confirmed', label: 'Confirmer la réception avec le code', needsCode: 'transfer' }
+    : NEXT_ACTION[course.status]
 
   // Phase = quelle destination on vise en ce moment.
   //   `pickup`   : je vais au marchand chercher le colis
@@ -72,7 +75,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
   const phase: 'pickup' | 'transfer' | 'dropoff' | 'return' =
     course.status === 'returning_to_sender'
       ? 'return'
-      : course.pickup_from_previous_driver && !['picked_up', 'at_dropoff'].includes(course.status)
+      : course.pickup_from_previous_driver
         ? 'transfer'
         : ['assigned', 'driver_to_pickup', 'at_pickup'].includes(course.status)
           ? 'pickup'
@@ -96,22 +99,34 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
       : phase === 'dropoff'
         ? course.destination_name
         : course.origin_name
-  const targetPhone = phase === 'dropoff' ? course.destination_phone : course.origin_phone
+  const targetPhone = phase === 'transfer' ? undefined : phase === 'dropoff' ? course.destination_phone : course.origin_phone
   const targetPhoneRole = phase === 'dropoff' ? 'le client' : 'le marchand'
 
   const mutation = useMutation({
-    mutationFn: () =>
-      transition(course.id, next.action, {
-        pickup_code:   next.needsCode === 'pickup'   ? code : undefined,
-        delivery_code: next.needsCode === 'delivery' ? code : undefined,
-        return_code:   next.needsCode === 'return'   ? code : undefined,
-      }),
-    onSuccess: () => {
+    mutationFn: () => {
+      if (!next) throw new Error('La livraison est suspendue en attente des opérations.')
+      return transition(course.id, next.action, {
+        pickup_code:   next.needsCode === 'pickup'   ? code.trim() : undefined,
+        delivery_code: next.needsCode === 'delivery' ? code.trim() : undefined,
+        return_code:   next.needsCode === 'return'   ? code.trim() : undefined,
+        transfer_code: next.needsCode === 'transfer' ? code.trim() : undefined,
+      })
+    },
+    onSuccess: (updatedCourse) => {
+      queryClient.setQueryData<DriverCourseSummary[]>(['my-active'], (courses) =>
+        courses?.flatMap((item) => item.id !== course.id ? [item] : ['delivered', 'failed', 'cancelled'].includes(updatedCourse.status) ? [] : [updatedCourse]),
+      )
       setCode('')
       queryClient.invalidateQueries({ queryKey: ['my-active'] })
       queryClient.invalidateQueries({ queryKey: ['me'] })
       queryClient.invalidateQueries({ queryKey: ['driver-history'] })
       queryClient.invalidateQueries({ queryKey: ['driver-stats'] })
+    },
+    onError: (error: any) => {
+      const errors = error?.response?.data?.errors
+      const details = errors ? Object.values(errors).flat().join('\n') : undefined
+      const message = details || error?.response?.data?.message || (error?.response ? `Erreur serveur (${error.response.status}).` : 'Serveur injoignable. Vérifie ta connexion et réessaie.')
+      Alert.alert('Action non confirmée', message)
     },
   })
 
@@ -188,10 +203,67 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
     ? TIMELINE_STEPS.length
     : TIMELINE_STEPS.findIndex((s) => s.key === course.status)
 
+  // Rendu exclusif : le détenteur attend la remise, sans actions de livraison.
+  if (course.holding_for_transfer) {
+    return (
+      <View className="rounded-3xl overflow-hidden border border-warm-200 bg-off-white">
+        <View className="bg-airmess-dark p-5">
+          <Text className="text-warm-400 text-xs font-mono mb-4">{course.reference}</Text>
+          <Ionicons name="swap-horizontal" size={28} color="#FFCC00" />
+          <Text className="text-white text-2xl font-extrabold mt-3">En attente de remise du colis</Text>
+          <Text className="text-warm-300 text-sm mt-2 leading-5">Conserve le colis et attends le livreur désigné sur place.</Text>
+        </View>
+        <View className="p-5">
+          <View className="flex-row items-center mb-5">
+            <View className="w-12 h-12 rounded-full bg-warm-100 items-center justify-center mr-3">
+              <Ionicons name="person-outline" size={24} color="#1A1614" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-warm-500 text-xs">Livreur attendu</Text>
+              <Text className="text-ink text-lg font-bold mt-1">
+                {course.handover_to?.name || (course.handover_to?.id ? `Livreur #${course.handover_to.id}` : 'Identité indisponible — contacte les opérations')}
+              </Text>
+            </View>
+          </View>
+          <View className="bg-airmess-yellow rounded-2xl p-4 items-center">
+            <Text className="text-ink text-xs font-bold uppercase tracking-widest">Code de remise</Text>
+            {course.handover_code ? (
+              <Text
+                className="text-ink text-4xl font-mono font-bold my-3"
+                style={{ letterSpacing: 6 }}
+                accessibilityLabel={`Code de remise : ${course.handover_code.split('').join(' ')}`}
+              >
+                {course.handover_code}
+              </Text>
+            ) : (
+              <Text className="text-ink text-base font-bold text-center my-3">Code indisponible — contacte les opérations.</Text>
+            )}
+            <View className="flex-row items-center">
+              <Ionicons name="lock-closed-outline" size={14} color="#1A1614" />
+              <Text className="text-ink text-xs ml-1.5">Visible uniquement par toi</Text>
+            </View>
+          </View>
+          <View className="flex-row mt-4">
+            <Ionicons name="shield-checkmark-outline" size={20} color="#D40511" />
+            <Text className="flex-1 text-ink text-sm font-semibold ml-2 leading-5">Communique ce code uniquement au moment de remettre physiquement le colis au livreur désigné.</Text>
+          </View>
+          <View className="border-t border-warm-200 mt-5 pt-4 flex-row">
+            <Ionicons name="time-outline" size={20} color="#78716C" />
+            <Text className="flex-1 text-warm-500 text-sm ml-2 leading-5">Il saisira le code pour confirmer la réception. Tu seras alors libéré de cette course. Cet écran s’actualise automatiquement.</Text>
+          </View>
+        </View>
+      </View>
+    )
+  }
+
   return (
     <View>
+      {waitingForOps && <View className="bg-warning-bg rounded-2xl p-4 mb-3">
+        <Text className="text-ink font-extrabold text-lg">Abandon signalé — en attente des opérations</Text>
+        <Text className="text-warm-600 mt-2">Conserve le colis. Les opérations doivent organiser un retour ou un transfert. Tu restes occupé tant que le colis ne leur est pas remis.</Text>
+      </View>}
       {/* ============ HEADER PHASE ============ */}
-      <Card variant="dark" padding="md" className="rounded-b-none">
+      {!waitingForOps && <Card variant="dark" padding="md" className="rounded-b-none">
         <View className="flex-row items-center justify-between mb-3">
           <Text className="text-warm-400 text-[10px] font-mono">{course.reference}</Text>
           <View
@@ -274,10 +346,11 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
             </Text>
           ))}
         </View>
-      </Card>
+      </Card>}
 
       {/* ============ ACTIONS CONTEXTUELLES ============ */}
-      <Card variant="default" padding="md" className="rounded-t-none border-t-0">
+      {!waitingForOps && <Card variant="default" padding="md" className="rounded-t-none border-t-0">
+        {!waitingForOps && <>
         {/* Carte du trajet — A retrait, B livraison, ma position live.
             La navigation routière reste déléguée au bouton "Naviguer" (Google Maps). */}
         {typeof course.origin_lat === 'number' && typeof course.destination_lat === 'number' && (
@@ -400,6 +473,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
           />
         </View>
 
+        </>}
         {/* Code de validation */}
         {next?.needsCode && (
           <View className="mb-4">
@@ -408,7 +482,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
                 ? 'Code marchand'
                 : next.needsCode === 'delivery'
                   ? 'Code livraison'
-                  : 'Code de retour marchand'}
+                  : next.needsCode === 'transfer' ? 'Code fourni par le précédent livreur' : 'Code de retour marchand'}
             </Text>
             <TextInput
               value={code}
@@ -428,14 +502,14 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
             variant="primary"
             size="xl"
             loading={mutation.isPending}
-            disabled={next.needsCode ? code.length < 4 : false}
+            disabled={next.needsCode ? code.trim().length < (next.needsCode === 'transfer' ? 6 : 4) : false}
             onPress={() => mutation.mutate()}
             rightIcon={<Ionicons name="arrow-forward" size={20} color="#1A1614" />}
           >
             {next.label}
           </Button>
         ) : (
-          <Text className="text-center text-warm-500 py-4">Statut terminal — rien à faire.</Text>
+          <Text className="text-center text-warm-500 py-4">{waitingForOps ? 'Livraison suspendue — instructions actualisées automatiquement.' : 'Statut terminal — rien à faire.'}</Text>
         )}
 
         {/* Actions secondaires — subtiles, groupées en bas */}
@@ -463,6 +537,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
           </Pressable>
           <Pressable
             onPress={() => setFailOpen(true)}
+            disabled={waitingForOps || !!course.abandonment_pending}
             className="flex-1 h-11 rounded-xl border-2 border-airmess-red/30 bg-danger-bg/40 items-center justify-center flex-row"
             style={({ pressed }) => (pressed ? { opacity: 0.85 } : undefined)}
           >
@@ -470,7 +545,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
             <Text className="text-airmess-red text-xs font-bold ml-1.5">Abandonner</Text>
           </Pressable>
         </View>
-      </Card>
+      </Card>}
 
       <IncidentModal
         courseId={course.id}
@@ -479,6 +554,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
       />
       <FailCourseModal
         courseId={course.id}
+        postPickup={['picked_up', 'at_dropoff', 'returning_to_sender'].includes(course.status) || !!course.pickup_from_previous_driver}
         visible={failOpen}
         onClose={() => setFailOpen(false)}
       />
@@ -498,6 +574,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
           behavior="padding"
         >
         <View className="flex-1 bg-black/60 items-center justify-center px-6">
+          <KeyboardAwareScrollView mode="layout" style={{ width: '100%', flex: 1 }} bottomOffset={24} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingVertical: 20 }}>
           <View className="w-full bg-off-white rounded-2xl p-5">
             <Text className="text-lg font-extrabold text-ink mb-1">
               Corriger le compteur d'appels
@@ -548,6 +625,7 @@ export default function ActiveCourseCard({ course, onMapInteractionChange }: Pro
               </Pressable>
             </View>
           </View>
+          </KeyboardAwareScrollView>
         </View>
         </KeyboardAvoidingView>
         </KeyboardProvider>

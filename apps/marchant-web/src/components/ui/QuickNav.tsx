@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { CloseIcon, MenuIcon, type IconProps } from './icons'
 
 /* ============================================================
@@ -42,7 +43,7 @@ interface Position {
 
 /** Rayon adapté au nombre d'items — laisse quelques px d'air entre chaque cercle. */
 function radiusForItems(n: number): number {
-  return Math.max(118, Math.min(200, Math.round(65 + n * 14)))
+  return Math.max(130, Math.min(280, Math.round(70 + n * 18)))
 }
 
 function loadPosition(key: string): Position | null {
@@ -81,6 +82,7 @@ function defaultPosition(): Position {
 }
 
 export default function QuickNav({ items, positionKey }: QuickNavProps) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const RADIUS = useMemo(() => radiusForItems(items.length), [items.length])
@@ -180,6 +182,12 @@ export default function QuickNav({ items, positionKey }: QuickNavProps) {
     }
   }
 
+  function activateItem(item: QuickNavItem) {
+    if (item.onClick) item.onClick()
+    else navigate(item.to)
+    setIsOpen(false)
+  }
+
   if (items.length === 0) return null
 
   return (
@@ -209,11 +217,7 @@ export default function QuickNav({ items, positionKey }: QuickNavProps) {
           return (
             <button
               key={item.to}
-              onClick={() => {
-                if (item.onClick) item.onClick()
-                else navigate(item.to)
-                setIsOpen(false)
-              }}
+              onClick={() => activateItem(item)}
               aria-label={item.label}
               tabIndex={isOpen ? 0 : -1}
               className={[
@@ -266,7 +270,7 @@ export default function QuickNav({ items, positionKey }: QuickNavProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        aria-label={isOpen ? 'Fermer la navigation rapide' : 'Ouvrir la navigation rapide'}
+        aria-label={isOpen ? t('quickNav.closeAria') : t('quickNav.openAria')}
         aria-expanded={isOpen}
         className={[
           'fixed z-50 flex items-center justify-center rounded-full shadow-xl select-none',

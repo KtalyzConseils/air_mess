@@ -5,18 +5,34 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseStatusHistory;
+use App\Models\Admin;
+use App\Models\AdminActivityLog;
 use App\Models\Driver;
 use App\Models\Individual;
 use App\Models\Marchant;
+use App\Models\MerchantWaitlist;
+use App\Models\DriverWaitlist;
 use App\Models\Payment;
 use App\Models\SupportNote;
+use App\Models\User;
+use App\Models\UserWallet;
+use App\Models\DriverWallet;
+use App\Models\UserWalletTransaction;
+use App\Models\WalletTransaction;
+use App\Models\WalletWithdrawRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use App\Services\NotificationService;
 use App\Services\DriverWalletService;
 use App\Models\CourseIncident;
+use App\Models\CourseOfferAdminAction;
+use App\Models\CourseDeclineRecord;
+use App\Models\Notification;
+use App\Services\CourseCreationService;
 
 
 class AdminController extends Controller
@@ -70,6 +86,7 @@ class AdminController extends Controller
     {
         $query = Course::query()
             ->with(['sender', 'driver.user', 'packageCategory'])
+            ->whereNull('archived_at')
             ->latest();
 
         if ($status = $request->query('status')) {
@@ -86,6 +103,155 @@ class AdminController extends Controller
         }
 
         return response()->json($query->paginate(min((int) $request->query('per_page', 20), 100)));
+    }
+
+    public function archivedCourses(Request $request): JsonResponse
+    {
+        $query = Course::query()
+            ->whereNotNull('archived_at')
+            ->with(['sender:id,name,email,phone,type', 'archivedBy:id,name,email'])
+            ->latest('archived_at');
+
+        if ($q = trim((string) $request->query('q', ''))) {
+            $query->where(function ($builder) use ($q) {
+                $builder->where('reference', 'ILIKE', "%{$q}%")
+                    ->orWhere('origin_name', 'ILIKE', "%{$q}%")
+                    ->orWhere('destination_name', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        return response()->json($query->paginate(min((int) $request->query('per_page', 30), 100)));
+    }
+
+    public function unassignedCourses(): JsonResponse
+    {
+        $courses = Course::query()->where('status', Course::STATUS_AWAITING)->whereNull('driver_id')
+            ->with(['sender:id,name,phone', 'offerAdminActions.adminUser:id,name'])
+            ->orderByRaw("CASE WHEN urgency = 'express' THEN 0 ELSE 1 END")
+            ->orderByRaw('COALESCE(offer_broadcasted_at, created_at) DESC')->get();
+
+        $courseIds = $courses->pluck('id');
+        $drivers = Driver::query()
+            ->where('activation_status', 'active')
+            ->whereIn('availability_status', ['available', 'busy'])
+            ->whereNotNull('current_lat')->whereNotNull('current_lng')
+            ->get(['id', 'user_id', 'first_name', 'last_name', 'availability_status', 'current_lat', 'current_lng', 'last_position_at']);
+        $offersByCourse = Notification::query()
+            ->whereIn('course_id', $courseIds)->where('type', 'course.offered')
+            ->with(['user:id,name', 'user.driver:id,user_id,first_name,last_name'])
+            ->orderByDesc('created_at')->get()->groupBy('course_id');
+        $declinesByCourse = CourseDeclineRecord::query()
+            ->whereIn('course_id', $courseIds)
+            ->with('driver:id,user_id,first_name,last_name')
+            ->orderByDesc('created_at')->get()->groupBy('course_id');
+
+        $distanceKm = static function (float $latA, float $lngA, float $latB, float $lngB): float {
+            $latDelta = deg2rad($latB - $latA);
+            $lngDelta = deg2rad($lngB - $lngA);
+            $a = sin($latDelta / 2) ** 2
+                + cos(deg2rad($latA)) * cos(deg2rad($latB)) * sin($lngDelta / 2) ** 2;
+
+            return 2 * 6371 * asin(min(1, sqrt($a)));
+        };
+
+        $courses->each(function (Course $course) use ($drivers, $offersByCourse, $declinesByCourse, $distanceKm) {
+            $start = $course->offer_broadcasted_at ?? $course->created_at;
+            $course->setAttribute('offer_age_seconds', $start->diffInSeconds(now()));
+
+            $distances = $drivers->mapWithKeys(fn (Driver $driver) => [
+                $driver->id => $distanceKm(
+                    (float) $course->origin_lat,
+                    (float) $course->origin_lng,
+                    (float) $driver->current_lat,
+                    (float) $driver->current_lng,
+                ),
+            ]);
+            $availableIds = $drivers->where('availability_status', 'available')->pluck('id');
+            $busyIds = $drivers->where('availability_status', 'busy')->pluck('id');
+            $availableWithin = $availableIds->filter(fn ($id) => $distances[$id] <= 8.0)->count();
+            $busyWithin = $busyIds->filter(fn ($id) => $distances[$id] <= 8.0)->count();
+            $nearestOutside = $availableIds->map(fn ($id) => $distances[$id])
+                ->filter(fn ($distance) => $distance > 8.0)->min();
+            $identity = static fn ($driver) => [
+                'driver_id' => $driver?->id,
+                'name' => $driver ? trim($driver->first_name.' '.$driver->last_name) : null,
+            ];
+            $contacted = ($offersByCourse[$course->id] ?? collect())->groupBy('user_id')->map(function ($notifications) use ($identity) {
+                $latest = $notifications->first();
+                return array_merge($identity($latest->user?->driver), [
+                    'user_id' => $latest->user_id,
+                    'name' => $latest->user?->name,
+                    'offered_at' => $latest->created_at?->toIso8601String(),
+                    'push_received_at' => $notifications->max('push_received_at')?->toIso8601String(),
+                    'notification_read_at' => $notifications->max('read_at')?->toIso8601String(),
+                ]);
+            })->values();
+            $refusals = ($declinesByCourse[$course->id] ?? collect())->unique('driver_id')->map(fn ($record) => array_merge($identity($record->driver), [
+                'driver_id' => $record->driver_id, 'reason' => $record->reason,
+                'custom_reason' => $record->custom_reason, 'declined_at' => $record->created_at?->toIso8601String(),
+            ]))->values();
+            $unanswered = $contacted->filter(fn ($person) => ! $refusals->contains('driver_id', $person['driver_id']))->values();
+            $located = $drivers->map(fn ($driver) => array_merge($identity($driver), [
+                'distance_km' => round($distances[$driver->id], 1),
+                'position_at' => $driver->last_position_at,
+                'availability' => $driver->availability_status,
+            ]));
+            $nearAvailable = $located->filter(fn ($person) => $person['availability'] === 'available' && $distances[$person['driver_id']] <= 8)->values();
+            $nearBusy = $located->filter(fn ($person) => $person['availability'] === 'busy' && $distances[$person['driver_id']] <= 8)->values();
+            $outside = $located->filter(fn ($person) => $person['availability'] === 'available' && $distances[$person['driver_id']] > 8)
+                ->sortBy(fn ($person) => $distances[$person['driver_id']])->take(1)->values();
+            $offered = $contacted->count();
+            $declined = $refusals->count();
+
+            if ($offered > 0 && $unanswered->isEmpty()) {
+                $code = 'all_contacted_declined';
+                $warning = 'Tous les livreurs contactés ont refusé';
+            } elseif ($availableWithin === 0 && $busyWithin > 0) {
+                $code = 'all_nearby_busy';
+                $warning = 'Livreurs présents, mais tous occupés';
+            } elseif ($availableWithin === 0) {
+                $code = 'none_available_nearby';
+                $warning = 'Aucun livreur disponible dans un rayon de 8 km';
+            } else {
+                $code = 'broadcast_no_response';
+                $warning = 'Diffusion envoyée, aucune réponse';
+            }
+
+            $course->setAttribute('assignment_diagnostic', [
+                'code' => $code,
+                'warning' => $warning,
+                'nearest_available_outside_km' => $nearestOutside === null ? null : round($nearestOutside, 1),
+                'available_within_radius' => $availableWithin,
+                'busy_within_radius' => $busyWithin,
+                'contacted_count' => $offered,
+                'declined_count' => $declined,
+                'people' => [
+                    'contacted' => $contacted, 'declined' => $refusals, 'unanswered' => $unanswered,
+                    'available' => $nearAvailable, 'busy' => $nearBusy, 'nearest' => $outside,
+                ],
+            ]);
+        });
+
+        return response()->json(['count' => $courses->count(), 'courses' => $courses]);
+    }
+
+    public function markOfferViewed(Request $request, Course $course): JsonResponse
+    {
+        CourseOfferAdminAction::create([
+            'course_id' => $course->id, 'admin_user_id' => $request->user()->id, 'action' => 'viewed',
+        ]);
+        return response()->json(['ok' => true]);
+    }
+
+    public function rebroadcastCourse(Request $request, Course $course, CourseCreationService $courses): JsonResponse
+    {
+        abort_unless($course->status === Course::STATUS_AWAITING && $course->driver_id === null, 422, 'Cette course ne peut plus être relancée.');
+        $course->forceFill(['offer_broadcasted_at' => now(), 'offer_alerts_sent' => []])->save();
+        CourseOfferAdminAction::create([
+            'course_id' => $course->id, 'admin_user_id' => $request->user()->id, 'action' => 'rebroadcasted',
+        ]);
+        $courses->dispatchToAvailableDrivers($course);
+        return response()->json(['course' => $course->fresh()]);
     }
 
     // ===== 3. RÉAFFECTER UNE COURSE =====
@@ -108,6 +274,9 @@ class AdminController extends Controller
 
         $isPostPickup = in_array($course->status, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF], true);
         $wantsTransfer = (bool) ($data['pickup_from_previous_driver'] ?? false);
+        if ($wantsTransfer && ! $isPostPickup) {
+            return response()->json(['message' => 'Le transfert concerne uniquement un colis déjà récupéré.'], 422);
+        }
 
         // Chemin classique : réassignation avant pickup → statut ASSIGNED
         // Chemin transfert : réassignation après pickup → statut PICKED_UP conservé
@@ -127,7 +296,12 @@ class AdminController extends Controller
                 'message' => 'Ce livreur n\'est pas disponible (hors-ligne, occupé ou compte inactif). Choisissez un livreur disponible.',
             ], 422);
         }
-        $oldDriver = $course->driver_id ? Driver::find($course->driver_id) : null;
+        $replacedDriverId = $course->pickup_from_previous_driver ? $course->driver_id : null;
+        $custodianId = $course->pickup_from_previous_driver ? $course->previous_driver_id : $course->driver_id;
+        $oldDriver = $custodianId ? Driver::find($custodianId) : null;
+        if ($wantsTransfer && (! $oldDriver || $oldDriver->id === $newDriver->id)) {
+            return response()->json(['message' => 'Le transfert exige deux livreurs distincts et un détenteur identifié.'], 422);
+        }
 
         // Coords de transfert : celles fournies (position au signalement) ou
         // fallback sur la current position du driver initial. Sans coord fiable
@@ -141,7 +315,10 @@ class AdminController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($course, $newDriver, $data, $oldDriver, $request, $wantsTransfer, $transferLat, $transferLng) {
+        DB::transaction(function () use ($course, $newDriver, $data, $oldDriver, $request, $wantsTransfer, $transferLat, $transferLng, $replacedDriverId) {
+            $locked = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
+            abort_if($locked->driver_id !== $course->driver_id || $locked->status !== $course->status
+                || $locked->pickup_from_previous_driver !== $course->pickup_from_previous_driver, 409, 'La course a changé. Actualisez avant de réaffecter.');
             $updates = [
                 'driver_id'   => $newDriver->id,
                 'assigned_at' => now(),
@@ -153,6 +330,11 @@ class AdminController extends Controller
                 // et son écran l'oriente vers transfer_lat/lng.
                 $updates['previous_driver_id']          = $oldDriver?->id;
                 $updates['pickup_from_previous_driver'] = true;
+                do { $transferCode = (string) random_int(100000, 999999); } while ($transferCode === $locked->transfer_code);
+                $updates['transfer_code'] = $transferCode;
+                $updates['transfer_code_attempts'] = 0;
+                $updates['transfer_code_locked_until'] = null;
+                $updates['transfer_confirmed_at'] = null;
                 $updates['transfer_lat']                = $transferLat;
                 $updates['transfer_lng']                = $transferLng;
                 // On ne touche PAS au statut : la course reste picked_up (ou at_dropoff).
@@ -163,12 +345,16 @@ class AdminController extends Controller
 
             $course->update($updates);
 
+            if ($replacedDriverId && $replacedDriverId !== $newDriver->id && ! Course::where('driver_id', $replacedDriverId)->whereNotIn('status', Course::TERMINAL_STATUSES)->exists()) {
+                Driver::whereKey($replacedDriverId)->where('availability_status', 'busy')->update(['availability_status' => 'available']);
+            }
+
             $newDriver->update(['availability_status' => 'busy']);
 
             // En transfert, le driver initial garde le colis quelques minutes de plus
-            // (le temps du rendez-vous), mais côté système on le libère : il pourra
-            // accepter d'autres courses une fois le transfert fait.
-            if ($oldDriver) {
+            // (le temps du rendez-vous) : il reste occupé jusqu'à la confirmation
+            // de la remise physique par le nouveau livreur.
+            if ($oldDriver && ! $wantsTransfer) {
                 $oldDriver->update(['availability_status' => 'available']);
             }
 
@@ -187,6 +373,13 @@ class AdminController extends Controller
                     'transfer_lat'                 => $wantsTransfer ? $transferLat : null,
                     'transfer_lng'                 => $wantsTransfer ? $transferLng : null,
                 ],
+            ]);
+
+            CourseOfferAdminAction::create([
+                'course_id' => $course->id,
+                'admin_user_id' => $request->user()->id,
+                'action' => 'assigned',
+                'metadata' => ['driver_id' => $newDriver->id],
             ]);
         });
 
@@ -271,6 +464,20 @@ class AdminController extends Controller
             );
         }
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'course.reassigned',
+            ($wantsTransfer ? 'Transfert physique' : 'Réaffectation') . " de la course {$course->reference} vers {$newDriver->first_name} {$newDriver->last_name}.",
+            [
+                'course_id' => $course->id,
+                'old_driver_id' => $oldDriver?->id,
+                'new_driver_id' => $newDriver->id,
+                'pickup_from_previous_driver' => $wantsTransfer,
+            ],
+        );
+
         return response()->json([
             'message' => $wantsTransfer ? 'Course transférée physiquement.' : 'Course réaffectée.',
             'course'  => $course->fresh()->load('driver.user'),
@@ -299,6 +506,15 @@ class AdminController extends Controller
                 'reason'          => $data['reason'],
             ]);
         });
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'course.disputed',
+            "Course {$course->reference} marquée en litige.",
+            ['course_id' => $course->id, 'reason' => $data['reason']],
+        );
 
         return response()->json(['message' => 'Course en litige.', 'course' => $course->fresh()]);
     }
@@ -487,6 +703,20 @@ class AdminController extends Controller
             );
         }
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'course.fraud_marked',
+            "Course {$course->reference} marquee comme fraude.",
+            [
+                'course_id' => $course->id,
+                'driver_id' => $course->driver_id,
+                'refund_owed' => $refundOwed,
+                'note' => $data['note'],
+            ],
+        );
+
         return response()->json([
             'message' => 'Course marquée comme fraude. Driver banni, caution saisie, marchand remboursé.',
             'course'  => $course->fresh(),
@@ -555,6 +785,401 @@ class AdminController extends Controller
     }
 
     // ===== 5ter. FICHE DÉTAILLÉE D'UN MARCHAND =====
+    // ===== 5quater. LISTE D'ATTENTE COMMERCANTS (etude de marche) =====
+    public function merchantWaitlists(Request $request): JsonResponse
+    {
+        $query = MerchantWaitlist::query()->latest();
+
+        // Recherche texte : commerce, responsable, WhatsApp ou zone.
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('shop_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('contact_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        return response()->json(
+            $query->paginate(min((int) $request->query('per_page', 20), 100))
+        );
+    }
+
+    public function createMarchant(Request $request): JsonResponse
+    {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'name'             => ['required', 'string', 'max:255'],
+            'email'            => ['required', 'email', 'unique:users,email'],
+            'phone'            => ['required', 'string', 'max:20', 'unique:users,phone'],
+            'password'         => ['required', 'string', 'min:8'],
+            'raison_sociale'   => ['required', 'string', 'max:255'],
+            'ifu_rccm'         => ['nullable', 'string', 'max:50'],
+            'secteur_activite' => ['required', Rule::in([
+                'supermarche', 'restaurant', 'boutique', 'pharmacie', 'ecommerce', 'autre',
+            ])],
+            'validate_now'     => ['nullable', 'boolean'],
+        ]);
+
+        $marchant = DB::transaction(function () use ($request, $data) {
+            $validateNow = (bool) ($data['validate_now'] ?? true);
+
+            $user = User::create([
+                'name'                   => $data['name'],
+                'email'                  => $data['email'],
+                'phone'                  => $data['phone'],
+                'password'               => $data['password'],
+                'password_set_at'        => now(),
+                'type'                   => User::TYPE_MARCHANT,
+                'is_active'              => true,
+                'waitlisted_at'          => $validateNow ? null : now(),
+                'phone_verified_at'      => now(),
+                'email_verified_at'      => now(),
+                'accepted_terms_at'      => now(),
+                'accepted_terms_version' => User::TERMS_VERSION,
+            ]);
+
+            UserWallet::create(['user_id' => $user->id]);
+
+            $marchant = Marchant::create([
+                'user_id'             => $user->id,
+                'raison_sociale'      => $data['raison_sociale'],
+                'ifu_rccm'            => $data['ifu_rccm'] ?? null,
+                'secteur_activite'    => $data['secteur_activite'],
+                'subscription_plan'   => 'trial',
+                'subscription_status' => $validateNow ? 'active' : 'trial',
+                'validated_at'        => $validateNow ? now() : null,
+                'validated_by'        => $validateNow ? $request->user()->id : null,
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'marchant.created',
+                "Marchand {$marchant->raison_sociale} cree par admin.",
+                ['marchant_id' => $marchant->id, 'user_id' => $user->id],
+            );
+
+            return $marchant;
+        });
+
+        return response()->json([
+            'message' => 'Marchand cree.',
+            'marchant' => $marchant->fresh()->load('user'),
+        ], 201);
+    }
+
+    public function updateMarchant(Request $request, Marchant $marchant): JsonResponse
+    {
+        $request->merge([
+            'phone' => $request->filled('phone')
+                ? \App\Support\Phone::normalize((string) $request->input('phone'))
+                : $request->input('phone'),
+        ]);
+
+        $data = $request->validate([
+            'name'             => ['required', 'string', 'max:255'],
+            'email'            => ['required', 'email', Rule::unique('users', 'email')->ignore($marchant->user_id)],
+            'phone'            => ['required', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($marchant->user_id)],
+            'raison_sociale'   => ['required', 'string', 'max:255'],
+            'ifu_rccm'         => ['nullable', 'string', 'max:50'],
+            'secteur_activite' => ['required', Rule::in([
+                'supermarche', 'restaurant', 'boutique', 'pharmacie', 'ecommerce', 'autre',
+            ])],
+        ]);
+
+        $before = [
+            'user' => $marchant->user->only(['name', 'email', 'phone']),
+            'marchant' => $marchant->only(['raison_sociale', 'ifu_rccm', 'secteur_activite']),
+        ];
+
+        DB::transaction(function () use ($request, $marchant, $data, $before) {
+            $marchant->user->update([
+                'name'  => $data['name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+            ]);
+
+            $marchant->update([
+                'raison_sociale'   => $data['raison_sociale'],
+                'ifu_rccm'         => $data['ifu_rccm'] ?? null,
+                'secteur_activite' => $data['secteur_activite'],
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'marchant.updated',
+                "Marchand {$marchant->raison_sociale} modifie.",
+                [
+                    'marchant_id' => $marchant->id,
+                    'user_id' => $marchant->user_id,
+                    'before' => $before,
+                    'after' => [
+                        'user' => $marchant->user->fresh()->only(['name', 'email', 'phone']),
+                        'marchant' => $marchant->fresh()->only(['raison_sociale', 'ifu_rccm', 'secteur_activite']),
+                    ],
+                ],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Marchand mis a jour.',
+            'marchant' => $marchant->fresh()->load(['user', 'user.wallet']),
+        ]);
+    }
+
+    // ===== 5ter. FICHE DÃ‰TAILLÃ‰E D'UN MARCHAND =====
+    // ===== 5quinquies. LISTE D'ATTENTE LIVREURS (etude de marche) =====
+    public function driverWaitlists(Request $request): JsonResponse
+    {
+        $query = DriverWaitlist::query()->latest();
+
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('full_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('email', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        return response()->json(
+            $query->paginate(min((int) $request->query('per_page', 20), 100))
+        );
+    }
+
+    public function notifyPublicWaitlist(Request $request, string $kind, int $id): JsonResponse
+    {
+        $model = $kind === 'merchants'
+            ? MerchantWaitlist::findOrFail($id)
+            : DriverWaitlist::findOrFail($id);
+
+        $this->sendPublicWaitlistReadyMail($model, $kind);
+
+        return response()->json(['message' => 'Le candidat a été informé.', 'notified_at' => $model->fresh()->notified_at]);
+    }
+
+    private function sendPublicWaitlistReadyMail(MerchantWaitlist|DriverWaitlist $model, string $kind): void
+    {
+        $email = $model->email;
+        if (! $email) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['email' => ['Cette candidature ne contient aucune adresse email.']]);
+        }
+
+        $name = $kind === 'merchants'
+            ? ($model->contact_name ?: $model->shop_name ?: 'partenaire')
+            : ($model->full_name ?: 'partenaire');
+
+        $activationToken = app(\App\Services\PublicWaitlistActivationService::class)->issue($model);
+
+        \Illuminate\Support\Facades\Mail::to($email)
+            ->send(new \App\Mail\PublicWaitlistReadyMail($name, $kind === 'merchants' ? 'merchant' : 'driver', $activationToken));
+
+        $model->update(['status' => 'notified', 'notified_at' => now()]);
+    }
+
+    public function merchantWaitlistsExport(Request $request, string $format): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $format = strtolower($format);
+        if (!in_array($format, ['csv', 'txt'], true)) {
+            abort(400, 'Unsupported export format.');
+        }
+
+        $query = MerchantWaitlist::query()->latest();
+
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('shop_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('contact_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        $delimiter = $format === 'csv' ? ';' : "\t";
+        $contentType = $format === 'csv' ? 'text/csv; charset=UTF-8' : 'text/plain; charset=UTF-8';
+        $filename = 'commercants_formulaires_' . now()->format('Ymd_His') . '.' . $format;
+        $stringifyList = fn ($value): string => is_array($value)
+            ? implode(' | ', array_map(fn ($item) => (string) $item, $value))
+            : (string) $value;
+        $cell = fn ($value) => $value === null ? '' : $stringifyList($value);
+
+        return response()->streamDownload(function () use ($query, $delimiter, $cell) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, [
+                'id',
+                'type_commerce',
+                'type_commerce_autre',
+                'zone',
+                'zone_autre',
+                'commandes_par_semaine',
+                'source',
+                'source_autre',
+                'moyens_livraison',
+                'moyens_livraison_autre',
+                'problemes',
+                'problemes_autre',
+                'pire_experience',
+                'probleme_collecte_especes',
+                'temps_perdu_par_semaine',
+                'commandes_perdues_par_semaine',
+                'benefice_attendu',
+                'acceptation_commission',
+                'commission_raisonnable',
+                'confiance_mobile_money',
+                'niveau_interet',
+                'interet_essai',
+                'nom_commerce',
+                'nom_contact',
+                'email',
+                'whatsapp',
+                'statut',
+                'bonus_montant',
+                'bonus_code',
+                'bonus_utilise_le',
+                'cree_le',
+            ], $delimiter);
+
+            $query->chunk(500, function ($rows) use ($out, $delimiter, $cell) {
+                foreach ($rows as $row) {
+                    fputcsv($out, [
+                        $row->id,
+                        $cell($row->commerce_type),
+                        $cell($row->commerce_type_other),
+                        $cell($row->zone),
+                        $cell($row->zone_other),
+                        $cell($row->weekly_orders),
+                        $cell($row->source),
+                        $cell($row->source_other),
+                        $cell($row->delivery_methods),
+                        $cell($row->delivery_methods_other),
+                        $cell($row->problems),
+                        $cell($row->problems_other),
+                        $cell($row->worst_experience),
+                        $cell($row->cash_collection_issue),
+                        $cell($row->time_lost_weekly),
+                        $cell($row->orders_lost_weekly),
+                        $cell($row->expected_benefit),
+                        $cell($row->commission_acceptance),
+                        $cell($row->reasonable_fee),
+                        $cell($row->mobile_money_trust),
+                        $row->interest_level ?? '',
+                        $cell($row->trial_interest),
+                        $cell($row->shop_name),
+                        $cell($row->contact_name),
+                        $cell($row->email),
+                        $cell($row->whatsapp),
+                        $cell($row->status),
+                        $row->bonus_amount ?? '',
+                        $cell($row->bonus_code),
+                        $row->bonus_redeemed_at?->format('Y-m-d H:i:s') ?? '',
+                        $row->created_at?->format('Y-m-d H:i:s') ?? '',
+                    ], $delimiter);
+                }
+            });
+
+            fclose($out);
+        }, $filename, ['Content-Type' => $contentType]);
+    }
+
+    public function driverWaitlistsExport(Request $request, string $format): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $format = strtolower($format);
+        if (!in_array($format, ['csv', 'txt'], true)) {
+            abort(400, 'Unsupported export format.');
+        }
+
+        $query = DriverWaitlist::query()->latest();
+
+        if ($q = $request->query('q')) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('full_name', 'ILIKE', "%{$q}%")
+                   ->orWhere('email', 'ILIKE', "%{$q}%")
+                   ->orWhere('whatsapp', 'ILIKE', "%{$q}%")
+                   ->orWhere('zone', 'ILIKE', "%{$q}%");
+            });
+        }
+
+        $delimiter = $format === 'csv' ? ';' : "\t";
+        $contentType = $format === 'csv' ? 'text/csv; charset=UTF-8' : 'text/plain; charset=UTF-8';
+        $filename = 'livreurs_formulaires_' . now()->format('Ymd_His') . '.' . $format;
+        $stringifyList = fn ($value): string => is_array($value)
+            ? implode(' | ', array_map(fn ($item) => (string) $item, $value))
+            : (string) $value;
+        $cell = fn ($value) => $value === null ? '' : $stringifyList($value);
+
+        return response()->streamDownload(function () use ($query, $delimiter, $cell) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, [
+                'id',
+                'nom_complet',
+                'email',
+                'whatsapp',
+                'type_vehicule',
+                'zone',
+                'zone_autre',
+                'experience',
+                'disponibilite',
+                'source',
+                'source_autre',
+                'plateformes_utilisees',
+                'plateformes_utilisees_autre',
+                'livraisons_par_semaine',
+                'revenu_hebdomadaire',
+                'problemes',
+                'problemes_autre',
+                'pire_experience',
+                'modele_paiement_attendu',
+                'revenu_hebdomadaire_attendu',
+                'confiance_mobile_money',
+                'niveau_interet',
+                'disponibilite_lancement',
+                'statut',
+                'cree_le',
+            ], $delimiter);
+
+            $query->chunk(500, function ($rows) use ($out, $delimiter, $cell) {
+                foreach ($rows as $row) {
+                    fputcsv($out, [
+                        $row->id,
+                        $cell($row->full_name),
+                        $cell($row->email),
+                        $cell($row->whatsapp),
+                        $cell($row->vehicle_type),
+                        $cell($row->zone),
+                        $cell($row->zone_other),
+                        $cell($row->experience),
+                        $cell($row->availability),
+                        $cell($row->source),
+                        $cell($row->source_other),
+                        $cell($row->platforms_used),
+                        $cell($row->platforms_used_other),
+                        $cell($row->weekly_deliveries),
+                        $cell($row->weekly_income),
+                        $cell($row->problems),
+                        $cell($row->problems_other),
+                        $cell($row->worst_experience),
+                        $cell($row->expected_payment_model),
+                        $cell($row->expected_weekly_income),
+                        $cell($row->mobile_money_trust),
+                        $row->interest_level ?? '',
+                        $cell($row->launch_availability),
+                        $cell($row->status),
+                        $row->created_at?->format('Y-m-d H:i:s') ?? '',
+                    ], $delimiter);
+                }
+            });
+
+            fclose($out);
+        }, $filename, ['Content-Type' => $contentType]);
+    }
+
     public function showMarchant(Marchant $marchant): JsonResponse
     {
         $marchant->load(['user', 'user.wallet', 'validatedBy', 'commercialAssignedTo']);
@@ -589,6 +1214,12 @@ class AdminController extends Controller
             'subscription_status' => 'active',
         ]);
 
+        $marchant->user->update([
+            'is_active' => true,
+            'waitlist_notified_at' => now(),
+            'waitlist_notified_by' => $request->user()->admin?->id,
+        ]);
+
         // Email de validation au marchand
         try {
             \Illuminate\Support\Facades\Mail::to($marchant->user->email)
@@ -600,6 +1231,15 @@ class AdminController extends Controller
             ]);
         }
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'marchant.validated',
+            "Marchand {$marchant->raison_sociale} valide.",
+            ['marchant_id' => $marchant->id, 'user_id' => $marchant->user_id],
+        );
+
         return response()->json([
             'message'  => 'Marchand validé.',
             'marchant' => $marchant->fresh()->load('user'),
@@ -607,6 +1247,169 @@ class AdminController extends Controller
     }
 
     // ===== 7. LISTE LIVE DES LIVREURS =====
+    public function createDriver(Request $request): JsonResponse
+    {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'first_name'    => ['required', 'string', 'max:100'],
+            'last_name'     => ['required', 'string', 'max:100'],
+            'email'         => ['required', 'email', 'unique:users,email'],
+            'phone'         => ['required', 'string', 'max:20', 'unique:users,phone'],
+            'password'      => ['required', 'string', 'min:8'],
+            'gender'        => ['nullable', Rule::in(['M', 'F', 'autre'])],
+            'birth_date'    => ['nullable', 'date', 'before:-16 years'],
+            'vehicle_type'  => ['required', Rule::in(['scooter', 'moto', 'voiture', 'velo'])],
+            'vehicle_plate' => ['nullable', 'string', 'max:20'],
+            'vehicle_brand' => ['nullable', 'string', 'max:50'],
+            'kind'          => ['nullable', Rule::in([Driver::KIND_INDEPENDENT, Driver::KIND_AIRMESS])],
+            'activate_now'  => ['nullable', 'boolean'],
+        ]);
+
+        $driver = DB::transaction(function () use ($request, $data) {
+            $activateNow = (bool) ($data['activate_now'] ?? false);
+
+            $user = User::create([
+                'name'                   => $data['first_name'] . ' ' . $data['last_name'],
+                'email'                  => $data['email'],
+                'phone'                  => $data['phone'],
+                'password'               => $data['password'],
+                'password_set_at'        => now(),
+                'type'                   => User::TYPE_DRIVER,
+                'is_active'              => true,
+                'waitlisted_at'          => $activateNow ? null : now(),
+                'waitlist_notified_at'   => $activateNow ? now() : null,
+                'waitlist_notified_by'   => $activateNow ? $request->user()->admin?->id : null,
+                'phone_verified_at'      => now(),
+                'email_verified_at'      => now(),
+                'accepted_terms_at'      => now(),
+                'accepted_terms_version' => User::TERMS_VERSION,
+            ]);
+
+            $driver = Driver::create([
+                'user_id'                  => $user->id,
+                'first_name'               => $data['first_name'],
+                'last_name'                => $data['last_name'],
+                'gender'                   => $data['gender'] ?? 'autre',
+                'birth_date'               => $data['birth_date'] ?? null,
+                'vehicle_type'             => $data['vehicle_type'],
+                'vehicle_plate'            => $data['vehicle_plate'] ?? null,
+                'vehicle_brand'            => $data['vehicle_brand'] ?? null,
+                'kind'                     => $data['kind'] ?? Driver::KIND_INDEPENDENT,
+                'activation_status'        => $activateNow ? 'active' : 'pending',
+                'availability_status'      => Driver::STATUS_OFFLINE,
+                'emergency_contact_name'   => $data['first_name'] . ' ' . $data['last_name'],
+                'emergency_contact_phone'  => $data['phone'],
+                'emergency_contact2_name'  => $data['first_name'] . ' ' . $data['last_name'],
+                'emergency_contact2_phone' => $data['phone'],
+                'equipment'                => [
+                    'isothermal_bag' => false,
+                    'top_case' => false,
+                    'refrigerated_bag' => false,
+                ],
+            ]);
+
+            DriverWallet::create(['driver_id' => $driver->id]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'driver.created',
+                "Livreur {$driver->first_name} {$driver->last_name} cree par admin.",
+                ['driver_id' => $driver->id, 'user_id' => $user->id],
+            );
+
+            return $driver;
+        });
+
+        return response()->json([
+            'message' => 'Livreur cree.',
+            'driver' => $driver->fresh()->load(['user', 'wallet']),
+        ], 201);
+    }
+
+    public function updateDriver(Request $request, Driver $driver): JsonResponse
+    {
+        $request->merge([
+            'phone' => $request->filled('phone')
+                ? \App\Support\Phone::normalize((string) $request->input('phone'))
+                : $request->input('phone'),
+        ]);
+
+        $data = $request->validate([
+            'first_name'               => ['required', 'string', 'max:100'],
+            'last_name'                => ['required', 'string', 'max:100'],
+            'email'                    => ['required', 'email', Rule::unique('users', 'email')->ignore($driver->user_id)],
+            'phone'                    => ['required', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($driver->user_id)],
+            'gender'                   => ['nullable', Rule::in(['M', 'F', 'autre'])],
+            'birth_date'               => ['nullable', 'date', 'before:-16 years'],
+            'vehicle_type'             => ['required', Rule::in(['scooter', 'moto', 'voiture', 'velo'])],
+            'vehicle_plate'            => ['nullable', 'string', 'max:20'],
+            'vehicle_brand'            => ['nullable', 'string', 'max:50'],
+            'emergency_contact_name'   => ['nullable', 'string', 'max:120'],
+            'emergency_contact_phone'  => ['nullable', 'string', 'max:20'],
+            'emergency_contact2_name'  => ['nullable', 'string', 'max:120'],
+            'emergency_contact2_phone' => ['nullable', 'string', 'max:20'],
+            'preferred_response_channel' => ['nullable', Rule::in(['email', 'sms', 'whatsapp'])],
+        ]);
+
+        $before = [
+            'user' => $driver->user->only(['name', 'email', 'phone']),
+            'driver' => $driver->only([
+                'first_name', 'last_name', 'gender', 'birth_date', 'vehicle_type',
+                'vehicle_plate', 'vehicle_brand', 'emergency_contact_name',
+                'emergency_contact_phone', 'emergency_contact2_name',
+                'emergency_contact2_phone', 'preferred_response_channel',
+            ]),
+        ];
+
+        DB::transaction(function () use ($request, $driver, $data, $before) {
+            $driver->user->update([
+                'name'  => $data['first_name'] . ' ' . $data['last_name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+            ]);
+
+            $driver->update([
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'],
+                'gender' => $data['gender'] ?? null,
+                'birth_date' => $data['birth_date'] ?? null,
+                'vehicle_type' => $data['vehicle_type'],
+                'vehicle_plate' => $data['vehicle_plate'] ?? null,
+                'vehicle_brand' => $data['vehicle_brand'] ?? null,
+                'emergency_contact_name' => $data['emergency_contact_name'] ?? null,
+                'emergency_contact_phone' => $data['emergency_contact_phone'] ?? null,
+                'emergency_contact2_name' => $data['emergency_contact2_name'] ?? null,
+                'emergency_contact2_phone' => $data['emergency_contact2_phone'] ?? null,
+                'preferred_response_channel' => $data['preferred_response_channel'] ?? null,
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'driver.updated',
+                "Livreur {$driver->first_name} {$driver->last_name} modifie.",
+                [
+                    'driver_id' => $driver->id,
+                    'user_id' => $driver->user_id,
+                    'before' => $before,
+                    'after' => [
+                        'user' => $driver->user->fresh()->only(['name', 'email', 'phone']),
+                        'driver' => $driver->fresh()->only(array_keys($before['driver'])),
+                    ],
+                ],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Livreur mis a jour.',
+            'driver' => $driver->fresh()->load(['user', 'wallet']),
+        ]);
+    }
+
     public function drivers(Request $request): JsonResponse
     {
         $query = Driver::query()->with('user')->latest();
@@ -781,20 +1584,27 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     }
 
     // ===== 7ter. ACTIVER / DÉSACTIVER LE COMPTE D'UN LIVREUR =====
-    public function toggleDriverActive(Driver $driver): JsonResponse
+    public function toggleDriverActive(Request $request, Driver $driver): JsonResponse
     {
         // On active si le compte n'est pas déjà 'active', sinon on désactive.
         $activate = $driver->activation_status !== 'active';
 
         // Garde-fou : on ne désactive pas un livreur qui a une course en cours.
         if (! $activate) {
-            $onCourse = Course::where('driver_id', $driver->id)
+            $onCourse = Course::where(function ($query) use ($driver) {
+                    $query->where('driver_id', $driver->id)
+                        ->orWhere(function ($transfer) use ($driver) {
+                            $transfer->where('previous_driver_id', $driver->id)
+                                ->where('pickup_from_previous_driver', true);
+                        });
+                })
                 ->whereIn('status', [
                     Course::STATUS_ASSIGNED,
                     Course::STATUS_TO_PICKUP,
                     Course::STATUS_AT_PICKUP,
                     Course::STATUS_PICKED_UP,
                     Course::STATUS_AT_DROPOFF,
+                    Course::STATUS_RETURNING_TO_SENDER,
                 ])
                 ->exists();
 
@@ -819,6 +1629,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 $driver->user->tokens()->delete();
             }
         });
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            $activate ? 'driver.activated' : 'driver.deactivated',
+            ($activate ? 'Activation' : 'Desactivation') . " du livreur {$driver->first_name} {$driver->last_name}.",
+            ['driver_id' => $driver->id, 'user_id' => $driver->user_id],
+        );
 
         return response()->json([
             'message' => $activate ? 'Compte livreur activé.' : 'Compte livreur désactivé.',
@@ -869,6 +1688,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         });
 
         $label = $newKind === Driver::KIND_AIRMESS ? 'Airmess' : 'indépendant';
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.kind_updated',
+            "Type du livreur {$driver->first_name} {$driver->last_name} modifie.",
+            ['driver_id' => $driver->id, 'before' => $previousKind, 'after' => $newKind],
+        );
 
         return response()->json([
             'message' => "Livreur passé en {$label}.",
@@ -944,6 +1772,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                 'escalated_to' => null,
             ]);
         });
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.withdraw_limits_updated',
+            "Plafonds de retrait du livreur {$driver->first_name} {$driver->last_name} modifies.",
+            ['driver_id' => $driver->id, 'changes' => $updates],
+        );
 
         return response()->json([
             'message' => 'Plafonds mis à jour.',
@@ -1023,6 +1860,20 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             default                => 'non vérifié',
         };
 
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.kyc_updated',
+            "KYC du livreur {$driver->first_name} {$driver->last_name} modifie.",
+            [
+                'driver_id' => $driver->id,
+                'before' => $previousStatus,
+                'after' => $newStatus,
+                'provider' => $data['provider'] ?? 'manual',
+            ],
+        );
+
         return response()->json([
             'message' => "Statut KYC : {$label}.",
             'driver'  => $driver->fresh()->load('user'),
@@ -1036,7 +1887,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      * d'un driver fraîchement inscrit, après vérification de ses documents par l'admin.
      * Envoie un email "Compte activé" au driver.
      */
-    public function validateDriver(Driver $driver, \App\Services\BrevoSmsService $sms): JsonResponse
+    public function validateDriver(Request $request, Driver $driver): JsonResponse
     {
         if ($driver->activation_status !== 'pending') {
             return response()->json([
@@ -1048,6 +1899,11 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             $driver->update(['activation_status' => 'active']);
             $driver->user->update(['is_active' => true]);
         });
+
+        $driver->user->update([
+            'waitlist_notified_at' => now(),
+            'waitlist_notified_by' => $request->user()->admin?->id,
+        ]);
 
         // Email de validation au driver (queued) — envoyé quel que soit le canal préféré.
         try {
@@ -1065,12 +1921,22 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         // reste prêt pour l'activation. 'whatsapp' = contact manuel par l'ops
         // (lien wa.me affiché sur la fiche driver admin). Si un flux "refus de
         // candidature" est créé plus tard, réutiliser la même logique.
-        if ($driver->preferred_response_channel === 'sms' && $driver->user->phone) {
+        // SMS candidature en pause : l'email reste le canal fiable pour l'instant.
+        if (false && $driver->preferred_response_channel === 'sms' && $driver->user->phone) {
             $sms->send(
                 \App\Support\Phone::normalize($driver->user->phone),
                 'Air Mess : votre compte livreur est activé ! Connectez-vous sur l\'app Air Mess Livreur.',
             );
         }
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.validated',
+            "Livreur {$driver->first_name} {$driver->last_name} valide.",
+            ['driver_id' => $driver->id, 'user_id' => $driver->user_id],
+        );
 
         return response()->json([
             'message' => 'Livreur validé. Email envoyé.',
@@ -1085,6 +1951,91 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      *
      * @param  string  $type  photo | cni | driving_license
      */
+    // Rejette une candidature pending, previent le candidat, puis libere son email.
+    public function rejectDriver(Request $request, Driver $driver): JsonResponse
+    {
+        if ($driver->activation_status !== 'pending') {
+            return response()->json([
+                'message' => 'Seule une candidature livreur en attente peut etre rejetee.',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ]);
+
+        $driver->load('user');
+        $user = $driver->user;
+        $driverId = $driver->id;
+        $userId = $user->id;
+        $driverName = trim("{$driver->first_name} {$driver->last_name}") ?: $user->name;
+        $email = $user->email;
+        $preferredChannel = $driver->preferred_response_channel ?: 'email';
+        $documentDir = null;
+
+        foreach ([$driver->cni_url, $driver->cni_back_url, $driver->driving_license_url, $driver->photo_url] as $path) {
+            if ($path) {
+                $documentDir = dirname($path);
+                break;
+            }
+        }
+
+        try {
+            if ($email) {
+                \Illuminate\Support\Facades\Mail::to($email)
+                    ->send(new \App\Mail\DriverRejectedMail($user, $driverName, $data['reason']));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('DriverRejectedMail failed', [
+                'err' => $e->getMessage(),
+                'driver_id' => $driverId,
+            ]);
+        }
+
+        // SMS candidature en pause : le motif de rejet est envoye par email.
+        if (false && $preferredChannel === 'sms') {
+            try {
+                $sms->send(
+                    \App\Support\Phone::normalize($phone),
+                    'Air Mess : votre candidature livreur est rejetee. Motif : ' . $data['reason'] . ' Vous pouvez reprendre l\'inscription avec le meme email.',
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Driver rejection SMS failed', [
+                    'err' => $e->getMessage(),
+                    'driver_id' => $driverId,
+                ]);
+            }
+        }
+
+        DB::transaction(function () use ($user) {
+            $user->tokens()->delete();
+            $user->delete();
+        });
+
+        if ($documentDir) {
+            \Illuminate\Support\Facades\Storage::disk('local')->deleteDirectory($documentDir);
+        }
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'driver.rejected',
+            "Candidature livreur {$driverName} rejetee et supprimee.",
+            [
+                'driver_id' => $driverId,
+                'user_id' => $userId,
+                'email' => $email,
+                'preferred_channel' => $preferredChannel,
+                'reason' => $data['reason'],
+            ],
+        );
+
+        return response()->json([
+            'message' => 'Candidature rejetee. Le compte a ete supprime pour permettre une nouvelle inscription.',
+        ]);
+    }
+
     public function driverDocument(Driver $driver, string $type)
     {
         $column = match ($type) {
@@ -1110,11 +2061,49 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     }
 
     // ===== 8. LISTE DES INCIDENTS =====
+    public function startIncidentReturn(Request $request, CourseIncident $incident, NotificationService $notifier): JsonResponse
+    {
+        $course = DB::transaction(function () use ($incident, $request) {
+            $lockedIncident = CourseIncident::whereKey($incident->id)->lockForUpdate()->firstOrFail();
+            $course = Course::whereKey($lockedIncident->course_id)->lockForUpdate()->firstOrFail();
+            if ($lockedIncident->status !== 'open' || ! str_starts_with($lockedIncident->description ?? '', '[Abandon après récupération]') ||
+                ! in_array($course->status, [Course::STATUS_PICKED_UP, Course::STATUS_AT_DROPOFF], true) || $course->pickup_from_previous_driver) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['course' => 'Cette course ne peut pas être mise en retour depuis cet incident.']);
+            }
+            $previousStatus = $course->status;
+            $course->update(['status' => Course::STATUS_RETURNING_TO_SENDER, 'return_code' => $course->return_code ?: Course::generateCode()]);
+            CourseStatusHistory::create([
+                'course_id' => $course->id, 'from_status' => $previousStatus, 'to_status' => Course::STATUS_RETURNING_TO_SENDER,
+                'changed_by_id' => $request->user()->id, 'changed_by_type' => 'user',
+                'reason' => 'Retour organisé par les opérations après abandon',
+                'metadata' => ['incident_id' => $lockedIncident->id],
+            ]);
+            return $course;
+        });
+        $notifier->sendToUser($course->sender_id, 'course.returning_to_sender', 'Retour du colis organisé',
+            "Les opérations organisent le retour de {$course->reference}. Code à donner lors de la remise : {$course->return_code}.",
+            ['reference' => $course->reference, 'return_code' => $course->return_code], $course->id);
+        $driver = $course->driver;
+        if ($driver) {
+            $notifier->sendToUser($driver->user_id, 'course.returning_to_sender', 'Rapporte le colis au point de départ',
+                "Retour autorisé par les opérations pour {$course->reference}. Confirme la remise avec le code de l’expéditeur.",
+                ['reference' => $course->reference], $course->id);
+        }
+        return response()->json(['message' => 'Retour organisé. L’incident reste ouvert pour le suivi et la facturation.']);
+    }
+
+    public function confirmTransferException(Request $request, Course $course): JsonResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'min:10', 'max:500']]);
+        $course->confirmParcelTransfer($request->user(), null, $data['reason']);
+        return response()->json(['message' => 'Remise confirmée par les opérations. L’incident reste à traiter.', 'course' => $course->fresh()]);
+    }
+
     public function incidents(Request $request): JsonResponse
     {
         $query = CourseIncident::query()
             ->with([
-                'course:id,reference,status',
+                'course:id,reference,status,pickup_from_previous_driver,previous_driver_id,driver_id',
                 'reportedBy:id,name,type',
             ])
             ->latest();
@@ -1220,6 +2209,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             'amount_marchand'        => ['nullable', 'integer'],
             'reason_code_driver'     => ['nullable', 'string', 'max:40'],
             'amount_driver'          => ['nullable', 'integer'],
+            'adjustment_driver_id'   => ['nullable', 'integer', 'required_with:reason_code_driver'],
         ]);
 
         // Cohérence : si un reason_code est fourni, l'amount correspondant doit
@@ -1246,12 +2236,27 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         ];
 
         try {
-            [$marchandAdj, $driverAdj, $cautionShort] = DB::transaction(function () use (
+            [$marchandAdj, $driverAdj, $cautionShort, $adjustmentDriver] = DB::transaction(function () use (
                 $data, $incident, $course, $admin, $adjustments, $cappableReasons
             ) {
                 $marchandAdj  = null;
                 $driverAdj    = null;
                 $cautionShort = false;
+
+                $incident = CourseIncident::whereKey($incident->id)->lockForUpdate()->firstOrFail();
+                if ($incident->status !== 'open') {
+                    throw new \DomainException('Cet incident est déjà clôturé.');
+                }
+
+                $course = Course::whereKey($course->id)->lockForUpdate()->firstOrFail();
+                $adjustmentDriver = null;
+                if (($data['reason_code_driver'] ?? null) !== null) {
+                    $selectedId = (int) ($data['adjustment_driver_id'] ?? 0);
+                    if (! $course->arbitrationDrivers()->contains('id', $selectedId)) {
+                        throw new \DomainException('Choisissez un livreur ayant participé à cette course.');
+                    }
+                    $adjustmentDriver = Driver::findOrFail($selectedId);
+                }
 
                 // Ajustement marchand (côté user_wallet) — le sender de la course.
                 if (($data['reason_code_marchand'] ?? null) !== null && $course->sender) {
@@ -1266,8 +2271,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     );
                 }
 
-                // Ajustement driver (côté wallet caution) — le driver assigné.
-                if (($data['reason_code_driver'] ?? null) !== null && $course->driver) {
+                // Ajustement caution : cible explicite, jamais le remplaçant par défaut.
+                if ($adjustmentDriver) {
                     $requestedAmount = (int) $data['amount_driver'];
                     $isDebit         = $requestedAmount < 0;
                     $isCappable      = in_array($data['reason_code_driver'], $cappableReasons, true);
@@ -1276,24 +2281,18 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     // au disponible ET on suspend le driver. Le reste des reasons garde
                     // la contrainte stricte (throw si insuffisant).
                     if ($isDebit && $isCappable) {
-                        $wallet = \App\Models\DriverWallet::where('driver_id', $course->driver->id)
+                        $wallet = \App\Models\DriverWallet::where('driver_id', $adjustmentDriver->id)
                             ->lockForUpdate()
                             ->firstOrFail();
 
                         $needed = abs($requestedAmount);
                         if ($needed > (int) $wallet->balance) {
                             $capped = -1 * (int) $wallet->balance;
-                            if ($capped === 0) {
-                                // Rien à débiter mais on veut quand même tracer l'insuffisance.
-                                // On saute la création de l'adjustment (amount=0 refusé par CHECK)
-                                // et on suspend directement.
-                                $course->driver->update(['activation_status' => 'suspended']);
-                                $cautionShort = true;
-                                return [$marchandAdj, null, $cautionShort];
-                            }
-
+                            // Même à solde nul, poursuivre jusqu'à la clôture de l'incident.
+                            // Sinon une relance pourrait créditer à nouveau le marchand.
+                            if ($capped !== 0) {
                             $driverAdj = $adjustments->applyToDriver(
-                                driver:     $course->driver,
+                                driver:     $adjustmentDriver,
                                 amount:     $capped,
                                 reasonCode: $data['reason_code_driver'],
                                 course:     $course,
@@ -1301,11 +2300,12 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                                 adminId:    $admin->id,
                                 notes:      "[Caution insuffisante — montant capé sur solde disponible] " . $data['resolution_note'],
                             );
-                            $course->driver->update(['activation_status' => 'suspended']);
+                            }
+                            $adjustmentDriver->update(['activation_status' => 'suspended']);
                             $cautionShort = true;
                         } else {
                             $driverAdj = $adjustments->applyToDriver(
-                                driver:     $course->driver,
+                                driver:     $adjustmentDriver,
                                 amount:     $requestedAmount,
                                 reasonCode: $data['reason_code_driver'],
                                 course:     $course,
@@ -1317,7 +2317,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     } else {
                         // Chemin classique : contrainte stricte, throw si insuffisant.
                         $driverAdj = $adjustments->applyToDriver(
-                            driver:     $course->driver,
+                            driver:     $adjustmentDriver,
                             amount:     $requestedAmount,
                             reasonCode: $data['reason_code_driver'],
                             course:     $course,
@@ -1328,15 +2328,21 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     }
                 }
 
+                // Conserver aussi la cible lorsque la caution nulle ne produit aucune écriture.
+                $resolutionNote = $data['resolution_note'];
+                if ($adjustmentDriver) {
+                    $resolutionNote .= "\n[Ajustement livreur #{$adjustmentDriver->id} : demandé {$data['amount_driver']} FCFA, appliqué "
+                        . ($driverAdj?->amount_fcfa ?? 0) . ' FCFA]';
+                }
                 // Résolution de l'incident (dans la même transaction — soit tout passe, soit rien).
                 $incident->update([
                     'status'          => 'resolved',
-                    'resolution_note' => $data['resolution_note'],
+                    'resolution_note' => $resolutionNote,
                     'resolved_by'     => $admin->user_id ?? null,
                     'resolved_at'     => now(),
                 ]);
 
-                return [$marchandAdj, $driverAdj, $cautionShort];
+                return [$marchandAdj, $driverAdj, $cautionShort, $adjustmentDriver];
             });
         } catch (\DomainException $e) {
             // Solde insuffisant côté user (débit qui mangerait les holds courses)
@@ -1362,20 +2368,21 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             $notifiedUserIds[] = $course->sender_id;
         }
 
-        if ($course->driver && $course->driver->user_id && ! in_array($course->driver->user_id, $notifiedUserIds, true)) {
+        $notifiedDriver = $adjustmentDriver ?? $course->driver;
+        if ($notifiedDriver && $notifiedDriver->user_id && ! in_array($notifiedDriver->user_id, $notifiedUserIds, true)) {
             $driverMessage = $this->buildDriverNotification($course, $driverAdj, $data['resolution_note']);
             if ($cautionShort) {
                 $driverMessage .= ' Votre caution est insuffisante pour couvrir le débit — votre compte est temporairement suspendu jusqu\'à rechargement.';
             }
             $notifier->sendToUser(
-                $course->driver->user_id,
+                $notifiedDriver->user_id,
                 'incident.arbitrated',
                 $cautionShort ? '⚠️ Compte suspendu — caution insuffisante' : '⚖️ Incident arbitré',
                 $driverMessage,
                 ['reference' => $course->reference, 'caution_short' => $cautionShort],
                 $course->id,
             );
-            $notifiedUserIds[] = $course->driver->user_id;
+            $notifiedUserIds[] = $notifiedDriver->user_id;
         }
 
         if ($incident->reported_by && ! in_array($incident->reported_by, $notifiedUserIds, true)) {
@@ -2018,7 +3025,17 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         }
         $data = $request->validate($rules);
 
+        $before = \App\Models\AppSetting::get($key);
         \App\Models\AppSetting::set($key, $data['value'], $request->user()->id);
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'setting.updated',
+            "Parametre {$key} mis a jour.",
+            ['key' => $key, 'before' => $before, 'after' => \App\Models\AppSetting::get($key)],
+        );
 
         return response()->json([
             'message' => 'Paramètre mis à jour.',
@@ -2044,7 +3061,21 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             'is_active'          => ['nullable', 'boolean'],
         ]);
 
+        $before = $plan->only(['monthly_price_fcfa', 'included_courses', 'is_active']);
         $plan->update($data);
+
+        $this->recordAdminActivity(
+            $request,
+            $request->user()->admin,
+            null,
+            'plan.updated',
+            "Plan {$plan->code} mis a jour.",
+            [
+                'plan_id' => $plan->id,
+                'before' => $before,
+                'after' => $plan->fresh()->only(['monthly_price_fcfa', 'included_courses', 'is_active']),
+            ],
+        );
 
         return response()->json([
             'message' => 'Plan mis à jour.',
@@ -2087,6 +3118,121 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     }
 
     // ===== 11. FICHE DÉTAILLÉE D'UN PARTICULIER =====
+    public function createIndividual(Request $request): JsonResponse
+    {
+        $request->merge(['phone' => \App\Support\Phone::normalize((string) $request->input('phone'))]);
+
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name'  => ['required', 'string', 'max:100'],
+            'email'      => ['required', 'email', 'unique:users,email'],
+            'phone'      => ['required', 'string', 'max:20', 'unique:users,phone'],
+            'password'   => ['required', 'string', 'min:8'],
+            'gender'     => ['nullable', Rule::in(['M', 'F', 'autre'])],
+        ]);
+
+        $individual = DB::transaction(function () use ($request, $data) {
+            $user = User::create([
+                'name'                   => $data['first_name'] . ' ' . $data['last_name'],
+                'email'                  => $data['email'],
+                'phone'                  => $data['phone'],
+                'password'               => $data['password'],
+                'password_set_at'        => now(),
+                'type'                   => User::TYPE_INDIVIDUAL,
+                'is_active'              => true,
+                'phone_verified_at'      => now(),
+                'email_verified_at'      => now(),
+                'accepted_terms_at'      => now(),
+                'accepted_terms_version' => User::TERMS_VERSION,
+            ]);
+
+            UserWallet::create(['user_id' => $user->id]);
+
+            $individual = Individual::create([
+                'user_id'                   => $user->id,
+                'first_name'                => $data['first_name'],
+                'last_name'                 => $data['last_name'],
+                'gender'                    => $data['gender'] ?? null,
+                'monthly_courses_limit'     => (int) \App\Models\AppSetting::get('individual_monthly_courses_limit', 20),
+                'monthly_period_started_at' => now()->startOfMonth(),
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'individual.created',
+                "Particulier {$individual->first_name} {$individual->last_name} cree par admin.",
+                ['individual_id' => $individual->id, 'user_id' => $user->id],
+            );
+
+            return $individual;
+        });
+
+        return response()->json([
+            'message' => 'Particulier cree.',
+            'individual' => $individual->fresh()->load('user'),
+        ], 201);
+    }
+
+    public function updateIndividual(Request $request, Individual $individual): JsonResponse
+    {
+        $request->merge([
+            'phone' => $request->filled('phone')
+                ? \App\Support\Phone::normalize((string) $request->input('phone'))
+                : $request->input('phone'),
+        ]);
+
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name'  => ['required', 'string', 'max:100'],
+            'email'      => ['required', 'email', Rule::unique('users', 'email')->ignore($individual->user_id)],
+            'phone'      => ['required', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($individual->user_id)],
+            'gender'     => ['nullable', Rule::in(['M', 'F', 'autre'])],
+        ]);
+
+        $before = [
+            'user' => $individual->user->only(['name', 'email', 'phone']),
+            'individual' => $individual->only(['first_name', 'last_name', 'gender']),
+        ];
+
+        DB::transaction(function () use ($request, $individual, $data, $before) {
+            $individual->user->update([
+                'name'  => $data['first_name'] . ' ' . $data['last_name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+            ]);
+
+            $individual->update([
+                'first_name' => $data['first_name'],
+                'last_name'  => $data['last_name'],
+                'gender'     => $data['gender'] ?? null,
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $request->user()->admin,
+                null,
+                'individual.updated',
+                "Particulier {$individual->first_name} {$individual->last_name} modifie.",
+                [
+                    'individual_id' => $individual->id,
+                    'user_id' => $individual->user_id,
+                    'before' => $before,
+                    'after' => [
+                        'user' => $individual->user->fresh()->only(['name', 'email', 'phone']),
+                        'individual' => $individual->fresh()->only(['first_name', 'last_name', 'gender']),
+                    ],
+                ],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Particulier mis a jour.',
+            'individual' => $individual->fresh()->load(['user', 'user.wallet']),
+        ]);
+    }
+
     public function showIndividual(Individual $individual): JsonResponse
     {
         $individual->load(['user', 'user.wallet']);
@@ -2532,7 +3678,10 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      *
      * Cf. project_wallet_driver_todo #6.
      */
-    public function reconciliation(Request $request): JsonResponse
+    public function reconciliation(
+        Request $request,
+        \App\Services\SandboxFinancialAuditService $sandboxAudit,
+    ): JsonResponse
     {
         $data = $request->validate([
             'from' => ['nullable', 'date'],
@@ -2676,6 +3825,7 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
                     || count($driftDrivers) > 0
                     || count($driftUsers) > 0,
             ],
+            'sandbox_audit' => $sandboxAudit->audit(),
         ]);
     }
 
@@ -2763,6 +3913,245 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
      * Sans cet endpoint, on n'avait aucun moyen de répondre à un driver qui dirait
      * « je n'ai pas reçu mon argent ». Cf. project_wallet_driver_todo #2.
      */
+    public function resetDriverWallet(Request $request, Driver $driver): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $admin = $request->user()->admin;
+
+        $result = DB::transaction(function () use ($request, $driver, $admin, $data) {
+            $wallet = DriverWallet::where('driver_id', $driver->id)->lockForUpdate()->firstOrFail();
+            $amount = (int) $wallet->balance;
+
+            $cancelledWithdrawals = WalletWithdrawRequest::where('driver_id', $driver->id)
+                ->where('status', WalletWithdrawRequest::STATUS_PENDING)
+                ->update([
+                    'status' => WalletWithdrawRequest::STATUS_CANCELLED,
+                    'decided_by_admin_id' => $admin->id,
+                    'decided_at' => now(),
+                    'rejection_reason' => 'Annule automatiquement par remise a zero du wallet: ' . $data['reason'],
+                ]);
+
+            if ($amount <= 0) {
+                return [
+                    'transaction' => null,
+                    'wallet' => $wallet,
+                    'amount' => 0,
+                    'cancelled_withdrawals' => $cancelledWithdrawals,
+                ];
+            }
+
+            $wallet->balance = 0;
+            $wallet->save();
+
+            $transaction = WalletTransaction::create([
+                'driver_id' => $driver->id,
+                'type' => WalletTransaction::TYPE_ADJUSTMENT_DEBIT,
+                'amount_fcfa' => -$amount,
+                'balance_after' => 0,
+                'metadata' => [
+                    'admin_id' => $admin->id,
+                    'reason' => $data['reason'],
+                    'reset_to_zero' => true,
+                    'cancelled_withdrawals' => $cancelledWithdrawals,
+                ],
+                'created_at' => now(),
+            ]);
+
+            app(\App\Services\AccountingLedgerService::class)->recordDriverWalletTransaction($transaction);
+
+            $this->recordAdminActivity(
+                $request,
+                $admin,
+                null,
+                'driver_wallet.reset_zero',
+                "Wallet livreur #{$driver->id} remis a zero ({$amount} FCFA).",
+                ['driver_id' => $driver->id, 'amount_fcfa' => $amount, 'cancelled_withdrawals' => $cancelledWithdrawals],
+            );
+
+            return [
+                'transaction' => $transaction,
+                'wallet' => $wallet->fresh(),
+                'amount' => $amount,
+                'cancelled_withdrawals' => $cancelledWithdrawals,
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Wallet livreur remis a zero.',
+            ...$result,
+        ]);
+    }
+
+    public function resetUserWallet(Request $request, User $user): JsonResponse
+    {
+        if (! $user->isMarchant() && ! $user->isIndividual()) {
+            return response()->json([
+                'message' => "La remise a zero de wallet user ne s'applique qu'aux marchands et particuliers.",
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $admin = $request->user()->admin;
+
+        $result = DB::transaction(function () use ($request, $user, $admin, $data) {
+            $wallet = UserWallet::where('user_id', $user->id)->lockForUpdate()->firstOrFail();
+            $amount = (int) $wallet->balance;
+            $reservedBefore = (int) $wallet->pending_reserved;
+
+            $cancelledWithdrawals = WalletWithdrawRequest::where('user_id', $user->id)
+                ->where('status', WalletWithdrawRequest::STATUS_PENDING)
+                ->update([
+                    'status' => WalletWithdrawRequest::STATUS_CANCELLED,
+                    'decided_by_admin_id' => $admin->id,
+                    'decided_at' => now(),
+                    'rejection_reason' => 'Annule automatiquement par remise a zero du wallet: ' . $data['reason'],
+                ]);
+
+            if ($amount <= 0 && $reservedBefore <= 0) {
+                return [
+                    'transaction' => null,
+                    'wallet' => $wallet,
+                    'amount' => 0,
+                    'cancelled_withdrawals' => $cancelledWithdrawals,
+                    'released_reserved' => 0,
+                ];
+            }
+
+            $wallet->balance = 0;
+            $wallet->pending_reserved = 0;
+            $wallet->save();
+
+            $transaction = null;
+            if ($amount > 0) {
+                $transaction = UserWalletTransaction::create([
+                    'user_id' => $user->id,
+                    'type' => UserWalletTransaction::TYPE_ADJUSTMENT_DEBIT,
+                    'amount_fcfa' => -$amount,
+                    'balance_after' => 0,
+                    'metadata' => [
+                        'admin_id' => $admin->id,
+                        'reason' => $data['reason'],
+                        'reset_to_zero' => true,
+                        'released_reserved' => $reservedBefore,
+                        'cancelled_withdrawals' => $cancelledWithdrawals,
+                    ],
+                    'created_at' => now(),
+                ]);
+
+                app(\App\Services\AccountingLedgerService::class)->recordUserWalletTransaction($transaction);
+            }
+
+            $this->recordAdminActivity(
+                $request,
+                $admin,
+                null,
+                'user_wallet.reset_zero',
+                "Wallet user #{$user->id} remis a zero ({$amount} FCFA).",
+                ['user_id' => $user->id, 'amount_fcfa' => $amount, 'released_reserved' => $reservedBefore, 'cancelled_withdrawals' => $cancelledWithdrawals],
+            );
+
+            return [
+                'transaction' => $transaction,
+                'wallet' => $wallet->fresh(),
+                'amount' => $amount,
+                'cancelled_withdrawals' => $cancelledWithdrawals,
+                'released_reserved' => $reservedBefore,
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Wallet user remis a zero.',
+            ...$result,
+        ]);
+    }
+
+    public function prepareSandboxRepair(
+        Request $request,
+        \App\Services\SandboxFinancialAuditService $auditService,
+    ): JsonResponse {
+        $admin = $request->user()->admin;
+        if (! $admin || ! $admin->isSuper()) {
+            return response()->json(['message' => 'Seul le super-admin peut préparer une correction sandbox.'], 403);
+        }
+
+        $data = $request->validate([
+            'snapshot_token' => ['required', 'string', 'min:10'],
+        ]);
+
+        try {
+            $plan = $auditService->previewRepair($data['snapshot_token']);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'snapshot_token' => $data['snapshot_token'],
+            ], 409);
+        }
+
+        $code = (string) random_int(100000, 999999);
+        Cache::put("sandbox-repair:confirmation:{$admin->id}", [
+            'code_hash' => Hash::make($code),
+            'snapshot_token' => $data['snapshot_token'],
+            'plan_hash' => hash('sha256', json_encode($plan, JSON_THROW_ON_ERROR)),
+            'attempts' => 0,
+        ], now()->addMinutes(10));
+
+        return response()->json([
+            'message' => 'Plan préparé. Saisissez le code dans les 10 minutes pour confirmer.',
+            'confirmation_code' => $code,
+            'expires_in_seconds' => 600,
+            'plan' => $plan,
+        ]);
+    }
+
+    public function sandboxRepair(
+        Request $request,
+        \App\Services\SandboxFinancialAuditService $auditService,
+    ): JsonResponse {
+        $admin = $request->user()->admin;
+        if (! $admin || ! $admin->isSuper()) {
+            return response()->json(['message' => 'Seul le super-admin peut appliquer une correction sandbox.'], 403);
+        }
+
+        $data = $request->validate([
+            'snapshot_token' => ['required', 'string', 'min:10'],
+            'confirmation_code' => ['required', 'digits:6'],
+        ]);
+        $key = "sandbox-repair:confirmation:{$admin->id}";
+        $challenge = Cache::get($key);
+        if (! is_array($challenge) || ! hash_equals((string) ($challenge['snapshot_token'] ?? ''), $data['snapshot_token'])) {
+            return response()->json(['message' => 'Code absent, expiré ou lié à un autre audit. Préparez de nouveau la correction.'], 422);
+        }
+        if (! Hash::check($data['confirmation_code'], (string) $challenge['code_hash'])) {
+            $challenge['attempts'] = (int) ($challenge['attempts'] ?? 0) + 1;
+            if ($challenge['attempts'] >= 5) Cache::forget($key);
+            else Cache::put($key, $challenge, now()->addMinutes(10));
+            return response()->json(['message' => 'Code de confirmation incorrect.'], 422);
+        }
+
+        try {
+            $currentPlan = $auditService->previewRepair($data['snapshot_token']);
+            if (! hash_equals((string) $challenge['plan_hash'], hash('sha256', json_encode($currentPlan, JSON_THROW_ON_ERROR)))) {
+                throw new \RuntimeException('Le plan a changé depuis sa préparation. Relancez un audit.');
+            }
+            Cache::forget($key);
+            $result = $auditService->applyRepair($data['snapshot_token'], (int) $admin->id);
+        } catch (\RuntimeException $e) {
+            Cache::forget($key);
+            return response()->json(['message' => $e->getMessage(), 'snapshot_token' => $data['snapshot_token']], 409);
+        }
+
+        return response()->json([
+            'message' => $result['applied'] ? 'Correction sandbox appliquée.' : 'Aucune correction requise.',
+            'result' => $result,
+        ]);
+    }
+
     public function markWithdrawRequestPaid(
         Request $request,
         \App\Models\WalletWithdrawRequest $withdraw,
@@ -2824,6 +4213,312 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         return response()->json([
             'message'    => 'Particulier réactivé.',
             'individual' => $individual->fresh()->load('user'),
+        ]);
+    }
+
+    // ===== 15. GESTION DES ADMINISTRATEURS (SUPER-ADMIN) =====
+    public function adminUsers(Request $request): JsonResponse
+    {
+        $query = Admin::query()
+            ->with('user:id,name,email,phone,is_active,last_login_at,created_at')
+            ->withCount('performedActivityLogs')
+            ->withMax('performedActivityLogs', 'created_at')
+            ->latest();
+
+        if ($role = $request->query('role')) {
+            $query->where('sub_role', $role);
+        }
+
+        if (($active = $request->query('active')) !== null && $active !== '') {
+            $query->whereHas('user', fn ($q) => $q->where('is_active', filter_var($active, FILTER_VALIDATE_BOOLEAN)));
+        }
+
+        if ($q = trim((string) $request->query('q', ''))) {
+            $query->where(function ($qq) use ($q) {
+                $qq->where('first_name', 'ILIKE', "%{$q}%")
+                    ->orWhere('last_name', 'ILIKE', "%{$q}%")
+                    ->orWhereHas('user', function ($u) use ($q) {
+                        $u->where('name', 'ILIKE', "%{$q}%")
+                            ->orWhere('email', 'ILIKE', "%{$q}%")
+                            ->orWhere('phone', 'ILIKE', "%{$q}%");
+                    });
+            });
+        }
+
+        return response()->json($query->paginate(min((int) $request->query('per_page', 20), 100)));
+    }
+
+    public function createAdminUser(Request $request): JsonResponse
+    {
+        $roles = [Admin::ROLE_SUPER, Admin::ROLE_OPS, Admin::ROLE_COMMERCIAL, Admin::ROLE_SUPPORT];
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name'  => ['required', 'string', 'max:100'],
+            'email'      => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone'      => ['nullable', 'string', 'max:20', 'unique:users,phone'],
+            'password'   => ['required', 'string', 'min:8'],
+            'sub_role'   => ['required', Rule::in($roles)],
+        ]);
+
+        $actor = $request->user()->admin;
+        $admin = DB::transaction(function () use ($data, $actor, $request) {
+            $name = trim($data['first_name'] . ' ' . $data['last_name']);
+            $user = User::create([
+                'name'            => $name,
+                'email'           => mb_strtolower($data['email']),
+                'phone'           => $data['phone'] ?? null,
+                'password'        => $data['password'],
+                'password_set_at' => now(),
+                'type'            => User::TYPE_ADMIN,
+                'is_active'       => true,
+            ]);
+
+            $admin = Admin::create([
+                'user_id'    => $user->id,
+                'first_name' => $data['first_name'],
+                'last_name'  => $data['last_name'],
+                'sub_role'   => $data['sub_role'],
+            ]);
+
+            $this->recordAdminActivity(
+                $request,
+                $actor,
+                $admin,
+                'admin.created',
+                "Création de l'admin {$name} ({$data['sub_role']}).",
+                ['created' => ['email' => $user->email, 'sub_role' => $admin->sub_role]],
+            );
+
+            return $admin;
+        });
+
+        return response()->json([
+            'message' => 'Administrateur créé.',
+            'admin'   => $admin->fresh()->load('user'),
+        ], 201);
+    }
+
+    public function updateAdminUser(Request $request, Admin $admin): JsonResponse
+    {
+        $roles = [Admin::ROLE_SUPER, Admin::ROLE_OPS, Admin::ROLE_COMMERCIAL, Admin::ROLE_SUPPORT];
+        $data = $request->validate([
+            'first_name' => ['sometimes', 'required', 'string', 'max:100'],
+            'last_name'  => ['sometimes', 'required', 'string', 'max:100'],
+            'phone'      => ['nullable', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($admin->user_id)],
+            'password'   => ['nullable', 'string', 'min:8'],
+            'sub_role'   => ['sometimes', 'required', Rule::in($roles)],
+            'is_active'  => ['sometimes', 'boolean'],
+        ]);
+
+        $actor = $request->user()->admin;
+        if (($data['is_active'] ?? true) === false && $actor->id === $admin->id) {
+            return response()->json(['message' => 'Vous ne pouvez pas désactiver votre propre compte admin.'], 422);
+        }
+
+        $before = [
+            'first_name' => $admin->first_name,
+            'last_name'  => $admin->last_name,
+            'sub_role'   => $admin->sub_role,
+            'is_active'  => $admin->user->is_active,
+            'phone'      => $admin->user->phone,
+        ];
+
+        DB::transaction(function () use ($admin, $data, $before, $actor, $request) {
+            $adminUpdates = [];
+            foreach (['first_name', 'last_name', 'sub_role'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $adminUpdates[$field] = $data[$field];
+                }
+            }
+            if ($adminUpdates) {
+                $admin->update($adminUpdates);
+            }
+
+            $userUpdates = [];
+            if (array_key_exists('first_name', $data) || array_key_exists('last_name', $data)) {
+                $userUpdates['name'] = trim(($data['first_name'] ?? $admin->first_name) . ' ' . ($data['last_name'] ?? $admin->last_name));
+            }
+            if (array_key_exists('phone', $data)) {
+                $userUpdates['phone'] = $data['phone'];
+            }
+            if (array_key_exists('is_active', $data)) {
+                $userUpdates['is_active'] = (bool) $data['is_active'];
+            }
+            if (! empty($data['password'])) {
+                $userUpdates['password'] = $data['password'];
+                $userUpdates['password_set_at'] = now();
+            }
+            if ($userUpdates) {
+                $admin->user->update($userUpdates);
+            }
+
+            $admin->refresh()->load('user');
+            $after = [
+                'first_name' => $admin->first_name,
+                'last_name'  => $admin->last_name,
+                'sub_role'   => $admin->sub_role,
+                'is_active'  => $admin->user->is_active,
+                'phone'      => $admin->user->phone,
+            ];
+
+            $changes = array_filter($after, fn ($value, $key) => ($before[$key] ?? null) !== $value, ARRAY_FILTER_USE_BOTH);
+            if (! empty($data['password'])) {
+                $changes['password'] = 'updated';
+            }
+
+            $this->recordAdminActivity(
+                $request,
+                $actor,
+                $admin,
+                'admin.updated',
+                "Modification de l'admin {$admin->user->name}.",
+                ['before' => $before, 'after' => $after, 'changed' => array_keys($changes)],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Administrateur mis à jour.',
+            'admin'   => $admin->fresh()->load('user'),
+        ]);
+    }
+
+    public function adminUserActivity(Request $request, Admin $admin): JsonResponse
+    {
+        $logs = AdminActivityLog::query()
+            ->with('targetAdmin.user:id,name,email')
+            ->where('admin_id', $admin->id)
+            ->latest()
+            ->paginate(min((int) $request->query('per_page', 20), 100));
+
+        return response()->json($logs);
+    }
+
+    public function waitlist(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:150'],
+            'status' => ['nullable', Rule::in(['waiting', 'notified', 'all'])],
+            'type' => ['nullable', Rule::in([User::TYPE_MARCHANT, User::TYPE_DRIVER])],
+            'per_page' => ['nullable', 'integer', 'between:1,100'],
+        ]);
+
+        $query = User::query()
+            ->with([
+                'marchant:id,user_id,raison_sociale,validated_at',
+                'driver:id,user_id,first_name,last_name,activation_status',
+                'waitlistNotifier.user:id,name',
+            ])
+            ->whereIn('type', [User::TYPE_MARCHANT, User::TYPE_DRIVER])
+            ->where(function ($query) {
+                $query->whereNotNull('waitlisted_at')
+                    ->orWhereHas('marchant', fn ($marchant) => $marchant->whereNull('validated_at'))
+                    ->orWhereHas('driver', fn ($driver) => $driver->where('activation_status', 'pending'));
+            });
+
+        if (($data['status'] ?? 'waiting') === 'waiting') {
+            $query->where(function ($pending) {
+                $pending->where(fn ($merchant) => $merchant->where('type', User::TYPE_MARCHANT)
+                    ->whereHas('marchant', fn ($profile) => $profile->whereNull('validated_at')))
+                    ->orWhere(fn ($driver) => $driver->where('type', User::TYPE_DRIVER)
+                        ->whereHas('driver', fn ($profile) => $profile->where('activation_status', 'pending')));
+            });
+        } elseif (($data['status'] ?? null) === 'notified') {
+            $query->whereNotNull('waitlist_notified_at');
+        }
+        if (! empty($data['type'])) {
+            $query->where('type', $data['type']);
+        }
+        if (! empty($data['q'])) {
+            $search = $data['q'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'ilike', "%{$search}%")
+                    ->orWhere('email', 'ilike', "%{$search}%")
+                    ->orWhere('phone', 'ilike', "%{$search}%")
+                    ->orWhereHas('marchant', fn ($m) => $m->where('raison_sociale', 'ilike', "%{$search}%"))
+                    ->orWhereHas('driver', fn ($d) => $d
+                        ->where('first_name', 'ilike', "%{$search}%")
+                        ->orWhere('last_name', 'ilike', "%{$search}%"));
+            });
+        }
+
+        return response()->json($query->latest('waitlisted_at')->paginate($data['per_page'] ?? 25));
+    }
+
+    public function notifyWaitlistedUser(Request $request, User $user, \App\Services\BrevoSmsService $sms): JsonResponse
+    {
+        return $this->validateWaitlistedUser($request, $user, $sms);
+    }
+
+    public function notifyWaitlistedUsers(Request $request, \App\Services\BrevoSmsService $sms): JsonResponse
+    {
+        $data = $request->validate([
+            'user_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'user_ids.*' => ['integer', 'distinct', 'exists:users,id'],
+        ]);
+
+        $results = [];
+        foreach (User::whereIn('id', $data['user_ids'])->get() as $user) {
+            try {
+                $response = $this->validateWaitlistedUser($request, $user, $sms);
+                $results[] = ['user_id' => $user->id] + $response->getData(true);
+            } catch (\Throwable $e) {
+                report($e);
+                $results[] = ['user_id' => $user->id, 'status' => 'failed'];
+            }
+        }
+
+        return response()->json([
+            'results' => $results,
+            'notified_count' => collect($results)->where('status', 'validated')->count(),
+        ]);
+    }
+
+    private function validateWaitlistedUser(
+        Request $request,
+        User $user,
+        \App\Services\BrevoSmsService $sms,
+    ): JsonResponse
+    {
+        if ($user->type === User::TYPE_MARCHANT && $user->marchant) {
+            if ($user->marchant->validated_at !== null) {
+                return response()->json(['status' => 'already_validated', 'message' => 'Marchand déjà validé.']);
+            }
+
+            $this->validateMarchant($request, $user->marchant);
+
+            return response()->json(['status' => 'validated', 'message' => 'Marchand validé et informé.']);
+        }
+
+        if ($user->type === User::TYPE_DRIVER && $user->driver) {
+            if ($user->driver->activation_status !== 'pending') {
+                return response()->json(['status' => 'already_validated', 'message' => 'Livreur déjà traité.']);
+            }
+
+            $this->validateDriver($request, $user->driver, $sms);
+
+            return response()->json(['status' => 'validated', 'message' => 'Livreur validé et informé.']);
+        }
+
+        return response()->json(['message' => "Ce compte n'est pas éligible à la validation."], 422);
+
+    }
+
+    private function recordAdminActivity(
+        Request $request,
+        ?Admin $actor,
+        ?Admin $target,
+        string $action,
+        string $summary,
+        ?array $changes = null,
+    ): void {
+        AdminActivityLog::create([
+            'admin_id'        => $actor?->id,
+            'target_admin_id' => $target?->id,
+            'action'          => $action,
+            'summary'         => $summary,
+            'changes'         => $changes,
+            'ip_address'      => $request->ip(),
+            'user_agent'      => mb_substr((string) $request->userAgent(), 0, 500),
         ]);
     }
 }

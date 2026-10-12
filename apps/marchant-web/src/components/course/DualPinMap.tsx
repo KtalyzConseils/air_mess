@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ORIGIN_ICON, DEST_ICON } from './tripPins'
 import PlaceSearchInput from './PlaceSearchInput'
 import type { PlaceDetails } from '../../api/places'
+import { MapPinIcon } from '../ui/icons'
 
 interface Props {
   originLat?: number
@@ -16,7 +17,12 @@ interface Props {
   onDestPlaceSelect?: (place: PlaceDetails) => void
   /** Pin actif par défaut. Le marchand connaît son origine ⇒ 'B' est plus fréquent. */
   defaultActive?: 'A' | 'B'
+  activePin?: 'A' | 'B'
+  onActivePinChange?: (pin: 'A' | 'B') => void
   height?: string
+  showPinToggle?: boolean
+  showSearch?: boolean
+  showCurrentPosition?: boolean
 }
 
 const COTONOU_CENTER: [number, number] = [6.3703, 2.3912]
@@ -37,12 +43,22 @@ export default function DualPinMap({
   onOriginPlaceSelect,
   onDestPlaceSelect,
   defaultActive = 'B',
+  activePin,
+  onActivePinChange,
   height = '340px',
+  showPinToggle = true,
+  showSearch = true,
+  showCurrentPosition = true,
 }: Props) {
   const { t } = useTranslation()
-  const [active, setActive] = useState<'A' | 'B'>(defaultActive)
+  const [internalActive, setInternalActive] = useState<'A' | 'B'>(defaultActive)
   const [error, setError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
+  const active = activePin ?? internalActive
+  const setActive = (pin: 'A' | 'B') => {
+    setInternalActive(pin)
+    onActivePinChange?.(pin)
+  }
 
   const hasOrigin =
     typeof originLat === 'number' &&
@@ -96,6 +112,7 @@ export default function DualPinMap({
   return (
     <div className="space-y-2.5">
       {/* Toggle A / B */}
+      {showPinToggle && (
       <div className="flex gap-1 rounded-lg bg-warm-100 p-1">
         <button
           type="button"
@@ -144,30 +161,36 @@ export default function DualPinMap({
           )}
         </button>
       </div>
+      )}
 
       {/* Chemin #1 : recherche Google Places → applique au pin actif */}
-      <PlaceSearchInput
-        resetKey={active}
-        activePinLabel={activeLabel}
-        onSelect={(place) => {
-          setError(null)
-          apply(place.lat, place.lng)
-          if (active === 'A') onOriginPlaceSelect?.(place)
-          else onDestPlaceSelect?.(place)
-        }}
-      />
+      {showSearch && (
+        <PlaceSearchInput
+          resetKey={active}
+          activePinLabel={activeLabel}
+          onSelect={(place) => {
+            setError(null)
+            apply(place.lat, place.lng)
+            if (active === 'A') onOriginPlaceSelect?.(place)
+            else onDestPlaceSelect?.(place)
+          }}
+        />
+      )}
 
       {/* Chemin #2 : position actuelle → applique au pin actif */}
-      <button
-        type="button"
-        onClick={useCurrentPosition}
-        disabled={locating}
-        className="w-full bg-airmess-dark text-white text-body-s font-semibold py-2 px-3 rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-      >
-        {locating
-          ? t('courses.new.dualMap.geoLoading')
-          : t('courses.new.dualMap.geoCta', { pin: activeLabel })}
-      </button>
+      {showCurrentPosition && (
+        <button
+          type="button"
+          onClick={useCurrentPosition}
+          disabled={locating}
+          className="w-full rounded-xl border border-airmess-yellow/70 bg-airmess-yellow/15 px-4 py-3 text-body-s font-bold text-ink transition-all hover:bg-airmess-yellow/25 disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          <MapPinIcon size={16} />
+          {locating
+            ? t('courses.new.dualMap.geoLoading')
+            : t('courses.new.dualMap.geoCta', { pin: activeLabel })}
+        </button>
+      )}
 
       {error && (
         <div className="bg-danger-bg border border-airmess-red/30 text-airmess-red px-3 py-2 rounded-md text-caption">

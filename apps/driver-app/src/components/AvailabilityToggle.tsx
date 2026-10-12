@@ -2,6 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ionicons } from '@expo/vector-icons'
 import { updateAvailability, type Availability } from '../api/driver'
+import { BrandColors, StatusToneOnDark } from '../constants/theme'
 
 /**
  * Carte STATUT (hero sombre) — le bloc que le livreur regarde en premier.
@@ -24,6 +25,11 @@ interface Props {
   pendingValidation?: boolean
 }
 
+/**
+ * Couleurs issues de `constants/theme.ts` (source programmatique unique) : sur le
+ * hero sombre, les teintes canoniques sont éclaircies pour tenir le contraste
+ * (cf. design-system/airmess-livreurs/MASTER.md §2).
+ */
 const STATE: Record<
   Availability | 'busy',
   { label: string; tagline: string; color: string }
@@ -31,22 +37,22 @@ const STATE: Record<
   available: {
     label: 'Disponible',
     tagline: "On t'envoie les courses qui matchent ta zone.",
-    color: '#16A34A',
+    color: StatusToneOnDark.success,
   },
   busy: {
     label: 'En course',
     tagline: 'Bonne route — concentre-toi sur ta livraison.',
-    color: '#FFCC00',
+    color: StatusToneOnDark.highlight,
   },
   on_break: {
     label: 'En pause',
     tagline: 'Reprends quand tu veux, tu restes connecté.',
-    color: '#F59E0B',
+    color: StatusToneOnDark.warning,
   },
   offline: {
     label: 'Hors-service',
     tagline: 'Personne ne peut te proposer une course.',
-    color: '#B8AF9F',
+    color: StatusToneOnDark.neutral,
   },
 }
 
@@ -85,9 +91,17 @@ export default function AvailabilityToggle({ current, pendingValidation = false 
           Statut
         </Text>
         {online && (
-          <View className="flex-row items-center bg-success/15 px-2.5 py-1 rounded-full">
-            <View className="w-1.5 h-1.5 rounded-full bg-success mr-1.5" />
-            <Text className="text-success text-[11px] font-jk-bold">En ligne</Text>
+          <View
+            className="flex-row items-center px-2.5 py-1 rounded-full"
+            style={{ backgroundColor: 'rgba(74, 222, 128, 0.15)' }}
+          >
+            <View
+              className="w-1.5 h-1.5 rounded-full mr-1.5"
+              style={{ backgroundColor: StatusToneOnDark.success }}
+            />
+            <Text className="text-[11px] font-jk-bold" style={{ color: StatusToneOnDark.success }}>
+              En ligne
+            </Text>
           </View>
         )}
       </View>
@@ -101,7 +115,7 @@ export default function AvailabilityToggle({ current, pendingValidation = false 
       {/* Actions */}
       {pendingValidation ? (
         <View className="mt-4 bg-warning/10 rounded-2xl px-4 py-3 flex-row items-start">
-          <Ionicons name="time-outline" size={16} color="#F59E0B" />
+          <Ionicons name="time-outline" size={16} color={StatusToneOnDark.warning} />
           <Text className="text-warm-300 text-xs font-jk-medium ml-2 flex-1">
             Compte en attente de validation. Tu pourras te rendre disponible dès que notre
             équipe aura activé ton compte — tu recevras un email.
@@ -109,7 +123,7 @@ export default function AvailabilityToggle({ current, pendingValidation = false 
         </View>
       ) : locked ? (
         <View className="mt-4 bg-white/5 rounded-2xl px-4 py-3 flex-row items-center">
-          <Ionicons name="lock-closed" size={15} color="#B8AF9F" />
+          <Ionicons name="lock-closed" size={15} color={StatusToneOnDark.neutral} />
           <Text className="text-warm-300 text-xs font-jk-medium ml-2 flex-1">
             Statut imposé pendant la course.
           </Text>
@@ -119,21 +133,21 @@ export default function AvailabilityToggle({ current, pendingValidation = false 
           <StatusBtn
             label="Dispo"
             icon="radio"
-            color="#16A34A"
+            color={StatusToneOnDark.success}
             active={current === 'available'}
             onPress={() => mutation.mutate('available')}
           />
           <StatusBtn
             label="Pause"
             icon="pause"
-            color="#F59E0B"
+            color={StatusToneOnDark.warning}
             active={current === 'on_break'}
             onPress={() => mutation.mutate('on_break')}
           />
           <StatusBtn
             label="Off"
             icon="power"
-            color="#E7E0D4"
+            color={BrandColors.warm200}
             active={current === 'offline'}
             onPress={() => mutation.mutate('offline')}
           />
@@ -160,6 +174,9 @@ function StatusBtn({
     <Pressable
       onPress={onPress}
       className="flex-1 h-14 rounded-2xl items-center justify-center"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
       style={({ pressed }) => [
         active
           ? { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1.5, borderColor: color }
@@ -167,11 +184,11 @@ function StatusBtn({
         pressed ? { opacity: 0.8 } : undefined,
       ]}
     >
-      <Ionicons name={icon} size={18} color={active ? color : '#8A7E68'} />
+      <Ionicons name={icon} size={18} color={active ? color : StatusToneOnDark.neutral} />
       <Text
         className="text-[13px] mt-1"
         style={{
-          color: active ? color : '#B8AF9F',
+          color: active ? color : StatusToneOnDark.neutral,
           fontFamily: active ? 'PlusJakartaSans_700Bold' : 'PlusJakartaSans_600SemiBold',
         }}
       >

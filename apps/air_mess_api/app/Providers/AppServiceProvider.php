@@ -143,5 +143,17 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('tracking-dispute', function (Request $request) {
             return Limit::perDay(3)->by($request->ip());
         });
+
+        // Liste d'attente commerçants (landing publique). 5 soumissions / heure / IP
+        // suffisent pour un vrai répondant, tout en bloquant le spam de formulaires.
+        RateLimiter::for('waitlist', function (Request $request) {
+            return Limit::perHour(5)->by($request->ip());
+        });
+
+        // Consultation d'un lien personnel : plusieurs chargements peuvent être
+        // légitimes pendant que le candidat finalise son dossier.
+        RateLimiter::for('waitlist-activation', function (Request $request) {
+            return Limit::perMinute(30)->by($request->ip().':'.hash('sha256', (string) $request->route('token')));
+        });
     }
 }

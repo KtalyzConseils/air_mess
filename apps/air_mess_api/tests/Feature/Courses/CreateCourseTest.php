@@ -5,6 +5,7 @@ namespace Tests\Feature\Courses;
 use App\Models\Course;
 use App\Models\Individual;
 use App\Models\Marchant;
+use App\Models\MerchantWaitlist;
 use App\Models\PackageCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -45,6 +46,23 @@ class CreateCourseTest extends TestCase
         ];
     }
 
+    private function addPublicMerchantApplication(string $email): MerchantWaitlist
+    {
+        return MerchantWaitlist::create([
+            'commerce_type' => 'Restauration rapide / plats préparés',
+            'zone' => 'Cotonou', 'weekly_orders' => 'Moins de 10',
+            'delivery_methods' => ['Je ne livre pas, vente sur place uniquement'],
+            'problems' => ['Aucun problème particulier'],
+            'worst_experience' => 'Aucune', 'cash_collection_issue' => 'Non, jamais',
+            'time_lost_weekly' => "Moins d'1 heure", 'orders_lost_weekly' => 'Aucune',
+            'expected_benefit' => 'Livraison fiable',
+            'commission_acceptance' => 'Oui, si le prix est raisonnable',
+            'reasonable_fee' => '300 à 500 FCFA', 'mobile_money_trust' => 'Oui, totalement',
+            'interest_level' => 5, 'trial_interest' => 'Oui', 'email' => $email,
+            'status' => MerchantWaitlist::STATUS_WAITLISTED, 'bonus_amount' => 500,
+        ]);
+    }
+
     public function test_authenticated_marchant_can_create_course(): void
     {
         $user = User::factory()->create(['type' => 'marchant']);
@@ -58,6 +76,63 @@ class CreateCourseTest extends TestCase
         $response->assertStatus(201);
         $response->assertJsonPath('course.status', Course::STATUS_AWAITING);
         $this->assertDatabaseCount('courses', 1);
+    }
+
+    public function test_first_course_gets_500_fcfa_discount_without_reducing_driver_earnings(): void
+    {
+        $user = User::factory()->create(['type' => 'marchant']);
+        $application = $this->addPublicMerchantApplication($user->email);
+        Marchant::factory()->create(['user_id' => $user->id]);
+        $cat = PackageCategory::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/courses', $this->validPayload($cat->id))->assertStatus(201);
+        $first = Course::firstOrFail();
+
+        $this->assertSame(500, (int) $first->discount_amount);
+        $this->assertSame('FIRST_COURSE_500', $first->discount_code);
+        $this->assertSame(500, (int) $first->original_delivery_fee - (int) $first->delivery_fee);
+        $this->assertNotNull($application->fresh()->bonus_redeemed_at);
+        $this->assertSame(
+            (int) round((int) $first->original_delivery_fee * 0.75),
+            (int) $first->driver_earnings,
+        );
+
+        $this->postJson('/api/courses', $this->validPayload($cat->id))->assertStatus(201);
+        $second = Course::latest('id')->firstOrFail();
+
+        $this->assertSame(0, (int) $second->discount_amount);
+        $this->assertNull($second->discount_code);
+        $this->assertSame((int) $second->original_delivery_fee, (int) $second->delivery_fee);
+    }
+
+    public function test_first_course_without_public_application_gets_no_discount(): void
+    {
+        $user = User::factory()->create(['type' => 'individual']);
+        Individual::factory()->create(['user_id' => $user->id]);
+        $cat = PackageCategory::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/courses', $this->validPayload($cat->id))->assertStatus(201);
+
+        $course = Course::firstOrFail();
+        $this->assertSame(0, (int) $course->discount_amount);
+        $this->assertNull($course->discount_code);
+        $this->assertSame((int) $course->original_delivery_fee, (int) $course->delivery_fee);
+    }
+
+    public function test_marchant_without_public_application_gets_no_discount(): void
+    {
+        $user = User::factory()->create(['type' => 'marchant']);
+        Marchant::factory()->create(['user_id' => $user->id]);
+        $cat = PackageCategory::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/courses', $this->validPayload($cat->id))->assertCreated();
+
+        $course = Course::firstOrFail();
+        $this->assertSame(0, (int) $course->discount_amount);
+        $this->assertNull($course->discount_code);
     }
 
     public function test_description_is_optional_and_secondary_phones_are_stored(): void
@@ -89,6 +164,19 @@ class CreateCourseTest extends TestCase
         $response = $this->postJson('/api/courses', $this->validPayload($cat->id));
 
         $response->assertStatus(401);
+        $this->assertDatabaseCount('courses', 0);
+    }
+
+    public function test_unvalidated_marchant_cannot_create_course(): void
+    {
+        $user = User::factory()->create(['type' => 'marchant', 'is_active' => true]);
+        Marchant::factory()->create(['user_id' => $user->id, 'validated_at' => null]);
+        $cat = PackageCategory::factory()->create();
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/courses', $this->validPayload($cat->id))
+            ->assertStatus(403);
         $this->assertDatabaseCount('courses', 0);
     }
 

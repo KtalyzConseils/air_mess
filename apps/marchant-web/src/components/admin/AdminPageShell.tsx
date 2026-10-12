@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import AdminSidebar from './AdminSidebar'
 import AdminQuickNav from './AdminQuickNav'
 import { MenuIcon } from '../ui/icons'
 import mark from '../../assets/logo/airmess-mark.svg'
 import { useUiPrefsStore } from '../../stores/uiPrefsStore'
+import { useDesktopNotifications } from '../../hooks/useDesktopNotifications'
 
 interface AdminPageShellProps {
   children: ReactNode
@@ -19,8 +21,13 @@ interface AdminPageShellProps {
  *  - 'fab'     : FAB uniquement (cache aussi le burger mobile)
  */
 export default function AdminPageShell({ children }: AdminPageShellProps) {
+  const { t } = useTranslation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const navMode = useUiPrefsStore((s) => s.navMode)
+
+  // Maintient l'enregistrement web-push et le polling des nouvelles
+  // notifications actifs sur toutes les pages d'administration.
+  useDesktopNotifications()
 
   const showSidebar = navMode !== 'fab'
   const showFab = navMode !== 'sidebar'
@@ -41,13 +48,13 @@ export default function AdminPageShell({ children }: AdminPageShellProps) {
             <button
               onClick={() => setMobileOpen(true)}
               className="p-2 -ml-2 rounded-md text-warm-600 hover:text-ink hover:bg-warm-100"
-              aria-label="Ouvrir la navigation"
+              aria-label={t('adminShell.openNav')}
             >
               <MenuIcon size={20} />
             </button>
             <Link to="/admin/dashboard" className="flex items-center gap-2">
               <img src={mark} alt="" className="h-7 w-7" />
-              <span className="text-body-s font-bold text-ink">Admin</span>
+              <span className="text-body-s font-bold text-ink">{t('adminShell.adminLabel')}</span>
             </Link>
           </div>
         )}
@@ -56,6 +63,7 @@ export default function AdminPageShell({ children }: AdminPageShellProps) {
       </div>
 
       {showFab && <AdminQuickNav />}
+
     </div>
   )
 }

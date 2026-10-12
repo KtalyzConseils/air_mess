@@ -12,7 +12,7 @@ import {
   CheckIcon,
   BellIcon,
 } from '../../components/ui/icons'
-import { fetchNotifications, markNotificationRead, type AppNotification } from '../../api/notifications'
+import { fetchNotifications, markAllNotificationsRead, markNotificationRead, type AppNotification } from '../../api/notifications'
 
 type IconKey =
   | 'alert'
@@ -87,6 +87,23 @@ export default function AdminNotificationsPage() {
     },
   })
 
+  const markAllRead = useMutation({
+    mutationFn: markAllNotificationsRead,
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['notifications'] })
+      const previous = queryClient.getQueryData<typeof data>(['notifications'])
+      queryClient.setQueryData<typeof data>(['notifications'], (current) => current && {
+        ...current,
+        data: current.data.map((notification) => ({ ...notification, read_at: new Date().toISOString() })),
+      })
+      return { previous }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(['notifications'], context.previous)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+
   const notifications: AppNotification[] = data?.data ?? []
   const unreadCount = notifications.filter((n) => n.read_at === null).length
 
@@ -96,9 +113,7 @@ export default function AdminNotificationsPage() {
   }
 
   function handleMarkAllRead() {
-    notifications
-      .filter((n) => n.read_at === null)
-      .forEach((n) => markRead.mutate(n.id))
+    if (unreadCount > 0 && !markAllRead.isPending) markAllRead.mutate()
   }
 
   return (
@@ -112,8 +127,10 @@ export default function AdminNotificationsPage() {
         }
         actions={
           unreadCount > 0 ? (
-            <AdminButton variant="primary" onClick={handleMarkAllRead}>
-              {t('admin.notifications.markAllReadCount', { count: unreadCount })}
+            <AdminButton variant="primary" onClick={handleMarkAllRead} disabled={markAllRead.isPending}>
+              {markAllRead.isPending
+                ? t('admin.notifications.markingAllRead')
+                : t('admin.notifications.markAllReadCount', { count: unreadCount })}
             </AdminButton>
           ) : null
         }

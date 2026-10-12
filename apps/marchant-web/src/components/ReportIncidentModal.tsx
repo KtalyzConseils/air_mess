@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
+import { useTranslation } from 'react-i18next'
 import Card from './ui/Card'
 import Button from './ui/Button'
 import {
@@ -23,6 +24,7 @@ export default function ReportIncidentModal({
   courseReference: string
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [type, setType] = useState<MarchandIncidentType | ''>('')
   const [description, setDescription] = useState('')
@@ -39,8 +41,8 @@ export default function ReportIncidentModal({
     onError: (err) => {
       const msg =
         err instanceof AxiosError
-          ? err.response?.data?.message ?? 'Erreur lors du signalement.'
-          : 'Erreur inattendue.'
+          ? err.response?.data?.message ?? t('reportIncident.submitError')
+          : t('reportIncident.unexpectedError')
       setError(msg)
     },
   })
@@ -48,11 +50,11 @@ export default function ReportIncidentModal({
   function submit() {
     setError(null)
     if (!type) {
-      setError('Choisissez un type d\'incident.')
+      setError(t('reportIncident.chooseType'))
       return
     }
     if (description.trim().length < 10) {
-      setError('La description doit contenir au moins 10 caractères.')
+      setError(t('reportIncident.descriptionTooShort'))
       return
     }
     mutation.mutate()
@@ -61,38 +63,38 @@ export default function ReportIncidentModal({
   return (
     <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 ams-anim-fade-in">
       <Card variant="signature" padding="lg" className="max-w-md w-full ams-anim-scale-in">
-        <h3 className="text-h2 text-ink font-bold">Signaler un incident</h3>
+        <h3 className="text-h2 text-ink font-bold">{t('reportIncident.title')}</h3>
         <p className="text-body-s text-warm-500 mt-1 mb-5">
-          Sur la course <span className="font-mono text-ink">{courseReference}</span>.
-          L'équipe ops recevra votre signalement immédiatement.
+          {t('reportIncident.onCourse')} <span className="font-mono text-ink">{courseReference}</span>.
+          {' '}{t('reportIncident.opsWillReceive')}
         </p>
 
         <label className="block text-caption uppercase text-warm-500 tracking-widest font-bold mb-1.5">
-          Type d'incident <span className="text-airmess-red">*</span>
+          {t('reportIncident.incidentType')} <span className="text-airmess-red">*</span>
         </label>
         <select
           value={type}
           onChange={(e) => setType(e.target.value as MarchandIncidentType | '')}
           className="w-full mb-4 bg-off-white border-2 border-warm-200 rounded-md px-3 py-2.5 text-body focus:outline-none focus:border-airmess-yellow"
         >
-          <option value="">— Choisir —</option>
-          {MARCHAND_INCIDENT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
+          <option value="">{t('reportIncident.choose')}</option>
+          {MARCHAND_INCIDENT_TYPES.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
 
         <label className="block text-caption uppercase text-warm-500 tracking-widest font-bold mb-1.5">
-          Décrivez ce qui s'est passé <span className="text-airmess-red">*</span>
+          {t('reportIncident.describe')} <span className="text-airmess-red">*</span>
         </label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
-          placeholder="Ex : le destinataire a reçu son colis avec l'écran cassé, il refuse de le garder. Photo en pièce jointe par WhatsApp."
+          placeholder={t('reportIncident.descriptionPlaceholder')}
           className="w-full mb-2 bg-off-white border-2 border-warm-200 rounded-md px-3 py-2.5 text-body-s focus:outline-none focus:border-airmess-yellow"
         />
         <p className="text-caption text-warm-500 mb-4">
-          Plus la description est précise, plus l'arbitrage est rapide.
+          {t('reportIncident.descriptionHint')}
         </p>
 
         {error && (
@@ -106,7 +108,7 @@ export default function ReportIncidentModal({
 
         <div className="flex justify-end gap-3">
           <Button variant="secondary" size="md" onClick={onClose} disabled={mutation.isPending}>
-            Annuler
+            {t('reportIncident.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -115,7 +117,7 @@ export default function ReportIncidentModal({
             onClick={submit}
             loading={mutation.isPending}
           >
-            Envoyer le signalement
+            {t('reportIncident.submit')}
           </Button>
         </div>
       </Card>

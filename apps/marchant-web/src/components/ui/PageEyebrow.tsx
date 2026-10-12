@@ -10,7 +10,7 @@ interface Props {
 }
 
 /**
- * Eyebrow standard d'une page Air Mess.
+ * Eyebrow standard d'une page AirMess.
  *
  * Un petit diamant jaune (rotation 45° d'un carré) à gauche du label en uppercase.
  * Le diamant est un écho de la forme géométrique de l'aile du logo — brand sans

@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CloseIcon } from '../ui/icons'
 
 interface AdminModalProps {
@@ -28,6 +29,7 @@ export default function AdminModal({
   width = 'md',
   children,
 }: AdminModalProps) {
+  const { t } = useTranslation()
   useEffect(() => {
     if (!open) return
     const original = document.body.style.overflow
@@ -75,7 +77,7 @@ export default function AdminModal({
           <button
             onClick={onClose}
             className="p-1.5 -m-1 rounded-md text-warm-500 hover:text-ink hover:bg-warm-100 shrink-0"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             <CloseIcon size={18} />
           </button>

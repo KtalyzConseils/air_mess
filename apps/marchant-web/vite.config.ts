@@ -11,7 +11,7 @@ export default defineConfig({
     // l'app installée s'ouvre sur /dashboard ; l'admin reste un simple site.
     VitePWA({
       registerType: 'prompt', // mise à jour via toast "Recharger" (jamais de reload sauvage)
-      includeAssets: ['favicon.svg', 'favicon.ico', 'apple-touch-icon-180x180.png'],
+      includeAssets: ['favicon-16x16.png', 'favicon-32x32.png', 'favicon.ico', 'apple-touch-icon.png', 'android-chrome-192x192.png', 'android-chrome-512x512.png'],
       manifest: {
         name: 'Air Mess',
         short_name: 'Air Mess',
@@ -24,9 +24,10 @@ export default defineConfig({
         theme_color: '#1A1614',
         background_color: '#FAF7F0',
         icons: [
-          { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+          { src: 'favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+          { src: 'android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'android-chrome-512x512.png', sizes: '512x512', type: 'image/png' },
           { src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
