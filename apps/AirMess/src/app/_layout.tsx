@@ -15,6 +15,7 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans'
 import BrandSplash from '../components/BrandSplash'
 import { installNotificationRouting, registerPushNotifications } from '../lib/notifications'
+import { usePermissionPrompt } from '../hooks/usePermissionPrompt'
 import { useAuthStore } from '../stores/authStore'
 import { useLanguageStore } from '../stores/languageStore'
 import { useThemeStore } from '../stores/themeStore'
@@ -39,6 +40,7 @@ export default function RootLayout() {
   const hydrateTheme = useThemeStore((state) => state.hydrate)
   const themeHydrated = useThemeStore((state) => state.hydrated)
   const theme = useThemeStore((state) => state.theme)
+  const { ensure: ensureNotifications, sheet: notificationsSheet } = usePermissionPrompt('notifications')
   const [minElapsed, setMinElapsed] = useState(false)
   const [fontsLoaded] = useFonts({
     PlusJakartaSans_400Regular,
@@ -62,10 +64,23 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!user) return
-    void registerPushNotifications().catch((error) => {
-      console.warn('[push] Enregistrement impossible :', error)
-    })
-  }, [user])
+    let cancelled = false
+
+    void (async () => {
+      // On explique d'abord (écran dédié), puis on demande, puis on enregistre
+      // le token. Aucun prompt système silencieux.
+      const granted = await ensureNotifications()
+      if (cancelled || !granted) return
+
+      await registerPushNotifications().catch((error) => {
+        console.warn('[push] Enregistrement impossible :', error)
+      })
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user, ensureNotifications])
 
   useEffect(() => {
     return installNotificationRouting()
@@ -103,6 +118,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <Stack screenOptions={{ headerShown: false }} />
       </QueryClientProvider>
+      {notificationsSheet}
     </KeyboardProvider>
   )
 }

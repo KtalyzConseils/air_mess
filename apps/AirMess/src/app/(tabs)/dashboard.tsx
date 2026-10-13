@@ -9,6 +9,7 @@ import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { fetchCourses, type Course } from '../../api/courses'
 import { fetchUnreadCount } from '../../api/notifications'
+import { usePermissionPrompt } from '../../hooks/usePermissionPrompt'
 import { useLanguageStore } from '../../stores/languageStore'
 
 const DASHBOARD_COPY = {
@@ -134,6 +135,7 @@ function Header() {
   const [positionLabel, setPositionLabel] = useState<string>(copy.yourPosition)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState(false)
+  const { ensure: ensureLocation, sheet: locationSheet } = usePermissionPrompt('location')
   const { data: unread = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: fetchUnreadCount,
@@ -145,8 +147,9 @@ function Header() {
     setLocationError(false)
 
     try {
-      const permission = await Location.requestForegroundPermissionsAsync()
-      if (permission.status !== 'granted') {
+      // Ecran d'explication avant le prompt systeme (voir usePermissionPrompt).
+      // Ici l'utilisateur a appuye sur le bouton : demande explicite.
+      if (!(await ensureLocation({ explicit: true }))) {
         setLocationError(true)
         setPositionLabel(copy.locationDenied)
         return
@@ -172,7 +175,7 @@ function Header() {
     } finally {
       setLocating(false)
     }
-  }, [copy])
+  }, [copy, ensureLocation])
 
   return (
     <View className="mb-5">
@@ -245,6 +248,7 @@ function Header() {
         </Text>
         <Ionicons name="chevron-forward" size={15} color="#8A7E68" style={{ marginLeft: 4 }} />
       </Pressable>
+      {locationSheet}
     </View>
   )
 }

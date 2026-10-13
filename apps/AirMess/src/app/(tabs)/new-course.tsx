@@ -11,6 +11,7 @@ import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { getPaymentCallbackUrl } from '../../lib/payment'
+import { usePermissionPrompt } from '../../hooks/usePermissionPrompt'
 import { useAuthStore } from '../../stores/authStore'
 import { useLanguageStore, type AppLanguage } from '../../stores/languageStore'
 import { getApiErrorMessage } from '../../lib/apiError'
@@ -251,6 +252,7 @@ export default function NewCourseScreen() {
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
+  const { ensure: ensureLocation, sheet: locationSheet } = usePermissionPrompt('location')
   const [draft, setDraft] = useState<LocationDraft>({
     originName: user?.marchant?.raison_sociale ?? user?.name ?? '',
     originPhone: user?.phone ?? '',
@@ -314,16 +316,21 @@ export default function NewCourseScreen() {
   }, [user])
 
   useEffect(() => {
-    void useCurrentLocation()
+    // On explique l'usage de la position avant tout prompt systeme, puis on
+    // pre-remplit la prise en charge.
+    void (async () => {
+      if (await ensureLocation()) await detectCurrentLocation()
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const useCurrentLocation = async () => {
+  const detectCurrentLocation = async (explicit = false) => {
     setLocating(true)
     setLocationError(null)
     try {
-      const permission = await Location.requestForegroundPermissionsAsync()
-      if (permission.status !== 'granted') {
+      // Ecran d'explication a la premiere demande, puis prompt systeme
+      // uniquement si l'utilisateur declenche l'action lui-meme.
+      if (!(await ensureLocation({ explicit }))) {
         setLocationError(copy.locationPermissionDenied)
         return
       }
@@ -627,7 +634,7 @@ export default function NewCourseScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={useCurrentLocation}
+                  onPress={() => void detectCurrentLocation(true)}
                   className="ml-2 h-9 w-9 items-center justify-center rounded-full bg-warm-100"
                   accessibilityRole="button"
                   accessibilityLabel={copy.useMyPosition}
@@ -1038,6 +1045,7 @@ export default function NewCourseScreen() {
           </Button>
         </View>
       )}
+      {locationSheet}
     </Screen>
   )
 }

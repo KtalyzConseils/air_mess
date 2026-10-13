@@ -26,6 +26,36 @@ if (Notifications) {
   })
 }
 
+export interface NotificationPermissionState {
+  granted: boolean
+  canAskAgain: boolean
+  /** Jamais demandee (ni par l'app, ni par le systeme). */
+  undetermined: boolean
+}
+
+/**
+ * Etat courant de la permission notifications, sans jamais afficher de prompt.
+ * Renvoie un etat "refuse" quand le module natif est absent (Expo Go).
+ */
+export async function getNotificationPermission(): Promise<NotificationPermissionState> {
+  if (!Notifications) return { granted: false, canAskAgain: false, undetermined: false }
+
+  const { status, canAskAgain } = await Notifications.getPermissionsAsync()
+  return {
+    granted: status === 'granted',
+    canAskAgain,
+    undetermined: status === 'undetermined',
+  }
+}
+
+/** Declenche le prompt systeme. A appeler uniquement derriere l'ecran d'explication. */
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (!Notifications) return false
+
+  const { status } = await Notifications.requestPermissionsAsync()
+  return status === 'granted'
+}
+
 export async function registerPushNotifications() {
   if (!Notifications) return null
   if (!Device.isDevice || (Platform.OS !== 'android' && Platform.OS !== 'ios')) return null
@@ -40,12 +70,13 @@ export async function registerPushNotifications() {
     })
   }
 
-  const existing = await Notifications.getPermissionsAsync()
-  const permission = existing.status === 'granted'
-    ? existing
-    : await Notifications.requestPermissionsAsync()
+  // Une seule source de verite : l'ecran d'explication utilise
+  // getNotificationPermission / requestNotificationPermission.
+  const granted = (await getNotificationPermission()).granted
+    ? true
+    : await requestNotificationPermission()
 
-  if (permission.status !== 'granted') return null
+  if (!granted) return null
 
   if (!projectId) {
     console.warn('[push] Project ID Expo introuvable, token non enregistre.')
