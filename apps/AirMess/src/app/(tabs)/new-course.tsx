@@ -66,6 +66,8 @@ const NEW_COURSE_COPY = {
     missingBoth: 'la prise en charge et la destination',
     missingOrigin: 'la prise en charge',
     missingDestination: 'la destination',
+    locationIncomplete:
+      "Complete la prise en charge (nom, telephone, adresse), puis le destinataire, pour continuer.",
     title: 'Nouvelle course',
     stepPackage: 'Colis',
     stepTrip: 'Trajet',
@@ -102,8 +104,9 @@ const NEW_COURSE_COPY = {
     standardSubtitle: 'Livraison normale',
     express: 'Express',
     expressSubtitle: 'Prioritaire',
-    packageDescription: 'Description du colis (optionnel)',
-    packageDescriptionPlaceholder: 'Ex: petit paquet, repas, documents...',
+    packageDescription: 'Description du colis',
+    packageDescriptionPlaceholder: 'Ex: 2 pizzas, un pli urgent, des medicaments...',
+    packageDescriptionRequired: 'Decris le colis : le livreur en a besoin pour le transport.',
     merchantPhoneSecondary: 'Second numero a joindre (marchand)',
     advancedOptions: 'Options avancees',
     advancedOptionsSubtitle: 'Valeur et paiement de la livraison',
@@ -154,6 +157,8 @@ const NEW_COURSE_COPY = {
     missingBoth: 'the pickup and the destination',
     missingOrigin: 'the pickup',
     missingDestination: 'the destination',
+    locationIncomplete:
+      'Complete the pickup (name, phone, address), then the recipient, to continue.',
     title: 'New delivery',
     stepPackage: 'Package',
     stepTrip: 'Trip',
@@ -190,8 +195,9 @@ const NEW_COURSE_COPY = {
     standardSubtitle: 'Regular delivery',
     express: 'Express',
     expressSubtitle: 'Priority',
-    packageDescription: 'Package description (optional)',
-    packageDescriptionPlaceholder: 'Ex: small package, meal, documents...',
+    packageDescription: 'Package description',
+    packageDescriptionPlaceholder: 'Ex: 2 pizzas, an urgent envelope, medicine...',
+    packageDescriptionRequired: 'Describe the package: the courier needs it for transport.',
     merchantPhoneSecondary: 'Second number to reach (merchant)',
     advancedOptions: 'Advanced options',
     advancedOptionsSubtitle: 'Value and delivery payment',
@@ -239,7 +245,9 @@ export default function NewCourseScreen() {
   const { addressId } = useLocalSearchParams<{ addressId?: string }>()
   const [step, setStep] = useState<Step>('package')
   const [selectedPackage, setSelectedPackage] = useState<PackageType | null>(null)
-  const [locationTarget, setLocationTarget] = useState<LocationTarget>('destination')
+  // On ouvre toujours le trajet sur l'expediteur : c'est la prise en charge qui
+  // doit etre completee avant de passer au destinataire.
+  const [locationTarget, setLocationTarget] = useState<LocationTarget>('origin')
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -263,7 +271,8 @@ export default function NewCourseScreen() {
     packageDescription: '',
     urgency: 'standard',
     packageDeclaredValue: '',
-    deliveryFeePaidBy: 'sender',
+    // Defaut metier aligne sur la web (main) : le destinataire paie la livraison.
+    deliveryFeePaidBy: 'recipient',
   })
 
   const { data: addresses = [] } = useQuery({
@@ -346,6 +355,14 @@ export default function NewCourseScreen() {
 
   const handleSelectPackage = (item: PackageType) => {
     setSelectedPackage(item)
+    // Comme la web : la description part de la vignette choisie (sauf "Autre"),
+    // l'utilisateur peut la remplacer. Le champ reste obligatoire.
+    if (item.id !== 'other') {
+      setDraft((current) => ({
+        ...current,
+        packageDescription: current.packageDescription.trim() || item.title,
+      }))
+    }
     setStep('location')
   }
 
@@ -361,6 +378,8 @@ export default function NewCourseScreen() {
         originLat: place.lat,
         originLng: place.lng,
       }))
+      // Prise en charge renseignee : on enchaine sur le destinataire.
+      setLocationTarget('destination')
       return
     }
 
@@ -392,10 +411,13 @@ export default function NewCourseScreen() {
     !!selectedPackage &&
     draft.originName.trim().length >= 2 &&
     draft.originPhone.trim().length >= 4 &&
+    // L'API exige origin_quartier : sans adresse ni quartier de prise en charge,
+    // la creation echoue plus loin (422). On bloque donc des cette etape.
+    (draft.originAddress.trim().length >= 2 || draft.originQuartier.trim().length >= 2) &&
     draft.destinationAddress.trim().length >= 2 &&
     draft.destinationName.trim().length >= 2 &&
     draft.destinationPhone.trim().length >= 4
-  const canContinueDetails = true
+  const canContinueDetails = draft.packageDescription.trim().length >= 3
   const packageCategory = categories.find((category) => category.code === selectedPackage?.categoryCode)
   const canCreateCourse =
     canContinueLocation &&
@@ -404,7 +426,7 @@ export default function NewCourseScreen() {
     hasDestinationCoords &&
     !!packageCategory
   const estimateQuery = useQuery({
-    queryKey: ['course-estimate', originLat, originLng, destinationLat, destinationLng, draft.urgency],
+    queryKey: ['course-estimate', originLat, originLng, destinationLat, destinationLng, draft.urgency, draft.deliveryFeePaidBy],
     queryFn: () =>
       estimateCourseFee({
         origin_lat: originLat,
@@ -412,6 +434,9 @@ export default function NewCourseScreen() {
         destination_lat: destinationLat,
         destination_lng: destinationLng,
         urgency: draft.urgency,
+        // Sans ce champ, l'API suppose "destinataire" et n'applique pas le
+        // bonus de premiere course quand le marchand paie.
+        delivery_fee_paid_by: draft.deliveryFeePaidBy,
       }),
     enabled: hasOriginCoords && hasDestinationCoords,
     staleTime: 30_000,
@@ -421,7 +446,7 @@ export default function NewCourseScreen() {
   const resetForm = () => {
     setStep('package')
     setSelectedPackage(null)
-    setLocationTarget('destination')
+    setLocationTarget('origin')
     setLocationError(null)
     setCreateError(null)
     setShowAddressBook(false)
@@ -445,7 +470,7 @@ export default function NewCourseScreen() {
       packageDescription: '',
       urgency: 'standard',
       packageDeclaredValue: '',
-      deliveryFeePaidBy: 'sender',
+      deliveryFeePaidBy: 'recipient',
     })
   }
 
@@ -780,6 +805,12 @@ export default function NewCourseScreen() {
             </Card>
           )}
 
+          {!canContinueLocation && (
+            <Text className="mb-3 text-sm font-semibold text-warm-600 dark:text-[#AEB6C5]">
+              {copy.locationIncomplete}
+            </Text>
+          )}
+
           <Button
             onPress={() => setStep('details')}
             disabled={!canContinueLocation}
@@ -827,7 +858,7 @@ export default function NewCourseScreen() {
               />
             </View>
 
-            <FieldLabel>{copy.packageDescription}</FieldLabel>
+            <FieldLabel required>{copy.packageDescription}</FieldLabel>
             <TextInput
               value={draft.packageDescription}
               onChangeText={(value) => setDraft((current) => ({ ...current, packageDescription: value }))}
@@ -837,6 +868,14 @@ export default function NewCourseScreen() {
               multiline
               textAlignVertical="top"
             />
+            <Text
+              className={[
+                'mt-1.5 text-xs font-semibold',
+                canContinueDetails ? 'text-warm-500' : 'text-airmess-red',
+              ].join(' ')}
+            >
+              {canContinueDetails ? copy.packageDescriptionPlaceholder : copy.packageDescriptionRequired}
+            </Text>
 
             <FieldLabel>{copy.merchantPhoneSecondary}</FieldLabel>
             <CourseInput

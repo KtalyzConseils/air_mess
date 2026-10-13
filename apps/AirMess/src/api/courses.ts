@@ -90,6 +90,12 @@ export interface EstimateFeeParams {
   destination_lat: number
   destination_lng: number
   urgency?: 'standard' | 'express'
+  /**
+   * Le premier-course (bonus de bienvenue) ne s'applique qu'aux courses
+   * payees par le marchand via son wallet : sans ce champ, l'estimation
+   * affiche le tarif plein et ne correspond plus au montant facture.
+   */
+  delivery_fee_paid_by?: 'sender' | 'recipient'
 }
 
 export async function estimateCourseFee(params: EstimateFeeParams): Promise<CourseFeeEstimate> {
