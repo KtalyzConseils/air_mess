@@ -287,7 +287,10 @@ class DriverController extends Controller
        //PUSH au marchand expéditeur
         $notifier->sendToUser(
             $course->sender_id,
-            'course.assigned',
+            // Type attendu par la web marchand (table d'icônes de
+            // NotificationsPage) et par PushOnAcceptTest : ne pas renommer
+            // sans mettre à jour le client.
+            'course.accepted',
             '✅ Votre course est acceptée',
             "{$driver->first_name} arrive. 🔑 Code de retrait : {$course->pickup_code}",
             [
@@ -757,10 +760,6 @@ class DriverController extends Controller
 
         //PUSH au marchand sur les transitions visibles côté client
         $isReturnConfirmation = $data['action'] === 'return_confirmed';
-        $skipMerchantPushStatuses = [
-            Course::STATUS_TO_PICKUP,
-            Course::STATUS_PICKED_UP,
-        ];
         $messages = [
             Course::STATUS_TO_PICKUP   => ['🚀 Le livreur est en route',  'Il se dirige vers le point de retrait.'],
             Course::STATUS_AT_PICKUP   => ['📍 Le livreur est arrivé',    'Il prépare le retrait du colis.'],
@@ -772,7 +771,10 @@ class DriverController extends Controller
                 : ['⚠️ Livraison échouée',    'Le livreur signale un problème. Voir détails.'],
         ];
 
-        if (! in_array($nextStatus, $skipMerchantPushStatuses, true) && isset($messages[$nextStatus])) {
+        // Toutes les étapes visibles par le marchand sont poussées, y compris
+        // "le livreur est en route" et "colis récupéré" : ce sont les deux
+        // informations qu'il attend le plus. (PushOnTransitionTest le vérifie.)
+        if (isset($messages[$nextStatus])) {
             [$title, $body] = $messages[$nextStatus];
             $notifier->sendToUser(
                 $course->sender_id,

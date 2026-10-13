@@ -428,7 +428,15 @@ class UserWalletController extends Controller
                 'wallet.deposited',
                 'Wallet rechargé',
                 number_format((int) $fresh->amount_fcfa, 0, ',', ' ') . ' FCFA ont été ajoutés à votre wallet.',
-                ['payment_id' => $fresh->id, 'amount' => (int) $fresh->amount_fcfa],
+                // `screen` est ce que lit l'app marchand pour ouvrir le wallet
+                // au tap : sans lui, la notif ouvre la liste des notifications.
+                [
+                    'app'        => 'merchant',
+                    'screen'     => 'wallet',
+                    'icon'       => 'wallet-outline',
+                    'payment_id' => $fresh->id,
+                    'amount'     => (int) $fresh->amount_fcfa,
+                ],
             );
         });
 

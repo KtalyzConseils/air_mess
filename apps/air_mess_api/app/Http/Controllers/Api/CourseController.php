@@ -187,8 +187,8 @@ class CourseController extends Controller
             $notifier->sendToUser(
                 $course->sender_id,
                 'course.created',
-                'Course creee',
-                "Votre course {$course->reference} est enregistree. Nous cherchons un livreur disponible.",
+                '✅ Course créée',
+                "Votre course {$course->reference} est enregistrée. Nous cherchons un livreur disponible.",
                 [
                     'app'       => 'merchant',
                     'screen'    => 'course_detail',
