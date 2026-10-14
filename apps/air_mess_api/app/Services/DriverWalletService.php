@@ -54,40 +54,70 @@ class DriverWalletService
     }
 
     /**
-     * Retire une partie de la caution du driver. Appelé :
-     *  - depuis AdminController après validation admin (mode admin_approval) — adminId renseigné
-     *  - depuis DriverController quand driver_payout_mode=instant (self-service) — adminId=null
-     * Le virement réel MoMo est initié ensuite via WalletWithdrawPayoutInitiator (Fedapay).
+     * Vérifie qu'un retrait peut être RÉSERVÉ (pas débité) sur la caution. Appelé
+     * juste avant de passer une demande en approved :
+     *  - AdminController à la validation admin (mode admin_approval)
+     *  - DriverController en self-service (driver_payout_mode=instant)
+     *
+     * DOIT être appelé dans une DB::transaction englobant le passage en approved :
+     * le lockForUpdate sérialise les réservations concurrentes sur un même wallet.
+     * Le débit réel n'a lieu qu'à la confirmation du virement (settleWithdraw).
      *
      * @throws \InvalidArgumentException si $amount <= 0 (bug d'appelant)
-     * @throws \DomainException          si règle métier violée (solde, busy, min)
+     * @throws \DomainException          si règle métier violée (disponible, busy, min)
      */
-    public function withdraw(Driver $driver, int $amount, ?int $adminId, string $reason): WalletTransaction
+    public function assertCanReserveWithdraw(Driver $driver, int $amount): void
     {
-        // 1. Sanity (bug d'appelant)
         if ($amount <= 0) {
             throw new \InvalidArgumentException("Withdraw amount must be > 0, got {$amount}.");
         }
 
-        // 2. Métier : retrait minimum (frais MoMo/banque)
         $minWithdraw = (int) AppSetting::get('driver_min_withdraw_fcfa', 500);
         if ($amount < $minWithdraw) {
             throw new \DomainException("Retrait minimum: {$minWithdraw} FCFA.");
         }
 
-        // 3. Métier : pas de retrait pendant une course active
         if ($driver->availability_status === 'busy') {
             throw new \DomainException('Retrait impossible : ce livreur a une course en cours.');
         }
 
-        $transaction = DB::transaction(function () use ($driver, $amount, $adminId, $reason) {
-            $wallet = DriverWallet::where('driver_id', $driver->id)
+        $wallet = DriverWallet::where('driver_id', $driver->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        // Disponible = balance − retraits déjà en vol (vérifié SOUS le lock)
+        $available = $wallet->available();
+        if ($amount > $available) {
+            throw new \DomainException("Solde insuffisant : disponible={$available}, demandé={$amount}.");
+        }
+    }
+
+    /**
+     * Débite la caution UNE FOIS le virement confirmé (webhook FedaPay `sent`
+     * ou « Marquer comme viré » admin). L'argent a déjà quitté AirMess : pas de
+     * contrôle busy/min ici, seulement le plancher balance >= 0.
+     *
+     * Idempotent : si un débit existe déjà pour ce retrait (y compris un débit
+     * historique posé à l'approbation avant ce modèle), il est retourné tel quel.
+     *
+     * @throws \DomainException si la balance ne couvre plus le montant (anomalie)
+     */
+    public function settleWithdraw(\App\Models\WalletWithdrawRequest $withdraw): WalletTransaction
+    {
+        $existing = $this->findWithdrawDebit($withdraw);
+        if ($existing) {
+            return $existing;
+        }
+
+        $amount = (int) $withdraw->amount_fcfa;
+
+        $transaction = DB::transaction(function () use ($withdraw, $amount) {
+            $wallet = DriverWallet::where('driver_id', $withdraw->driver_id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // 4. Métier : solde suffisant (vérifié SOUS le lock pour éviter race)
             if ($amount > $wallet->balance) {
-                throw new \DomainException("Solde insuffisant : balance={$wallet->balance}, demandé={$amount}.");
+                throw new \DomainException("Débit du retrait #{$withdraw->id} impossible : balance={$wallet->balance}, montant={$amount}.");
             }
 
             $wallet->balance         -= $amount;
@@ -95,18 +125,37 @@ class DriverWalletService
             $wallet->save();
 
             return WalletTransaction::create([
-                'driver_id'     => $driver->id,
+                'driver_id'     => $withdraw->driver_id,
                 'type'          => WalletTransaction::TYPE_WITHDRAW,
                 'amount_fcfa'   => -$amount, // signe négatif (CHECK Postgres)
                 'balance_after' => $wallet->balance,
                 'metadata'      => [
-                    'admin_id' => $adminId,
-                    'reason'   => $reason,
+                    'admin_id'    => $withdraw->paid_by_admin_id ?? $withdraw->decided_by_admin_id,
+                    'withdraw_id' => $withdraw->id,
+                    'reason'      => "Payout confirmed for withdraw request #{$withdraw->id}",
                 ],
             ]);
         });
 
         return $this->recordAccounting($transaction);
+    }
+
+    /**
+     * Débit déjà posé pour ce retrait. Couvre le nouveau format (metadata.withdraw_id)
+     * et les débits historiques posés à l'approbation (raison libellée avec l'id).
+     */
+    public function findWithdrawDebit(\App\Models\WalletWithdrawRequest $withdraw): ?WalletTransaction
+    {
+        return WalletTransaction::where('driver_id', $withdraw->driver_id)
+            ->where('type', WalletTransaction::TYPE_WITHDRAW)
+            ->where(function ($q) use ($withdraw) {
+                $q->whereJsonContains('metadata->withdraw_id', $withdraw->id)
+                  ->orWhereIn('metadata->reason', [
+                      "Approval of withdraw request #{$withdraw->id}",
+                      "Instant self-service withdraw #{$withdraw->id}",
+                  ]);
+            })
+            ->first();
     }
 
     /**
@@ -390,9 +439,10 @@ class DriverWalletService
     }
 
     /**
-     * Refund automatique du wallet driver quand Fedapay a définitivement échoué
-     * le payout (webhook payout.failed/canceled/declined). L'argent est restitué
-     * au driver — l'admin verra la trace dans wallet_transactions.
+     * Payout FedaPay définitivement échoué : restitue la caution SEULEMENT si un
+     * débit a réellement été posé (demandes historiques débitées à l'approbation).
+     * Avec le modèle actuel (débit à la confirmation), rien n'a été débité : no-op,
+     * la réservation est libérée par le simple marquage payout_failed_at.
      *
      * Idempotent : si un refund existe déjà pour ce withdraw (metadata match),
      * la méthode est no-op — le webhook Fedapay peut être renvoyé plusieurs fois.
@@ -409,6 +459,9 @@ class DriverWalletService
             ->first();
         if ($existing) {
             return $existing;
+        }
+        if (! $this->findWithdrawDebit($withdraw)) {
+            return null; // jamais débité → rien à restituer
         }
 
         $amount = (int) $withdraw->amount_fcfa;

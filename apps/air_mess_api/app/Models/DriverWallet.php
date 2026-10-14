@@ -46,11 +46,20 @@ class DriverWallet extends Model
     }
 
     /**
+     * Caution réellement utilisable : balance moins les retraits en vol
+     * (réservés en attendant la confirmation FedaPay, pas encore débités).
+     */
+    public function available(): int
+    {
+        return (int) $this->balance - WalletWithdrawRequest::reservedForDriver((int) $this->driver_id);
+    }
+
+    /**
      * Vrai si le driver a assez de caution disponible pour accepter une course
      * avec un encaissement de $collectionAmount FCFA.
      */
     public function canCoverCollection(int $collectionAmount): bool
     {
-        return $this->balance >= $collectionAmount;
+        return $this->available() >= $collectionAmount;
     }
 }

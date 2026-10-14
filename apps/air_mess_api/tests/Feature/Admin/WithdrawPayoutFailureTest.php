@@ -19,7 +19,7 @@ use Tests\TestCase;
  * recevait « versement en cours » alors que rien n'était parti — argent débité, aucun virement.
  *
  * Ces tests verrouillent le comportement attendu : un échec FedaPay est remonté tel quel
- * (approbation ET retentative), le wallet n'est débité qu'une fois, et aucun état « payé »
+ * (approbation ET retentative), le wallet n'est pas débité sans virement confirmé, et aucun état « payé »
  * n'est écrit sans confirmation de la part du fournisseur.
  */
 class WithdrawPayoutFailureTest extends TestCase
@@ -78,13 +78,14 @@ class WithdrawPayoutFailureTest extends TestCase
         $this->assertNull($fresh->paid_at);
         $this->assertStringContainsString('403', (string) $fresh->payout_failure_reason);
 
-        // Débit unique, malgré l'échec du virement : le montant reste à verser par l'ops.
+        // Aucun débit : le wallet n'est débité qu'à la confirmation du virement
+        // (webhook FedaPay `sent` ou « Marquer comme viré » après virement manuel).
         $this->assertSame(
-            40_000,
+            50_000,
             (int) DriverWallet::where('driver_id', $driver->id)->value('balance'),
         );
         $this->assertSame(
-            1,
+            0,
             WalletTransaction::where('driver_id', $driver->id)
                 ->where('type', WalletTransaction::TYPE_WITHDRAW)
                 ->count(),

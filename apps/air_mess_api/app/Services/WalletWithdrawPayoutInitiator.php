@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\Log;
  *
  * Idempotent : si le payout a déjà été initié avec succès (payout_initiated_at
  * ET pas de payout_failed_at), la méthode est no-op — le webhook Fedapay se
- * chargera de la transition finale (paid_at / status=failed).
+ * chargera de la transition finale (débit wallet + paid_at, ou payout_failed_at).
+ *
+ * Aucun débit wallet ici : le montant est seulement réservé tant que FedaPay
+ * n'a pas confirmé le virement (cf. WalletWithdrawRequest::scopeInFlight).
  *
  * Ne pas appeler dans une transaction DB : l'appel Fedapay peut prendre plusieurs
  * secondes et on ne veut pas tenir un lock pendant ce temps.
@@ -56,7 +59,9 @@ class WalletWithdrawPayoutInitiator
         try {
             $payout = $this->fedapay->createPayout(
                 amountFcfa:    $withdraw->amount_fcfa,
-                mode:          'mtn', // sandbox accepte 'mtn' pour tester
+                // null = FedaPay détecte l'opérateur (MTN 'mtn_open', Moov 'moov', Celtiis 'sbin').
+                // L'ancien 'mtn' codé en dur n'est pas un mode valide en live.
+                mode:          config('services.fedapay.payout_mode') ?: null,
                 accountNumber: $withdraw->target_account,
                 customer:      $customer,
                 description:   $description,

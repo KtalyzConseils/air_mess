@@ -292,8 +292,15 @@ class SubscriptionController extends Controller
      * Webhook FedaPay pour les events payout.* (virements sortants).
      * Match le WalletWithdrawRequest via payout_provider_ref.
      *
-     *  - payout.approved/processed → remplit paid_at + external_payout_reference + notif driver
-     *  - payout.failed/canceled   → flag payout_failed_at + raison, admin peut retenter
+     * Le statut de l'entité fait foi (FedaPay : pending → started → processing →
+     * sent | failed) ; les noms d'événements historiques restent acceptés.
+     *  - sent   → DÉBIT du wallet (settleWithdraw) + paid_at + notif. C'est le
+     *             seul moment où le wallet est débité : avant, le montant est
+     *             seulement réservé.
+     *  - failed → payout_failed_at + raison : la réservation est libérée, aucun
+     *             débit n'a eu lieu (remboursement seulement pour les demandes
+     *             historiques débitées à l'approbation).
+     *  - autres (created, started, processing…) → ignorés, on attend l'issue.
      */
     private function handlePayoutWebhook(
         string $event,
@@ -309,8 +316,19 @@ class SubscriptionController extends Controller
             return response()->json(['message' => 'Inconnu.'], 200);
         }
 
-        // Idempotence : déjà payé via webhook ?
-        if ($withdraw->isPaid() && in_array($event, ['payout.approved', 'payout.processed'], true)) {
+        $status    = $tx['status'] ?? null;
+        $isSuccess = $status === 'sent'
+            || in_array($event, ['payout.sent', 'payout.approved', 'payout.processed'], true);
+        $isFailure = ! $isSuccess && (
+            in_array($status, ['failed', 'canceled', 'declined'], true)
+            || in_array($event, ['payout.failed', 'payout.canceled', 'payout.declined'], true)
+        );
+
+        // Idempotence : déjà payé ? (un échec tardif ne peut plus annuler un virement confirmé)
+        if ($withdraw->isPaid()) {
+            if ($isFailure) {
+                Log::warning('Fedapay payout webhook : échec reçu sur un retrait déjà payé', ['withdraw_id' => $withdraw->id, 'event' => $event]);
+            }
             return response()->json(['message' => 'Déjà traité.'], 200);
         }
 
@@ -318,40 +336,72 @@ class SubscriptionController extends Controller
             ? (int) $withdraw->driver->user_id
             : (int) $withdraw->user_id;
 
-        if (in_array($event, ['payout.approved', 'payout.processed'], true)) {
-            DB::transaction(function () use ($withdraw, $tx, $notifier, $notifyUserId) {
-                $withdraw->update([
-                    'paid_at'                  => now(),
-                    'external_payout_reference' => $tx['reference'] ?? ('fedapay:' . $tx['id']),
-                    'paid_by_admin_id'         => $withdraw->decided_by_admin_id, // payout auto = même admin qui a approuvé
-                    'payout_failed_at'         => null,
-                    'payout_failure_reason'    => null,
-                ]);
+        if ($isSuccess) {
+            try {
+                $paid = DB::transaction(function () use ($withdraw, $tx, $driverWallet, $userWallet) {
+                    // Verrou sur la demande : deux webhooks simultanés ne débitent qu'une fois.
+                    $locked = \App\Models\WalletWithdrawRequest::whereKey($withdraw->id)->lockForUpdate()->firstOrFail();
+                    if ($locked->isPaid()) {
+                        return false;
+                    }
 
-                $notifier->sendToUser(
-                    $notifyUserId,
-                    'wallet.withdraw_paid',
-                    'Virement effectué',
-                    "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA a été viré automatiquement.",
-                    [
-                        'app'         => $withdraw->isForDriver() ? 'driver' : 'merchant',
-                        'screen'      => 'wallet',
-                        'icon'        => 'wallet-outline',
-                        'withdraw_id' => $withdraw->id,
-                        'reference'   => $withdraw->external_payout_reference,
-                        'amount'      => (int) $withdraw->amount_fcfa,
-                    ],
-                    null,
-                );
-            });
-        } elseif (in_array($event, ['payout.failed', 'payout.canceled', 'payout.declined'], true)) {
-            // Marquage échec + refund AUTOMATIQUE du wallet (driver OU user marchand)
-            // — sinon l'argent reste débité alors que Fedapay a confirmé l'échec définitif.
-            // Idempotent : refund déjà émis pour ce withdraw → no-op via metadata match.
+                    if ($locked->isForDriver()) {
+                        $driverWallet->settleWithdraw($locked);
+                    } else {
+                        $userWallet->settleWithdraw($locked);
+                    }
+
+                    $locked->update([
+                        'paid_at'                   => now(),
+                        'external_payout_reference' => $tx['reference'] ?? ('fedapay:' . $tx['id']),
+                        'paid_by_admin_id'          => $locked->decided_by_admin_id, // payout auto = même admin qui a approuvé
+                        'payout_failed_at'          => null,
+                        'payout_failure_reason'     => null,
+                    ]);
+                    return true;
+                });
+            } catch (\DomainException $e) {
+                // Le virement est parti mais le wallet ne couvre plus le montant : anomalie
+                // à réconcilier. 500 → FedaPay rejoue, la demande reste réservée/non payée.
+                Log::critical('Fedapay payout envoyé mais débit wallet impossible', [
+                    'withdraw_id' => $withdraw->id,
+                    'error'       => $e->getMessage(),
+                ]);
+                return response()->json(['message' => 'Débit impossible.'], 500);
+            }
+
+            if (! $paid) {
+                return response()->json(['message' => 'Déjà traité.'], 200);
+            }
+            $withdraw->refresh();
+
+            $notifier->sendToUser(
+                $notifyUserId,
+                'wallet.withdraw_paid',
+                'Virement effectué',
+                "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA a été viré automatiquement.",
+                [
+                    'app'         => $withdraw->isForDriver() ? 'driver' : 'merchant',
+                    'screen'      => 'wallet',
+                    'icon'        => 'wallet-outline',
+                    'withdraw_id' => $withdraw->id,
+                    'reference'   => $withdraw->external_payout_reference,
+                    'amount'      => (int) $withdraw->amount_fcfa,
+                ],
+                null,
+            );
+        } elseif ($isFailure) {
+            // Idempotence : échec déjà enregistré pour cette tentative → pas de 2e notif.
+            if ($withdraw->payout_failed_at) {
+                return response()->json(['message' => 'Déjà traité.'], 200);
+            }
+
+            // Marquage échec = libération de la réservation. Aucun débit n'a eu lieu ;
+            // refundFailedWithdraw ne restitue que les demandes historiques déjà débitées.
             DB::transaction(function () use ($withdraw, $tx, $event, $notifier, $driverWallet, $userWallet, $notifyUserId) {
                 $withdraw->update([
                     'payout_failed_at'      => now(),
-                    'payout_failure_reason' => $tx['failure_reason'] ?? $tx['status'] ?? $event,
+                    'payout_failure_reason' => $tx['failure_reason'] ?? $tx['last_error_message'] ?? $tx['status'] ?? $event,
                 ]);
 
                 if ($withdraw->isForDriver()) {
@@ -364,7 +414,7 @@ class SubscriptionController extends Controller
                     $notifyUserId,
                     'wallet.withdraw_refunded',
                     'Virement échoué',
-                    "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA n'a pas pu être effectué. La somme a été remise sur votre solde. Vérifiez votre numéro et réessayez.",
+                    "Votre retrait de " . number_format($withdraw->amount_fcfa, 0, ',', ' ') . " FCFA n'a pas pu être effectué. Aucun montant n'a été débité de votre solde. Vérifiez votre numéro et réessayez.",
                     [
                         'app'            => $withdraw->isForDriver() ? 'driver' : 'merchant',
                         'screen'         => 'wallet',
@@ -377,7 +427,7 @@ class SubscriptionController extends Controller
                 );
             });
 
-            Log::warning('Fedapay payout failed → refund automatique', [
+            Log::warning('Fedapay payout failed → réservation libérée', [
                 'withdraw_id' => $withdraw->id,
                 'event'       => $event,
                 'tx'          => $tx,

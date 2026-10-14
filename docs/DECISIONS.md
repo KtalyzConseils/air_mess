@@ -41,3 +41,11 @@
 **Rationale :** l'email est déjà confirmé par code à l'inscription, et l'équipe garde les moyens d'agir après coup (`AdminController::suspendMarchant`, `rejectMarchant`, `reactivateMarchant`). La validation a priori n'apportait donc rien, mais bloquait la première course d'un marchand fraîchement inscrit : `CreateCourseRequest` refusait toute création tant que `validated_at` était nul, web comme application mobile.
 
 **Impact :** `CreateCourseRequest` s'ouvre dès l'inscription ; la file admin `AdminController::pendingMarchants` ne concerne plus que les dossiers antérieurs au 12/10/2026 ; `MarchantValidatedMail` n'est plus envoyé pour les nouvelles inscriptions ; l'override web « dossier en cours de validation » (overlay du dashboard, badge « en attente » du profil) piloté par `validated_at` ne s'affiche plus. Les dossiers marchands déjà en attente en production ne sont pas validés automatiquement : ils demandent une action admin explicite.
+
+## D-06 — Retraits : débit du wallet seulement après confirmation du virement (14/10/2026)
+
+**Décision :** une demande de retrait approuvée (par un admin ou en libre-service) réserve le montant sans débiter le wallet. Le débit a lieu uniquement quand FedaPay confirme le payout (`sent`) ou quand un admin marque le virement manuel comme effectué. Un échec FedaPay libère la réservation, sans mouvement financier.
+
+**Rationale :** jusqu'ici, le wallet était débité avant que l'argent ne parte, puis recrédité en cas d'échec. Comme le webhook de succès n'était jamais reconnu (FedaPay envoie `sent`, pas `approved`/`processed`) et que la contrainte `paid_consistency_check` refusait les retraits instant sans admin, des soldes étaient amputés sans virement confirmé.
+
+**Impact :** migration `2026_10_14_000000_allow_automatic_withdraw_payout_without_admin` (`paid_by_admin_id` peut rester nul pour un payout automatique). Les demandes historiques déjà débitées sont reconnues et ne sont jamais débitées une seconde fois ; en cas d'échec, elles restent remboursées. Les applications peuvent afficher `available` et `withdraw_in_progress_fcfa` au lieu de `balance`.

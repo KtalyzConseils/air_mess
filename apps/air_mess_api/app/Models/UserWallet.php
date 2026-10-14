@@ -43,11 +43,14 @@ class UserWallet extends Model
     }
 
     /**
-     * Disponible effectif (utilisable pour réserver une nouvelle course).
+     * Disponible effectif (utilisable pour réserver une nouvelle course) :
+     * balance − holds courses − retraits en vol (réservés jusqu'au webhook FedaPay).
      */
     public function available(): int
     {
-        return (int) $this->balance - (int) $this->pending_reserved;
+        return (int) $this->balance
+            - (int) $this->pending_reserved
+            - WalletWithdrawRequest::reservedForUser((int) $this->user_id);
     }
 
     /**

@@ -142,7 +142,8 @@ class DriverController extends Controller
             // l'offre que s'il peut déjà couvrir cette part avec son wallet, sinon le
             // débit échouerait à la livraison. Le driver Airmess bypass : salarié, pas
             // de commission perso (tout revient à la plateforme via PlatformEarning).
-            $balance = $driver->wallet?->balance ?? 0;
+            // Disponible = balance − retraits en vol (réservés jusqu'au webhook FedaPay).
+            $balance = $driver->wallet?->available() ?? 0;
             $query->where(function ($q) use ($balance) {
                 $q->where('delivery_fee_paid_by', '!=', Course::PAID_BY_RECIPIENT)
                   ->orWhereNull('delivery_fee_paid_by')
@@ -213,7 +214,7 @@ class DriverController extends Controller
         if ($isVisibleOffer && ! $driver->isAirmess()) {
             $isHighValue = (bool) $course->is_high_value;
             $paidByRecipient = $course->delivery_fee_paid_by === Course::PAID_BY_RECIPIENT;
-            $balance = (int) ($driver->wallet?->balance ?? 0);
+            $balance = (int) ($driver->wallet?->available() ?? 0);
             // Part AirMess à débiter à la livraison si le driver prend cette course
             // (cf. debitPlatformCommission) — doit déjà être couverte par le wallet.
             $platformShare = (int) $course->delivery_fee - (int) $course->driver_earnings;
@@ -880,6 +881,9 @@ class DriverController extends Controller
 
         return response()->json([
             'balance'         => $wallet->balance,
+            // Retraits approuvés en attente de confirmation FedaPay : réservés, pas encore débités.
+            'withdraw_in_progress_fcfa' => \App\Models\WalletWithdrawRequest::reservedForDriver($driver->id),
+            'available'       => $wallet->available(),
             'total_deposited' => $wallet->total_deposited,
             'total_withdrawn' => $wallet->total_withdrawn,
             'min_withdraw_fcfa' => (int) \App\Models\AppSetting::get('driver_min_withdraw_fcfa', 500),
@@ -1046,12 +1050,13 @@ class DriverController extends Controller
      *
      * Bifurque selon le setting `driver_payout_mode` :
      *  - admin_approval (défaut) : la demande est créée en `pending`. L'admin l'approuve
-     *    plus tard depuis /admin/withdraws — c'est à l'approbation que le wallet est débité
-     *    et que Fedapay Payout est appelé.
+     *    plus tard depuis /admin/withdraws — c'est à l'approbation que le montant est
+     *    réservé et que Fedapay Payout est appelé (débit à la confirmation du virement).
      *  - instant : le driver retire depuis l'app sans admin. Vérifs supplémentaires
-     *    (activation validée, cooldown), débit immédiat du wallet + création directe en
-     *    `approved` + appel Fedapay Payout dans la foulée. En cas d'échec Fedapay, la
-     *    demande reste approved avec payout_failed_at → admin peut retenter manuellement.
+     *    (activation validée, cooldown), réservation du montant + création directe en
+     *    `approved` + appel Fedapay Payout dans la foulée. Le wallet n'est débité qu'au
+     *    webhook de confirmation. En cas d'échec Fedapay, la demande reste approved avec
+     *    payout_failed_at (réservation libérée) → admin peut retenter manuellement.
      */
     public function requestWithdraw(
         Request $request,
@@ -1121,9 +1126,10 @@ class DriverController extends Controller
         }
 
         $wallet = \App\Models\DriverWallet::firstOrCreate(['driver_id' => $driver->id]);
-        if ($data['amount'] > $wallet->balance) {
+        $available = $wallet->available(); // balance − retraits déjà en vol
+        if ($data['amount'] > $available) {
             return response()->json([
-                'message' => "Solde insuffisant : caution={$wallet->balance} FCFA, demandé={$data['amount']} FCFA.",
+                'message' => "Solde insuffisant : disponible={$available} FCFA, demandé={$data['amount']} FCFA.",
             ], 422);
         }
 
@@ -1149,11 +1155,14 @@ class DriverController extends Controller
                 ], 429);
             }
 
-            // Transaction atomique : création + débit wallet. Si le débit throw
-            // (solde, busy, min), le create est rollback → aucune trace incohérente.
+            // Transaction atomique : contrôle du disponible SOUS lock wallet + création
+            // en approved. Le montant est seulement RÉSERVÉ : le débit n'aura lieu qu'à
+            // la confirmation FedaPay (webhook payout `sent`).
             try {
                 $req = DB::transaction(function () use ($driver, $data, $driverWallet) {
-                    $req = \App\Models\WalletWithdrawRequest::create([
+                    $driverWallet->assertCanReserveWithdraw($driver, (int) $data['amount']);
+
+                    return \App\Models\WalletWithdrawRequest::create([
                         'driver_id'      => $driver->id,
                         'amount_fcfa'    => $data['amount'],
                         'target_method'  => $data['target_method'],
@@ -1162,20 +1171,13 @@ class DriverController extends Controller
                         'decided_at'     => now(),
                         // decided_by_admin_id reste null (self-service)
                     ]);
-                    $driverWallet->withdraw(
-                        driver:  $driver,
-                        amount:  $data['amount'],
-                        adminId: null,
-                        reason:  "Instant self-service withdraw #{$req->id}",
-                    );
-                    return $req;
                 });
             } catch (\DomainException $e) {
                 return response()->json(['message' => $e->getMessage()], 422);
             }
 
-            // Appel Fedapay HORS transaction (best-effort). Un échec n'annule pas le
-            // débit — l'admin a le filet manuel via /admin/withdraws/{id}/retry-payout.
+            // Appel Fedapay HORS transaction (best-effort). En cas d'échec rien n'a été
+            // débité ; l'admin peut retenter via /admin/withdraws/{id}/retry-payout.
             $payoutInitiator->initiate($req->fresh());
             $req = $req->fresh();
 
@@ -1187,13 +1189,13 @@ class DriverController extends Controller
                     $driver->user_id,
                     'wallet.withdraw_failed_initiation',
                     'Retrait en attente',
-                    'Ta demande a été enregistrée mais le virement automatique a échoué. Notre équipe prend le relais.',
+                    'Le virement automatique a échoué, rien n\'a été débité de ta caution. Notre équipe prend le relais.',
                     ['withdraw_id' => $req->id],
                     null,
                 );
 
                 return response()->json([
-                    'message' => 'Votre retrait a été enregistré, mais le virement automatique a échoué. Notre équipe va prendre le relais rapidement.',
+                    'message' => 'Le virement automatique a échoué. Aucun montant n\'a été débité ; notre équipe va prendre le relais rapidement.',
                     'request' => $req,
                 ], 201);
             }

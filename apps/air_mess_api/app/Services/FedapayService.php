@@ -167,39 +167,49 @@ class FedapayService
     }
 
     /**
-     * Crée un payout (versement sortant) vers un numéro MoMo ou un compte bancaire.
+     * Crée un payout (« dépôt » dans la doc FedaPay) vers un numéro Mobile Money.
      *
-     * @param 'mtn'|'moov'|'bank' $mode Type de destination
-     * @param string $accountNumber Numéro MoMo (format Bénin) ou IBAN si bank
+     * @param string|null $mode Code opérateur FedaPay (Bénin : 'mtn_open', 'moov', 'sbin').
+     *                          null = FedaPay détecte l'opérateur depuis le numéro (recommandé).
+     *                          Attention : 'mtn' n'est pas un mode valide en live.
+     * @param string $accountNumber Numéro MoMo saisi par le demandeur (tout format Bénin)
      * @return array ['id', 'reference', 'status'] — id sert à matcher le webhook
      *
-     * Cf. https://docs.fedapay.com/api/payouts — endpoint POST /v1/payouts.
-     * En sandbox, aucun virement réel n'est effectué, mais le cycle webhook fonctionne.
+     * Cf. https://docs.fedapay.com/fr/integration-api/payouts-management — POST /v1/payouts
+     * puis PUT /v1/payouts/start. Statuts : pending → started → processing → sent | failed.
+     *
+     * @throws RuntimeException si la création OU le démarrage échoue (un payout non
+     *                          démarré reste « pending » chez FedaPay et ne part jamais).
      */
     public function createPayout(
         int $amountFcfa,
-        string $mode,
+        ?string $mode,
         string $accountNumber,
         array $customer,
         string $description = '',
     ): array {
+        $body = [
+            'amount'      => $amountFcfa,
+            'currency'    => ['iso' => $this->currency],
+            'description' => $description,
+            'customer'    => array_filter([
+                'email'        => $customer['email'] ?? null,
+                'firstname'    => $customer['firstname'] ?? 'Livreur',
+                'lastname'     => $customer['lastname']  ?? 'RMess',
+                'phone_number' => [
+                    // Même format que createCheckout : numéro national quand country=bj.
+                    'number'  => $this->formatCustomerPhone($accountNumber),
+                    'country' => 'bj',
+                ],
+            ], fn ($v) => $v !== null),
+        ];
+        if ($mode) {
+            $body['mode'] = $mode;
+        }
+
         $response = Http::withToken($this->secretKey)
             ->acceptJson()
-            ->post("{$this->apiUrl}/payouts", [
-                'amount'      => $amountFcfa,
-                'mode'        => $mode,
-                'currency'    => ['iso' => $this->currency],
-                'description' => $description,
-                'customer'    => [
-                    'email'        => $customer['email'] ?? null,
-                    'firstname'    => $customer['firstname'] ?? 'Livreur',
-                    'lastname'     => $customer['lastname']  ?? 'RMess',
-                    'phone_number' => [
-                        'number'  => $accountNumber,
-                        'country' => 'bj',
-                    ],
-                ],
-            ]);
+            ->post("{$this->apiUrl}/payouts", $body);
 
         if ($response->failed()) {
             Log::error('Fedapay createPayout failed', [
@@ -221,11 +231,15 @@ class FedapayService
             ]);
 
         if ($startResponse->failed()) {
-            Log::warning('Fedapay startPayout failed (le payout existe mais n\'est pas lancé)', [
+            Log::error('Fedapay startPayout failed (le payout existe mais n\'est pas lancé)', [
                 'payout_id' => $payout['id'],
+                'status'    => $startResponse->status(),
                 'body'      => $startResponse->body(),
             ]);
-            // On ne throw pas : l'admin pourra retenter ou marquer manuellement.
+            // On throw : sans démarrage, FedaPay n'envoie jamais de webhook et la demande
+            // resterait réservée indéfiniment. L'initiateur la marque en échec → retry admin.
+            $apiMessage = $startResponse->json('message') ?? $startResponse->body();
+            throw new RuntimeException("Échec démarrage payout FedaPay #{$payout['id']} (HTTP {$startResponse->status()}) : {$apiMessage}");
         }
 
         return [

@@ -80,8 +80,8 @@ class UserWalletService
                 return false;
             }
 
-            // Capacité disponible = balance - holds existants.
-            $available = (int) $wallet->balance - (int) $wallet->pending_reserved;
+            // Capacité disponible = balance - holds existants - retraits en vol.
+            $available = $wallet->available();
             if ($available < $amount) {
                 return false;
             }
@@ -457,34 +457,61 @@ class UserWalletService
     }
 
     /**
-     * Retrait wallet — débite le wallet et journalise.
+     * Vérifie qu'un retrait peut être RÉSERVÉ (pas débité) sur le wallet, juste
+     * avant de passer la demande en approved (validation admin ou mode instant).
      *
-     * On considère le retrait comme un *paiement sortant* — il ampute la balance
-     * réelle et **compte le total_spent** (comme un course_charge) : c'est de
-     * l'argent qui quitte définitivement notre garde.
-     *
-     * Deux origines possibles :
-     *  - depuis AdminController quand user_payout_mode=admin_approval (validation) — adminId défini
-     *  - depuis UserWalletController quand user_payout_mode=instant (self-service) — adminId=null
+     * DOIT être appelé dans une DB::transaction englobant le passage en approved
+     * (lockForUpdate = sérialise les réservations concurrentes). Le débit réel
+     * n'a lieu qu'à la confirmation du virement (settleWithdraw).
      *
      * @throws \DomainException si le disponible ne couvre pas le retrait
      */
-    public function withdraw(User $user, int $amount, ?int $adminId, string $reason): UserWalletTransaction
+    public function assertCanReserveWithdraw(User $user, int $amount): void
     {
         if ($amount <= 0) {
             throw new \InvalidArgumentException("Withdraw amount must be > 0, got {$amount}.");
         }
 
-        $transaction = DB::transaction(function () use ($user, $amount, $adminId, $reason) {
-            $wallet = UserWallet::where('user_id', $user->id)
+        $wallet = UserWallet::where('user_id', $user->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        // Disponible = balance − holds courses − retraits déjà en vol.
+        $available = $wallet->available();
+        if ($amount > $available) {
+            throw new \DomainException(
+                "Retrait impossible : disponible={$available} FCFA, demandé={$amount} FCFA."
+            );
+        }
+    }
+
+    /**
+     * Débite le wallet UNE FOIS le virement confirmé (webhook FedaPay `sent` ou
+     * « Marquer comme viré » admin). Le retrait est un *paiement sortant* : il
+     * ampute la balance réelle et compte dans total_spent.
+     *
+     * Idempotent : un débit déjà posé pour ce retrait (y compris un débit
+     * historique posé à l'approbation) est retourné tel quel.
+     *
+     * @throws \DomainException si la balance ne couvre plus le montant (anomalie)
+     */
+    public function settleWithdraw(\App\Models\WalletWithdrawRequest $withdraw): UserWalletTransaction
+    {
+        $existing = $this->findWithdrawDebit($withdraw);
+        if ($existing) {
+            return $existing;
+        }
+
+        $amount = (int) $withdraw->amount_fcfa;
+
+        $transaction = DB::transaction(function () use ($withdraw, $amount) {
+            $wallet = UserWallet::where('user_id', $withdraw->user_id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // Disponible = balance − holds courses. On refuse si ça dépasse.
-            $available = (int) $wallet->balance - (int) $wallet->pending_reserved;
-            if ($amount > $available) {
+            if ($amount > $wallet->balance) {
                 throw new \DomainException(
-                    "Retrait impossible : disponible={$available} FCFA, demandé={$amount} FCFA."
+                    "Débit du retrait #{$withdraw->id} impossible : balance={$wallet->balance}, montant={$amount}."
                 );
             }
 
@@ -493,11 +520,15 @@ class UserWalletService
             $wallet->save();
 
             return UserWalletTransaction::create([
-                'user_id'       => $user->id,
+                'user_id'       => $withdraw->user_id,
                 'type'          => UserWalletTransaction::TYPE_WITHDRAW,
                 'amount_fcfa'   => -$amount,
                 'balance_after' => $wallet->balance,
-                'metadata'      => ['admin_id' => $adminId, 'reason' => $reason],
+                'metadata'      => [
+                    'admin_id'    => $withdraw->paid_by_admin_id ?? $withdraw->decided_by_admin_id,
+                    'withdraw_id' => $withdraw->id,
+                    'reason'      => "Payout confirmed for withdraw request #{$withdraw->id}",
+                ],
             ]);
         });
 
@@ -505,9 +536,27 @@ class UserWalletService
     }
 
     /**
-     * Refund automatique du wallet user quand Fedapay a définitivement échoué le
-     * payout (webhook payout.failed/canceled/declined). Symétrique de
-     * DriverWalletService::refundFailedWithdraw.
+     * Débit déjà posé pour ce retrait (nouveau format metadata.withdraw_id ou
+     * débit historique posé à l'approbation, raison libellée avec l'id).
+     */
+    public function findWithdrawDebit(\App\Models\WalletWithdrawRequest $withdraw): ?UserWalletTransaction
+    {
+        return UserWalletTransaction::where('user_id', $withdraw->user_id)
+            ->where('type', UserWalletTransaction::TYPE_WITHDRAW)
+            ->where(function ($q) use ($withdraw) {
+                $q->whereJsonContains('metadata->withdraw_id', $withdraw->id)
+                  ->orWhereIn('metadata->reason', [
+                      "Approval of withdraw request #{$withdraw->id}",
+                      "Retrait wallet instant #{$withdraw->id}",
+                  ]);
+            })
+            ->first();
+    }
+
+    /**
+     * Payout FedaPay définitivement échoué : restitue le wallet SEULEMENT si un
+     * débit a réellement été posé (demandes historiques). Avec le modèle actuel,
+     * rien n'a été débité : no-op. Symétrique de DriverWalletService.
      *
      * Idempotent : refund déjà émis pour ce withdraw → no-op (metadata match).
      */
@@ -519,6 +568,9 @@ class UserWalletService
             ->first();
         if ($existing) {
             return $existing;
+        }
+        if (! $this->findWithdrawDebit($withdraw)) {
+            return null; // jamais débité → rien à restituer
         }
 
         $amount = (int) $withdraw->amount_fcfa;
@@ -568,7 +620,7 @@ class UserWalletService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $available = (int) $wallet->balance - (int) $wallet->pending_reserved;
+            $available = $wallet->available();
             if ($amount > $available) {
                 throw new \DomainException(
                     "Ajustement impossible : disponible={$available}, demandé={$amount}."

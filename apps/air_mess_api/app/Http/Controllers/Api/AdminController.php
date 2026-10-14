@@ -3471,23 +3471,15 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         $admin = $request->user()->admin;
 
-        // 1. Débit du wallet + transition à approved (transaction atomique)
+        // 1. Réservation (contrôle du disponible sous lock) + transition à approved.
+        //    AUCUN débit ici : le wallet n'est débité qu'à la confirmation du virement
+        //    (webhook FedaPay `sent` ou « Marquer comme viré »).
         try {
             DB::transaction(function () use ($withdraw, $admin, $driverWallet, $userWallet, $notifier) {
                 if ($withdraw->isForDriver()) {
-                    $driverWallet->withdraw(
-                        driver:  $withdraw->driver,
-                        amount:  $withdraw->amount_fcfa,
-                        adminId: $admin->id,
-                        reason:  "Approval of withdraw request #{$withdraw->id}",
-                    );
+                    $driverWallet->assertCanReserveWithdraw($withdraw->driver, (int) $withdraw->amount_fcfa);
                 } else {
-                    $userWallet->withdraw(
-                        user:    $withdraw->user,
-                        amount:  $withdraw->amount_fcfa,
-                        adminId: $admin->id,
-                        reason:  "Approval of withdraw request #{$withdraw->id}",
-                    );
+                    $userWallet->assertCanReserveWithdraw($withdraw->user, (int) $withdraw->amount_fcfa);
                 }
 
                 $withdraw->update([
@@ -3510,10 +3502,10 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        // 2. Appel automatique FedaPay payout (hors transaction : on garde le débit même si l'API plante).
-        //    Le webhook FedaPay remplira paid_at + external_payout_reference quand le virement aboutit.
-        //    Si l'API échoue, la demande reste approved avec payout_failed_at → admin peut retenter
-        //    ou faire le virement manuel via le bouton "Marquer comme viré" (filet de sécurité).
+        // 2. Appel automatique FedaPay payout (hors transaction).
+        //    Le webhook FedaPay débitera le wallet + remplira paid_at quand le virement aboutit.
+        //    Si l'API échoue, la demande reste approved avec payout_failed_at (réservation
+        //    libérée) → admin peut retenter ou faire le virement manuel via "Marquer comme viré".
         $payoutInitiator->initiate($withdraw->fresh());
 
         $fresh   = $withdraw->fresh();
@@ -3607,6 +3599,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
     public function retryWithdrawPayout(
         \App\Models\WalletWithdrawRequest $withdraw,
         \App\Services\WalletWithdrawPayoutInitiator $payoutInitiator,
+        \App\Services\DriverWalletService $driverWallet,
+        \App\Services\UserWalletService $userWallet,
     ): JsonResponse {
         if ($withdraw->status !== \App\Models\WalletWithdrawRequest::STATUS_APPROVED) {
             return response()->json(['message' => 'Seules les demandes approuvées peuvent retenter un payout.'], 422);
@@ -3616,6 +3610,20 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         }
         if ($withdraw->payout_initiated_at && ! $withdraw->payout_failed_at) {
             return response()->json(['message' => 'Un payout est déjà en cours, attendez le webhook.'], 422);
+        }
+
+        // L'échec précédent a libéré la réservation : le disponible doit encore couvrir
+        // le montant (sinon le webhook de succès ne pourrait plus débiter).
+        if ($withdraw->payout_failed_at) {
+            try {
+                DB::transaction(function () use ($withdraw, $driverWallet, $userWallet) {
+                    $withdraw->isForDriver()
+                        ? $driverWallet->assertCanReserveWithdraw($withdraw->driver, (int) $withdraw->amount_fcfa)
+                        : $userWallet->assertCanReserveWithdraw($withdraw->user, (int) $withdraw->amount_fcfa);
+                });
+            } catch (\DomainException $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
         }
 
         $payoutInitiator->initiate($withdraw);
@@ -4228,6 +4236,8 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         Request $request,
         \App\Models\WalletWithdrawRequest $withdraw,
         NotificationService $notifier,
+        \App\Services\DriverWalletService $driverWallet,
+        \App\Services\UserWalletService $userWallet,
     ): JsonResponse {
         $data = $request->validate([
             'external_payout_reference' => ['required', 'string', 'max:100'],
@@ -4247,11 +4257,28 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         $admin = $request->user()->admin;
 
-        $withdraw->update([
-            'external_payout_reference' => trim($data['external_payout_reference']),
-            'paid_at'                   => now(),
-            'paid_by_admin_id'          => $admin->id,
-        ]);
+        // Virement manuel confirmé = moment du débit wallet (idempotent, cf. settleWithdraw).
+        try {
+            DB::transaction(function () use ($withdraw, $data, $admin, $driverWallet, $userWallet) {
+                $locked = \App\Models\WalletWithdrawRequest::whereKey($withdraw->id)->lockForUpdate()->firstOrFail();
+                if ($locked->isPaid()) {
+                    throw new \DomainException('Cette demande vient déjà d\'être marquée comme virée.');
+                }
+
+                $locked->paid_by_admin_id = $admin->id;
+                $locked->isForDriver()
+                    ? $driverWallet->settleWithdraw($locked)
+                    : $userWallet->settleWithdraw($locked);
+
+                $locked->update([
+                    'external_payout_reference' => trim($data['external_payout_reference']),
+                    'paid_at'                   => now(),
+                    'paid_by_admin_id'          => $admin->id,
+                ]);
+            });
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         $notifier->sendToUser(
             $this->withdrawNotifyUserId($withdraw),

@@ -71,6 +71,8 @@ class UserWalletController extends Controller
         return response()->json([
             'balance'              => (int) $wallet->balance,
             'pending_reserved'     => (int) $wallet->pending_reserved,
+            // Retraits approuvés en attente de confirmation FedaPay : réservés, pas encore débités.
+            'withdraw_in_progress_fcfa' => WalletWithdrawRequest::reservedForUser($user->id),
             'available'            => $wallet->available(),
             'total_deposited'      => (int) $wallet->total_deposited,
             'total_spent'          => (int) $wallet->total_spent,
@@ -85,7 +87,8 @@ class UserWalletController extends Controller
 
     /**
      * Le marchand/particulier demande un retrait de son wallet vers momo ou banque.
-     * Le débit n'a lieu QU'au moment de l'approbation admin (cf. UserWalletService::withdraw).
+     * Le montant est réservé à l'approbation (admin ou instant) et débité seulement à la
+     * confirmation du virement (cf. UserWalletService::settleWithdraw).
      * Une seule demande pending à la fois par user (garde-fou anti double-décaissement).
      */
     public function requestWithdraw(
@@ -184,22 +187,27 @@ class UserWalletController extends Controller
                 ], 422);
             }
 
-            // Crée la demande + débite le wallet DANS UNE TRANSACTION.
+            // Contrôle du disponible SOUS lock + création en approved DANS UNE TRANSACTION.
+            // Le montant est seulement RÉSERVÉ : débit à la confirmation FedaPay (webhook).
             // L'appel Fedapay est FAIT HORS transaction (peut prendre plusieurs sec).
-            $req = DB::transaction(function () use ($user, $data, $userWalletService) {
-                $r = WalletWithdrawRequest::create([
-                    'user_id'        => $user->id,
-                    'amount_fcfa'    => $data['amount'],
-                    'target_method'  => $data['target_method'],
-                    'target_account' => $data['target_account'],
-                    'status'         => WalletWithdrawRequest::STATUS_APPROVED, // débit immédiat
-                    'decided_at'     => now(),
-                ]);
-                $userWalletService->withdraw($user, (int) $data['amount'], null, "Retrait wallet instant #{$r->id}");
-                return $r;
-            });
+            try {
+                $req = DB::transaction(function () use ($user, $data, $userWalletService) {
+                    $userWalletService->assertCanReserveWithdraw($user, (int) $data['amount']);
 
-            // Initie le payout Fedapay HORS transaction (le webhook confirmera ou refund).
+                    return WalletWithdrawRequest::create([
+                        'user_id'        => $user->id,
+                        'amount_fcfa'    => $data['amount'],
+                        'target_method'  => $data['target_method'],
+                        'target_account' => $data['target_account'],
+                        'status'         => WalletWithdrawRequest::STATUS_APPROVED, // réservé, pas débité
+                        'decided_at'     => now(),
+                    ]);
+                });
+            } catch (\DomainException $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            // Initie le payout Fedapay HORS transaction (le webhook débitera ou libérera).
             $payoutInitiator->initiate($req->fresh());
             $req = $req->fresh();
 

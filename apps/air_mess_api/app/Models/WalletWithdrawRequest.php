@@ -6,9 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 /**
- * Demande de retrait de caution par un driver.
+ * Demande de retrait (caution driver ou wallet marchand/particulier).
  * Cycle : pending → approved | rejected | cancelled.
- * Le débit du wallet (via DriverWalletService::withdraw) n'a lieu QU'au passage approved.
+ *
+ * Une demande approved non payée et sans échec de payout est « en vol » : son
+ * montant est RÉSERVÉ (exclu du disponible) mais pas débité. Le débit n'a lieu
+ * qu'à la confirmation du virement (webhook FedaPay `sent` ou « Marquer comme
+ * viré » admin) via settleWithdraw() des services wallet. Un échec FedaPay
+ * libère simplement la réservation.
  */
 class WalletWithdrawRequest extends Model
 {
@@ -90,6 +95,29 @@ class WalletWithdrawRequest extends Model
     public function isForUser(): bool
     {
         return $this->user_id !== null;
+    }
+
+    /**
+     * Retraits en vol : approuvés, ni payés ni en échec de payout. Leur montant
+     * est réservé sur le wallet tant que FedaPay (ou l'admin) n'a pas confirmé.
+     */
+    public function scopeInFlight($query)
+    {
+        return $query->where('status', self::STATUS_APPROVED)
+            ->whereNull('paid_at')
+            ->whereNull('payout_failed_at');
+    }
+
+    /** Montant réservé par les retraits en vol d'un driver. */
+    public static function reservedForDriver(int $driverId): int
+    {
+        return (int) static::query()->inFlight()->where('driver_id', $driverId)->sum('amount_fcfa');
+    }
+
+    /** Montant réservé par les retraits en vol d'un user marchand/particulier. */
+    public static function reservedForUser(int $userId): int
+    {
+        return (int) static::query()->inFlight()->where('user_id', $userId)->sum('amount_fcfa');
     }
 
     /** Type d'identification pour le front (driver | user). */

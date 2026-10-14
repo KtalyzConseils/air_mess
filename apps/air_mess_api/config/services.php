@@ -80,6 +80,9 @@ return [
         'secret_key'     => env('FEDAPAY_SECRET_KEY'),
         'webhook_secret' => env('FEDAPAY_WEBHOOK_SECRET'),
         'currency'       => env('FEDAPAY_CURRENCY', 'XOF'),
+        // Mode opérateur forcé pour les payouts (ex: mtn_open, moov, sbin).
+        // Vide = FedaPay détecte l'opérateur depuis le numéro.
+        'payout_mode'    => env('FEDAPAY_PAYOUT_MODE'),
     ],
 
     'slack' => [
