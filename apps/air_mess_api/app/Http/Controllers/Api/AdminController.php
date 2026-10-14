@@ -3516,9 +3516,34 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         //    ou faire le virement manuel via le bouton "Marquer comme viré" (filet de sécurité).
         $payoutInitiator->initiate($withdraw->fresh());
 
+        $fresh   = $withdraw->fresh();
+        $outcome = $this->payoutOutcome($fresh);
+
+        // Le livreur vient de recevoir « versement en cours ». Si le virement automatique n'a
+        // pas pu être lancé, il doit recevoir la correction : l'ops prend le relais manuellement.
+        // Même type de notification que le flux livreur instant (DriverController::requestWithdraw).
+        if ($outcome['status'] === 'failed') {
+            $notifier->sendToUser(
+                $this->withdrawNotifyUserId($fresh),
+                'wallet.withdraw_failed_initiation',
+                'Retrait approuvé',
+                'Votre retrait de ' . number_format($fresh->amount_fcfa, 0, ',', ' ') . " FCFA a été validé, mais le virement automatique n'a pas pu être lancé. Notre équipe effectue le virement manuellement.",
+                [
+                    'app'         => $fresh->isForDriver() ? 'driver' : 'merchant',
+                    'screen'      => 'wallet',
+                    'icon'        => 'wallet-outline',
+                    'withdraw_id' => $fresh->id,
+                    'status'      => 'manual_required',
+                ],
+                null,
+            );
+        }
+
         return response()->json([
-            'message'  => 'Demande approuvée. Tentative de virement automatique lancée.',
-            'request'  => $withdraw->fresh()->load(['driver.user', 'user']),
+            'message'               => 'Demande approuvée. ' . $outcome['summary'],
+            'payout_status'         => $outcome['status'],
+            'payout_failure_reason' => $fresh->payout_failure_reason,
+            'request'               => $fresh->load(['driver.user', 'user']),
         ]);
     }
 
@@ -3531,6 +3556,48 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
         return $withdraw->isForDriver()
             ? (int) $withdraw->driver->user_id
             : (int) $withdraw->user_id;
+    }
+
+    /**
+     * Résultat réel de la tentative de virement automatique, partagé par l'approbation
+     * et la retentative. Source unique : aucune des deux ne doit présenter un échec
+     * FedaPay — ou un mode non automatisable — comme un virement lancé.
+     *
+     * Cf. incident prod 2026-10 : FedaPay refusait les payouts en 403 « Opération non
+     * autorisée », l'admin lisait « tentative de virement lancée » et le livreur
+     * « versement en cours » alors que rien n'était parti.
+     *
+     * @return array{status: 'initiated'|'failed'|'manual_required', summary: string}
+     */
+    private function payoutOutcome(\App\Models\WalletWithdrawRequest $withdraw): array
+    {
+        $amount = number_format((int) $withdraw->amount_fcfa, 0, ',', ' ');
+
+        if ($withdraw->payout_failed_at !== null) {
+            $reason = (string) ($withdraw->payout_failure_reason ?? '');
+            $detail = $reason !== '' ? ' Motif : ' . \Illuminate\Support\Str::limit($reason, 160) : '';
+
+            return [
+                'status'  => 'failed',
+                'summary' => "Le virement automatique a échoué. Effectuez le virement de {$amount} FCFA "
+                    . "manuellement puis marquez la demande comme virée.{$detail}",
+            ];
+        }
+
+        if ($withdraw->payout_initiated_at !== null) {
+            return [
+                'status'  => 'initiated',
+                'summary' => 'Virement automatique lancé ; confirmation attendue sous quelques minutes.',
+            ];
+        }
+
+        // Aucun payout n'a été tenté : la banque n'est pas supportée par l'API FedaPay,
+        // le virement doit être fait à la main.
+        return [
+            'status'  => 'manual_required',
+            'summary' => "Le virement automatique n'est pas disponible pour ce mode de paiement. "
+                . "Effectuez le virement de {$amount} FCFA vers {$withdraw->target_account} puis marquez la demande comme virée.",
+        ];
     }
 
     /**
@@ -3553,9 +3620,14 @@ public function suspendMarchant(Request $request, Marchant $marchant): JsonRespo
 
         $payoutInitiator->initiate($withdraw);
 
+        $fresh   = $withdraw->fresh();
+        $outcome = $this->payoutOutcome($fresh);
+
         return response()->json([
-            'message' => 'Nouvelle tentative de payout lancée.',
-            'request' => $withdraw->fresh()->load(['driver.user', 'paidByAdmin']),
+            'message'               => $outcome['summary'],
+            'payout_status'         => $outcome['status'],
+            'payout_failure_reason' => $fresh->payout_failure_reason,
+            'request'               => $fresh->load(['driver.user', 'paidByAdmin']),
         ]);
     }
 

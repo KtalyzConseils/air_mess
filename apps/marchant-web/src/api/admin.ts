@@ -1145,8 +1145,23 @@ export async function fetchWithdrawRequest(id: number | string): Promise<Withdra
   return data
 }
 
-export async function approveWithdrawRequest(id: number): Promise<void> {
-  await api.post(`/admin/withdraw-requests/${id}/approve`)
+/**
+ * Résultat réel de la tentative de virement automatique renvoyé par l'API.
+ * `initiated` = FedaPay a accepté ; `failed` = refus FedaPay (l'ops doit virer à la main) ;
+ * `manual_required` = aucun payout automatique possible (virement bancaire).
+ */
+export type WithdrawPayoutStatus = 'initiated' | 'failed' | 'manual_required'
+
+export interface WithdrawPayoutOutcome {
+  message: string
+  payout_status: WithdrawPayoutStatus
+  payout_failure_reason: string | null
+  request: WithdrawRequestDetailRequest
+}
+
+export async function approveWithdrawRequest(id: number): Promise<WithdrawPayoutOutcome> {
+  const { data } = await api.post<WithdrawPayoutOutcome>(`/admin/withdraw-requests/${id}/approve`)
+  return data
 }
 
 export async function rejectWithdrawRequest(id: number, reason: string): Promise<void> {
@@ -1159,8 +1174,9 @@ export async function markWithdrawRequestPaid(id: number, externalReference: str
   })
 }
 
-export async function retryWithdrawPayout(id: number): Promise<void> {
-  await api.post(`/admin/withdraw-requests/${id}/retry-payout`)
+export async function retryWithdrawPayout(id: number): Promise<WithdrawPayoutOutcome> {
+  const { data } = await api.post<WithdrawPayoutOutcome>(`/admin/withdraw-requests/${id}/retry-payout`)
+  return data
 }
 
 // ============== AJUSTEMENT MANUEL DES WALLETS (SUPER-ADMIN) ==============

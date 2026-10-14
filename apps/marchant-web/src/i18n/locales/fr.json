@@ -2168,6 +2168,8 @@
       "payoutRetrying": "Tentative…",
       "payoutRetryCta": "Retenter le payout",
       "payoutRetryHint": "ou utilise le bouton « Marquer comme viré » ci-dessous pour le faire manuellement.",
+      "payoutFailedAlert": "Le virement automatique FedaPay a échoué : {{reason}}.\n\nEffectue le virement manuellement puis marque la demande comme virée.",
+      "payoutManualRequiredAlert": "Aucun virement automatique n'a été lancé pour ce mode de paiement.\n\nEffectue le virement manuellement puis marque la demande comme virée.",
       "payoutManualIntro": "Le wallet du livreur a été débité. ",
       "payoutManualMomoIntro": "Le payout FedaPay n'a pas été lancé (numéro non éligible ou tentative manuelle attendue). Effectue le virement vers ",
       "payoutManualBankIntro": "Effectue le virement bancaire vers ",

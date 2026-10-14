@@ -19,6 +19,7 @@ import {
   rejectWithdrawRequest,
   markWithdrawRequestPaid,
   retryWithdrawPayout,
+  type WithdrawPayoutOutcome,
   type WithdrawRequestRecentTx,
 } from '../../api/admin'
 
@@ -121,9 +122,29 @@ export default function AdminWithdrawRequestDetailPage() {
     window.alert(message)
   }
 
+  /**
+   * Un échec du virement automatique (FedaPay) ou un mode non automatisable ne doit
+   * jamais être présenté comme un virement lancé : le wallet est débité, c'est à
+   * l'ops d'effectuer le virement réel puis de marquer la demande comme virée.
+   */
+  function alertPayoutOutcome(result: WithdrawPayoutOutcome) {
+    if (result.payout_status === 'failed') {
+      window.alert(
+        t('admin.withdraws.payoutFailedAlert', {
+          reason: result.payout_failure_reason ?? t('admin.withdraws.payoutFailureUnknown'),
+        }),
+      )
+    } else if (result.payout_status === 'manual_required') {
+      window.alert(t('admin.withdraws.payoutManualRequiredAlert'))
+    }
+  }
+
   const approveMutation = useMutation({
     mutationFn: () => approveWithdrawRequest(Number(id)),
-    onSuccess: invalidate,
+    onSuccess: (result) => {
+      invalidate()
+      alertPayoutOutcome(result)
+    },
     onError: (err) => alertApi(err, t('admin.withdraws.approveError')),
   })
   const rejectMutation = useMutation({
@@ -146,7 +167,10 @@ export default function AdminWithdrawRequestDetailPage() {
   })
   const retryPayoutMutation = useMutation({
     mutationFn: () => retryWithdrawPayout(Number(id)),
-    onSuccess: invalidate,
+    onSuccess: (result) => {
+      invalidate()
+      alertPayoutOutcome(result)
+    },
     onError: (err) => alertApi(err, t('admin.withdraws.retryPayoutError')),
   })
 
