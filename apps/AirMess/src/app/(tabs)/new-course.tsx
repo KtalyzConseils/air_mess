@@ -11,13 +11,7 @@ import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { getPaymentCallbackUrl } from '../../lib/payment'
-import {
-  addPickupPoint,
-  fetchPickupPoints,
-  removePickupPoint,
-  type PickupPoint,
-} from '../../lib/pickupPoints'
-import PickupPointsSheet from '../../components/PickupPointsSheet'
+import { fetchPickupPoints, type PickupPoint } from '../../lib/pickupPoints'
 import PlaceSearchBox from '../../components/PlaceSearchBox'
 import { usePermissionPrompt } from '../../hooks/usePermissionPrompt'
 import { useAuthStore } from '../../stores/authStore'
@@ -87,9 +81,7 @@ const NEW_COURSE_COPY = {
     currentPosition: 'Position actuelle',
     editPickup: 'Modifier la prise en charge',
     useMyPosition: 'Utiliser ma position',
-    pickupSaveTrigger: 'Enregistrer ce retrait',
     pickupSavedTrigger: (count: number) => `Mes retraits (${count})`,
-    pickupAdd: 'Nouveau',
     newPickupLabel: 'Nouveau retrait',
     destination: 'Destination',
     whereToDeliver: 'Ou livrer ?',
@@ -182,9 +174,7 @@ const NEW_COURSE_COPY = {
     currentPosition: 'Current location',
     editPickup: 'Edit pickup',
     useMyPosition: 'Use my location',
-    pickupSaveTrigger: 'Save this pickup',
     pickupSavedTrigger: (count: number) => `My pickups (${count})`,
-    pickupAdd: 'New',
     newPickupLabel: 'New pickup',
     destination: 'Destination',
     whereToDeliver: 'Where to deliver?',
@@ -270,7 +260,6 @@ export default function NewCourseScreen() {
   const [createError, setCreateError] = useState<string | null>(null)
   const { ensure: ensureLocation, sheet: locationSheet } = usePermissionPrompt('location')
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([])
-  const [pickupSheetOpen, setPickupSheetOpen] = useState(false)
   const [draft, setDraft] = useState<LocationDraft>({
     originName: user?.marchant?.raison_sociale ?? user?.name ?? '',
     originPhone: user?.phone ?? '',
@@ -347,21 +336,9 @@ export default function NewCourseScreen() {
     void fetchPickupPoints().then(setPickupPoints)
   }, [])
 
-  const saveCurrentPickup = async () => {
-    if (!hasOriginCoords || draft.originLat === null || draft.originLng === null) return
-
-    const next = await addPickupPoint({
-      label: draft.originQuartier.trim() || draft.originAddress.trim(),
-      address: draft.originAddress.trim() || draft.originQuartier.trim(),
-      quartier: draft.originQuartier.trim(),
-      city: draft.originCity.trim() || 'Cotonou',
-      lat: draft.originLat,
-      lng: draft.originLng,
-    })
-    setPickupPoints(next)
-    setPickupSheetOpen(false)
-  }
-
+  // Un seul chemin pour enregistrer un retrait : l'ecran dedie
+  // (/pickup-address), ouvert par la ligne "Nouveau retrait" ci-dessous. La
+  // feuille modale qui doublait ce parcours a ete retiree.
   const usePickupPoint = (point: PickupPoint) => {
     setDraft((current) => ({
       ...current,
@@ -372,13 +349,8 @@ export default function NewCourseScreen() {
       originLng: point.lng,
     }))
     setLocationError(null)
-    setPickupSheetOpen(false)
     // Meme enchainement que la selection d'un lieu : on passe au destinataire.
     setLocationTarget('destination')
-  }
-
-  const deletePickupPoint = async (id: string) => {
-    setPickupPoints(await removePickupPoint(id))
   }
 
   const detectCurrentLocation = async () => {
@@ -704,10 +676,13 @@ export default function NewCourseScreen() {
                 </Pressable>
               </Pressable>
 
-              <View className="ml-1 mt-3 gap-2">
-                <Text className="text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
+              <View className="ml-1 mt-3">
+                <Text className="px-1 pb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
                   {copy.pickupSavedTrigger(pickupPoints.length)}
                 </Text>
+                {/* Meme ligne que le carnet destinataire (voir plus bas) : une
+                    seule mise en forme pour les deux listes. */}
+                <View className="overflow-hidden rounded-2xl border border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]">
                   {pickupPoints.map((point) => {
                     const selected =
                       draft.originLat !== null &&
@@ -716,43 +691,28 @@ export default function NewCourseScreen() {
                       Math.abs(draft.originLng - point.lng) < 1e-5
 
                     return (
-                      <Pressable
+                      <BookRow
                         key={point.id}
+                        icon="location-outline"
+                        title={point.label || point.quartier || copy.stepTrip}
+                        meta={[point.address, point.quartier, point.city].filter(Boolean).join(', ')}
+                        selected={selected}
+                        trailing={
+                          selected ? (
+                            <Ionicons name="checkmark-circle" size={18} color="#1A1614" />
+                          ) : undefined
+                        }
                         onPress={() => usePickupPoint(point)}
-                        className={[
-                          'flex-row items-start rounded-2xl bg-off-white p-3 dark:bg-[#181B24]',
-                          selected ? 'bg-airmess-yellow/25' : '',
-                        ].join(' ')}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                      >
-                        <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
-                          <Ionicons name="location-outline" size={23} color="#1A1614" />
-                        </View>
-                        <View className="flex-1">
-                          <Text className="text-base font-extrabold text-ink dark:text-white" numberOfLines={1}>
-                            {point.label || point.quartier || copy.stepTrip}
-                          </Text>
-                          <Text className="mt-0.5 text-xs font-semibold text-warm-500" numberOfLines={2}>
-                            {[point.address, point.quartier, point.city].filter(Boolean).join(', ')}
-                          </Text>
-                        </View>
-                        {selected && <Ionicons name="checkmark-circle" size={20} color="#1A1614" />}
-                      </Pressable>
+                      />
                     )
                   })}
-                <Pressable
-                  onPress={() => router.push('/pickup-address')}
-                  className="flex-row items-center rounded-2xl bg-off-white p-3 dark:bg-[#181B24]"
-                  accessibilityRole="button"
-                >
-                  <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
-                    <Ionicons name="add" size={23} color="#1A1614" />
-                  </View>
-                  <Text className="flex-1 text-base font-extrabold text-ink dark:text-white">
-                    {copy.newPickupLabel}
-                  </Text>
-                </Pressable>
+                  <BookRow
+                    icon="add"
+                    title={copy.newPickupLabel}
+                    className={pickupPoints.length > 0 ? 'border-t border-warm-100 dark:border-[#2A2F3A]' : ''}
+                    onPress={() => router.push('/pickup-address')}
+                  />
+                </View>
               </View>
 
               <View className="my-3 ml-[58px] h-px bg-warm-200" />
@@ -833,28 +793,15 @@ export default function NewCourseScreen() {
                     </View>
                   ) : (
                     addresses.slice(0, 5).map((address) => (
-                      <Pressable
+                      <BookRow
                         key={address.id}
+                        icon="person"
+                        title={address.label || address.recipient_name}
+                        subtitle={`${address.recipient_name} - ${address.recipient_phone}`}
+                        meta={[address.street, address.quartier, address.city].filter(Boolean).join(', ')}
+                        trailing={<Ionicons name="chevron-forward" size={18} color="#B8AF9F" />}
                         onPress={() => fillDestinationFromAddress(address)}
-                        className="min-h-16 flex-row items-center px-4 py-2"
-                        accessibilityRole="button"
-                      >
-                        <View className="h-9 w-9 items-center justify-center rounded-full bg-warm-100">
-                          <Ionicons name="person" size={18} color="#1A1614" />
-                        </View>
-                        <View className="ml-3 flex-1">
-                          <Text className="text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
-                            {address.label || address.recipient_name}
-                          </Text>
-                          <Text className="mt-0.5 text-xs font-bold text-warm-600" numberOfLines={1}>
-                            {address.recipient_name} - {address.recipient_phone}
-                          </Text>
-                          <Text className="mt-0.5 text-xs font-semibold text-warm-500" numberOfLines={1}>
-                            {[address.street, address.quartier, address.city].filter(Boolean).join(', ')}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={18} color="#B8AF9F" />
-                      </Pressable>
+                      />
                     ))
                   )}
                 </View>
@@ -1157,14 +1104,6 @@ export default function NewCourseScreen() {
         </View>
       )}
       {locationSheet}
-      <PickupPointsSheet
-        visible={pickupSheetOpen}
-        onClose={() => setPickupSheetOpen(false)}
-        points={pickupPoints}
-        onSaveCurrent={hasOriginCoords ? () => void saveCurrentPickup() : null}
-        onUse={usePickupPoint}
-        onDelete={(id) => void deletePickupPoint(id)}
-      />
     </Screen>
   )
 }
@@ -1218,6 +1157,66 @@ function FieldLabel({ children, required = false }: { children: React.ReactNode;
       {children}
       {required && <Text className="text-airmess-red"> *</Text>}
     </Text>
+  )
+}
+
+/**
+ * Ligne unique des listes d'adresses de la creation de course.
+ *
+ * Elle sert au carnet destinataire ET aux retraits enregistres : les deux
+ * listes doivent s'afficher a l'identique (pastille ronde claire, nom, adresse,
+ * lignes compactes empilees dans une meme carte).
+ */
+function BookRow({
+  icon,
+  title,
+  subtitle,
+  meta,
+  selected = false,
+  trailing,
+  className = '',
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  title: string
+  subtitle?: string
+  meta?: string
+  selected?: boolean
+  trailing?: React.ReactNode
+  className?: string
+  onPress: () => void
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className={[
+        'min-h-16 flex-row items-center px-4 py-2',
+        selected ? 'bg-airmess-yellow/15' : '',
+        className,
+      ].join(' ')}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+    >
+      <View className="h-9 w-9 items-center justify-center rounded-full bg-warm-100 dark:bg-[#232833]">
+        <Ionicons name={icon} size={18} color="#1A1614" />
+      </View>
+      <View className="ml-3 flex-1">
+        <Text className="text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text className="mt-0.5 text-xs font-bold text-warm-600" numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+        {meta ? (
+          <Text className="mt-0.5 text-xs font-semibold text-warm-500" numberOfLines={1}>
+            {meta}
+          </Text>
+        ) : null}
+      </View>
+      {trailing}
+    </Pressable>
   )
 }
 
