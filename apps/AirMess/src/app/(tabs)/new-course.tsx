@@ -83,6 +83,7 @@ const NEW_COURSE_COPY = {
     useMyPosition: 'Utiliser ma position',
     pickupSavedTrigger: (count: number) => `Mes retraits (${count})`,
     newPickupLabel: 'Nouveau retrait',
+    noPickupSaved: "Aucun retrait enregistre pour l'instant.",
     destination: 'Destination',
     whereToDeliver: 'Ou livrer ?',
     editDestination: 'Modifier la destination',
@@ -176,6 +177,7 @@ const NEW_COURSE_COPY = {
     useMyPosition: 'Use my location',
     pickupSavedTrigger: (count: number) => `My pickups (${count})`,
     newPickupLabel: 'New pickup',
+    noPickupSaved: 'No saved pickup yet.',
     destination: 'Destination',
     whereToDeliver: 'Where to deliver?',
     editDestination: 'Edit destination',
@@ -260,6 +262,7 @@ export default function NewCourseScreen() {
   const [createError, setCreateError] = useState<string | null>(null)
   const { ensure: ensureLocation, sheet: locationSheet } = usePermissionPrompt('location')
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([])
+  const [showPickupBook, setShowPickupBook] = useState(false)
   const [draft, setDraft] = useState<LocationDraft>({
     originName: user?.marchant?.raison_sociale ?? user?.name ?? '',
     originPhone: user?.phone ?? '',
@@ -349,6 +352,9 @@ export default function NewCourseScreen() {
       originLng: point.lng,
     }))
     setLocationError(null)
+    // Meme enchainement que le carnet destinataire : la liste se referme des
+    // qu'un point est choisi.
+    setShowPickupBook(false)
     // Meme enchainement que la selection d'un lieu : on passe au destinataire.
     setLocationTarget('destination')
   }
@@ -486,6 +492,7 @@ export default function NewCourseScreen() {
     setLocationError(null)
     setCreateError(null)
     setShowAddressBook(false)
+    setShowPickupBook(false)
     setDraft({
       originName: user?.marchant?.raison_sociale ?? user?.name ?? '',
       originPhone: user?.phone ?? '',
@@ -631,6 +638,29 @@ export default function NewCourseScreen() {
 
           <View className="mb-4">
             <Card className="shadow-card" padding="md">
+              {/* Meme en-tete que "Reception / Carnet" plus bas : le bouton sur
+                  le cote ouvre la liste des retraits enregistres. */}
+              <View className="mb-2 flex-row items-center justify-between">
+                <View className="flex-row items-center">
+                  <Text className="text-sm font-bold text-warm-400">{copy.pickup}</Text>
+                  {hasOriginCoords && (
+                    <Ionicons name="checkmark-circle" size={15} color="#16A34A" style={{ marginLeft: 6 }} />
+                  )}
+                </View>
+                <Pressable
+                  onPress={() => setShowPickupBook((value) => !value)}
+                  className="h-9 flex-row items-center rounded-full bg-warm-100 px-3"
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showPickupBook }}
+                >
+                  <Ionicons name="bookmark" size={16} color="#1A1614" />
+                  <Text className="ml-1 text-xs font-extrabold text-ink">
+                    {copy.pickupSavedTrigger(pickupPoints.length)}
+                  </Text>
+                </Pressable>
+              </View>
+
               <Pressable
                 onPress={() => setLocationTarget('origin')}
                 className={[
@@ -652,13 +682,7 @@ export default function NewCourseScreen() {
                   className="flex-1"
                   accessibilityRole="button"
                 >
-                  <View className="flex-row items-center">
-                    <Text className="text-sm font-bold text-warm-400">{copy.pickup}</Text>
-                    {hasOriginCoords && (
-                      <Ionicons name="checkmark-circle" size={15} color="#16A34A" style={{ marginLeft: 6 }} />
-                    )}
-                  </View>
-                  <Text className="mt-0.5 text-xl font-extrabold text-ink dark:text-white" numberOfLines={1}>
+                  <Text className="text-xl font-extrabold text-ink dark:text-white" numberOfLines={1}>
                     {formatCompactPlace(draft.originQuartier, draft.originCity) || copy.currentPosition}
                   </Text>
                 </Pressable>
@@ -676,13 +700,17 @@ export default function NewCourseScreen() {
                 </Pressable>
               </Pressable>
 
-              <View className="ml-1 mt-3">
-                <Text className="px-1 pb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
-                  {copy.pickupSavedTrigger(pickupPoints.length)}
-                </Text>
-                {/* Meme ligne que le carnet destinataire (voir plus bas) : une
-                    seule mise en forme pour les deux listes. */}
-                <View className="overflow-hidden rounded-2xl border border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]">
+              {showPickupBook && (
+                // Meme boite et memes lignes que le carnet destinataire.
+                <View className="mt-3 overflow-hidden rounded-2xl border border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]">
+                  {pickupPoints.length === 0 && (
+                    <View className="flex-row items-center px-4 py-3">
+                      <Ionicons name="information-circle-outline" size={18} color="#8A7E68" />
+                      <Text className="ml-2 flex-1 text-sm font-semibold text-warm-500">
+                        {copy.noPickupSaved}
+                      </Text>
+                    </View>
+                  )}
                   {pickupPoints.map((point) => {
                     const selected =
                       draft.originLat !== null &&
@@ -709,11 +737,11 @@ export default function NewCourseScreen() {
                   <BookRow
                     icon="add"
                     title={copy.newPickupLabel}
-                    className={pickupPoints.length > 0 ? 'border-t border-warm-100 dark:border-[#2A2F3A]' : ''}
+                    className="border-t border-warm-100 dark:border-[#2A2F3A]"
                     onPress={() => router.push('/pickup-address')}
                   />
                 </View>
-              </View>
+              )}
 
               <View className="my-3 ml-[58px] h-px bg-warm-200" />
 
