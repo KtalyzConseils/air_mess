@@ -3,12 +3,14 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as Location from 'expo-location'
 import { Image } from 'expo-image'
-import { Link } from 'expo-router'
+import { Link, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { fetchCourses, type Course } from '../../api/courses'
 import { fetchUnreadCount } from '../../api/notifications'
+import BottomSheet from '../../components/ui/BottomSheet'
+import { fetchPickupPoints, type PickupPoint } from '../../lib/pickupPoints'
 import { usePermissionPrompt } from '../../hooks/usePermissionPrompt'
 import { useLanguageStore } from '../../stores/languageStore'
 
@@ -23,6 +25,10 @@ const DASHBOARD_COPY = {
     positionUnavailable: 'Position indisponible',
     openNotifications: 'Ouvrir les notifications',
     detectPosition: 'Detecter votre position',
+    pickupsTitle: 'Point de retrait',
+    pickupsSubtitle: 'Position actuelle ou adresse enregistree.',
+    useCurrentPosition: 'Utiliser ma position actuelle',
+    newPickup: 'Nouveau retrait',
     detecting: 'Detection...',
     todayCourses: 'Courses du jour',
     activeCourse: (count: number) => `${count} course${count > 1 ? 's' : ''} encore active${count > 1 ? 's' : ''}`,
@@ -47,6 +53,10 @@ const DASHBOARD_COPY = {
     positionUnavailable: 'Location unavailable',
     openNotifications: 'Open notifications',
     detectPosition: 'Detect your location',
+    pickupsTitle: 'Pickup point',
+    pickupsSubtitle: 'Current position or a saved address.',
+    useCurrentPosition: 'Use my current position',
+    newPickup: 'New pickup',
     detecting: 'Detecting...',
     todayCourses: "Today's deliveries",
     activeCourse: (count: number) => `${count} ${count > 1 ? 'deliveries' : 'delivery'} still active`,
@@ -136,6 +146,14 @@ function Header() {
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState(false)
   const { ensure: ensureLocation, sheet: locationSheet } = usePermissionPrompt('location')
+  const router = useRouter()
+  const [pickupSheetOpen, setPickupSheetOpen] = useState(false)
+  const [pickups, setPickups] = useState<PickupPoint[]>([])
+
+  const openPickupSheet = () => {
+    setPickupSheetOpen(true)
+    void fetchPickupPoints().then(setPickups)
+  }
   const { data: unread = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: fetchUnreadCount,
@@ -217,7 +235,7 @@ function Header() {
       </View>
 
       <Pressable
-        onPress={() => void detectPosition()}
+        onPress={openPickupSheet}
         className={[
           'max-w-[82%] self-start flex-row items-center rounded-full border px-3 py-2.5 shadow-card',
           locationError
@@ -249,6 +267,62 @@ function Header() {
         <Ionicons name="chevron-forward" size={15} color="#8A7E68" style={{ marginLeft: 4 }} />
       </Pressable>
       {locationSheet}
+      <BottomSheet
+        visible={pickupSheetOpen}
+        onClose={() => setPickupSheetOpen(false)}
+        title={copy.pickupsTitle}
+        subtitle={copy.pickupsSubtitle}
+      >
+        <View className="gap-2 pb-2">
+          <Pressable
+            onPress={() => {
+              setPickupSheetOpen(false)
+              void detectPosition()
+            }}
+            className="min-h-14 flex-row items-center rounded-2xl border border-warm-200 bg-off-white px-4 py-3 dark:border-[#343A46] dark:bg-[#181B24]"
+            accessibilityRole="button"
+          >
+            <Ionicons name="locate" size={20} color="#1A1614" />
+            <Text className="ml-3 flex-1 text-sm font-extrabold text-ink dark:text-white">
+              {copy.useCurrentPosition}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              setPickupSheetOpen(false)
+              router.push('/pickup-address')
+            }}
+            className="min-h-14 flex-row items-center rounded-2xl border border-airmess-yellow bg-airmess-yellow px-4 py-3"
+            accessibilityRole="button"
+          >
+            <Ionicons name="add-circle-outline" size={20} color="#1A1614" />
+            <Text className="ml-3 flex-1 text-sm font-extrabold text-ink">{copy.newPickup}</Text>
+          </Pressable>
+
+          {pickups.map((pickup) => (
+            <Pressable
+              key={pickup.id}
+              onPress={() => {
+                setPositionLabel(pickup.label || pickup.quartier || copy.yourPosition)
+                setPickupSheetOpen(false)
+              }}
+              className="min-h-14 flex-row items-center rounded-2xl border border-warm-200 bg-white px-4 py-3 dark:border-[#343A46] dark:bg-[#181B24]"
+              accessibilityRole="button"
+            >
+              <Ionicons name="bookmark" size={18} color="#8A7E68" />
+              <View className="ml-3 flex-1">
+                <Text className="text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
+                  {pickup.label || pickup.quartier}
+                </Text>
+                <Text className="mt-0.5 text-xs font-semibold text-warm-500" numberOfLines={1}>
+                  {pickup.address || [pickup.quartier, pickup.city].filter(Boolean).join(', ')}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      </BottomSheet>
     </View>
   )
 }

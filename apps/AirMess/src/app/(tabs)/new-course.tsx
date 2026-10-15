@@ -18,6 +18,7 @@ import {
   type PickupPoint,
 } from '../../lib/pickupPoints'
 import PickupPointsSheet from '../../components/PickupPointsSheet'
+import PlaceSearchBox from '../../components/PlaceSearchBox'
 import { usePermissionPrompt } from '../../hooks/usePermissionPrompt'
 import { useAuthStore } from '../../stores/authStore'
 import { useLanguageStore, type AppLanguage } from '../../stores/languageStore'
@@ -88,6 +89,7 @@ const NEW_COURSE_COPY = {
     useMyPosition: 'Utiliser ma position',
     pickupSaveTrigger: 'Enregistrer ce retrait',
     pickupSavedTrigger: (count: number) => `Mes retraits (${count})`,
+    pickupAdd: 'Nouveau',
     destination: 'Destination',
     whereToDeliver: 'Ou livrer ?',
     editDestination: 'Modifier la destination',
@@ -181,6 +183,7 @@ const NEW_COURSE_COPY = {
     useMyPosition: 'Use my location',
     pickupSaveTrigger: 'Save this pickup',
     pickupSavedTrigger: (count: number) => `My pickups (${count})`,
+    pickupAdd: 'New',
     destination: 'Destination',
     whereToDeliver: 'Where to deliver?',
     editDestination: 'Edit destination',
@@ -346,6 +349,7 @@ export default function NewCourseScreen() {
     if (!hasOriginCoords || draft.originLat === null || draft.originLng === null) return
 
     const next = await addPickupPoint({
+      label: draft.originQuartier.trim() || draft.originAddress.trim(),
       address: draft.originAddress.trim() || draft.originQuartier.trim(),
       quartier: draft.originQuartier.trim(),
       city: draft.originCity.trim() || 'Cotonou',
@@ -698,18 +702,43 @@ export default function NewCourseScreen() {
                 </Pressable>
               </Pressable>
 
-              <Pressable
-                onPress={() => setPickupSheetOpen(true)}
-                className="ml-[58px] mt-2 flex-row items-center"
-                accessibilityRole="button"
-              >
-                <Ionicons name="bookmark-outline" size={15} color="#8A7E68" />
-                <Text className="ml-1.5 text-xs font-extrabold text-warm-600 dark:text-[#AEB6C5]">
-                  {pickupPoints.length > 0
-                    ? copy.pickupSavedTrigger(pickupPoints.length)
-                    : copy.pickupSaveTrigger}
-                </Text>
-              </Pressable>
+              <View className="ml-[58px] mt-2 flex-row flex-wrap items-center gap-2">
+                  {pickupPoints.map((point) => {
+                    const selected =
+                      draft.originLat !== null &&
+                      draft.originLng !== null &&
+                      Math.abs(draft.originLat - point.lat) < 1e-5 &&
+                      Math.abs(draft.originLng - point.lng) < 1e-5
+
+                    return (
+                      <Pressable
+                        key={point.id}
+                        onPress={() => usePickupPoint(point)}
+                        className={[
+                          'flex-row items-center rounded-full border px-3 py-1.5',
+                          selected
+                            ? 'border-airmess-yellow bg-airmess-yellow'
+                            : 'border-warm-200 bg-off-white dark:border-[#343A46] dark:bg-[#181B24]',
+                        ].join(' ')}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                      >
+                        <Ionicons name="bookmark" size={13} color="#1A1614" />
+                        <Text className="ml-1 max-w-[130px] text-xs font-extrabold text-ink dark:text-white" numberOfLines={1}>
+                          {point.label || point.quartier || copy.stepTrip}
+                        </Text>
+                      </Pressable>
+                    )
+                  })}
+                <Pressable
+                  onPress={() => router.push('/pickup-address')}
+                  className="flex-row items-center rounded-full border border-dashed border-warm-400 px-3 py-1.5"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="add" size={14} color="#1A1614" />
+                  <Text className="ml-1 text-xs font-extrabold text-ink dark:text-white">{copy.pickupAdd}</Text>
+                </Pressable>
+              </View>
 
               <View className="my-3 ml-[58px] h-px bg-warm-200" />
 
@@ -755,8 +784,8 @@ export default function NewCourseScreen() {
 
             <View className="mt-3">
               <PlaceSearchBox
-                target={locationTarget}
-                copy={copy}
+                resetKey={locationTarget}
+                placesLanguage={copy.placesLanguage}
                 onSelect={handleSelectPlace}
                 onSearchChange={() => setLocationError(null)}
                 placeholder={locationTarget === 'origin' ? copy.searchPickup : copy.searchDestination}
@@ -1165,117 +1194,6 @@ function StepDot({ active, done, label }: { active: boolean; done: boolean; labe
   )
 }
 
-function PlaceSearchBox({
-  target,
-  placeholder,
-  copy,
-  onSelect,
-  onSearchChange,
-}: {
-  target: LocationTarget
-  placeholder: string
-  copy: NewCourseCopy
-  onSelect: (place: PlaceDetails) => void
-  onSearchChange?: () => void
-}) {
-  const [query, setQuery] = useState('')
-  const [debounced, setDebounced] = useState('')
-  const [loadingDetail, setLoadingDetail] = useState(false)
-  const [detailError, setDetailError] = useState<string | null>(null)
-  const sessionIdRef = useRef(generateSessionId())
-
-  useEffect(() => {
-    setQuery('')
-    setDebounced('')
-    setDetailError(null)
-  }, [target])
-
-  useEffect(() => {
-    const trimmed = query.trim()
-    if (trimmed.length < 2) {
-      setDebounced('')
-      return
-    }
-
-    const timer = setTimeout(() => setDebounced(trimmed), 350)
-    return () => clearTimeout(timer)
-  }, [query])
-
-  const { data: suggestions = [], isFetching, error: searchError } = useQuery({
-    queryKey: ['places-search', debounced, copy.placesLanguage],
-    queryFn: () => searchPlaces(debounced, sessionIdRef.current, copy.placesLanguage),
-    enabled: debounced.length >= 2,
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const selectPlace = async (suggestion: PlaceSuggestion) => {
-    setLoadingDetail(true)
-    setDetailError(null)
-    try {
-      const place = await fetchPlaceDetails(suggestion.place_id, sessionIdRef.current, copy.placesLanguage)
-      onSelect(place)
-      setQuery(suggestion.main_text || suggestion.description)
-      setDebounced('')
-      sessionIdRef.current = generateSessionId()
-    } catch (err) {
-      setDetailError(getApiErrorMessage(err))
-    } finally {
-      setLoadingDetail(false)
-    }
-  }
-
-  return (
-    <View>
-      <View className="h-12 flex-row items-center rounded-2xl border border-warm-200 bg-white px-4 dark:border-[#343A46] dark:bg-[#181B24]">
-        <Ionicons name="search" size={19} color="#6F665D" />
-        <TextInput
-          value={query}
-          onChangeText={(value) => {
-            onSearchChange?.()
-            setQuery(value)
-          }}
-          className="ml-3 h-full flex-1 text-sm font-semibold text-ink dark:text-white"
-          placeholder={placeholder}
-          placeholderTextColor="#A89F95"
-        />
-        {(isFetching || loadingDetail) && <ActivityIndicator color="#1A1614" />}
-      </View>
-
-      {(detailError || searchError) && (
-        <Text className="mt-2 text-sm font-bold text-airmess-red">
-          {detailError ?? getApiErrorMessage(searchError)}
-        </Text>
-      )}
-
-      {debounced.length >= 2 && suggestions.length > 0 && (
-        <View className="mt-2 overflow-hidden rounded-2xl border border-warm-200 bg-off-white dark:border-[#343A46] dark:bg-[#181B24]">
-          {suggestions.slice(0, 5).map((suggestion, index) => (
-            <Pressable
-              key={suggestion.place_id}
-              onPress={() => void selectPlace(suggestion)}
-              className="min-h-12 flex-row items-center px-4"
-              accessibilityRole="button"
-            >
-              <Ionicons name="location-outline" size={17} color="#6F665D" />
-              <View className="ml-3 flex-1">
-                <Text className="text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
-                  {suggestion.main_text}
-                </Text>
-                {!!suggestion.secondary && (
-                  <Text className="mt-0.5 text-xs font-semibold text-warm-500" numberOfLines={1}>
-                    {suggestion.secondary}
-                  </Text>
-                )}
-              </View>
-              {index === 0 && <Ionicons name="chevron-forward" size={18} color="#B8AF9F" />}
-            </Pressable>
-          ))}
-        </View>
-      )}
-    </View>
-  )
-}
-
 function FieldLabel({ children, required = false }: { children: React.ReactNode; required?: boolean }) {
   return (
     <Text className="mb-2 mt-3 text-xs font-extrabold uppercase text-warm-500">
@@ -1399,7 +1317,3 @@ function formatCompactPlace(quartier: string, city: string) {
   return [quartier, city].filter(Boolean).join(', ')
 }
 
-function generateSessionId() {
-  const rand = () => Math.floor(Math.random() * 0xffff).toString(16).padStart(4, '0')
-  return `${rand()}${rand()}-${rand()}-${rand()}-${rand()}-${rand()}${rand()}${rand()}`
-}

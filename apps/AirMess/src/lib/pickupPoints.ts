@@ -16,6 +16,8 @@ export const MAX_PICKUP_POINTS = 10
 
 export interface PickupPoint {
   id: string
+  /** Nom donne par l'utilisateur (Maison, Travail, ...). */
+  label: string
   /** Rue / lieu tel que renvoye par la recherche (peut etre vide). */
   address: string
   quartier: string
@@ -49,7 +51,10 @@ export async function fetchPickupPoints(): Promise<PickupPoint[]> {
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isPickupPoint)
+    // `label` a ete ajoute apres coup : les points enregistres sans nom restent lisibles.
+    return parsed
+      .filter(isPickupPoint)
+      .map((point) => ({ ...point, label: typeof point.label === 'string' ? point.label : '' }))
   } catch {
     return []
   }
