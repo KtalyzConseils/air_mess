@@ -727,7 +727,11 @@ export default function NewCourseScreen() {
                         key={point.id}
                         icon="location-outline"
                         title={point.label || point.quartier || copy.stepTrip}
-                        meta={[point.address, point.quartier, point.city].filter(Boolean).join(', ')}
+                        // Meme structure que les lignes du carnet : nom, puis
+                        // l'adresse, puis la ligne courte quartier/ville que la
+                        // troncature ne peut pas manger.
+                        subtitle={point.address}
+                        meta={[point.quartier, point.city].filter(Boolean).join(', ')}
                         selected={selected}
                         trailing={
                           selected ? (
@@ -1153,16 +1157,41 @@ function PackageCard({
     <Pressable
       onPress={onPress}
       className={[
-        'min-h-[96px] w-[47%] rounded-2xl border p-3',
-        selected ? 'border-airmess-yellow bg-airmess-yellow' : 'border-warm-200 bg-off-white dark:border-[#343A46] dark:bg-[#181B24]',
+        // Deux colonnes toujours egales : base a 45% (deux par ligne, meme avec
+        // le gap) puis etirement pour remplir la ligne, au lieu d'un w-[47%] qui
+        // laissait un vide irregulier a droite.
+        'min-h-[104px] grow shrink basis-[45%] rounded-2xl border p-3.5',
+        selected
+          ? 'border-airmess-yellow bg-airmess-yellow'
+          : 'border-warm-200 bg-off-white dark:border-[#343A46] dark:bg-[#181B24]',
       ].join(' ')}
       accessibilityRole="button"
+      accessibilityState={{ selected }}
     >
-      <View className="mb-2 h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-[#11141B]">
-        <Ionicons name={item.icon} size={20} color="#1A1614" />
+      <View className="mb-2.5 flex-row items-start justify-between">
+        {/* Pastille lisible sur les deux themes : le blanc sur off-white
+            disparaissait en clair, et le choix retenu se voit d'un coup d'oeil. */}
+        <View
+          className={[
+            'h-11 w-11 items-center justify-center rounded-full',
+            selected ? 'bg-white' : 'bg-warm-100 dark:bg-[#232833]',
+          ].join(' ')}
+        >
+          <Ionicons name={item.icon} size={22} color="#1A1614" />
+        </View>
+        {selected && <Ionicons name="checkmark-circle" size={20} color="#1A1614" />}
       </View>
       <Text className={['text-sm font-extrabold', selected ? 'text-ink' : 'text-ink dark:text-white'].join(' ')}>{item.title}</Text>
-      <Text className="mt-0.5 text-[11px] font-semibold leading-4 text-warm-600">{item.subtitle}</Text>
+      <Text
+        className={[
+          'mt-0.5 text-xs font-semibold leading-4',
+          // Sur la carte jaune, warm-600 tombait a 4:1 ; en sombre il restait
+          // sous 4.5:1. On garde le gris secondaire clair de l'app en sombre.
+          selected ? 'text-ink/80' : 'text-warm-600 dark:text-[#AEB6C5]',
+        ].join(' ')}
+      >
+        {item.subtitle}
+      </Text>
     </Pressable>
   )
 }
