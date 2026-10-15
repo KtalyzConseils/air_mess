@@ -704,8 +704,8 @@ export default function NewCourseScreen() {
                 </Pressable>
               </Pressable>
 
-              <View className="ml-[58px] mt-3 overflow-hidden rounded-2xl border border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]">
-                <Text className="px-3 pt-2.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
+              <View className="ml-1 mt-3 gap-2">
+                <Text className="text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
                   {copy.pickupSavedTrigger(pickupPoints.length)}
                 </Text>
                   {pickupPoints.map((point) => {
@@ -720,36 +720,36 @@ export default function NewCourseScreen() {
                         key={point.id}
                         onPress={() => usePickupPoint(point)}
                         className={[
-                          'min-h-16 flex-row items-center px-4 py-2',
+                          'flex-row items-start rounded-2xl bg-off-white p-3 dark:bg-[#181B24]',
                           selected ? 'bg-airmess-yellow/25' : '',
                         ].join(' ')}
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                       >
-                        <View className="h-9 w-9 items-center justify-center rounded-full bg-warm-100">
-                          <Ionicons name="storefront" size={18} color="#1A1614" />
+                        <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
+                          <Ionicons name="location-outline" size={23} color="#1A1614" />
                         </View>
-                        <View className="ml-3 flex-1">
-                          <Text className="text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
+                        <View className="flex-1">
+                          <Text className="text-base font-extrabold text-ink dark:text-white" numberOfLines={1}>
                             {point.label || point.quartier || copy.stepTrip}
                           </Text>
-                          <Text className="mt-0.5 text-xs font-semibold text-warm-500" numberOfLines={1}>
-                            {point.address || [point.quartier, point.city].filter(Boolean).join(', ')}
+                          <Text className="mt-0.5 text-xs font-semibold text-warm-500" numberOfLines={2}>
+                            {[point.address, point.quartier, point.city].filter(Boolean).join(', ')}
                           </Text>
                         </View>
-                        {selected && <Ionicons name="checkmark-circle" size={18} color="#1A1614" />}
+                        {selected && <Ionicons name="checkmark-circle" size={20} color="#1A1614" />}
                       </Pressable>
                     )
                   })}
                 <Pressable
                   onPress={() => router.push('/pickup-address')}
-                  className="min-h-16 flex-row items-center px-4 py-2"
+                  className="flex-row items-center rounded-2xl bg-off-white p-3 dark:bg-[#181B24]"
                   accessibilityRole="button"
                 >
-                  <View className="h-9 w-9 items-center justify-center rounded-full bg-airmess-yellow">
-                    <Ionicons name="add" size={19} color="#1A1614" />
+                  <View className="mr-3 h-11 w-11 items-center justify-center rounded-full bg-airmess-yellow">
+                    <Ionicons name="add" size={23} color="#1A1614" />
                   </View>
-                  <Text className="ml-3 flex-1 text-sm font-extrabold text-ink dark:text-white">
+                  <Text className="flex-1 text-base font-extrabold text-ink dark:text-white">
                     {copy.newPickupLabel}
                   </Text>
                 </Pressable>
