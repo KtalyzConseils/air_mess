@@ -90,6 +90,7 @@ const NEW_COURSE_COPY = {
     pickupSaveTrigger: 'Enregistrer ce retrait',
     pickupSavedTrigger: (count: number) => `Mes retraits (${count})`,
     pickupAdd: 'Nouveau',
+    newPickupLabel: 'Nouveau retrait',
     destination: 'Destination',
     whereToDeliver: 'Ou livrer ?',
     editDestination: 'Modifier la destination',
@@ -184,6 +185,7 @@ const NEW_COURSE_COPY = {
     pickupSaveTrigger: 'Save this pickup',
     pickupSavedTrigger: (count: number) => `My pickups (${count})`,
     pickupAdd: 'New',
+    newPickupLabel: 'New pickup',
     destination: 'Destination',
     whereToDeliver: 'Where to deliver?',
     editDestination: 'Edit destination',
@@ -702,7 +704,10 @@ export default function NewCourseScreen() {
                 </Pressable>
               </Pressable>
 
-              <View className="ml-[58px] mt-2 flex-row flex-wrap items-center gap-2">
+              <View className="ml-[58px] mt-3 overflow-hidden rounded-2xl border border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]">
+                <Text className="px-3 pt-2.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
+                  {copy.pickupSavedTrigger(pickupPoints.length)}
+                </Text>
                   {pickupPoints.map((point) => {
                     const selected =
                       draft.originLat !== null &&
@@ -715,28 +720,40 @@ export default function NewCourseScreen() {
                         key={point.id}
                         onPress={() => usePickupPoint(point)}
                         className={[
-                          'flex-row items-center rounded-full border px-3 py-1.5',
-                          selected
-                            ? 'border-airmess-yellow bg-airmess-yellow'
-                            : 'border-warm-200 bg-off-white dark:border-[#343A46] dark:bg-[#181B24]',
+                          'flex-row items-center border-t border-warm-100 px-3 py-2.5',
+                          selected ? 'bg-airmess-yellow/25' : '',
                         ].join(' ')}
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                       >
-                        <Ionicons name="bookmark" size={13} color="#1A1614" />
-                        <Text className="ml-1 max-w-[130px] text-xs font-extrabold text-ink dark:text-white" numberOfLines={1}>
-                          {point.label || point.quartier || copy.stepTrip}
-                        </Text>
+                        <Ionicons
+                          name={selected ? 'bookmark' : 'bookmark-outline'}
+                          size={17}
+                          color={selected ? '#1A1614' : '#8A7E68'}
+                        />
+                        <View className="ml-2.5 flex-1">
+                          <Text className="text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
+                            {point.label || point.quartier || copy.stepTrip}
+                          </Text>
+                          <Text className="mt-0.5 text-xs font-semibold text-warm-500" numberOfLines={1}>
+                            {point.address || [point.quartier, point.city].filter(Boolean).join(', ')}
+                          </Text>
+                        </View>
+                        {selected && <Ionicons name="checkmark-circle" size={18} color="#1A1614" />}
                       </Pressable>
                     )
                   })}
                 <Pressable
                   onPress={() => router.push('/pickup-address')}
-                  className="flex-row items-center rounded-full border border-dashed border-warm-400 px-3 py-1.5"
+                  className="flex-row items-center border-t border-warm-100 px-3 py-2.5"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="add" size={14} color="#1A1614" />
-                  <Text className="ml-1 text-xs font-extrabold text-ink dark:text-white">{copy.pickupAdd}</Text>
+                  <View className="h-8 w-8 items-center justify-center rounded-full bg-airmess-yellow">
+                    <Ionicons name="add" size={18} color="#1A1614" />
+                  </View>
+                  <Text className="ml-2.5 flex-1 text-sm font-extrabold text-ink dark:text-white">
+                    {copy.newPickupLabel}
+                  </Text>
                 </Pressable>
               </View>
 
@@ -810,9 +827,12 @@ export default function NewCourseScreen() {
               {showAddressBook && (
                 <View className="mt-3 overflow-hidden rounded-2xl border border-warm-200 bg-white dark:border-[#343A46] dark:bg-[#181B24]">
                   {addresses.length === 0 ? (
-                    <Text className="px-4 py-3 text-sm font-semibold text-warm-500">
-                      {copy.noAddressSaved}
-                    </Text>
+                    <View className="flex-row items-center px-4 py-3">
+                      <Ionicons name="information-circle-outline" size={18} color="#8A7E68" />
+                      <Text className="ml-2 flex-1 text-sm font-semibold text-warm-500">
+                        {copy.noAddressSaved}
+                      </Text>
+                    </View>
                   ) : (
                     addresses.slice(0, 5).map((address) => (
                       <Pressable
