@@ -25,12 +25,13 @@ export default function BrandSplash() {
   }, [opacity, scale])
 
   return (
-    // Fond sombre identique au splash natif (voir expo-splash-screen dans
-    // app.json) : pas de flash blanc entre les deux.
-    <View className="flex-1 items-center justify-center bg-airmess-dark">
-      <StatusBar style="light" />
+    // Fond jaune identique au splash natif (backgroundColor #FFCC00 dans
+    // app.json) : pas de flash entre les deux. La marque est posee nue, sans son
+    // bloc jaune, pour ne pas faire du jaune sur du jaune.
+    <View className="flex-1 items-center justify-center bg-airmess-yellow">
+      <StatusBar style="dark" />
       <Animated.View style={{ opacity, transform: [{ scale }] }}>
-        <BrandMark size="lg" />
+        <BrandMark variant="bare" />
       </Animated.View>
     </View>
   )
