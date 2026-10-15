@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   Alert,
   KeyboardAvoidingView,
@@ -95,6 +95,14 @@ const EMPTY_FORM: AddressPayload = {
   city: 'Cotonou',
 }
 
+/**
+ * Reference d'appel du formulaire : gardee tant que l'enregistrement n'a pas
+ * abouti, pour qu'un double tap ou un retry reseau ne cree qu'une adresse.
+ */
+function makeClientReference(): string {
+  return `addr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 export default function AddressesScreen() {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -105,6 +113,10 @@ export default function AddressesScreen() {
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState<AddressPayload>(EMPTY_FORM)
   const [formError, setFormError] = useState<string | null>(null)
+  const [clientReference, setClientReference] = useState<string | null>(null)
+  // Verrou synchrone : l'etat react-query arrive apres le premier tap, un
+  // deuxieme appui tres rapide passerait entre les deux.
+  const submittingRef = useRef(false)
 
   const { data: addresses = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['addresses'],
@@ -135,9 +147,20 @@ export default function AddressesScreen() {
       editing ? updateAddress(editing.id, payload) : createAddress(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['addresses'] })
-      closeModal()
+      // Le formulaire doit disparaitre des que l'enregistrement aboutit. On ne
+      // peut pas se fier a `isPending` ici : react-query appelle onSuccess alors
+      // que la mutation est encore a l'etat "pending", donc closeModal() sortait
+      // aussitot sans fermer la modale.
+      submittingRef.current = false
+      setClientReference(null)
+      closeModal(true)
     },
-    onError: (error) => setFormError(getApiErrorMessage(error, language)),
+    onError: (error) => {
+      // La reference est conservee : le prochain essai rejoue le meme appel et
+      // l'API renvoie l'adresse deja creee si la requete avait abouti malgre tout.
+      submittingRef.current = false
+      setFormError(getApiErrorMessage(error, language))
+    },
   })
 
   const deleteMutation = useMutation({
@@ -150,6 +173,7 @@ export default function AddressesScreen() {
     setEditing(null)
     setForm(EMPTY_FORM)
     setFormError(null)
+    setClientReference(makeClientReference())
     setModalOpen(true)
   }
 
@@ -162,11 +186,13 @@ export default function AddressesScreen() {
       city: address.city,
     })
     setFormError(null)
+    setClientReference(null)
     setModalOpen(true)
   }
 
-  const closeModal = () => {
-    if (saveMutation.isPending) return
+  const closeModal = (force = false) => {
+    if (!force && saveMutation.isPending) return
+    submittingRef.current = false
     setModalOpen(false)
     setEditing(null)
     setFormError(null)
@@ -196,14 +222,19 @@ export default function AddressesScreen() {
     !saveMutation.isPending
 
   const saveAddress = () => {
-    if (!canSave) return
+    if (!canSave || submittingRef.current) return
+    submittingRef.current = true
 
-    saveMutation.mutate({
+    const payload: AddressPayload = {
       recipient_name: form.recipient_name.trim(),
       recipient_phone: form.recipient_phone.trim(),
       quartier: form.quartier.trim() || copy.defaultQuartier,
       city: form.city.trim() || 'Cotonou',
-    })
+    }
+    // Une modification n'est pas une creation : la cle ne concerne que l'ajout.
+    if (!editing && clientReference) payload.client_reference = clientReference
+
+    saveMutation.mutate(payload)
   }
 
   return (

@@ -15,6 +15,7 @@ class Address extends Model
         'street', 'landmark', 'quartier', 'city',
         'lat', 'lng', 'instructions',
         'is_default', 'usage_count',
+        'client_reference',
     ];
 
     protected function casts(): array

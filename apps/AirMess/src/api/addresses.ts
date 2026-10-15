@@ -16,6 +16,8 @@ export interface Address {
   instructions: string | null
   is_default: boolean
   usage_count: number
+  /** Cle d'idempotence envoyee par le formulaire, null pour les autres clients. */
+  client_reference: string | null
   created_at: string
   updated_at: string
 }
@@ -31,6 +33,11 @@ export interface AddressPayload {
   maps_link?: string | null
   instructions?: string | null
   is_default?: boolean
+  /**
+   * Reference d'appel : rejouer le meme enregistrement (double tap, retry
+   * reseau) ne cree qu'une seule adresse cote API.
+   */
+  client_reference?: string | null
 }
 
 export async function fetchAddresses(): Promise<Address[]> {
