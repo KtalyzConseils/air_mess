@@ -606,7 +606,7 @@ export default function NewCourseScreen() {
       {step === 'package' ? (
         <View>
           <Text className="mb-3 text-base font-extrabold text-ink dark:text-white">{copy.whatAreWeDelivering}</Text>
-          <View className="flex-row flex-wrap gap-3">
+          <View className="flex-row flex-wrap gap-4">
             {copy.packageTypes.map((item) => (
               <PackageCard
                 key={item.id}
@@ -1157,41 +1157,55 @@ function PackageCard({
     <Pressable
       onPress={onPress}
       className={[
-        // Deux colonnes toujours egales : base a 45% (deux par ligne, meme avec
+        // Deux colonnes toujours egales : base a 44% (deux par ligne, meme avec
         // le gap) puis etirement pour remplir la ligne, au lieu d'un w-[47%] qui
         // laissait un vide irregulier a droite.
-        'min-h-[104px] grow shrink basis-[45%] rounded-2xl border p-3.5',
+        'min-h-[148px] grow shrink basis-[44%] justify-between rounded-3xl border p-4 shadow-card',
         selected
           ? 'border-airmess-yellow bg-airmess-yellow'
           : 'border-warm-200 bg-off-white dark:border-[#343A46] dark:bg-[#181B24]',
       ].join(' ')}
       accessibilityRole="button"
       accessibilityState={{ selected }}
+      accessibilityLabel={`${item.title} ${item.subtitle}`}
     >
-      <View className="mb-2.5 flex-row items-start justify-between">
-        {/* Pastille lisible sur les deux themes : le blanc sur off-white
-            disparaissait en clair, et le choix retenu se voit d'un coup d'oeil. */}
+      <View className="flex-row items-start justify-between">
+        {/* Tuile d'icone jaune, comme celle de la marque : lisible sur fond
+            clair comme sur fond sombre (le blanc sur off-white disparaissait). */}
         <View
           className={[
-            'h-11 w-11 items-center justify-center rounded-full',
-            selected ? 'bg-white' : 'bg-warm-100 dark:bg-[#232833]',
+            'h-12 w-12 items-center justify-center rounded-2xl',
+            selected ? 'bg-white' : 'bg-airmess-yellow',
           ].join(' ')}
         >
-          <Ionicons name={item.icon} size={22} color="#1A1614" />
+          <Ionicons name={item.icon} size={24} color="#1A1614" />
         </View>
         {selected && <Ionicons name="checkmark-circle" size={20} color="#1A1614" />}
       </View>
-      <Text className={['text-sm font-extrabold', selected ? 'text-ink' : 'text-ink dark:text-white'].join(' ')}>{item.title}</Text>
-      <Text
-        className={[
-          'mt-0.5 text-xs font-semibold leading-4',
-          // Sur la carte jaune, warm-600 tombait a 4:1 ; en sombre il restait
-          // sous 4.5:1. On garde le gris secondaire clair de l'app en sombre.
-          selected ? 'text-ink/80' : 'text-warm-600 dark:text-[#AEB6C5]',
-        ].join(' ')}
-      >
-        {item.subtitle}
-      </Text>
+
+      {/* Texte ancre en bas de la carte : l'air laisse par la hauteur se place
+          entre l'icone et le texte, la carte ne parait plus vide. */}
+      <View className="mt-4">
+        <Text
+          className={[
+            'text-base font-extrabold',
+            selected ? 'text-ink' : 'text-ink dark:text-white',
+          ].join(' ')}
+        >
+          {item.title}
+        </Text>
+        <Text
+          className={[
+            'mt-1 text-xs font-semibold leading-4',
+            // Sur la carte jaune, warm-600 tombait a 4:1 ; en sombre il restait
+            // sous 4.5:1. On garde le gris secondaire clair de l'app en sombre.
+            selected ? 'text-ink/80' : 'text-warm-600 dark:text-[#AEB6C5]',
+          ].join(' ')}
+          numberOfLines={2}
+        >
+          {item.subtitle}
+        </Text>
+      </View>
     </Pressable>
   )
 }
@@ -1258,7 +1272,9 @@ function BookRow({
       accessibilityRole="button"
       accessibilityState={{ selected }}
     >
-      <View className="h-9 w-9 items-center justify-center rounded-full bg-warm-100 dark:bg-[#232833]">
+      {/* Pastille claire dans les deux themes, comme le carnet destinataire :
+          un fond sombre rendrait l'icone encre illisible. */}
+      <View className="h-9 w-9 items-center justify-center rounded-full bg-warm-100">
         <Ionicons name={icon} size={18} color="#1A1614" />
       </View>
       <View className="ml-3 flex-1">
