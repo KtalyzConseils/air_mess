@@ -81,7 +81,7 @@ const NEW_COURSE_COPY = {
     currentPosition: 'Position actuelle',
     editPickup: 'Modifier la prise en charge',
     useMyPosition: 'Utiliser ma position',
-    pickupSavedTrigger: (count: number) => `Mes retraits (${count})`,
+    pickupSavedTrigger: (count: number) => `Retraits (${count})`,
     newPickupLabel: 'Nouveau retrait',
     noPickupSaved: "Aucun retrait enregistre pour l'instant.",
     destination: 'Destination',
@@ -175,7 +175,7 @@ const NEW_COURSE_COPY = {
     currentPosition: 'Current location',
     editPickup: 'Edit pickup',
     useMyPosition: 'Use my location',
-    pickupSavedTrigger: (count: number) => `My pickups (${count})`,
+    pickupSavedTrigger: (count: number) => `Pickups (${count})`,
     newPickupLabel: 'New pickup',
     noPickupSaved: 'No saved pickup yet.',
     destination: 'Destination',
@@ -638,24 +638,28 @@ export default function NewCourseScreen() {
 
           <View className="mb-4">
             <Card className="shadow-card" padding="md">
-              {/* Meme en-tete que "Reception / Carnet" plus bas : le bouton sur
-                  le cote ouvre la liste des retraits enregistres. */}
-              <View className="mb-2 flex-row items-center justify-between">
+              {/* Meme en-tete que "Reception / Carnet" plus bas : titre en
+                  encre et bouton sur le cote, qui ouvre la liste des retraits
+                  enregistres. */}
+              <View className="mb-3 flex-row items-center justify-between">
                 <View className="flex-row items-center">
-                  <Text className="text-sm font-bold text-warm-400">{copy.pickup}</Text>
+                  <Text className="text-base font-extrabold text-ink dark:text-white">
+                    {copy.pickup}
+                  </Text>
                   {hasOriginCoords && (
                     <Ionicons name="checkmark-circle" size={15} color="#16A34A" style={{ marginLeft: 6 }} />
                   )}
                 </View>
                 <Pressable
                   onPress={() => setShowPickupBook((value) => !value)}
-                  className="h-9 flex-row items-center rounded-full bg-warm-100 px-3"
-                  hitSlop={6}
+                  // Meme pastille que le bouton "Carnet" de la carte Reception.
+                  className="ml-3 h-9 max-w-[55%] flex-row items-center rounded-full bg-warm-100 px-3"
+                  hitSlop={8}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: showPickupBook }}
                 >
                   <Ionicons name="bookmark" size={16} color="#1A1614" />
-                  <Text className="ml-1 text-xs font-extrabold text-ink">
+                  <Text className="ml-1 text-xs font-extrabold text-ink" numberOfLines={1}>
                     {copy.pickupSavedTrigger(pickupPoints.length)}
                   </Text>
                 </Pressable>
