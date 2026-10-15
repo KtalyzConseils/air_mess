@@ -1,19 +1,16 @@
 import { useState } from 'react'
-import {
-  Image,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Pressable, Text, TextInput, View } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { Ionicons } from '@expo/vector-icons'
 import { Link, Redirect, useRouter } from 'expo-router'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import BrandMark from '../components/BrandMark'
 import Button from '../components/ui/Button'
+import Card from '../components/ui/Card'
 import { useAuthStore } from '../stores/authStore'
 import { useLanguageStore } from '../stores/languageStore'
+import { useThemeStore } from '../stores/themeStore'
 import { getApiErrorMessage } from '../lib/apiError'
 
 const LOGIN_COPY = {
@@ -52,6 +49,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets()
   const language = useLanguageStore((state) => state.language)
   const copy = LOGIN_COPY[language]
+  const theme = useThemeStore((state) => state.theme)
   const user = useAuthStore((state) => state.user)
   const login = useAuthStore((state) => state.login)
   const [email, setEmail] = useState('')
@@ -81,30 +79,30 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-airmess-dark" edges={['top', 'left', 'right']}>
-      <StatusBar style="light" />
+    <SafeAreaView className="flex-1 bg-cream dark:bg-[#0F1115]" edges={['top', 'left', 'right']}>
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <KeyboardAwareScrollView
         bottomOffset={24}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="items-center px-6 pb-4 pt-6">
-          <Image
-            source={require('../../assets/images/splash-icon.png')}
-            style={{ width: 150, height: 225 }}
-            resizeMode="contain"
-          />
-          <Text className="-mt-3 text-sm font-semibold uppercase tracking-widest text-warm-400">
+        <View className="items-center px-6 pb-5 pt-7">
+          <BrandMark />
+          <Text className="mt-4 text-sm font-semibold uppercase tracking-widest text-warm-600 dark:text-warm-300">
             {copy.tagline}
           </Text>
         </View>
 
-        <View className="mx-5 rounded-3xl bg-cream p-6 shadow-cta-dark dark:bg-[#181B24]">
+        {/* Fond clair : carte off-white bordee plutot qu'un aplat jaune, pour
+            garder un fond confortable et des champs lisibles. */}
+        <Card padding="lg" className="mx-5 shadow-card">
           <Text className="mb-1 text-xl font-extrabold text-ink dark:text-white">{copy.welcome}</Text>
-          <Text className="mb-5 text-sm text-warm-500">{copy.subtitle}</Text>
+          <Text className="mb-5 text-sm font-semibold text-warm-600 dark:text-[#AEB6C5]">
+            {copy.subtitle}
+          </Text>
 
-          <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
+          <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-600 dark:text-warm-300">
             {copy.email}
           </Text>
           <TextInput
@@ -120,7 +118,7 @@ export default function LoginScreen() {
             className="mb-4 h-14 rounded-2xl border-2 border-warm-200 bg-off-white px-4 text-base text-ink dark:border-[#343A46] dark:bg-[#11141B] dark:text-white"
           />
 
-          <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-500">
+          <Text className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-warm-600 dark:text-warm-300">
             {copy.password}
           </Text>
           <View className="mb-4">
@@ -153,11 +151,11 @@ export default function LoginScreen() {
 
           <Pressable
             onPress={() => router.push('/forgot-password')}
-            className="-mt-2 mb-4 self-end"
+            className="-mt-1 mb-3 min-h-11 justify-center self-end px-1"
             hitSlop={8}
             accessibilityRole="link"
           >
-            <Text className="text-sm font-semibold text-warm-600 underline">
+            <Text className="text-sm font-semibold text-warm-600 underline dark:text-warm-300">
               {copy.forgotPassword}
             </Text>
           </Pressable>
@@ -183,14 +181,16 @@ export default function LoginScreen() {
           </Button>
 
           <View className="mt-5 flex-row justify-center">
-            <Text className="text-sm font-semibold text-warm-500">{copy.noAccount}</Text>
+            <Text className="text-sm font-semibold text-warm-600 dark:text-[#AEB6C5]">
+              {copy.noAccount}
+            </Text>
             <Link href="/register" asChild>
-              <Pressable accessibilityRole="button">
+              <Pressable accessibilityRole="button" hitSlop={12}>
                 <Text className="text-sm font-extrabold text-airmess-red">{copy.createAccount}</Text>
               </Pressable>
             </Link>
           </View>
-        </View>
+        </Card>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   )
