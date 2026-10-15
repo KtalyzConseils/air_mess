@@ -11,6 +11,13 @@ import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { getPaymentCallbackUrl } from '../../lib/payment'
+import {
+  addPickupPoint,
+  fetchPickupPoints,
+  removePickupPoint,
+  type PickupPoint,
+} from '../../lib/pickupPoints'
+import PickupPointsSheet from '../../components/PickupPointsSheet'
 import { usePermissionPrompt } from '../../hooks/usePermissionPrompt'
 import { useAuthStore } from '../../stores/authStore'
 import { useLanguageStore, type AppLanguage } from '../../stores/languageStore'
@@ -79,6 +86,8 @@ const NEW_COURSE_COPY = {
     currentPosition: 'Position actuelle',
     editPickup: 'Modifier la prise en charge',
     useMyPosition: 'Utiliser ma position',
+    pickupSaveTrigger: 'Enregistrer ce retrait',
+    pickupSavedTrigger: (count: number) => `Mes retraits (${count})`,
     destination: 'Destination',
     whereToDeliver: 'Ou livrer ?',
     editDestination: 'Modifier la destination',
@@ -170,6 +179,8 @@ const NEW_COURSE_COPY = {
     currentPosition: 'Current location',
     editPickup: 'Edit pickup',
     useMyPosition: 'Use my location',
+    pickupSaveTrigger: 'Save this pickup',
+    pickupSavedTrigger: (count: number) => `My pickups (${count})`,
     destination: 'Destination',
     whereToDeliver: 'Where to deliver?',
     editDestination: 'Edit destination',
@@ -253,6 +264,8 @@ export default function NewCourseScreen() {
   const [locationError, setLocationError] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const { ensure: ensureLocation, sheet: locationSheet } = usePermissionPrompt('location')
+  const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([])
+  const [pickupSheetOpen, setPickupSheetOpen] = useState(false)
   const [draft, setDraft] = useState<LocationDraft>({
     originName: user?.marchant?.raison_sociale ?? user?.name ?? '',
     originPhone: user?.phone ?? '',
@@ -324,13 +337,51 @@ export default function NewCourseScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const detectCurrentLocation = async (explicit = false) => {
+  // Carnet de retraits : memoire locale de l'appareil (voir lib/pickupPoints).
+  useEffect(() => {
+    void fetchPickupPoints().then(setPickupPoints)
+  }, [])
+
+  const saveCurrentPickup = async () => {
+    if (!hasOriginCoords || draft.originLat === null || draft.originLng === null) return
+
+    const next = await addPickupPoint({
+      address: draft.originAddress.trim() || draft.originQuartier.trim(),
+      quartier: draft.originQuartier.trim(),
+      city: draft.originCity.trim() || 'Cotonou',
+      lat: draft.originLat,
+      lng: draft.originLng,
+    })
+    setPickupPoints(next)
+    setPickupSheetOpen(false)
+  }
+
+  const usePickupPoint = (point: PickupPoint) => {
+    setDraft((current) => ({
+      ...current,
+      originAddress: point.address || current.originAddress,
+      originQuartier: point.quartier,
+      originCity: point.city,
+      originLat: point.lat,
+      originLng: point.lng,
+    }))
+    setLocationError(null)
+    setPickupSheetOpen(false)
+    // Meme enchainement que la selection d'un lieu : on passe au destinataire.
+    setLocationTarget('destination')
+  }
+
+  const deletePickupPoint = async (id: string) => {
+    setPickupPoints(await removePickupPoint(id))
+  }
+
+  const detectCurrentLocation = async () => {
     setLocating(true)
     setLocationError(null)
     try {
-      // Ecran d'explication a la premiere demande, puis prompt systeme
-      // uniquement si l'utilisateur declenche l'action lui-meme.
-      if (!(await ensureLocation({ explicit }))) {
+      // Prompt systeme direct a la premiere demande ; si la permission a deja ete
+      // refusee, l'ecran propose les reglages (voir usePermissionPrompt).
+      if (!(await ensureLocation())) {
         setLocationError(copy.locationPermissionDenied)
         return
       }
@@ -634,7 +685,7 @@ export default function NewCourseScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => void detectCurrentLocation(true)}
+                  onPress={() => void detectCurrentLocation()}
                   className="ml-2 h-9 w-9 items-center justify-center rounded-full bg-warm-100"
                   accessibilityRole="button"
                   accessibilityLabel={copy.useMyPosition}
@@ -645,6 +696,19 @@ export default function NewCourseScreen() {
                     <Ionicons name="locate" size={18} color="#1A1614" />
                   )}
                 </Pressable>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setPickupSheetOpen(true)}
+                className="ml-[58px] mt-2 flex-row items-center"
+                accessibilityRole="button"
+              >
+                <Ionicons name="bookmark-outline" size={15} color="#8A7E68" />
+                <Text className="ml-1.5 text-xs font-extrabold text-warm-600 dark:text-[#AEB6C5]">
+                  {pickupPoints.length > 0
+                    ? copy.pickupSavedTrigger(pickupPoints.length)
+                    : copy.pickupSaveTrigger}
+                </Text>
               </Pressable>
 
               <View className="my-3 ml-[58px] h-px bg-warm-200" />
@@ -1046,6 +1110,14 @@ export default function NewCourseScreen() {
         </View>
       )}
       {locationSheet}
+      <PickupPointsSheet
+        visible={pickupSheetOpen}
+        onClose={() => setPickupSheetOpen(false)}
+        points={pickupPoints}
+        onSaveCurrent={hasOriginCoords ? () => void saveCurrentPickup() : null}
+        onUse={usePickupPoint}
+        onDelete={(id) => void deletePickupPoint(id)}
+      />
     </Screen>
   )
 }

@@ -1,5 +1,4 @@
 import * as Location from 'expo-location'
-import * as SecureStore from 'expo-secure-store'
 import { Linking } from 'react-native'
 import {
   getNotificationPermission,
@@ -17,17 +16,6 @@ import {
 export type PermissionKind = 'notifications' | 'location'
 
 export type PermissionState = NotificationPermissionState
-
-const PROMPTED_PREFIX = 'airmess_permission_prompted_'
-
-/** Vrai si l'utilisateur a deja vu l'ecran d'explication pour cette permission. */
-export async function hasBeenExplained(kind: PermissionKind): Promise<boolean> {
-  return (await SecureStore.getItemAsync(PROMPTED_PREFIX + kind)) === '1'
-}
-
-export async function markExplained(kind: PermissionKind): Promise<void> {
-  await SecureStore.setItemAsync(PROMPTED_PREFIX + kind, '1').catch(() => undefined)
-}
 
 /** Etat courant, sans afficher de prompt. */
 export async function readPermission(kind: PermissionKind): Promise<PermissionState> {

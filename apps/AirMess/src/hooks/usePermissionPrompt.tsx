@@ -1,8 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import PermissionSheet from '../components/PermissionSheet'
 import {
-  hasBeenExplained,
-  markExplained,
   openSystemSettings,
   readPermission,
   requestPermission,
@@ -18,9 +16,11 @@ import {
  *   if (await ensure()) { ... }   // true seulement si accordee
  *   ... rendre `sheet` dans le JSX de l'ecran
  *
- * Regle : le prompt systeme n'est jamais declenche directement, il passe
- * toujours par l'ecran d'explication (sauf si l'utilisateur l'a deja vu et
- * n'a pas refuse definitivement).
+ * Comportement aligne sur l'app livreur : la premiere demande declenche
+ * directement le prompt systeme (des la premiere connexion pour les
+ * notifications). L'ecran explicatif ne sert plus qu'au cas ou la permission a
+ * deja ete refusee : le prompt systeme ne s'afficherait plus, on propose donc
+ * les reglages du telephone.
  */
 export function usePermissionPrompt(kind: PermissionKind) {
   const [visible, setVisible] = useState(false)
@@ -42,32 +42,17 @@ export function usePermissionPrompt(kind: PermissionKind) {
     })
   }, [])
 
-  /**
-   * `explicit` = l'utilisateur vient de declencher l'action lui-meme (bouton).
-   * Sans ce drapeau, on ne declenche jamais le prompt systeme : si il a deja
-   * repondu "Plus tard", on ne le relance pas a la prochaine connexion.
-   */
-  const ensure = useCallback(
-    async (options?: { explicit?: boolean }): Promise<boolean> => {
-      const state = await readPermission(kind)
-      if (state.granted) return true
+  const ensure = useCallback(async (): Promise<boolean> => {
+    const state = await readPermission(kind)
+    if (state.granted) return true
 
-      // Refus definitif : le prompt systeme ne s'afficherait plus, on propose les
-      // reglages du telephone.
-      if (!state.canAskAgain) return askWithSheet(true)
+    // Premiere demande : prompt systeme direct (comme l'app livreur).
+    if (state.undetermined) return requestPermission(kind)
 
-      const explained = await hasBeenExplained(kind)
-
-      // Premiere fois : on explique avant de demander.
-      if (!explained) return askWithSheet(false)
-
-      // Deja explique : on redemande uniquement sur action explicite.
-      if (options?.explicit) return requestPermission(kind)
-
-      return false
-    },
-    [askWithSheet, kind],
-  )
+    // Deja refusee : le systeme ne reaffichera pas le prompt, on envoie vers les
+    // reglages (et on n'insiste pas a chaque ouverture).
+    return askWithSheet(true)
+  }, [askWithSheet, kind])
 
   const sheet = (
     <PermissionSheet
@@ -76,7 +61,6 @@ export function usePermissionPrompt(kind: PermissionKind) {
       settingsOnly={settingsOnly}
       onAllow={() => {
         void (async () => {
-          await markExplained(kind)
           if (settingsOnly) {
             await openSystemSettings()
             close(false)
@@ -85,10 +69,7 @@ export function usePermissionPrompt(kind: PermissionKind) {
           close(await requestPermission(kind))
         })()
       }}
-      onLater={() => {
-        void markExplained(kind)
-        close(false)
-      }}
+      onLater={() => close(false)}
     />
   )
 

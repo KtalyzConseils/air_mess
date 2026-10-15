@@ -147,9 +147,9 @@ function Header() {
     setLocationError(false)
 
     try {
-      // Ecran d'explication avant le prompt systeme (voir usePermissionPrompt).
-      // Ici l'utilisateur a appuye sur le bouton : demande explicite.
-      if (!(await ensureLocation({ explicit: true }))) {
+      // Prompt systeme direct a la premiere demande (voir usePermissionPrompt) ;
+      // si la permission a deja ete refusee, l'ecran propose les reglages.
+      if (!(await ensureLocation())) {
         setLocationError(true)
         setPositionLabel(copy.locationDenied)
         return
