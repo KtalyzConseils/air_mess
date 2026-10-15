@@ -720,18 +720,16 @@ export default function NewCourseScreen() {
                         key={point.id}
                         onPress={() => usePickupPoint(point)}
                         className={[
-                          'flex-row items-center border-t border-warm-100 px-3 py-2.5',
+                          'min-h-16 flex-row items-center px-4 py-2',
                           selected ? 'bg-airmess-yellow/25' : '',
                         ].join(' ')}
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                       >
-                        <Ionicons
-                          name={selected ? 'bookmark' : 'bookmark-outline'}
-                          size={17}
-                          color={selected ? '#1A1614' : '#8A7E68'}
-                        />
-                        <View className="ml-2.5 flex-1">
+                        <View className="h-9 w-9 items-center justify-center rounded-full bg-warm-100">
+                          <Ionicons name="storefront" size={18} color="#1A1614" />
+                        </View>
+                        <View className="ml-3 flex-1">
                           <Text className="text-sm font-extrabold text-ink dark:text-white" numberOfLines={1}>
                             {point.label || point.quartier || copy.stepTrip}
                           </Text>
@@ -745,13 +743,13 @@ export default function NewCourseScreen() {
                   })}
                 <Pressable
                   onPress={() => router.push('/pickup-address')}
-                  className="flex-row items-center border-t border-warm-100 px-3 py-2.5"
+                  className="min-h-16 flex-row items-center px-4 py-2"
                   accessibilityRole="button"
                 >
-                  <View className="h-8 w-8 items-center justify-center rounded-full bg-airmess-yellow">
-                    <Ionicons name="add" size={18} color="#1A1614" />
+                  <View className="h-9 w-9 items-center justify-center rounded-full bg-airmess-yellow">
+                    <Ionicons name="add" size={19} color="#1A1614" />
                   </View>
-                  <Text className="ml-2.5 flex-1 text-sm font-extrabold text-ink dark:text-white">
+                  <Text className="ml-3 flex-1 text-sm font-extrabold text-ink dark:text-white">
                     {copy.newPickupLabel}
                   </Text>
                 </Pressable>
