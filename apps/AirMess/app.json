@@ -13,7 +13,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#1A1614",
+        "backgroundColor": "#FFCC00",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -90,7 +90,15 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "expo-navigation-bar": {
+        "enforceContrast": true,
+        "style": "light",
+        "hidden": false
+      },
+      "eas": {
+        "projectId": "a1c01b4f-7b3f-4768-8ef9-3dbcd99b6b97"
+      }
     }
   }
 }

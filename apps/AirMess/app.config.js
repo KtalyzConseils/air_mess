@@ -10,6 +10,10 @@ export default ({ config }) => ({
   },
   android: {
     ...config.android,
+    // En build EAS : variable fichier GOOGLE_SERVICES_JSON du projet, matérialisée
+    // sur disque (même mécanique que l'app livreur). En local : app.json.
+    googleServicesFile:
+      process.env.GOOGLE_SERVICES_JSON ?? config.android.googleServicesFile,
     config: {
       ...(config.android?.config ?? {}),
       googleMaps: {
