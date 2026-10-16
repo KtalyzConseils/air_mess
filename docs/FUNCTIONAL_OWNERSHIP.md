@@ -100,14 +100,16 @@ Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `Firs
 - Toute correction future doit conserver les historiques, utiliser des écritures compensatoires et revérifier le jeton dans la transaction d'application.
 - L'application exige une préparation serveur et un code temporaire à usage unique lié au super-admin, au snapshot et au hash du plan. Une simple confirmation navigateur ne suffit pas.
 
-## Confirmation email de l'inscription marchand / particulier
+## Confirmation email de l'inscription particulier
 
-- Source de vérité : `AuthController::sendRegistrationEmailCode` (envoi) et `AuthController::consumeRegistrationEmailCode` (consommation), utilisées par `POST /api/auth/register/email/send-code`, `POST /api/auth/register/marchant` et `POST /api/auth/register/individual`.
+- Périmètre : le code de confirmation ne concerne plus que le particulier (cf. D-07). L'inscription marchand n'a plus aucune vérification email.
+- Source de vérité : `AuthController::sendRegistrationEmailCode` (envoi) et `AuthController::consumeRegistrationEmailCode` (consommation), utilisées par `POST /api/auth/register/email/send-code` et `POST /api/auth/register/individual` uniquement.
 - Un seul canal de confirmation : le code à six chiffres reçu par email. Le choix SMS/email côté utilisateur et le parcours d'inscription rapide (`/api/auth/register/quick/*`) ne sont plus utilisés par l'app marchand ni par la web ; ces routes restent servies pour les builds déjà installés.
 - Code à usage unique : stocké haché en cache dix minutes, cinq tentatives maximum, cooldown de 45 secondes entre deux envois, supprimé dès qu'il est accepté. Un code déjà consommé ne peut pas créer un second compte.
-- Exception unique : une connexion Google (`firebase_google_id_token`) prouve déjà l'email et dispense du code. Ne pas ajouter d'autre exemption.
+- Exception : une connexion Google (`firebase_google_id_token`) prouve déjà l'email et dispense du code chez le particulier. Côté marchand, le token Google est encore vérifié s'il est envoyé, mais il ne conditionne plus la création du compte.
+- `email_code` reste accepté à la validation pour les clients déjà installés : il est ignoré côté marchand, obligatoire côté particulier.
 - Connexion : `POST /api/auth/login` par email + mot de passe, partagée avec l'app livreur. L'app marchand n'expose plus le login par SMS.
-- Suite d'inscription inchangée : le marchand reste `waitlisted_at` avec `marchants.validated_at` nul, donc sans accès à la création de course avant validation par un admin.
+- Inscription marchand : compte ouvert immédiatement (D-05) — `waitlisted_at` nul, `marchants.validated_at` posé à la création, `email_verified_at` posé à la création, aucune vérification préalable (D-07).
 - Ne pas réintroduire un second mécanisme de code (table, service ou endpoint dédié) : la mécanique de cache existante doit être étendue.
 
 ## Changement de mot de passe (écran Sécurité)

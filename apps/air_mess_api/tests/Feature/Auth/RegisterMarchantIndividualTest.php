@@ -45,7 +45,6 @@ class RegisterMarchantIndividualTest extends TestCase
             'raison_sociale'   => 'Kponou Market',
             'secteur_activite' => 'boutique',
             'accepted_terms'   => '1',
-            'email_code'       => $this->seedRegistrationEmailCode('shop@example.com'),
         ], $overrides);
     }
 
@@ -79,8 +78,8 @@ class RegisterMarchantIndividualTest extends TestCase
         $user = User::where('email', 'ama@example.com')->firstOrFail();
         $this->assertSame('+2290190123456', $user->phone);
         $this->assertNotNull($user->phone_verified_at);
-        // L'email est desormais confirme par le code recu par email : plus aucun
-        // compte ne peut etre cree avec un email non verifie.
+        // Le particulier confirme toujours son email par le code recu par email.
+        // (Le marchand, lui, s'inscrit sans verification : cf. D-07.)
         $this->assertNotNull($user->email_verified_at);
     }
 
@@ -190,8 +189,9 @@ class RegisterMarchantIndividualTest extends TestCase
             ->assertJsonValidationErrors(['activation_token']);
     }
 
-    public function test_marchant_register_requires_email_code(): void
+    public function test_marchant_register_succeeds_without_any_email_code(): void
     {
+        // D-07 : le marchand s'inscrit sans code de confirmation email.
         $this->postJson('/api/auth/register/marchant', [
             'name'                  => 'Jean Kponou',
             'email'                 => 'sans-code@example.com',
@@ -201,36 +201,36 @@ class RegisterMarchantIndividualTest extends TestCase
             'raison_sociale'        => 'Kponou Market',
             'secteur_activite'      => 'boutique',
             'accepted_terms'        => '1',
-        ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['email_code']);
+        ])->assertStatus(201);
 
-        $this->assertDatabaseCount('users', 0);
+        $user = User::where('email', 'sans-code@example.com')->firstOrFail();
+        $this->assertNotNull($user->email_verified_at);
+        // Aucun code n'est consomme : rien en cache pour cet email.
+        $this->assertFalse(Cache::has('register-email-code:'.sha1('sans-code@example.com')));
     }
 
-    public function test_marchant_register_rejects_wrong_email_code(): void
+    public function test_marchant_register_ignores_a_legacy_email_code(): void
     {
+        // Les applications deja installees envoient encore email_code : il est ignore.
         $this->postJson('/api/auth/register/marchant', $this->marchantPayload([
             'email_code' => '000000',
-        ]))
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['email_code']);
+        ]))->assertCreated();
 
-        $this->assertDatabaseCount('users', 0);
+        $this->assertNotNull(User::where('email', 'shop@example.com')->firstOrFail()->email_verified_at);
     }
 
     public function test_registration_email_code_cannot_be_replayed(): void
     {
-        $payload = $this->marchantPayload();
+        $payload = $this->individualPayload();
 
-        $this->postJson('/api/auth/register/marchant', $payload)->assertCreated();
+        $this->postJson('/api/auth/register/individual', $payload)->assertCreated();
         $this->assertDatabaseCount('users', 1);
 
         // Le compte est supprime : seule la consommation du code empeche une
         // seconde creation avec le meme code.
         User::where('email', $payload['email'])->firstOrFail()->delete();
 
-        $this->postJson('/api/auth/register/marchant', $payload)
+        $this->postJson('/api/auth/register/individual', $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['email_code']);
 
@@ -254,7 +254,7 @@ class RegisterMarchantIndividualTest extends TestCase
 
         $code = Mail::queued(QuickRegistrationCodeMail::class)->first()->code;
 
-        $this->postJson('/api/auth/register/marchant', $this->marchantPayload([
+        $this->postJson('/api/auth/register/individual', $this->individualPayload([
             'email'      => $email,
             'email_code' => $code,
         ]))->assertCreated();
@@ -264,13 +264,13 @@ class RegisterMarchantIndividualTest extends TestCase
 
     public function test_google_registration_does_not_require_email_code(): void
     {
-        $this->mockGoogleVerifier('shop@example.com');
+        $this->mockGoogleVerifier('ama@example.com');
 
-        $payload = $this->marchantPayload(['firebase_google_id_token' => 'fake-google-token']);
+        $payload = $this->individualPayload(['firebase_google_id_token' => 'fake-google-token']);
         unset($payload['email_code']);
 
-        $this->postJson('/api/auth/register/marchant', $payload)->assertCreated();
-        $this->assertNotNull(User::where('email', 'shop@example.com')->firstOrFail()->email_verified_at);
+        $this->postJson('/api/auth/register/individual', $payload)->assertCreated();
+        $this->assertNotNull(User::where('email', 'ama@example.com')->firstOrFail()->email_verified_at);
     }
 
     public function test_individual_register_requires_email_code(): void

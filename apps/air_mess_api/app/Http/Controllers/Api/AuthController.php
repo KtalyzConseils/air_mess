@@ -301,7 +301,8 @@ class AuthController extends Controller
     }
 
     /**
-     * Inscription d'un marchand (validation manuelle ensuite par un admin).
+     * Inscription d'un marchand : compte ouvert immédiatement (D-05), sans
+     * validation admin ni vérification email (D-07).
      */
     public function registerMarchant(
         Request $request,
@@ -317,8 +318,8 @@ class AuthController extends Controller
             'password'         => ['required', 'string', 'min:8', 'confirmed'],
             // Connexion Google (optionnelle)
             'firebase_google_id_token' => ['nullable', 'string'],
-            // Confirmation email : code a 6 chiffres recu par email.
-            // Obligatoire sauf si l'email est deja prouve par Google.
+            // Code email : conservé pour les clients déjà installés (app mobile),
+            // mais ignoré côté marchand depuis D-07. Toujours exigé côté particulier.
             'email_code'       => ['nullable', 'string', 'digits:6'],
             'raison_sociale'   => ['required', 'string', 'max:255'],
             'ifu_rccm'         => ['nullable', 'string', 'max:50'],
@@ -339,8 +340,7 @@ class AuthController extends Controller
         );
 
         // Vérification Google (optionnelle) : si un token Google est fourni, on vérifie
-        // que l'email Google correspond à l'email soumis.
-        $emailVerifiedAt = null;
+        // que l'email Google correspond à l'email soumis. Il ne conditionne plus rien.
         if (! empty($data['firebase_google_id_token'])) {
             $googleEmail = $firebaseVerifier->verifyGoogleEmail($data['firebase_google_id_token']);
             if ($googleEmail === null || $googleEmail !== mb_strtolower($data['email'])) {
@@ -348,14 +348,12 @@ class AuthController extends Controller
                     'email' => ['Connexion Google invalide ou email différent. Réessayez.'],
                 ]);
             }
-            $emailVerifiedAt = now();
         }
 
-        // Sans Google, l'email n'est prouve que par le code recu par email.
-        if ($emailVerifiedAt === null) {
-            $this->consumeRegistrationEmailCode($data['email'], $data['email_code'] ?? null);
-            $emailVerifiedAt = now();
-        }
+        // D-07 : plus de code de confirmation pour les marchands. L'email est marqué
+        // vérifié à la création, comme le téléphone (phone_verified_at) — même logique
+        // d'inscription sans vérification. À rétablir ici si on revient en arrière.
+        $emailVerifiedAt = now();
 
         $user = DB::transaction(function () use ($data, $emailVerifiedAt, $waitlistCandidate, $waitlistActivations) {
             $user = User::create([

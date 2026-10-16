@@ -49,3 +49,11 @@
 **Rationale :** jusqu'ici, le wallet était débité avant que l'argent ne parte, puis recrédité en cas d'échec. Comme le webhook de succès n'était jamais reconnu (FedaPay envoie `sent`, pas `approved`/`processed`) et que la contrainte `paid_consistency_check` refusait les retraits instant sans admin, des soldes étaient amputés sans virement confirmé.
 
 **Impact :** migration `2026_10_14_000000_allow_automatic_withdraw_payout_without_admin` (`paid_by_admin_id` peut rester nul pour un payout automatique). Les demandes historiques déjà débitées sont reconnues et ne sont jamais débitées une seconde fois ; en cas d'échec, elles restent remboursées. Les applications peuvent afficher `available` et `withdraw_in_progress_fcfa` au lieu de `balance`.
+
+## D-07 — Inscription marchand : fin de la vérification email (16/10/2026)
+
+**Décision :** `POST /api/auth/register/marchant` ne demande plus de code de confirmation par email. L'email est marqué vérifié à la création (`email_verified_at`), comme le téléphone (`phone_verified_at`), et le compte reste ouvert immédiatement (D-05). Le particulier conserve le code à six chiffres, sans changement.
+
+**Rationale :** le code email était la dernière vérification de l'inscription marchand et bloquait des inscriptions légitimes quand le message n'arrivait pas. Le compte étant déjà opérationnel sans validation admin depuis D-05, l'étape n'apportait plus qu'une friction.
+
+**Impact :** plus aucun contrôle à l'inscription marchand — un compte opérationnel peut être créé avec une adresse email que le demandeur ne possède pas. Le throttle `auth-register` (3 inscriptions/minute par IP) devient la seule limite. `email_code` reste accepté à la validation pour les clients déjà installés, mais il est ignoré côté marchand. La justification de D-05 (« l'email est déjà confirmé par code à l'inscription ») n'est plus vraie : le contrôle a posteriori (`AdminController::suspendMarchant`, `rejectMarchant`) devient le seul filet. Réversibilité : rétablir l'appel à `consumeRegistrationEmailCode` dans `AuthController::registerMarchant` et `emailCodeRequired = true` dans `RegisterPage`.

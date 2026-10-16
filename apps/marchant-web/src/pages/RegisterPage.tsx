@@ -67,6 +67,10 @@ export default function RegisterPage() {
   const [codeSentTo, setCodeSentTo] = useState<string | null>(null)
   const [codeBusy, setCodeBusy] = useState(false)
 
+  // D-07 : la vérification email ne concerne plus les marchands — le code de
+  // confirmation n'est demandé qu'aux particuliers.
+  const emailCodeRequired = type === 'individual'
+
   const {
     register,
     handleSubmit,
@@ -184,7 +188,6 @@ export default function RegisterPage() {
           raison_sociale: values.raison_sociale!,
           secteur_activite: values.secteur_activite!,
           ifu_rccm: values.ifu_rccm || undefined,
-          email_code: googleStillValid ? undefined : values.email_code,
           firebase_google_id_token: googleStillValid ? googleToken : undefined,
           accepted_terms: true,
           activation_token: activationToken || undefined,
@@ -364,7 +367,7 @@ export default function RegisterPage() {
                   >
                     {t('auth.register.googleUnlink')}
                   </button>
-                ) : (
+                ) : emailCodeRequired ? (
                   <button
                     type="button"
                     onClick={() => void handleSendCode()}
@@ -377,11 +380,11 @@ export default function RegisterPage() {
                         ? t('auth.register.emailCodeResend')
                         : t('auth.register.emailCodeSend')}
                   </button>
-                )
+                ) : undefined
               }
             />
 
-            {!googleToken && (
+            {!googleToken && emailCodeRequired && (
               <Input
                 label={t('auth.register.emailCode')}
                 placeholder="123456"
