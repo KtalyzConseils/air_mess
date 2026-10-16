@@ -48,14 +48,5 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   return { idToken, email, displayName, firstName, lastName: rest.join(' ') }
 }
 
-/**
- * Normalise un numéro vers E.164 : "+229 01 90 12 34 56" → "+2290190123456".
- * Doit rester alignée avec App\Support\Phone::normalize côté API, sinon le
- * claim phone_number du jeton Firebase ne matchera pas le numéro soumis.
- */
-export function normalizePhone(raw: string): string {
-  let phone = raw.trim().replace(/[\s\-.()]+/g, '')
-  if (phone.startsWith('00')) phone = `+${phone.slice(2)}`
-  if (phone && !phone.startsWith('+')) phone = `+229${phone}`
-  return phone
-}
+// Source unique dans lib/phone (sans dépendance Firebase) ; ré-export pour les appelants existants.
+export { normalizePhone } from './phone'

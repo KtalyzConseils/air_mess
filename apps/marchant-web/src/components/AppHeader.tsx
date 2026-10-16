@@ -12,6 +12,7 @@ import markWhite from '../assets/logo/airmess-mark-white.svg'
 import mark from '../assets/logo/airmess-mark.svg'
 import { useUiPrefsStore } from '../stores/uiPrefsStore'
 import { useOnboardingStore } from '../stores/onboardingStore'
+import OnboardingModal from './onboarding/OnboardingModal'
 import { HelpCircleIcon, SparklesIcon, MapPinIcon, PhoneIcon, BellIcon, WalletIcon, UserIcon } from './ui/icons'
 
 /**
@@ -25,8 +26,10 @@ export default function AppHeader() {
   const { t } = useTranslation()
   const clientNavMode = useUiPrefsStore((s) => s.clientNavMode)
   const location = useLocation()
-  const replayWelcome = useOnboardingStore((s) => s.replayWelcome)
-  const replayFormTips = useOnboardingStore((s) => s.replayFormTips)
+  const replayWelcome = useOnboardingStore((s) => s.openWelcome)
+  const replayFormTips = useOnboardingStore((s) => s.openFormTips)
+  const welcomeOpen = useOnboardingStore((s) => s.welcomeOpen)
+  const closeWelcome = useOnboardingStore((s) => s.closeWelcome)
 
   const isOnNewCourse = location.pathname.startsWith('/courses/new')
 
@@ -69,10 +72,13 @@ export default function AppHeader() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   // Mode 'fab' : le header est entièrement remplacé par le FAB radial
-  // (rendu globalement dans App.tsx). On retourne null sans casser le layout
+  // (rendu globalement dans App.tsx). On ne rend que la modale d'aide, sans casser le layout
   // — les pages utilisent `min-h-screen` autour de leur main, le header n'a
   // jamais été stretch.
-  if (clientNavMode === 'fab') return null
+  // La présentation (3 slides) est montée ici pour s'ouvrir depuis n'importe quelle page.
+  const welcomeModal = <OnboardingModal open={welcomeOpen} onClose={closeWelcome} />
+
+  if (clientNavMode === 'fab') return welcomeModal
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     [
@@ -317,6 +323,7 @@ export default function AppHeader() {
 
       {/* Modale contact support (montée au niveau header pour rester dispo partout) */}
       <SupportContactModal open={supportOpen} onClose={() => setSupportOpen(false)} />
+      {welcomeModal}
     </header>
   )
 }

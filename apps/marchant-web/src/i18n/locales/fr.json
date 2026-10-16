@@ -141,16 +141,16 @@
     "tipsDone": "C'est parti",
     "slides": {
       "describe": {
-        "title": "Décrivez votre livraison",
-        "body": "Où part le colis, où il arrive, ce qu'il contient. Renseignez la position sur la carte pour que le livreur trouve du 1er coup."
+        "title": "Votre colis part en 2 minutes",
+        "body": "Indiquez le départ, l’arrivée et ce que vous envoyez. Placez le point sur la carte : le livreur trouve du premier coup, sans vous appeler."
       },
       "assign": {
-        "title": "Un livreur prend en charge",
-        "body": "AirMess trouve automatiquement un livreur près de vous. Un code de pickup et un code de livraison vous sont remis — à donner uniquement aux bonnes personnes."
+        "title": "Un livreur vient le chercher",
+        "body": "Pas besoin de chercher quelqu’un : un livreur proche de vous accepte la course. Vos codes de remise garantissent que le colis passe uniquement entre les bonnes mains."
       },
       "track": {
-        "title": "Suivez en temps réel",
-        "body": "Vous recevez un lien de suivi à partager au destinataire. Vous voyez le livreur sur la carte jusqu'à la remise du colis."
+        "title": "Votre client sait où en est son colis",
+        "body": "Envoyez-lui le lien de suivi : il voit le livreur arriver en temps réel. Moins d’appels pour vous, plus de confiance pour lui."
       }
     },
     "tips": {
@@ -170,6 +170,27 @@
         "title": "Valeur du colis (indemnisation)",
         "body": "En cas de vol ou perte, c'est le montant qu'AirMess vous rembourse. Soyez honnête : sous-déclarer réduit votre indemnisation."
       }
+    },
+    "firstCourse": {
+      "eyebrow": "Bienvenue sur AirMess",
+      "title": "Votre première livraison commence ici",
+      "body": "Indiquez où récupérer le colis et où le livrer : un livreur proche s’en occupe, et vous suivez tout en direct.",
+      "bonus": "Votre bon de 500 FCFA est déduit automatiquement de cette première course",
+      "cta": "Créer ma première course",
+      "watch": "Voir le tuto (3 min)",
+      "videoTitle": "Tuto : créer une course AirMess",
+      "createdTitle": "Votre course est créée !",
+      "createdBody": "Un livreur proche va l’accepter dans quelques minutes. Ouvrez-la pour la suivre et prévenir votre client.",
+      "createdCta": "Voir la course",
+      "later": "Plus tard",
+      "shareEyebrow": "Étape suivante",
+      "shareTitle": "Partagez le lien de suivi à votre client",
+      "shareBody": "Il voit le livreur arriver en direct et n’a plus besoin de vous appeler pour savoir où en est son colis.",
+      "shareWhatsapp": "Envoyer par WhatsApp",
+      "shareCopy": "Copier le lien",
+      "deliveredTitle": "Première livraison réussie !",
+      "deliveredBody": "Votre colis est bien arrivé. La prochaine se lance encore plus vite : vos informations sont déjà enregistrées.",
+      "deliveredCta": "Créer une nouvelle course"
     }
   },
   "userMenu": {
@@ -572,6 +593,7 @@
       "paidByOptionRecipientHint": "Le destinataire paiera les frais de livraison à la remise.",
       "paidByMerchantCheckbox": "Je paie moi-même la livraison",
       "paidByMerchantHint": "Les frais seront pris en charge par votre compte marchand.",
+      "paidByRecipientHint": "Laissez décoché : le destinataire paiera les frais de livraison au livreur à la remise.",
       "paidByMerchantPreview": "Vous prenez en charge {{fee}} FCFA de frais de livraison.",
       "paidByPreviewFeeOnly": "Le livreur collectera {{fee}} FCFA de frais de livraison auprès du destinataire.",
       "paidByPreviewCombined": "Le livreur collectera {{product}} + {{fee}} = {{total}} FCFA à la remise (produit + livraison).",

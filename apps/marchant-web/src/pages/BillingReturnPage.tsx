@@ -15,6 +15,8 @@ export default function BillingReturnPage() {
   const { fetchMe } = useAuthStore()
   const queryClient = useQueryClient()
   const [confirmedStatus, setConfirmedStatus] = useState<string | null>(null)
+  // Course payée à l'unité : transmise au tableau de bord pour confirmer une première course.
+  const [paidCourseId, setPaidCourseId] = useState<number | null>(null)
 
   // Fedapay renvoie typiquement ?status=approved | declined | canceled
   const status = params.get('status') ?? 'unknown'
@@ -32,6 +34,7 @@ export default function BillingReturnPage() {
           setConfirmedStatus(confirmation.status)
           if (confirmation.status === 'paid') {
             sessionStorage.removeItem('airmess_pending_payment_id')
+            setPaidCourseId(confirmation.course_id ?? null)
           }
         } catch {
           setConfirmedStatus('processing')
@@ -87,7 +90,10 @@ export default function BillingReturnPage() {
             <Button variant="secondary" size="md" onClick={() => navigate('/wallet')}>
               {t('billing.myWalletCta')}
             </Button>
-            <Button variant="dark" size="md" pill onClick={() => navigate('/dashboard')}>
+            <Button variant="dark" size="md" pill onClick={() =>
+                navigate('/dashboard', paidCourseId ? { state: { createdCourseId: paidCourseId } } : undefined)
+              }
+            >
               {t('billing.dashboardCta')}
             </Button>
           </div>

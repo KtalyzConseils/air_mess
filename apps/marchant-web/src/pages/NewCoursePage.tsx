@@ -276,12 +276,20 @@ export default function NewCoursePage() {
   const [originDrawerOpen, setOriginDrawerOpen] = useState(false)
   const [locationTarget, setLocationTarget] = useState<'A' | 'B'>('A')
 
-  // Onboarding — coach-marks du formulaire. Si l'utilisateur ne les a pas
-  // encore vus, on ouvre l'accordion "Options" pour que les cibles
-  // (encaissement, valeur déclarée) soient visibles à l'écran.
-  const formTipsSeen = useOnboardingStore((s) => s.formTipsSeen)
-  const markFormTipsSeen = useOnboardingStore((s) => s.markFormTipsSeen)
-  const [optionsOpen, setOptionsOpen] = useState(!formTipsSeen)
+  // Onboarding — coach-marks du formulaire, uniquement sur demande (menu « Aide ») :
+  // l'aide permanente est intégrée sous les champs. À l'ouverture des astuces, on
+  // déplie l'accordion "Options" pour que les cibles (encaissement, valeur déclarée)
+  // soient visibles à l'écran.
+  const formTipsOpen = useOnboardingStore((s) => s.formTipsOpen)
+  const closeFormTips = useOnboardingStore((s) => s.closeFormTips)
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const [lastFormTipsOpen, setLastFormTipsOpen] = useState(formTipsOpen)
+  if (lastFormTipsOpen !== formTipsOpen) {
+    setLastFormTipsOpen(formTipsOpen)
+    if (formTipsOpen) setOptionsOpen(true)
+  }
+  // Quitter le formulaire referme les astuces : elles ne doivent pas resurgir au retour.
+  useEffect(() => closeFormTips, [closeFormTips])
 
   useEffect(() => {
     if (shouldSuggestDeclared) {
@@ -339,7 +347,8 @@ export default function NewCoursePage() {
         queryClient.invalidateQueries({ queryKey: ['courses'] })
         queryClient.invalidateQueries({ queryKey: ['wallet'] })
         queryClient.invalidateQueries({ queryKey: ['me', 'wallet'] })
-        navigate('/dashboard')
+        // Le tableau de bord confirme la création s'il s'agit de la toute première course.
+        navigate('/dashboard', { state: { createdCourseId: result.course.id } })
         return
       }
       if (result.payment_required && result.checkout_url) {
@@ -1442,6 +1451,9 @@ export default function NewCoursePage() {
                           {t('courses.new.collectionYes')}
                         </span>
                       </label>
+                      <p className="mt-1 ml-6 text-caption text-warm-500">
+                        {t('onboarding.tips.collection.body')}
+                      </p>
 
                       {hasCollection && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
@@ -1728,10 +1740,10 @@ export default function NewCoursePage() {
 
       {/* Onboarding — coach-marks du formulaire */}
       <Coachmark
-        open={!formTipsSeen}
+        open={formTipsOpen}
         steps={coachSteps}
-        onClose={markFormTipsSeen}
-        onFinish={markFormTipsSeen}
+        onClose={closeFormTips}
+        onFinish={closeFormTips}
       />
     </div>
   )

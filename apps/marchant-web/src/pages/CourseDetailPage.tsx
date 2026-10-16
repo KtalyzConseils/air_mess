@@ -17,6 +17,9 @@ import { AlertTriangleIcon } from '../components/ui/icons'
 import { fetchCourse, fetchCourseHistory, cancelCourse } from '../api/courses'
 import { markCourseFraud } from '../api/admin'
 import { useAuthStore } from '../stores/authStore'
+import { markTrackingSharedForCurrentUser } from '../stores/onboardingStore'
+import { whatsappNumber } from '../lib/phone'
+import ShareTrackingPrompt from '../components/onboarding/ShareTrackingPrompt'
 import { hasAdminRole } from '../lib/permissions'
 
 /**
@@ -65,6 +68,7 @@ export default function CourseDetailPage() {
   async function copy(text: string, key: string) {
     try {
       await navigator.clipboard.writeText(text)
+      if (key === 'link') markTrackingSharedForCurrentUser()
       setCopiedKey(key)
       setTimeout(() => setCopiedKey(null), 2000)
     } catch {
@@ -164,7 +168,7 @@ export default function CourseDetailPage() {
     url: trackingUrl,
     code: course.delivery_code,
   })
-  const waLink = `https://wa.me/${waNumber(course.destination_phone)}?text=${encodeURIComponent(waMessage)}`
+  const waLink = `https://wa.me/${whatsappNumber(course.destination_phone)}?text=${encodeURIComponent(waMessage)}`
 
   const apiError =
     cancelMutation.error instanceof AxiosError
@@ -230,6 +234,15 @@ export default function CourseDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Onboarding — tant qu'aucun lien de suivi n'a été envoyé, on invite à le faire. */}
+        {!isAdmin && !isTerminal && (
+          <ShareTrackingPrompt
+            whatsappHref={waLink}
+            copied={copiedKey === 'link'}
+            onCopy={() => copy(trackingUrl, 'link')}
+          />
+        )}
 
         {/* Course premium — hors pool driver, prise en charge manuelle par l'ops */}
         {course.is_high_value && !course.driver && !['delivered', 'cancelled', 'failed'].includes(course.status) && (
@@ -492,6 +505,7 @@ export default function CourseDetailPage() {
                   href={waLink}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={markTrackingSharedForCurrentUser}
                   className="mt-4 w-full flex items-center justify-center gap-2 bg-[#25D366] text-white font-semibold py-3 rounded-full hover:opacity-90 transition-opacity shadow-sm"
                 >
                   <span className="text-lg" aria-hidden>📲</span>
@@ -770,11 +784,4 @@ function duration(from: string | null | undefined, to: string | null | undefined
   const min = Math.round(ms / 60000)
   if (min < 60) return t('courses.detail.durationMinutes', { count: min })
   return t('courses.detail.durationHoursMinutes', { hours: Math.floor(min / 60), minutes: String(min % 60).padStart(2, '0') })
-}
-
-function waNumber(phone: string): string {
-  let d = phone.replace(/\D/g, '')
-  if (d.startsWith('00')) d = d.slice(2)
-  if (d.length <= 8) d = '229' + d
-  return d
 }

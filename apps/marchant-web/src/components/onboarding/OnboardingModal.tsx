@@ -34,7 +34,7 @@ const SLIDES = [
 /**
  * Modale d'onboarding — 3 slides expliquant en pratique comment lancer une course.
  * Contenu unifié marchand + particulier (le flux backend est le même).
- * S'affiche au 1er load du dashboard, et se rejoue depuis le bouton "Aide".
+ * Ne s'impose jamais : s'ouvre uniquement depuis le menu « Aide » (AppHeader).
  */
 export default function OnboardingModal({ open, onClose }: Props) {
   const { t } = useTranslation()

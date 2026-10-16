@@ -125,3 +125,14 @@ Avant de toucher au bonus ou aux listes d'attente, rechercher au minimum : `Firs
 - Échec FedaPay (`failed`) : marquer `payout_failed_at` libère la réservation, sans mouvement de wallet. `refundFailedWithdraw` ne rembourse que les demandes historiques déjà débitées.
 - Appel FedaPay : `WalletWithdrawPayoutInitiator` → `FedapayService::createPayout`. Le mode opérateur est détecté par FedaPay (forçable via `FEDAPAY_PAYOUT_MODE`) ; ne jamais coder en dur `mtn`, qui n'est pas valide en live. Un échec de `/payouts/start` est une erreur.
 - Ne pas réintroduire de débit à l'approbation ni de second chemin de débit des retraits.
+
+## Onboarding web marchand et particulier
+
+- Source de vérité : `apps/marchant-web/src/stores/onboardingStore.ts` (local au navigateur, sans backend) et les composants `apps/marchant-web/src/components/onboarding/`.
+- Parcours linéaire vers la première livraison, une seule action par écran, déduit des courses réelles :
+  1. aucune course → `FirstCourseHero` remplace le tableau de bord (tuto vidéo `public/videos/airmess-tuto-demo.mp4` proposé, bouton « Créer ma première course ») ;
+  2. première course créée → `FirstCourseCreatedModal` sur le tableau de bord (id transmis par `NewCoursePage` ou `BillingReturnPage`), bouton « Voir la course » ;
+  3. détail de course → `ShareTrackingPrompt` tant qu'aucun lien de suivi n'a été envoyé (`trackingShared`, posé à chaque copie du lien ou envoi WhatsApp) ;
+  4. première livraison → `FirstDeliveryCelebration`, une seule fois (`firstDeliveryCelebrated`).
+- Rien ne s'ouvre d'office hors de ce parcours : la présentation en 3 slides (`OnboardingModal`, montée dans `AppHeader`) et les astuces du formulaire (`Coachmark`) ne s'ouvrent que depuis le menu « Aide ».
+- Ne pas recréer de modale ou de visite guidée automatique ; prolonger ce parcours plutôt que d'ajouter un écran d'introduction.

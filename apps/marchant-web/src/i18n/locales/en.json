@@ -141,16 +141,16 @@
     "tipsDone": "Let's go",
     "slides": {
       "describe": {
-        "title": "Describe your delivery",
-        "body": "Where the package starts, where it arrives, what it contains. Pin the map so the driver finds it on the first try."
+        "title": "Your parcel leaves in 2 minutes",
+        "body": "Enter the pickup, the drop-off and what you are sending. Drop the pin on the map: the courier finds it first time, without calling you."
       },
       "assign": {
-        "title": "A driver takes it on",
-        "body": "AirMess automatically finds a nearby driver. You get a pickup code and a delivery code — give each one only to the right person."
+        "title": "A courier comes to pick it up",
+        "body": "No need to find anyone: a courier near you accepts the delivery. Your handover codes make sure the parcel only changes hands with the right people."
       },
       "track": {
-        "title": "Track in real time",
-        "body": "You receive a tracking link to share with the recipient. Watch the driver on the map all the way to the drop-off."
+        "title": "Your customer knows where the parcel is",
+        "body": "Send them the tracking link: they see the courier arrive in real time. Fewer calls for you, more trust for them."
       }
     },
     "tips": {
@@ -170,6 +170,27 @@
         "title": "Package value (insurance)",
         "body": "If the package is lost or stolen, this is the amount AirMess refunds you. Be honest: under-declaring means less refund."
       }
+    },
+    "firstCourse": {
+      "eyebrow": "Welcome to AirMess",
+      "title": "Your first delivery starts here",
+      "body": "Tell us where to pick up the parcel and where to deliver it: a nearby courier takes care of it, and you follow everything live.",
+      "bonus": "Your 500 FCFA voucher is automatically deducted from this first delivery",
+      "cta": "Create my first delivery",
+      "watch": "Watch the tutorial (3 min)",
+      "videoTitle": "Tutorial: create an AirMess delivery",
+      "createdTitle": "Your delivery is created!",
+      "createdBody": "A nearby courier will accept it within a few minutes. Open it to follow it and let your customer know.",
+      "createdCta": "View the delivery",
+      "later": "Later",
+      "shareEyebrow": "Next step",
+      "shareTitle": "Share the tracking link with your customer",
+      "shareBody": "They see the courier arrive live and no longer need to call you to know where their parcel is.",
+      "shareWhatsapp": "Send via WhatsApp",
+      "shareCopy": "Copy the link",
+      "deliveredTitle": "First delivery completed!",
+      "deliveredBody": "Your parcel has arrived. The next one is even faster: your details are already saved.",
+      "deliveredCta": "Create a new delivery"
     }
   },
   "userMenu": {
@@ -572,6 +593,7 @@
       "paidByOptionRecipientHint": "The recipient will pay the delivery fee at drop-off.",
       "paidByMerchantCheckbox": "I want to pay the delivery myself",
       "paidByMerchantHint": "The delivery fee will be covered by your merchant account.",
+      "paidByRecipientHint": "Leave unchecked: the recipient will pay the delivery fee to the courier at drop-off.",
       "paidByMerchantPreview": "You will cover {{fee}} FCFA in delivery fees.",
       "paidByPreviewFeeOnly": "The courier will collect {{fee}} FCFA in delivery fees from the recipient.",
       "paidByPreviewCombined": "The courier will collect {{product}} + {{fee}} = {{total}} FCFA at drop-off (product + delivery).",

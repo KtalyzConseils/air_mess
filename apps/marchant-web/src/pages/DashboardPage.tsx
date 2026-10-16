@@ -27,8 +27,10 @@ import {
 import { fetchCourses, type Course } from '../api/courses'
 import { fetchWallet } from '../api/wallet'
 import { useAuthStore } from '../stores/authStore'
-import { useOnboardingStore } from '../stores/onboardingStore'
-import OnboardingModal from '../components/onboarding/OnboardingModal'
+import { useOnboardingProgress } from '../stores/onboardingStore'
+import FirstCourseHero from '../components/onboarding/FirstCourseHero'
+import FirstCourseCreatedModal from '../components/onboarding/FirstCourseCreatedModal'
+import FirstDeliveryCelebration from '../components/onboarding/FirstDeliveryCelebration'
 import AcceptTermsModal from '../components/AcceptTermsModal'
 import { fetchTermsStatus } from '../api/terms'
 
@@ -71,10 +73,19 @@ export default function DashboardPage() {
     return () => window.clearInterval(id)
   }, [])
 
-  // Onboarding — 1er passage : la modale de bienvenue s'affiche. Le bouton "Aide"
-  // du header remet le flag à false pour la rejouer à la demande.
-  const welcomeSeen = useOnboardingStore((s) => s.welcomeSeen)
-  const markWelcomeSeen = useOnboardingStore((s) => s.markWelcomeSeen)
+  // Onboarding — parcours vers la première livraison (cf. onboardingStore). La
+  // présentation en slides ne s'ouvre plus d'office, seulement depuis « Aide ».
+  const { markTrackingShared } = useOnboardingProgress()
+  // Course tout juste créée (transmise par NewCoursePage) : confirmée si c'est la première.
+  const [createdCourseId, setCreatedCourseId] = useState<number | null>(
+    () => (location.state as { createdCourseId?: number } | null)?.createdCourseId ?? null,
+  )
+  function dismissCreated(goToCourse: boolean) {
+    const id = createdCourseId
+    setCreatedCourseId(null)
+    // On vide l'état de navigation : un rafraîchissement ne doit pas rouvrir la confirmation.
+    navigate(goToCourse && id ? `/courses/${id}` : location.pathname, { replace: !goToCourse, state: null })
+  }
 
   // CGU — modale bloquante si jamais accepté (comptes anciens) ou version bumpée.
   const termsQuery = useQuery({
@@ -130,6 +141,13 @@ export default function DashboardPage() {
     .reduce((sum, c) => sum + (c.delivery_fee ?? 0), 0)
 
   const activeCount = inProgressCourses.length
+
+  // Parcours première livraison — tout se déduit des courses réelles.
+  const isFirstVisit = !isLoading && !error && !isPendingMarchant && courses.length === 0
+  const deliveredCount = courses.filter((c) => c.status === 'delivered').length
+  const showFirstDelivery = !isLoading && deliveredCount === 1
+  const showCreated =
+    createdCourseId != null && courses.length === 1 && courses[0].id === createdCourseId
   // Pendant le premier chargement, rien n'est encore « live » : on reste neutre.
   const freshnessVariant = isLoading
     ? 'neutral'
@@ -165,6 +183,7 @@ export default function DashboardPage() {
     e.stopPropagation()
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/t/${course.tracking_token}`)
+      markTrackingShared()
       setCopiedId(course.id)
       setTimeout(() => setCopiedId(null), 2000)
     } catch {
@@ -229,27 +248,20 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {!isLoading && user?.type === 'individual' && courses.length === 0 && (
-          <Card
-            variant="default"
-            padding="md"
-            className="mb-8 border-airmess-yellow/60! bg-airmess-yellow/10!"
-          >
-            <div className="flex items-start gap-3">
-              <span className="shrink-0 text-ink" aria-hidden="true">
-                <SparklesIcon size={20} />
-              </span>
-              <div>
-                <p className="font-bold text-ink text-body">
-                  {t('dashboard.firstCourseBonusTitle')}
-                </p>
-                <p className="mt-0.5 text-body-s text-warm-600">
-                  {t('dashboard.firstCourseBonusBody')}
-                </p>
-              </div>
-            </div>
-          </Card>
+        {/* Première visite : une seule chose à faire — tuto + « Créer ma première course ». */}
+        {isFirstVisit && (
+          <>
+            <PageEyebrow label={t('dashboard.eyebrow')} className="mb-4" />
+            <h1 className="text-h2 md:text-h1 text-ink leading-tight mb-6">
+              {t('dashboard.greeting')} {greetingName}.
+            </h1>
+            <FirstCourseHero showBonus={user?.type === 'individual'} />
+          </>
         )}
+
+        {!isFirstVisit && (
+        <>
+        {showFirstDelivery && <FirstDeliveryCelebration />}
 
         {/* ============================================================
             EN-TÊTE : eyebrow + salutation + état des données
@@ -546,17 +558,22 @@ export default function DashboardPage() {
             </ul>
           )}
         </section>
+        </>
+        )}
       </main>
+
+      {showCreated && createdCourseId != null && (
+        <FirstCourseCreatedModal
+          courseId={createdCourseId}
+          onView={() => dismissCreated(true)}
+          onClose={() => dismissCreated(false)}
+        />
+      )}
 
       {/* Région de statut unique de l'écran (jamais de nombre nu, jamais de focus déplacé) */}
       <p role="status" aria-atomic="true" className="sr-only">
         {statusMessage}
       </p>
-
-      {/* Onboarding — modale de bienvenue (3 slides). S'affiche automatiquement la
-          1ère fois, puis rejouable depuis le bouton "Aide" du header. Elle est
-          masquée tant que la modale CGU (plus prioritaire) est ouverte. */}
-      <OnboardingModal open={!welcomeSeen && !needsTermsAcceptance} onClose={markWelcomeSeen} />
 
       {/* CGU — modale BLOQUANTE si jamais accepté ou version obsolète. */}
       <AcceptTermsModal open={needsTermsAcceptance} onAccepted={() => termsQuery.refetch()} />

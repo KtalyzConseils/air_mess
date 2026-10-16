@@ -10,6 +10,7 @@ import Card from '../components/ui/Card'
 import StatusBadge from '../components/StatusBadge'
 import { fetchCourses, type Course } from '../api/courses'
 import { cn } from '../lib/cn'
+import { markTrackingSharedForCurrentUser } from '../stores/onboardingStore'
 
 type StatusGroup = 'all' | 'pending' | 'in_progress' | 'delivered' | 'cancelled'
 
@@ -94,6 +95,7 @@ export default function MyCoursesPage() {
     e.stopPropagation()
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/t/${course.tracking_token}`)
+      markTrackingSharedForCurrentUser()
       setCopiedId(course.id)
       setTimeout(() => setCopiedId(null), 2000)
     } catch {
