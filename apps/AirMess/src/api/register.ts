@@ -21,8 +21,8 @@ export interface SendRegistrationCodeResponse {
 }
 
 /**
- * Envoie le code de confirmation par email. C'est le seul canal de
- * confirmation de l'inscription : plus de choix SMS/email cote utilisateur.
+ * Envoie le code de confirmation par email — utilisé par l'inscription
+ * particulier uniquement : le marchand s'inscrit sans vérification email (D-07).
  */
 export async function sendRegistrationEmailCode(
   email: string,
@@ -44,7 +44,8 @@ export interface RegisterMarchantPayload {
   raison_sociale: string
   secteur_activite: SecteurActivite
   ifu_rccm?: string
-  email_code: string
+  /** Plus exigé pour un marchand (D-07) : le champ n'est plus envoyé. */
+  email_code?: string
   accepted_terms: boolean
 }
 

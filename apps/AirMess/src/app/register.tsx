@@ -37,6 +37,7 @@ const REGISTER_COPY = {
       telephone: { title: 'Ton numero', subtitle: 'Le numero joignable pour tes livraisons.' },
       entreprise: { title: 'Ton activite', subtitle: "Ton secteur, et ton numero IFU si tu l'as." },
       confirmation: { title: 'Confirmation', subtitle: 'Un code recu par email, puis les conditions.' },
+      confirmationMarchant: { title: 'Confirmation', subtitle: 'Verifie tes informations, puis accepte les conditions.' },
     },
     errors: {
       type: 'Choisis un type de compte.',
@@ -64,6 +65,7 @@ const REGISTER_COPY = {
     emailLabel: 'Email',
     emailPlaceholder: 'commercant@example.com',
     emailHelper: 'Ton email sert a te connecter et a recevoir ton code de confirmation.',
+    emailHelperMarchant: 'Ton email sert a te connecter.',
     phoneLabel: 'Telephone WhatsApp',
     phonePlaceholder: '+229...',
     phoneHelper: 'Le livreur appellera ce numero pour te joindre.',
@@ -100,6 +102,7 @@ const REGISTER_COPY = {
       telephone: { title: 'Your number', subtitle: 'The number we can reach for your deliveries.' },
       entreprise: { title: 'Your business activity', subtitle: 'Your sector, and your TIN if you have one.' },
       confirmation: { title: 'Confirmation', subtitle: 'A code sent by email, then the terms.' },
+      confirmationMarchant: { title: 'Confirmation', subtitle: 'Check your details, then accept the terms.' },
     },
     errors: {
       type: 'Choose an account type.',
@@ -127,6 +130,7 @@ const REGISTER_COPY = {
     emailLabel: 'Email',
     emailPlaceholder: 'merchant@example.com',
     emailHelper: 'Your email is used to sign in and to receive your confirmation code.',
+    emailHelperMarchant: 'Your email is used to sign in.',
     phoneLabel: 'WhatsApp phone',
     phonePlaceholder: '+229...',
     phoneHelper: 'The courier will call this number to reach you.',
@@ -218,7 +222,12 @@ export default function RegisterScreen() {
   const displayName = isMarchant ? trimmedName : `${trimmedFirstName} ${trimmedLastName}`.trim()
 
   // L'etape "identite" a deux libelles selon le type de compte.
-  const metaKey = stepKey === 'identite' ? (isMarchant ? 'identiteMarchant' : 'identiteIndividual') : stepKey
+  const metaKey =
+    stepKey === 'identite'
+      ? (isMarchant ? 'identiteMarchant' : 'identiteIndividual')
+      : stepKey === 'confirmation'
+        ? (isMarchant ? 'confirmationMarchant' : 'confirmation')
+        : stepKey
   const meta = copy.stepTitles[metaKey]
 
   if (user) {
@@ -243,8 +252,12 @@ export default function RegisterScreen() {
       case 'entreprise':
         return secteur ? null : copy.errors.secteur
       case 'confirmation':
-        if (codeSentTo !== trimmedEmail) return copy.errors.code
-        if (code.trim().length !== 6) return copy.errors.codeLength
+        // Le marchand n'a plus de code de confirmation (D-07) : seul le
+        // particulier confirme son email avant d'accepter les conditions.
+        if (!isMarchant) {
+          if (codeSentTo !== trimmedEmail) return copy.errors.code
+          if (code.trim().length !== 6) return copy.errors.codeLength
+        }
         return acceptedTerms ? null : copy.errors.terms
       default:
         return null
@@ -291,7 +304,8 @@ export default function RegisterScreen() {
 
     // Le code part des qu'on arrive sur l'etape de confirmation : une action
     // de moins pour l'utilisateur, et jamais deux envois pour le meme email.
-    if (steps[stepIndex] === 'confirmation' && codeSentTo !== trimmedEmail) {
+    // Concerne uniquement le particulier : le marchand n'a plus de code (D-07).
+    if (!isMarchant && steps[stepIndex] === 'confirmation' && codeSentTo !== trimmedEmail) {
       await sendCodeNow()
     }
 
@@ -318,7 +332,6 @@ export default function RegisterScreen() {
           raison_sociale: trimmedName,
           secteur_activite: secteur ?? 'autre',
           ifu_rccm: trimmedIfu || undefined,
-          email_code: code.trim(),
           accepted_terms: true,
         })
       } else {
@@ -406,7 +419,7 @@ export default function RegisterScreen() {
               labels={{
                 emailLabel: copy.emailLabel,
                 emailPlaceholder: copy.emailPlaceholder,
-                emailHelper: copy.emailHelper,
+                emailHelper: isMarchant ? copy.emailHelperMarchant : copy.emailHelper,
                 passwordLabel: copy.passwordLabel,
                 passwordPlaceholder: copy.passwordPlaceholder,
                 passwordConfirmLabel: copy.passwordConfirmLabel,
@@ -444,6 +457,7 @@ export default function RegisterScreen() {
           {stepKey === 'confirmation' && (
             <StepConfirmation
               email={codeSentTo ?? trimmedEmail}
+              showCode={!isMarchant}
               code={code}
               onChangeCode={setCode}
               onResend={() => void sendCodeNow()}
@@ -748,6 +762,7 @@ function StepActivity({
 
 function StepConfirmation({
   email,
+  showCode,
   code,
   onChangeCode,
   onResend,
@@ -763,6 +778,8 @@ function StepConfirmation({
   privacyLabel,
 }: {
   email: string
+  /** Faux pour un marchand : plus de code de confirmation email (D-07). */
+  showCode: boolean
   code: string
   onChangeCode: (value: string) => void
   onResend: () => void
@@ -784,27 +801,31 @@ function StepConfirmation({
         <Text className="ml-2 flex-1 text-sm font-extrabold text-ink">{email}</Text>
       </View>
 
-      <HelperText>{codeHelper}</HelperText>
+      {showCode && (
+        <>
+          <HelperText>{codeHelper}</HelperText>
 
-      <FieldLabel>{codeLabel}</FieldLabel>
-      <FormInput
-        value={code}
-        onChangeText={onChangeCode}
-        placeholder={codePlaceholder}
-        keyboardType="number-pad"
-        textContentType="oneTimeCode"
-      />
+          <FieldLabel>{codeLabel}</FieldLabel>
+          <FormInput
+            value={code}
+            onChangeText={onChangeCode}
+            placeholder={codePlaceholder}
+            keyboardType="number-pad"
+            textContentType="oneTimeCode"
+          />
 
-      <Button
-        className="mt-4"
-        variant="outline"
-        size="md"
-        onPress={onResend}
-        loading={resending}
-        rightIcon={<Ionicons name="send" size={16} color="#1A1614" />}
-      >
-        {resendLabel}
-      </Button>
+          <Button
+            className="mt-4"
+            variant="outline"
+            size="md"
+            onPress={onResend}
+            loading={resending}
+            rightIcon={<Ionicons name="send" size={16} color="#1A1614" />}
+          >
+            {resendLabel}
+          </Button>
+        </>
+      )}
 
       <Pressable
         onPress={toggleAcceptedTerms}
