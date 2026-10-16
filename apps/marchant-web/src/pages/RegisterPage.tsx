@@ -7,9 +7,8 @@ import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Highlight from '../components/Highlight'
-import { cn } from '../lib/cn'
 import { signInWithGoogle } from '../lib/firebase'
-import { EyeIcon, EyeOffIcon, ArrowRightIcon, GoogleIcon, CheckIcon } from '../components/ui/icons'
+import { EyeIcon, EyeOffIcon, ArrowRightIcon, GoogleIcon, CheckIcon, StoreIcon, UserIcon } from '../components/ui/icons'
 import LanguageToggle from '../components/ui/LanguageToggle'
 import AuthSupportFooter from '../components/AuthSupportFooter'
 import InstallPwaButton from '../components/InstallPwaButton'
@@ -42,15 +41,34 @@ const selectClass =
 export default function RegisterPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const activationToken = searchParams.get('activation') ?? ''
   const registerIndividual = useAuthStore((s) => s.registerIndividual)
   const registerMarchant = useAuthStore((s) => s.registerMarchant)
   const sendRegistrationEmailCode = useAuthStore((s) => s.sendRegistrationEmailCode)
 
-  const [type, setType] = useState<AccountType>(() =>
-    activationToken || searchParams.get('type') === 'marchant' ? 'marchant' : 'individual',
-  )
+  // Le type de compte vient de l'adresse (?type=marchant|individual) : tant qu'il
+  // n'est pas choisi, on affiche l'écran de choix au lieu d'un formulaire par défaut
+  // (beaucoup de commerçants remplissaient le formulaire particulier sans voir l'onglet).
+  // Le lien d'activation d'une candidature est toujours un compte marchand.
+  const typeParam = searchParams.get('type')
+  const type: AccountType | null = activationToken
+    ? 'marchant'
+    : typeParam === 'marchant' || typeParam === 'individual'
+      ? typeParam
+      : null
+
+  // Nouvelle entrée d'historique : le bouton « retour » ramène à l'écran de choix.
+  function chooseType(kind: AccountType | null) {
+    setError(null)
+    setServerFieldErrors({})
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (kind) next.set('type', kind)
+      else next.delete('type')
+      return next
+    })
+  }
   const [error, setError] = useState<string | null>(null)
   // Erreurs 422 par champ renvoyées par Laravel. Chaque champ récupère son
   // premier message via `serverErr(field)` en fallback des validations client.
@@ -86,7 +104,6 @@ export default function RegisterPage() {
     void fetchWaitlistActivation(activationToken)
       .then((prefill) => {
         if (prefill.kind !== 'merchant') throw new Error('wrong_kind')
-        setType('marchant')
         if (prefill.email) setValue('email', prefill.email)
         if (prefill.phone) setValue('phone', prefill.phone)
         if (prefill.name) setValue('name', prefill.name)
@@ -156,6 +173,7 @@ export default function RegisterPage() {
   }
 
   async function onSubmit(values: RegisterFormValues) {
+    if (!type) return
     setError(null)
     setServerFieldErrors({})
     if (!acceptedTerms) {
@@ -240,23 +258,26 @@ export default function RegisterPage() {
               de langue en absolute sur mobile). Rendu seulement si proposé. */}
           <InstallPwaButton variant="light" className="mb-6" />
 
-          {/* Toggle Particulier / Entreprise */}
-          <div className="grid grid-cols-2 gap-2 mb-6 p-1 bg-warm-100 rounded-md">
-            {(['individual', 'marchant'] as const).map((kind) => (
+          {/* Étape 1 : choix explicite du type de compte, avant tout formulaire. */}
+          {!type && <AccountTypeChoice onChoose={chooseType} />}
+
+          {type && (
+          <>
+          {/* Rappel du type choisi + retour au choix (sauf lien d'activation marchand) */}
+          <div className="mb-6 flex items-center justify-between gap-3 rounded-md border border-warm-200 bg-off-white px-4 py-3">
+            <span className="inline-flex items-center gap-2 text-body-s font-semibold text-ink">
+              {type === 'marchant' ? <StoreIcon size={18} /> : <UserIcon size={18} />}
+              {type === 'marchant' ? t('auth.register.choice.recapMarchant') : t('auth.register.choice.recapIndividual')}
+            </span>
+            {!activationToken && (
               <button
-                key={kind}
                 type="button"
-                onClick={() => setType(kind)}
-                className={cn(
-                  'py-2 rounded-md text-body-s font-semibold transition-all duration-200',
-                  type === kind
-                    ? 'bg-airmess-dark text-cream shadow-sm'
-                    : 'text-warm-600 hover:text-ink',
-                )}
+                onClick={() => chooseType(null)}
+                className="text-body-s font-medium text-warm-600 underline hover:text-ink cursor-pointer"
               >
-                {kind === 'individual' ? t('auth.register.typeIndividual') : t('auth.register.typeMarchant')}
+                {t('auth.register.choice.change')}
               </button>
-            ))}
+            )}
           </div>
 
           {/* Connexion Google : pré-remplit et prouve l'email (optionnel). */}
@@ -475,6 +496,8 @@ export default function RegisterPage() {
                 : t('auth.register.submit')}
             </Button>
           </form>
+          </>
+          )}
 
           <p className="text-center text-body-s text-warm-500 mt-8">
             {t('auth.register.alreadyRegistered')}{' '}
@@ -539,6 +562,45 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/* ============================================================
+   Sous-composant : choix du type de compte (étape 1)
+   ============================================================ */
+function AccountTypeChoice({ onChoose }: { onChoose: (kind: AccountType) => void }) {
+  const { t } = useTranslation()
+  const options = [
+    { kind: 'marchant' as const, Icon: StoreIcon },
+    { kind: 'individual' as const, Icon: UserIcon },
+  ]
+
+  return (
+    // min-w-0 : un <fieldset> prend par défaut la largeur de son contenu et déborde sur mobile.
+    <fieldset className="mb-2 min-w-0">
+      <legend className="text-body font-semibold text-ink mb-3">{t('auth.register.choice.question')}</legend>
+      <div className="space-y-3">
+        {options.map(({ kind, Icon }) => (
+          <button
+            key={kind}
+            type="button"
+            onClick={() => onChoose(kind)}
+            className="group w-full flex items-center gap-4 rounded-xl border-2 border-warm-200 bg-off-white px-5 py-4 text-left transition-all duration-200 hover:border-airmess-yellow hover:shadow-sm focus-visible:border-airmess-yellow focus-visible:outline-none cursor-pointer"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-airmess-yellow/20 text-ink">
+              <Icon size={24} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-body-l font-bold text-ink">{t(`auth.register.choice.${kind}Title`)}</span>
+              <span className="block text-body-s text-warm-600 mt-0.5">{t(`auth.register.choice.${kind}Body`)}</span>
+            </span>
+            <span className="text-warm-400 group-hover:text-ink transition-colors" aria-hidden="true">
+              <ArrowRightIcon size={18} />
+            </span>
+          </button>
+        ))}
+      </div>
+    </fieldset>
   )
 }
 
