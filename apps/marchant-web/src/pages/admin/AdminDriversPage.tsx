@@ -44,16 +44,19 @@ function Badge({
   )
 }
 
-type AvailFilter = 'all' | 'available' | 'busy' | 'offline'
+// Le filtre « pending » porte sur l'état administratif (activation_status),
+// les autres sur la disponibilité temps réel (availability_status).
+type DriverFilter = 'all' | 'pending' | 'available' | 'busy' | 'offline'
 
 export default function AdminDriversPage() {
   const { t } = useTranslation()
-  const [filter, setFilter] = useState<AvailFilter>('all')
+  const [filter, setFilter] = useState<DriverFilter>('all')
   const [view, setView] = useState<'list' | 'map'>('list')
   const [createOpen, setCreateOpen] = useState(false)
 
-  const FILTERS: readonly { key: AvailFilter; label: string }[] = [
+  const FILTERS: readonly { key: DriverFilter; label: string }[] = [
     { key: 'all', label: t('admin.drivers.filterAll') },
+    { key: 'pending', label: t('admin.drivers.filterToValidate') },
     { key: 'available', label: t('admin.drivers.filterAvailable') },
     { key: 'busy', label: t('admin.drivers.filterBusy') },
     { key: 'offline', label: t('admin.drivers.filterOffline') },
@@ -66,7 +69,11 @@ export default function AdminDriversPage() {
   })
 
   const filtered =
-    filter === 'all' ? drivers : drivers.filter((d) => d.availability_status === filter)
+    filter === 'all'
+      ? drivers
+      : filter === 'pending'
+        ? drivers.filter((d) => d.activation_status === 'pending')
+        : drivers.filter((d) => d.availability_status === filter)
 
   const queryClient = useQueryClient()
 

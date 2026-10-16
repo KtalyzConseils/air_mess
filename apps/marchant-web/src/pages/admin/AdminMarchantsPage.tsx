@@ -11,7 +11,7 @@ import MarchantStatusBadge from '../../components/MarchantStatusBadge'
 import { fetchMarchants, type MarchantListParams } from '../../api/admin'
 import { CreateMarchantModal } from '../../components/admin/CreateAccountModals'
 
-type FilterKey = 'all' | 'active' | 'suspended'
+type FilterKey = 'all' | 'pending' | 'active' | 'suspended'
 
 export default function AdminMarchantsPage() {
   const { t } = useTranslation()
@@ -22,6 +22,7 @@ export default function AdminMarchantsPage() {
 
   const FILTERS: readonly { key: FilterKey; label: string; params: MarchantListParams }[] = [
     { key: 'all', label: t('admin.marchants.tabAll'), params: {} },
+    { key: 'pending', label: t('admin.marchants.tabToValidate'), params: { validation: 'pending' } },
     { key: 'active', label: t('admin.marchants.tabActive'), params: { subscription_status: 'active' } },
     { key: 'suspended', label: t('admin.marchants.tabSuspended'), params: { subscription_status: 'suspended' } },
   ] as const

@@ -190,6 +190,11 @@ export default function NewCoursePage() {
   })
   const categories = categoriesQuery.data ?? []
 
+  // La zone des catégories affiche un loader tant que l'appel tourne : on ne montre
+  // l'erreur que si l'appel a réellement échoué, jamais pour un simple chargement en cours.
+  const categoriesLoading = categoriesQuery.isPending
+  const categoriesUnavailable = categoriesQuery.isError && categories.length === 0
+
   const isPayerUser = user?.type === 'marchant' || user?.type === 'individual'
   const { data: wallet } = useQuery({
     queryKey: ['wallet'],
@@ -267,7 +272,6 @@ export default function NewCoursePage() {
   const [collectionDecided, setCollectionDecided] = useState(false)
   const [pendingValues, setPendingValues] = useState<FormValues | null>(null)
   const [quotaError, setQuotaError] = useState<string | null>(null)
-  const [quotaErrorAction, setQuotaErrorAction] = useState<'refreshCategories' | null>(null)
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'success' | 'denied'>('idle')
 
   const [showWeight, setShowWeight] = useState(false)
@@ -359,7 +363,6 @@ export default function NewCoursePage() {
         return
       }
       if (result.quota_reached) {
-        setQuotaErrorAction(null)
         setQuotaError(
           t('courses.new.quotaMonthlyReached', { used: result.used, limit: result.limit }),
         )
@@ -525,12 +528,10 @@ export default function NewCoursePage() {
       categories[0]
 
     if (!category) {
-      setQuotaErrorAction('refreshCategories')
       setQuotaError(t('courses.new.categoriesNotLoaded'))
       return
     }
 
-    setQuotaErrorAction(null)
     setQuotaError(null)
     setSelectedPresetId(preset.id)
     setValue('package_category_id', category.id, { shouldDirty: true, shouldValidate: true })
@@ -634,7 +635,6 @@ export default function NewCoursePage() {
   ])
 
   function performCreate(values: FormValues) {
-    setQuotaErrorAction(null)
     setQuotaError(null)
 
     const oLat = Number(values.origin_lat)
@@ -893,7 +893,7 @@ export default function NewCoursePage() {
           <Card
             variant="default"
             padding="md"
-            className="mb-4 bg-warning-bg! border-warning/30! flex items-start justify-between gap-3"
+            className="mb-4 bg-warning-bg! border-warning/30! flex items-start gap-3"
           >
             <div className="flex items-start gap-2">
               <span className="text-warning shrink-0 mt-0.5">
@@ -901,26 +901,6 @@ export default function NewCoursePage() {
               </span>
               <p className="text-body-s text-warning">{quotaError}</p>
             </div>
-            {quotaErrorAction === 'refreshCategories' && (
-              <Button
-                variant="primary"
-                size="sm"
-                pill
-                type="button"
-                onClick={async () => {
-                  const result = await categoriesQuery.refetch()
-                  if ((result.data ?? []).length > 0) {
-                    setQuotaErrorAction(null)
-                    setQuotaError(null)
-                  }
-                }}
-                disabled={categoriesQuery.isFetching}
-              >
-                {categoriesQuery.isFetching
-                  ? t('courses.new.refreshingCategoriesCta')
-                  : t('courses.new.refreshCategoriesCta')}
-              </Button>
-            )}
           </Card>
         )}
 
@@ -977,6 +957,30 @@ export default function NewCoursePage() {
                     </span>
                   </div>
 
+                  {categoriesLoading ? (
+                    <div
+                      className="flex min-h-[116px] items-center justify-center gap-3 rounded-xl border-2 border-dashed border-warm-200 bg-cream/60 px-4 text-body-s font-semibold text-warm-600"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <span className="h-4 w-4 shrink-0 rounded-full border-2 border-warm-300 border-t-airmess-yellow animate-spin" />
+                      {t('courses.new.loadingCategories')}
+                    </div>
+                  ) : categoriesUnavailable ? (
+                    <div className="flex min-h-[116px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-warning/40 bg-warning-bg/50 px-4 text-center">
+                      <p className="text-body-s text-warning">{t('courses.new.categoriesNotLoaded')}</p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        pill
+                        type="button"
+                        loading={categoriesQuery.isFetching}
+                        onClick={() => void categoriesQuery.refetch()}
+                      >
+                        {t('courses.new.refreshCategoriesCta')}
+                      </Button>
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     {PACKAGE_PRESETS.map((preset) => {
                       const selected = selectedPackagePreset?.id === preset.id
@@ -1013,6 +1017,7 @@ export default function NewCoursePage() {
                       )
                     })}
                   </div>
+                  )}
 
                   <input
                     type="hidden"

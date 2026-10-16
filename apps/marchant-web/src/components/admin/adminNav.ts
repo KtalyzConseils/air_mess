@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../stores/authStore'
 import { hasAdminRole } from '../../lib/permissions'
 import { fetchUnreadCount } from '../../api/notifications'
-import { fetchUnassignedCourses, fetchWaitlist, fetchIncidents } from '../../api/admin'
+import { fetchUnassignedCourses, fetchWaitlist, fetchIncidents, fetchWithdrawRequests } from '../../api/admin'
 import {
   DashboardIcon,
   StoreIcon,
@@ -72,6 +72,26 @@ export function useAdminNav() {
     refetchInterval: 30_000,
     enabled: canBrowseEntities,
   })
+  // Compteurs par population : même source que le badge « liste d'attente » ci-dessus,
+  // filtré par type. Ne pas recréer une seconde définition de « compte à valider ».
+  const { data: marchantsToValidate } = useQuery({
+    queryKey: ['admin', 'waitlist', 'nav-count', 'marchant'],
+    queryFn: () => fetchWaitlist({ status: 'waiting', type: 'marchant', per_page: 1 }),
+    refetchInterval: 30_000,
+    enabled: canBrowseEntities,
+  })
+  const { data: driversToValidate } = useQuery({
+    queryKey: ['admin', 'waitlist', 'nav-count', 'driver'],
+    queryFn: () => fetchWaitlist({ status: 'waiting', type: 'driver', per_page: 1 }),
+    refetchInterval: 30_000,
+    enabled: canBrowseEntities,
+  })
+  const { data: withdrawsToReview } = useQuery({
+    queryKey: ['admin', 'withdraw-requests', 'nav-count'],
+    queryFn: () => fetchWithdrawRequests({ status: 'pending', per_page: 1 }),
+    refetchInterval: 30_000,
+    enabled: isSuperAdmin,
+  })
   const { data: incidents } = useQuery({
     queryKey: ['admin', 'incidents', 'nav-count'],
     queryFn: () => fetchIncidents({ status: 'open', page: 1 }),
@@ -93,18 +113,18 @@ export function useAdminNav() {
     {
       title: t('admin.nav.accounts'),
       items: filterItems([
-        { to: '/admin/marchants', label: t('admin.nav.marchants'), Icon: StoreIcon, visible: canBrowseEntities },
+        { to: '/admin/marchants', label: t('admin.nav.marchants'), Icon: StoreIcon, visible: canBrowseEntities, badge: marchantsToValidate?.total ?? 0 },
         { to: '/admin/form-results', label: t('admin.nav.formResults'), Icon: ClipboardListIcon, visible: canBrowseEntities },
         { to: '/admin/individuals', label: t('admin.nav.individuals'), Icon: UserIcon, visible: canBrowseEntities },
         { to: '/admin/waitlist', label: t('admin.nav.waitlist'), Icon: ClockIcon, visible: canBrowseEntities, badge: waitlist?.total ?? 0 },
-        { to: '/admin/drivers', label: t('admin.nav.drivers'), Icon: BikeIcon, visible: canBrowseEntities },
+        { to: '/admin/drivers', label: t('admin.nav.drivers'), Icon: BikeIcon, visible: canBrowseEntities, badge: driversToValidate?.total ?? 0 },
         { to: '/admin/api-apps', label: t('admin.nav.apiApps'), Icon: CodeIcon, visible: canBrowseEntities },
       ]),
     },
     {
       title: t('admin.nav.finance'),
       items: filterItems([
-        { to: '/admin/withdraw-requests', label: t('admin.nav.withdraws'), Icon: BankIcon, visible: isSuperAdmin },
+        { to: '/admin/withdraw-requests', label: t('admin.nav.withdraws'), Icon: BankIcon, visible: isSuperAdmin, badge: withdrawsToReview?.total ?? 0 },
         { to: '/admin/reporting/wallets', label: t('admin.nav.walletReporting'), Icon: WalletIcon, visible: isSuperAdmin },
         { to: '/admin/reporting/accounting', label: t('admin.nav.accountingLedger'), Icon: ReceiptIcon, visible: canOps },
         { to: '/admin/reconciliation', label: t('admin.nav.reconciliation'), Icon: ScaleIcon, visible: isSuperAdmin },
