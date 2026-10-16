@@ -7,6 +7,7 @@ import Card from '../../components/ui/Card'
 import Screen from '../../components/ui/Screen'
 import { fetchCourses, type Course } from '../../api/courses'
 import { useLanguageStore, type AppLanguage } from '../../stores/languageStore'
+import { courseStatusLabel } from '../../lib/courseStatus'
 
 type StatusGroup = 'all' | 'pending' | 'in_progress' | 'delivered' | 'cancelled'
 
@@ -52,19 +53,6 @@ const COURSES_COPY = {
     noCourse: 'Aucune course',
     tryOtherFilter: 'Essaie un autre filtre ou une autre recherche.',
     coursesAppearHere: 'Tes livraisons apparaitront ici apres creation.',
-    statusLabels: {
-      pending_preparation: 'Preparation',
-      awaiting_assignment: 'En attribution',
-      assigned: 'Assignee',
-      driver_to_pickup: 'Livreur en route',
-      at_pickup: 'Au retrait',
-      picked_up: 'Recuperee',
-      at_dropoff: 'En livraison',
-      delivered: 'Livree',
-      cancelled: 'Annulee',
-      failed: 'Echec',
-      disputed: 'Litige',
-    } as Record<string, string>,
   },
   en: {
     locale: 'en-US',
@@ -89,19 +77,6 @@ const COURSES_COPY = {
     noCourse: 'No deliveries',
     tryOtherFilter: 'Try another filter or search term.',
     coursesAppearHere: 'Your deliveries will appear here once created.',
-    statusLabels: {
-      pending_preparation: 'Preparation',
-      awaiting_assignment: 'Awaiting assignment',
-      assigned: 'Assigned',
-      driver_to_pickup: 'Driver on the way',
-      at_pickup: 'At pickup',
-      picked_up: 'Picked up',
-      at_dropoff: 'Out for delivery',
-      delivered: 'Delivered',
-      cancelled: 'Cancelled',
-      failed: 'Failed',
-      disputed: 'Disputed',
-    } as Record<string, string>,
   },
 } as const
 
@@ -283,7 +258,7 @@ function CourseHistoryCard({ course, copy }: { course: Course; copy: CoursesCopy
             <Text className="mt-0.5 text-xs font-semibold text-warm-500">{formatDate(course.created_at, copy.locale)}</Text>
           </View>
         </View>
-        <StatusPill status={course.status} label={course.status_label} copy={copy} />
+        <StatusPill status={course.status} />
       </View>
 
       <Text className="text-lg font-extrabold text-ink dark:text-white" numberOfLines={1}>
@@ -313,11 +288,12 @@ function CourseHistoryCard({ course, copy }: { course: Course; copy: CoursesCopy
   )
 }
 
-function StatusPill({ status, label, copy }: { status: string; label?: string; copy: CoursesCopy }) {
+function StatusPill({ status }: { status: string }) {
+  const language = useLanguageStore((state) => state.language)
   return (
     <View className={['rounded-full px-2.5 py-1', statusPillTone(status)].join(' ')}>
       <Text className="text-[10px] font-extrabold uppercase" numberOfLines={1}>
-        {label ?? fallbackStatusLabel(status, copy)}
+        {courseStatusLabel(status, language)}
       </Text>
     </View>
   )
@@ -375,10 +351,6 @@ function statusIcon(status: string): keyof typeof Ionicons.glyphMap {
   if (GROUP_STATUSES.delivered.includes(status)) return 'checkmark-done-outline'
   if (GROUP_STATUSES.cancelled.includes(status)) return 'close-circle-outline'
   return 'bicycle-outline'
-}
-
-function fallbackStatusLabel(status: string, copy: CoursesCopy) {
-  return copy.statusLabels[status] ?? status.replaceAll('_', ' ')
 }
 
 function formatDate(value: string, locale: string) {

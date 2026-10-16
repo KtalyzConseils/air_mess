@@ -13,6 +13,7 @@ import BottomSheet from '../../components/ui/BottomSheet'
 import { fetchPickupPoints, type PickupPoint } from '../../lib/pickupPoints'
 import { usePermissionPrompt } from '../../hooks/usePermissionPrompt'
 import { useLanguageStore } from '../../stores/languageStore'
+import { courseStatusLabel } from '../../lib/courseStatus'
 
 const DASHBOARD_COPY = {
   fr: {
@@ -400,7 +401,7 @@ function CourseRow({ course }: { course: Course }) {
         <View className="flex-1">
           <View className="mb-1 flex-row items-center justify-between gap-2">
             <Text className="font-mono text-xs font-bold text-warm-500">{course.reference}</Text>
-            <StatusPill status={course.status} label={course.status_label} />
+            <StatusPill status={course.status} />
           </View>
           <Text className="text-base font-extrabold text-ink dark:text-white" numberOfLines={1}>
             {course.origin_quartier} {copy.toDestination} {course.destination_quartier}
@@ -456,7 +457,8 @@ function StatTile({
   )
 }
 
-function StatusPill({ status, label }: { status: string; label?: string }) {
+function StatusPill({ status }: { status: string }) {
+  const language = useLanguageStore((state) => state.language)
   const tone =
     status === 'awaiting_assignment'
       ? 'bg-warning-bg text-warning'
@@ -469,7 +471,7 @@ function StatusPill({ status, label }: { status: string; label?: string }) {
   return (
     <View className={['rounded-full px-2.5 py-1', tone].join(' ')}>
       <Text className="text-[10px] font-extrabold uppercase" numberOfLines={1}>
-        {label ?? status.replaceAll('_', ' ')}
+        {courseStatusLabel(status, language)}
       </Text>
     </View>
   )

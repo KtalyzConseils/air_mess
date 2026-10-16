@@ -4,7 +4,6 @@ export interface Course {
   id: number
   reference: string
   status: string
-  status_label?: string
   origin_name?: string
   origin_phone?: string
   origin_quartier: string

@@ -7,6 +7,7 @@ import Card from '../../../components/ui/Card'
 import Screen from '../../../components/ui/Screen'
 import { cancelCourse, fetchCourse, type Course } from '../../../api/courses'
 import { useLanguageStore, type AppLanguage } from '../../../stores/languageStore'
+import { courseStatusLabel } from '../../../lib/courseStatus'
 
 const COURSE_DETAIL_COPY = {
   fr: {
@@ -197,7 +198,7 @@ function CourseDetail({
               {course.origin_quartier} {copy.toDestination} {course.destination_quartier}
             </Text>
           </View>
-          <StatusPill status={course.status} label={course.status_label} />
+          <StatusPill status={course.status} />
         </View>
         <Text className="text-sm font-semibold text-warm-300">
           {copy.createdOn} {formatDate(course.created_at, copy.locale)}
@@ -327,7 +328,8 @@ function CodeTile({ label, value }: { label: string; value: string }) {
   )
 }
 
-function StatusPill({ status, label }: { status: string; label?: string }) {
+function StatusPill({ status }: { status: string }) {
+  const language = useLanguageStore((state) => state.language)
   const tone =
     status === 'delivered'
       ? 'bg-success-bg text-success'
@@ -340,7 +342,7 @@ function StatusPill({ status, label }: { status: string; label?: string }) {
   return (
     <View className={['rounded-full px-2.5 py-1', tone].join(' ')}>
       <Text className="text-[10px] font-extrabold uppercase" numberOfLines={1}>
-        {label ?? status.replaceAll('_', ' ')}
+        {courseStatusLabel(status, language)}
       </Text>
     </View>
   )

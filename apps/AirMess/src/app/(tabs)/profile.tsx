@@ -73,8 +73,6 @@ const PROFILE_COPY = {
     edit: 'Modifier',
     merchantOnly: 'Cette section est reservee aux comptes marchands.',
     profileUpdated: 'Profil mis a jour.',
-    paymentMethods: 'Modes de paiement',
-    paymentSubtitle: 'Wallet AirMess et especes',
     becomeDriver: 'Devenez livreur',
     becomeDriverTitle: 'Devenir livreur AirMess',
     becomeDriverSubtitle: "Candidature, validation, puis application livreur.",
@@ -149,8 +147,6 @@ const PROFILE_COPY = {
     edit: 'Edit',
     merchantOnly: 'This section is reserved for merchant accounts.',
     profileUpdated: 'Profile updated.',
-    paymentMethods: 'Payment methods',
-    paymentSubtitle: 'AirMess wallet and cash',
     becomeDriver: 'Become a driver',
     becomeDriverTitle: 'Become an AirMess driver',
     becomeDriverSubtitle: 'Application, approval, then courier app.',
@@ -494,10 +490,6 @@ export default function ProfileScreen() {
         {profileSuccess && (
           <Text className="text-sm font-bold text-success">{profileSuccess}</Text>
         )}
-      </Card>
-
-      <Card className="mt-5" padding="none">
-        <MenuRow icon="card" title={copy.paymentMethods} subtitle={copy.paymentSubtitle} href="/(tabs)/wallet" />
       </Card>
 
       <Pressable
